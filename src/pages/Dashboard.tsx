@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, MapPin, Calendar, TrendingUp, Clock, BarChart3, Database } from "lucide-react";
+import { Users, MapPin, Calendar, TrendingUp, Clock, BarChart3, Database, Cake } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { DashboardSkeleton } from "@/components/DashboardSkeleton";
 import {
@@ -227,6 +227,51 @@ const Dashboard = () => {
     ...queryConfig,
   });
 
+  // Birthday brokers - cross-reference brokers with sales_brokers
+  const { data: birthdayBrokers } = useQuery({
+    queryKey: ["dashboard-birthdays", selectedMonth],
+    queryFn: async () => {
+      const month = selectedMonth.split("-")[1]; // "03" from "2026-03"
+      
+      // Get active escalas brokers names
+      const { data: escalaBrokers } = await supabase
+        .from("brokers")
+        .select("name")
+        .eq("is_active", true);
+      
+      if (!escalaBrokers || escalaBrokers.length === 0) return [];
+      
+      const brokerNames = escalaBrokers.map(b => b.name.toLowerCase().trim());
+      
+      // Get sales_brokers with birth_date in the selected month
+      const { data: salesBrokers } = await supabase
+        .from("sales_brokers")
+        .select("name, birth_date")
+        .eq("is_active", true)
+        .not("birth_date", "is", null);
+      
+      if (!salesBrokers) return [];
+      
+      // Filter by month and cross-reference by name
+      const today = new Date();
+      return salesBrokers
+        .filter(sb => {
+          if (!sb.birth_date) return false;
+          const birthMonth = sb.birth_date.substring(5, 7);
+          return birthMonth === month && brokerNames.includes(sb.name.toLowerCase().trim());
+        })
+        .map(sb => {
+          const day = parseInt(sb.birth_date!.substring(8, 10));
+          const todayDay = today.getDate();
+          const todayMonth = today.getMonth() + 1;
+          const isToday = day === todayDay && parseInt(month) === todayMonth;
+          return { name: sb.name, day, isToday };
+        })
+        .sort((a, b) => a.day - b.day);
+    },
+    ...queryConfig,
+  });
+
   // Show loading state while critical data is loading
   if (loadingStats || loadingCounts) {
     return <DashboardSkeleton />;
@@ -313,7 +358,7 @@ const Dashboard = () => {
       </div>
 
       {/* Cards Informativos */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Corretores Ativos</CardTitle>
@@ -348,6 +393,33 @@ const Dashboard = () => {
               <p className="text-xs text-amber-600 mt-2">
                 ⚠️ {participationStats.leastScheduled.name}: {participationStats.leastScheduled.count} plantões
               </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Aniversariantes do Mês</CardTitle>
+            <Cake className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {birthdayBrokers && birthdayBrokers.length > 0 ? (
+              <div className="space-y-1">
+                {birthdayBrokers.map((b, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-sm">
+                    <span className={b.isToday ? "font-bold text-primary" : ""}>{b.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {b.isToday ? (
+                        <Badge variant="default" className="text-[10px] px-1.5 py-0">🎂 Hoje!</Badge>
+                      ) : (
+                        `dia ${b.day}`
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Nenhum aniversariante</p>
             )}
           </CardContent>
         </Card>

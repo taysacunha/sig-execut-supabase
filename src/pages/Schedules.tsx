@@ -2088,6 +2088,7 @@ const Schedules = () => {
               assignments={scheduleAssignments || []}
               scheduleWeekStart={schedules?.find(s => s.id === selectedScheduleId)?.week_start_date}
               scheduleWeekEnd={schedules?.find(s => s.id === selectedScheduleId)?.week_end_date}
+              scheduleId={selectedScheduleId || undefined}
             />
             </TabsContent>
             </Tabs>
@@ -2101,6 +2102,7 @@ const Schedules = () => {
               scheduleWeekEnd={schedules?.find(s => s.id === selectedScheduleId)?.week_end_date}
               generatedAt={schedules?.find(s => s.id === selectedScheduleId)?.created_at}
               updatedAt={schedules?.find(s => s.id === selectedScheduleId)?.updated_at}
+              scheduleId={selectedScheduleId || undefined}
             />
           )}
         </TabsContent>
