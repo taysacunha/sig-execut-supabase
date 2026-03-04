@@ -2,8 +2,9 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, TrendingUp, FileText, DollarSign, Trophy, Target, Calendar, ArrowUpRight, ArrowDownRight, Minus, Eye, EyeOff } from "lucide-react";
+import { Users, TrendingUp, FileText, DollarSign, Trophy, Target, Calendar, ArrowUpRight, ArrowDownRight, Minus, Eye, EyeOff, Cake } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, AreaChart, Area, PieChart, Pie, Cell
@@ -274,6 +275,38 @@ const VendasDashboard = () => {
       });
       
       return Object.values(grouped).sort((a, b) => b.visits - a.visits).slice(0, 10);
+    },
+    ...queryConfig,
+  });
+
+  // Birthday brokers
+  const { data: birthdayBrokers } = useQuery({
+    queryKey: ["vendas-birthdays", selectedMonth],
+    queryFn: async () => {
+      const month = selectedMonth || format(new Date(), "MM");
+      
+      const { data: salesBrokers } = await supabase
+        .from("sales_brokers")
+        .select("name, birth_date")
+        .eq("is_active", true)
+        .not("birth_date", "is", null);
+      
+      if (!salesBrokers) return [];
+      
+      const today = new Date();
+      return salesBrokers
+        .filter(sb => {
+          if (!sb.birth_date) return false;
+          return sb.birth_date.substring(5, 7) === month;
+        })
+        .map(sb => {
+          const day = parseInt(sb.birth_date!.substring(8, 10));
+          const todayDay = today.getDate();
+          const todayMonth = today.getMonth() + 1;
+          const isToday = day === todayDay && parseInt(month) === todayMonth;
+          return { name: sb.name, day, isToday };
+        })
+        .sort((a, b) => a.day - b.day);
     },
     ...queryConfig,
   });
@@ -798,6 +831,37 @@ const VendasDashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Aniversariantes */}
+      {birthdayBrokers && birthdayBrokers.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Cake className="h-5 w-5 text-pink-500" />
+              Aniversariantes do Mês
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              {selectedMonth ? MONTHS.find(m => m.value === selectedMonth)?.label : "Mês atual"}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {birthdayBrokers.map((b, idx) => (
+                <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
+                  <span className={`text-sm ${b.isToday ? "font-bold text-primary" : ""}`}>{b.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {b.isToday ? (
+                      <Badge variant="default" className="text-[10px] px-1.5 py-0">🎂 Hoje!</Badge>
+                    ) : (
+                      `dia ${b.day}`
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

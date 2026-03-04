@@ -21,6 +21,7 @@ interface SchedulePDFGeneratorProps {
   scheduleWeekEnd?: string;
   generatedAt?: string;
   updatedAt?: string;
+  scheduleId?: string;
 }
 
 const weekdaysMap: Record<string, string> = {
@@ -33,7 +34,23 @@ const weekdaysMap: Record<string, string> = {
   sunday: "Dom",
 };
 
-export function SchedulePDFGenerator({ assignments, scheduleWeekStart, scheduleWeekEnd, generatedAt, updatedAt }: SchedulePDFGeneratorProps) {
+export function SchedulePDFGenerator({ assignments, scheduleWeekStart, scheduleWeekEnd, generatedAt, updatedAt, scheduleId }: SchedulePDFGeneratorProps) {
+  // Load observation for PDF
+  const { data: observation } = useQuery({
+    queryKey: ["schedule-observation-pdf", scheduleId],
+    queryFn: async () => {
+      if (!scheduleId) return null;
+      const { data, error } = await supabase
+        .from("schedule_observations" as any)
+        .select("content")
+        .eq("schedule_id", scheduleId)
+        .maybeSingle();
+      if (error) throw error;
+      return data as any;
+    },
+    enabled: !!scheduleId,
+  });
+  const observationContent = observation?.content || "";
   const processedData = useMemo(() => {
     if (!assignments || assignments.length === 0) {
       return { brokerSchedule: {}, weekDays: [], sortedBrokers: [], uniqueLocations: [], weekStart: null, weekEnd: null };
@@ -486,6 +503,18 @@ export function SchedulePDFGenerator({ assignments, scheduleWeekStart, scheduleW
             </tbody>
           </table>
         </div>
+
+        {/* OBSERVAÇÕES */}
+        {observationContent && (
+          <div style={{ marginTop: "2mm" }}>
+            <h2 style={{ fontSize: "9px", fontWeight: "bold", margin: "0 0 1mm 0", borderBottom: "1px solid #3b82f6", paddingBottom: "0.5mm", color: "#3b82f6" }}>
+              OBSERVAÇÕES
+            </h2>
+            <p style={{ fontSize: "8px", color: "#333", whiteSpace: "pre-wrap", margin: 0, lineHeight: "1.4" }}>
+              {observationContent}
+            </p>
+          </div>
+        )}
     </div>
   );
 

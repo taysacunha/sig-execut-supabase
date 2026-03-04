@@ -1,9 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { format, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { MessageSquare } from "lucide-react";
 interface ScheduleAssignment {
   id?: string;
   broker?: any;
@@ -18,6 +20,7 @@ interface ScheduleCalendarViewProps {
   assignments: ScheduleAssignment[];
   scheduleWeekStart?: string;
   scheduleWeekEnd?: string;
+  scheduleId?: string;
 }
 
 const weekdaysMap: Record<string, string> = {
@@ -30,7 +33,57 @@ const weekdaysMap: Record<string, string> = {
   sunday: "Dom",
 };
 
-export function ScheduleCalendarView({ assignments, scheduleWeekStart, scheduleWeekEnd }: ScheduleCalendarViewProps) {
+export function ScheduleCalendarView({ assignments, scheduleWeekStart, scheduleWeekEnd, scheduleId }: ScheduleCalendarViewProps) {
+  const queryClient = useQueryClient();
+  const [observationText, setObservationText] = useState("");
+  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  // Load existing observation
+  const { data: savedObservation } = useQuery({
+    queryKey: ["schedule-observation", scheduleId],
+    queryFn: async () => {
+      if (!scheduleId) return null;
+      const { data, error } = await supabase
+        .from("schedule_observations" as any)
+        .select("*")
+        .eq("schedule_id", scheduleId)
+        .maybeSingle();
+      if (error) throw error;
+      return data as any;
+    },
+    enabled: !!scheduleId,
+  });
+
+  useEffect(() => {
+    if (savedObservation) {
+      setObservationText(savedObservation.content || "");
+    } else {
+      setObservationText("");
+    }
+  }, [savedObservation]);
+
+  // Auto-save mutation
+  const saveMutation = useMutation({
+    mutationFn: async (content: string) => {
+      if (!scheduleId) return;
+      const { error } = await supabase
+        .from("schedule_observations" as any)
+        .upsert({ schedule_id: scheduleId, content } as any, { onConflict: "schedule_id" });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["schedule-observation", scheduleId] });
+    },
+  });
+
+  const handleObservationChange = useCallback((value: string) => {
+    setObservationText(value);
+    if (saveTimeout) clearTimeout(saveTimeout);
+    const timeout = setTimeout(() => {
+      saveMutation.mutate(value);
+    }, 1000);
+    setSaveTimeout(timeout);
+  }, [saveTimeout, saveMutation]);
   // Buscar todos os corretores ativos do banco
   const { data: activeBrokers } = useQuery({
     queryKey: ["active-brokers-for-calendar"],
@@ -491,6 +544,25 @@ export function ScheduleCalendarView({ assignments, scheduleWeekStart, scheduleW
           </table>
         </div>
       </div>
+
+      {/* OBSERVAÇÕES */}
+      {scheduleId && (
+        <div className="mt-6 border-t pt-4">
+          <Label className="flex items-center gap-2 text-sm font-semibold mb-2">
+            <MessageSquare className="h-4 w-4" />
+            Observações
+          </Label>
+          <Textarea
+            value={observationText}
+            onChange={(e) => handleObservationChange(e.target.value)}
+            placeholder="Adicione observações sobre esta escala..."
+            className="min-h-[80px] resize-y"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            {saveMutation.isPending ? "Salvando..." : saveMutation.isSuccess ? "✓ Salvo" : "Auto-save ativado"}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
