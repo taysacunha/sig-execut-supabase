@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Sun, Moon } from "lucide-react";
+import { Sun, Moon, Info } from "lucide-react";
 
 interface SpecificDateShiftDialogProps {
   open: boolean;
@@ -37,6 +37,15 @@ interface SpecificDateShiftDialogProps {
     afternoon_start: string;
     afternoon_end: string;
   };
+  suggestedConfig?: {
+    has_morning: boolean;
+    has_afternoon: boolean;
+    morning_start: string;
+    morning_end: string;
+    afternoon_start: string;
+    afternoon_end: string;
+  };
+  suggestedFromLabel?: string | null;
 }
 
 export function SpecificDateShiftDialog({
@@ -47,6 +56,8 @@ export function SpecificDateShiftDialog({
   onDelete,
   hasExistingConfig,
   initialConfig,
+  suggestedConfig,
+  suggestedFromLabel,
 }: SpecificDateShiftDialogProps) {
   const [hasMorning, setHasMorning] = useState(false);
   const [hasAfternoon, setHasAfternoon] = useState(false);
@@ -54,6 +65,7 @@ export function SpecificDateShiftDialog({
   const [morningEnd, setMorningEnd] = useState("12:00");
   const [afternoonStart, setAfternoonStart] = useState("13:00");
   const [afternoonEnd, setAfternoonEnd] = useState("18:00");
+  const [showInheritBanner, setShowInheritBanner] = useState(false);
 
   useEffect(() => {
     if (initialConfig) {
@@ -63,6 +75,16 @@ export function SpecificDateShiftDialog({
       setMorningEnd(initialConfig.morning_end || "12:00");
       setAfternoonStart(initialConfig.afternoon_start || "13:00");
       setAfternoonEnd(initialConfig.afternoon_end || "18:00");
+      setShowInheritBanner(false);
+    } else if (suggestedConfig) {
+      // Auto-fill from previous period
+      setHasMorning(suggestedConfig.has_morning);
+      setHasAfternoon(suggestedConfig.has_afternoon);
+      setMorningStart(suggestedConfig.morning_start || "08:00");
+      setMorningEnd(suggestedConfig.morning_end || "12:00");
+      setAfternoonStart(suggestedConfig.afternoon_start || "13:00");
+      setAfternoonEnd(suggestedConfig.afternoon_end || "18:00");
+      setShowInheritBanner(!!suggestedFromLabel);
     } else {
       // Reset to defaults when opening for a new date
       setHasMorning(false);
@@ -71,8 +93,9 @@ export function SpecificDateShiftDialog({
       setMorningEnd("12:00");
       setAfternoonStart("13:00");
       setAfternoonEnd("18:00");
+      setShowInheritBanner(false);
     }
-  }, [initialConfig, open, date]);
+  }, [initialConfig, suggestedConfig, suggestedFromLabel, open, date]);
 
   const handleSave = () => {
     if (!hasMorning && !hasAfternoon) {
@@ -104,6 +127,13 @@ export function SpecificDateShiftDialog({
             )}
           </DialogDescription>
         </DialogHeader>
+
+        {showInheritBanner && suggestedFromLabel && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-700">
+            <Info className="h-4 w-4 flex-shrink-0" />
+            <span>Horários carregados do período de <strong className="capitalize">{suggestedFromLabel}</strong></span>
+          </div>
+        )}
 
         <div className="space-y-6 py-4">
           {/* Morning Shift */}

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,9 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Plus, Eye, Edit, Trash2, ChevronDown, CalendarDays } from "lucide-react";
+import { Plus, Eye, Edit, Trash2, ChevronDown, CalendarDays, Info } from "lucide-react";
 import { toast } from "sonner";
-import { format, eachDayOfInterval, getDay, startOfWeek, addDays } from "date-fns";
+import { format, eachDayOfInterval, getDay, startOfWeek, addDays, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { InternalPeriodConfigDialog } from "./InternalPeriodConfigDialog";
 import { SpecificDateShiftDialog } from "./SpecificDateShiftDialog";
@@ -224,6 +224,63 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
     return acc;
   }, {} as Record<string, any[]>) || {};
 
+  // Estado para banner de horários herdados
+  const [inheritedFromLabel, setInheritedFromLabel] = useState<string | null>(null);
+
+  // Buscar configs do período anterior para auto-fill
+  const getPreviousPeriodConfigs = useCallback(async () => {
+    if (!periods || periods.length === 0) return null;
+    
+    const sortedPeriods = [...periods].sort((a, b) => b.start_date.localeCompare(a.start_date));
+    const previousPeriod = sortedPeriods[0];
+    if (!previousPeriod) return null;
+
+    const { data: prevSpecificConfigs } = await supabase
+      .from("period_specific_day_configs")
+      .select("*")
+      .eq("period_id", previousPeriod.id);
+
+    const { data: prevDayConfigs } = await supabase
+      .from("period_day_configs")
+      .select("*")
+      .eq("period_id", previousPeriod.id);
+
+    const configs = (prevSpecificConfigs && prevSpecificConfigs.length > 0) ? prevSpecificConfigs : prevDayConfigs;
+    if (!configs || configs.length === 0) return null;
+
+    const periodDate = new Date(previousPeriod.start_date + "T00:00:00");
+    const label = format(periodDate, "MMMM/yyyy", { locale: ptBR });
+
+    let weekdayConfig: any = null;
+    let saturdayConfig: any = null;
+    let sundayConfig: any = null;
+
+    if (prevSpecificConfigs && prevSpecificConfigs.length > 0) {
+      weekdayConfig = prevSpecificConfigs.find((c: any) => {
+        const dow = new Date(c.specific_date + "T00:00:00").getDay();
+        return dow >= 1 && dow <= 5;
+      });
+      saturdayConfig = prevSpecificConfigs.find((c: any) => {
+        const dow = new Date(c.specific_date + "T00:00:00").getDay();
+        return dow === 6;
+      });
+      sundayConfig = prevSpecificConfigs.find((c: any) => {
+        const dow = new Date(c.specific_date + "T00:00:00").getDay();
+        return dow === 0;
+      });
+    } else if (prevDayConfigs && prevDayConfigs.length > 0) {
+      weekdayConfig = prevDayConfigs.find((c: any) => 
+        ["monday","tuesday","wednesday","thursday","friday"].includes(c.weekday)
+      );
+      saturdayConfig = prevDayConfigs.find((c: any) => c.weekday === "saturday");
+      sundayConfig = prevDayConfigs.find((c: any) => c.weekday === "sunday");
+    }
+
+    return { weekdayConfig, saturdayConfig, sundayConfig, label };
+  }, [periods]);
+
+  // (handleCreatePeriod and getSuggestedConfigForDate moved below createPeriodMutation)
+
   const createPeriodMutation = useMutation({
     mutationFn: async (data: typeof periodForm) => {
       // Calcular primeiro e último dia do mês
@@ -245,10 +302,13 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
       if (error) throw error;
       return newPeriod;
     },
-    onSuccess: (newPeriod) => {
+    onSuccess: (newPeriod, variables) => {
       queryClient.invalidateQueries({ queryKey: ["location-periods", locationId] });
       queryClient.invalidateQueries({ queryKey: ["locations"] });
       toast.success("Período adicionado!");
+      
+      // Definir o mês do calendário para o mês/ano selecionado
+      setCalendarMonth(new Date(variables.year, variables.month - 1, 1));
       
       if (locationType === "external") {
         // Para externos, abrir calendário
@@ -262,6 +322,51 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
       setPeriodForm({ month: new Date().getMonth() + 1, year: new Date().getFullYear() });
     },
   });
+
+  // Validar duplicata e criar período
+  const handleCreatePeriod = useCallback(async () => {
+    const startDate = new Date(periodForm.year, periodForm.month - 1, 1);
+    const startDateStr = format(startDate, "yyyy-MM-dd");
+    
+    const isDuplicate = periods?.some(p => p.start_date === startDateStr);
+    if (isDuplicate) {
+      toast.error("Já existe um período para este mês/ano neste local!");
+      return;
+    }
+
+    const prevConfigs = await getPreviousPeriodConfigs();
+    if (prevConfigs) {
+      setInheritedFromLabel(prevConfigs.label);
+      if (prevConfigs.weekdayConfig) {
+        const c = prevConfigs.weekdayConfig;
+        setTempWeekdayConfig({ has_morning: c.has_morning || false, has_afternoon: c.has_afternoon || false, morning_start: c.morning_start || "08:00", morning_end: c.morning_end || "12:00", afternoon_start: c.afternoon_start || "13:00", afternoon_end: c.afternoon_end || "18:00" });
+        if (locationType === "internal") setInternalSchedule(prev => ({ ...prev, weekday_morning_start: c.morning_start || "08:00", weekday_morning_end: c.morning_end || "12:00", weekday_afternoon_start: c.afternoon_start || "13:00", weekday_afternoon_end: c.afternoon_end || "18:00" }));
+      }
+      if (prevConfigs.saturdayConfig) {
+        const c = prevConfigs.saturdayConfig;
+        setTempSaturdayConfig({ has_morning: c.has_morning || false, has_afternoon: c.has_afternoon || false, morning_start: c.morning_start || "08:00", morning_end: c.morning_end || "12:00", afternoon_start: c.afternoon_start || "13:00", afternoon_end: c.afternoon_end || "18:00" });
+        if (locationType === "internal") setInternalSchedule(prev => ({ ...prev, saturday_start: c.morning_start || "08:00", saturday_end: c.morning_end || "12:00" }));
+      }
+      if (prevConfigs.sundayConfig) {
+        const c = prevConfigs.sundayConfig;
+        setTempSundayConfig({ has_morning: c.has_morning || false, has_afternoon: c.has_afternoon || false, morning_start: c.morning_start || "08:00", morning_end: c.morning_end || "12:00", afternoon_start: c.afternoon_start || "13:00", afternoon_end: c.afternoon_end || "18:00" });
+        if (locationType === "internal") setInternalSchedule(prev => ({ ...prev, sunday_start: c.morning_start || "08:00", sunday_end: c.morning_end || "12:00" }));
+      }
+    } else {
+      setInheritedFromLabel(null);
+    }
+
+    createPeriodMutation.mutate(periodForm);
+  }, [periodForm, periods, getPreviousPeriodConfigs, createPeriodMutation, locationType]);
+
+  const getSuggestedConfigForDate = useCallback((date: Date | null) => {
+    if (!date || !inheritedFromLabel) return undefined;
+    const dow = getDay(date);
+    if (dow >= 1 && dow <= 5) return tempWeekdayConfig.has_morning || tempWeekdayConfig.has_afternoon ? tempWeekdayConfig : undefined;
+    if (dow === 6) return tempSaturdayConfig.has_morning || tempSaturdayConfig.has_afternoon ? tempSaturdayConfig : undefined;
+    if (dow === 0) return tempSundayConfig.has_morning || tempSundayConfig.has_afternoon ? tempSundayConfig : undefined;
+    return undefined;
+  }, [tempWeekdayConfig, tempSaturdayConfig, tempSundayConfig, inheritedFromLabel]);
 
   const createDayConfigsMutation = useMutation({
     mutationFn: async (configs: any[]) => {
@@ -971,7 +1076,7 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
             </div>
 
             <Button
-              onClick={() => createPeriodMutation.mutate(periodForm)}
+              onClick={() => handleCreatePeriod()}
               disabled={(selectedWeekdays.length === 0 && !saturdayEnabled && !sundayEnabled)}
               className="w-full"
             >
@@ -1134,7 +1239,7 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
           </div>
         </div>
         <Button
-          onClick={() => createPeriodMutation.mutate(periodForm)}
+          onClick={() => handleCreatePeriod()}
         >
           <Plus className="mr-2 h-4 w-4" />
           Adicionar Período
@@ -1930,6 +2035,12 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
                   ? getConfigForDate(editingSpecificDate) || undefined
                   : undefined
               }
+              suggestedConfig={
+                editingSpecificDate && !getConfigForDate(editingSpecificDate)
+                  ? getSuggestedConfigForDate(editingSpecificDate)
+                  : undefined
+              }
+              suggestedFromLabel={inheritedFromLabel}
             />
     </div>
   );
