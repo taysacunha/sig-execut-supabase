@@ -708,9 +708,9 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
             months={months}
           />
 
-          {/* Detalhes das Vendas - visível no PDF */}
+          {/* Detalhes das Vendas - apenas no PDF */}
           {saleDetails.length > 0 && (
-            <Card>
+            <Card className="hidden print:block">
               <CardHeader>
                 <CardTitle className="text-base">Detalhes das Vendas</CardTitle>
               </CardHeader>
@@ -749,8 +749,10 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
             </Card>
           )}
 
-          {/* Detalhes da Avaliação - visível no PDF */}
-          <EvaluationDetailsPDF brokerId={selectedBrokerId} months={months} />
+          {/* Detalhes da Avaliação - apenas no PDF */}
+          <div className="hidden print:block">
+            <EvaluationDetailsPDF brokerId={selectedBrokerId} months={months} />
+          </div>
 
           {/* Charts */}
           <div className="grid md:grid-cols-2 gap-6">

@@ -227,38 +227,45 @@ const Dashboard = () => {
     ...queryConfig,
   });
 
-  // Birthday brokers - cross-reference brokers with sales_brokers
+  // Birthday brokers - cross-reference brokers with sales_brokers by CRECI
   const { data: birthdayBrokers } = useQuery({
     queryKey: ["dashboard-birthdays", selectedMonth],
     queryFn: async () => {
       const month = selectedMonth.split("-")[1]; // "03" from "2026-03"
       
-      // Get active escalas brokers names
+      // Get active escalas brokers with CRECI
       const { data: escalaBrokers } = await supabase
         .from("brokers")
-        .select("name")
+        .select("name, creci")
         .eq("is_active", true);
       
       if (!escalaBrokers || escalaBrokers.length === 0) return [];
       
-      const brokerNames = escalaBrokers.map(b => b.name.toLowerCase().trim());
-      
       // Get sales_brokers with birth_date in the selected month
-      const { data: salesBrokers } = await supabase
+      const { data: salesBrokersRaw } = await supabase
         .from("sales_brokers")
-        .select("name, birth_date")
+        .select("name, birth_date, creci" as any)
         .eq("is_active", true)
         .not("birth_date", "is", null);
       
+      const salesBrokers = salesBrokersRaw as any[] | null;
       if (!salesBrokers) return [];
       
-      // Filter by month and cross-reference by name
+      // Build sets for matching
+      const brokerCrecis = new Set(escalaBrokers.filter(b => b.creci).map(b => b.creci!.toLowerCase().trim()));
+      const brokerNames = new Set(escalaBrokers.map(b => b.name.toLowerCase().trim()));
+      
+      // Filter by month and cross-reference by CRECI first, then fallback to name
       const today = new Date();
       return salesBrokers
         .filter(sb => {
           if (!sb.birth_date) return false;
           const birthMonth = sb.birth_date.substring(5, 7);
-          return birthMonth === month && brokerNames.includes(sb.name.toLowerCase().trim());
+          if (birthMonth !== month) return false;
+          // Match by CRECI if available, otherwise by name
+          const sbCreci = ((sb as any).creci || "").toLowerCase().trim();
+          if (sbCreci && brokerCrecis.has(sbCreci)) return true;
+          return brokerNames.has(sb.name.toLowerCase().trim());
         })
         .map(sb => {
           const day = parseInt(sb.birth_date!.substring(8, 10));
@@ -269,7 +276,9 @@ const Dashboard = () => {
         })
         .sort((a, b) => a.day - b.day);
     },
-    ...queryConfig,
+    staleTime: 1000 * 30, // 30 seconds for faster updates
+    gcTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: true,
   });
 
   // Show loading state while critical data is loading
