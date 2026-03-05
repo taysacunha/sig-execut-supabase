@@ -32,7 +32,8 @@ export const BrokerPerformanceTab = ({ enabled = true }: BrokerPerformanceTabPro
         end_date: endDate,
       });
       if (error) throw error;
-      return data || [];
+      // Filter out brokers with 0 assignments (no data in period)
+      return (data || []).filter((b: any) => Number(b.total_assignments) > 0);
     },
     enabled,
     staleTime: 1000 * 60 * 5,

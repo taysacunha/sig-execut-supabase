@@ -248,23 +248,36 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
     const configs = (prevSpecificConfigs && prevSpecificConfigs.length > 0) ? prevSpecificConfigs : prevDayConfigs;
     if (!configs || configs.length === 0) return null;
 
-    const periodDate = new Date(previousPeriod.start_date + "T00:00:00");
-    const label = format(periodDate, "MMMM/yyyy", { locale: ptBR });
+    // Generate label with specific date and weekday
+    const generateLabel = (config: any, isSpecific: boolean) => {
+      if (isSpecific && config.specific_date) {
+        const d = new Date(config.specific_date + "T00:00:00");
+        return format(d, "dd/MM/yyyy, EEEE", { locale: ptBR });
+      }
+      // For period_day_configs, use the period end_date as reference
+      const periodDate = new Date(previousPeriod.end_date + "T00:00:00");
+      return format(periodDate, "MMMM/yyyy", { locale: ptBR });
+    };
+
+    const isSpecific = prevSpecificConfigs && prevSpecificConfigs.length > 0;
 
     let weekdayConfig: any = null;
     let saturdayConfig: any = null;
     let sundayConfig: any = null;
+    let weekdayLabel = "";
+    let saturdayLabel = "";
+    let sundayLabel = "";
 
-    if (prevSpecificConfigs && prevSpecificConfigs.length > 0) {
-      weekdayConfig = prevSpecificConfigs.find((c: any) => {
+    if (isSpecific) {
+      weekdayConfig = prevSpecificConfigs!.find((c: any) => {
         const dow = new Date(c.specific_date + "T00:00:00").getDay();
         return dow >= 1 && dow <= 5;
       });
-      saturdayConfig = prevSpecificConfigs.find((c: any) => {
+      saturdayConfig = prevSpecificConfigs!.find((c: any) => {
         const dow = new Date(c.specific_date + "T00:00:00").getDay();
         return dow === 6;
       });
-      sundayConfig = prevSpecificConfigs.find((c: any) => {
+      sundayConfig = prevSpecificConfigs!.find((c: any) => {
         const dow = new Date(c.specific_date + "T00:00:00").getDay();
         return dow === 0;
       });
@@ -275,6 +288,13 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
       saturdayConfig = prevDayConfigs.find((c: any) => c.weekday === "saturday");
       sundayConfig = prevDayConfigs.find((c: any) => c.weekday === "sunday");
     }
+
+    if (weekdayConfig) weekdayLabel = generateLabel(weekdayConfig, !!isSpecific);
+    if (saturdayConfig) saturdayLabel = generateLabel(saturdayConfig, !!isSpecific);
+    if (sundayConfig) sundayLabel = generateLabel(sundayConfig, !!isSpecific);
+
+    // Use the most specific label available
+    const label = weekdayLabel || saturdayLabel || sundayLabel;
 
     return { weekdayConfig, saturdayConfig, sundayConfig, label };
   }, [periods]);

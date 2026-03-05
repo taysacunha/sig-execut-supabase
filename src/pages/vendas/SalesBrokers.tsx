@@ -51,6 +51,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { z } from "zod";
 import { normalizeText, isSimilarName } from "@/lib/textUtils";
+import { formatCreci } from "@/lib/utils";
 import { useTableControls } from "@/hooks/useTableControls";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
 import { format } from "date-fns";
@@ -59,6 +60,7 @@ import { ptBR } from "date-fns/locale";
 const brokerSchema = z.object({
   name: z.string().trim().min(1, "Nome é obrigatório").max(100, "Nome muito longo"),
   nome_exibicao: z.string().nullable(),
+  creci: z.string().nullable(),
   team_id: z.string().nullable(),
   is_active: z.boolean(),
   deactivated_month: z.string().nullable(),
@@ -73,6 +75,7 @@ type BrokerFormData = z.infer<typeof brokerSchema>;
 interface SalesBroker {
   id: string;
   name: string;
+  creci: string | null;
   team_id: string | null;
   team_name?: string;
   is_active: boolean;
@@ -101,6 +104,7 @@ const SalesBrokers = () => {
   const [formData, setFormData] = useState<BrokerFormData>({
     name: "",
     nome_exibicao: null,
+    creci: null,
     team_id: null,
     is_active: true,
     deactivated_month: null,
@@ -140,6 +144,7 @@ const SalesBrokers = () => {
       return (data || []).map((broker: any) => ({
         id: broker.id,
         name: broker.name,
+        creci: broker.creci || null,
         team_id: broker.team_id,
         team_name: broker.sales_teams?.name || null,
         is_active: broker.is_active,
@@ -180,6 +185,7 @@ const SalesBrokers = () => {
       const { error } = await supabase.from("sales_brokers").insert([{
         name: data.name,
         nome_exibicao: data.nome_exibicao || null,
+        creci: data.creci || null,
         team_id: data.team_id || null,
         is_active: data.is_active,
         deactivated_month: !data.is_active ? data.deactivated_month : null,
@@ -187,12 +193,13 @@ const SalesBrokers = () => {
         hire_date: data.hire_date || null,
         birth_date: data.birth_date || null,
         broker_type: data.broker_type,
-      }]);
+      } as any]);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales-brokers"] });
       queryClient.invalidateQueries({ queryKey: ["sales-teams"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-birthdays"] });
       toast.success("Corretor criado com sucesso!");
       handleCloseDialog();
     },
@@ -208,6 +215,7 @@ const SalesBrokers = () => {
         .update({
           name: data.name,
           nome_exibicao: data.nome_exibicao || null,
+          creci: data.creci || null,
           team_id: data.team_id || null,
           is_active: data.is_active,
           deactivated_month: !data.is_active ? data.deactivated_month : null,
@@ -215,13 +223,14 @@ const SalesBrokers = () => {
           hire_date: data.hire_date || null,
           birth_date: data.birth_date || null,
           broker_type: data.broker_type,
-        })
+        } as any)
         .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales-brokers"] });
       queryClient.invalidateQueries({ queryKey: ["sales-teams"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-birthdays"] });
       toast.success("Corretor atualizado com sucesso!");
       handleCloseDialog();
     },
@@ -268,7 +277,7 @@ const SalesBrokers = () => {
 
   const handleOpenCreate = () => {
     setEditingBroker(null);
-    setFormData({ name: "", nome_exibicao: null, team_id: null, is_active: true, deactivated_month: null, is_manager: false, hire_date: null, birth_date: null, broker_type: "venda" });
+    setFormData({ name: "", nome_exibicao: null, creci: null, team_id: null, is_active: true, deactivated_month: null, is_manager: false, hire_date: null, birth_date: null, broker_type: "venda" });
     setErrors({});
     setDialogOpen(true);
   };
@@ -277,6 +286,7 @@ const SalesBrokers = () => {
     setFormData({
       name: broker.name,
       nome_exibicao: (broker as any).nome_exibicao || null,
+      creci: broker.creci || null,
       team_id: broker.team_id,
       is_active: broker.is_active,
       deactivated_month: broker.deactivated_month,
@@ -292,7 +302,7 @@ const SalesBrokers = () => {
   const handleCloseDialog = () => {
     setDialogOpen(false);
     setEditingBroker(null);
-    setFormData({ name: "", nome_exibicao: null, team_id: null, is_active: true, deactivated_month: null, is_manager: false, hire_date: null, birth_date: null, broker_type: "venda" });
+    setFormData({ name: "", nome_exibicao: null, creci: null, team_id: null, is_active: true, deactivated_month: null, is_manager: false, hire_date: null, birth_date: null, broker_type: "venda" });
     setErrors({});
   };
 
@@ -480,6 +490,19 @@ const SalesBrokers = () => {
                 placeholder="Ex: João Silva"
               />
               {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="creci">CRECI</Label>
+              <Input
+                id="creci"
+                value={formData.creci || ""}
+                onChange={(e) => setFormData({ ...formData, creci: formatCreci(e.target.value) })}
+                placeholder="Ex: 12345-F"
+              />
+              <p className="text-xs text-muted-foreground">
+                Número do CRECI. Usado para cruzar dados entre sistemas.
+              </p>
             </div>
 
             <div className="space-y-2">

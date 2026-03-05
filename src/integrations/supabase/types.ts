@@ -2103,6 +2103,38 @@ export type Database = {
           },
         ]
       }
+      schedule_observations: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          schedule_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          schedule_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          schedule_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_observations_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: true
+            referencedRelation: "generated_schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       schedule_validation_results: {
         Row: {
           broker_reports: Json | null
