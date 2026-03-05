@@ -1,109 +1,82 @@
 
 
-## Plano Completo - 5 Funcionalidades (Revisão Final)
+## Plano de Ajustes - 6 Correções
+
+### 1. Relatório Corretores mostrando dados de meses sem cadastro
+
+**Problema:** A aba "Corretores" nos relatórios de escalas mostra corretores (Cleane, Adjane) para períodos sem dados cadastrados. A RPC `get_broker_performance_hybrid` provavelmente retorna todos os corretores ativos, mesmo sem assignments no período.
+
+**Solução:** Em `BrokerPerformanceTab.tsx`, filtrar o resultado da query para remover corretores com `total_assignments === 0`. Isso evita mostrar corretores sem dados no período selecionado.
+
+**Arquivo:** `src/components/reports/BrokerPerformanceTab.tsx`
 
 ---
 
-### Funcionalidade 1: Calendário abre no mês selecionado
+### 2. Relatório Corretores Vendas - remover divs de vendas/observações da página
 
-**Problema:** Ao criar um período (ex: maio/2026), o dialog do calendário abre em março/2026 (mês atual).
+**Problema:** Em `BrokerIndividualReport.tsx`, os cards "Detalhes das Vendas" (linha 711-749) e `EvaluationDetailsPDF` (linha 753) estão visíveis na tela. Devem aparecer apenas no PDF (quando exporta), não na visualização normal.
 
-**Solução:** Em `LocationPeriodTree.tsx`, no `onSuccess` do `createPeriodMutation` (linha 248), antes de abrir o dialog, definir `setCalendarMonth(new Date(data.year, data.month - 1, 1))`. Atualmente isso só é feito no `handleEditPeriod` (linha 459-460) e `handleOpenCalendar` (linha 534-535), mas falta no create.
+**Solução:** Envolver essas divs com uma classe CSS que as esconde na tela mas mostra no print/PDF capture. Usar `className="hidden print:block"` ou esconder condicionalmente (mostrar somente durante captura de PDF).
 
-**Arquivo:** `LocationPeriodTree.tsx` (linha ~248-256)
-
----
-
-### Funcionalidade 2: Bloquear períodos duplicados
-
-**Problema:** É possível adicionar o mesmo mês/ano duas vezes para o mesmo local.
-
-**Solução:** Em `LocationPeriodTree.tsx`, antes de chamar `createPeriodMutation.mutate()`, verificar se já existe um período com o mesmo mês/ano na lista `periods` carregada pela query. Se existir, exibir `toast.error("Já existe um período para este mês/ano neste local!")` e não prosseguir.
-
-**Arquivo:** `LocationPeriodTree.tsx` (no handler de submit do form de período)
+**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas 711-753)
 
 ---
 
-### Funcionalidade 3: Auto-preenchimento de horários + banner informativo
+### 3. Adicionar campo CRECI ao formulário de corretores de vendas + cruzar por CRECI
 
-**Problema:** Ao configurar turnos de um novo mês, os horários vêm com valores padrão em vez de herdar do período anterior.
+**Problema:** O cruzamento de aniversariantes entre `brokers` e `sales_brokers` é feito por nome, que falha quando os nomes não são exatamente iguais. A tabela `sales_brokers` não tem campo `creci` atualmente.
 
 **Solução:**
-- Ao criar um novo período, buscar o período mais recente do mesmo local (por `start_date` descendente) que já tenha configurações de turno
-- Separar por tipo de dia: weekday (seg-sex), sábado, domingo
-- Preencher os campos de horário com os valores do período anterior
-- Exibir um **banner informativo** no dialog, ex: `ℹ️ Horários carregados do período de Fevereiro/2026`
-- No `SpecificDateShiftDialog`, quando `initialConfig` é null (novo dia), passar os horários sugeridos como prop `suggestedConfig` com a referência do mês de origem
-- O banner desaparece se o usuário alterar os horários manualmente
+- **Migração SQL:** `ALTER TABLE sales_brokers ADD COLUMN creci text;`
+- **Formulário:** Em `SalesBrokers.tsx`, adicionar campo CRECI no form (input com máscara, opcional)
+- **Dashboard Escalas:** Em `Dashboard.tsx`, alterar a query de aniversariantes para cruzar por CRECI (`brokers.creci = sales_brokers.creci`) em vez de por nome
+- **Dashboard Vendas:** Sem alteração (query direta em `sales_brokers`)
 
-**Arquivos:** `LocationPeriodTree.tsx`, `SpecificDateShiftDialog.tsx`
+**Arquivos:** Migração SQL, `src/pages/vendas/SalesBrokers.tsx`, `src/pages/Dashboard.tsx`
 
 ---
 
-### Funcionalidade 4: Campo "Observações" na escala e no PDF
+### 4. Aniversariantes não atualizam em tempo real
 
-**Problema:** Não existe campo para observações na visualização da escala.
+**Problema:** A query de aniversariantes usa `staleTime: 5min` e `refetchOnWindowFocus: false`, então não atualiza ao editar um corretor.
 
-**Solução:**
+**Solução:** Na mutation de update do corretor em `SalesBrokers.tsx`, adicionar `queryClient.invalidateQueries({ queryKey: ["dashboard-birthdays"] })`. Também no `Dashboard.tsx`, remover ou reduzir o `staleTime` da query de aniversariantes para que revalide mais frequentemente.
 
-**4a. Migração SQL** - Criar tabela `schedule_observations`:
-```sql
-CREATE TABLE schedule_observations (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  schedule_id uuid REFERENCES generated_schedules(id) ON DELETE CASCADE NOT NULL,
-  content text NOT NULL DEFAULT '',
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now(),
-  UNIQUE(schedule_id)
-);
-ALTER TABLE schedule_observations ENABLE ROW LEVEL SECURITY;
--- Policies para escalas viewers/editors (SELECT/INSERT/UPDATE/DELETE)
-```
-
-**4b. UI** - Em `ScheduleCalendarView.tsx`, abaixo da legenda de horários (final do componente, antes do `</div>` final), adicionar:
-- Um `Textarea` editável com label "Observações"
-- Auto-save com debounce (upsert na tabela `schedule_observations`)
-- Query para carregar observações existentes pelo `schedule_id`
-- Será necessário receber `scheduleId` como nova prop
-
-**4c. PDF** - Em `SchedulePDFGenerator.tsx`, abaixo da legenda, renderizar o conteúdo das observações se existir. Também receberá `scheduleId` como nova prop para carregar dados.
-
-**4d. Schedules.tsx** - Passar o `selectedScheduleId` como prop para `ScheduleCalendarView` e `SchedulePDFGenerator`.
-
-**Arquivos:** Migração SQL, `ScheduleCalendarView.tsx`, `SchedulePDFGenerator.tsx`, `Schedules.tsx`
+**Arquivos:** `src/pages/vendas/SalesBrokers.tsx`, `src/pages/Dashboard.tsx`
 
 ---
 
-### Funcionalidade 5: Aniversariantes nos dashboards de Escalas e Vendas
+### 5. Banner de horários herdados - mostrar data e dia da semana
 
-**Problema:** Aniversariantes só aparecem no sistema de Férias. Quer ver nos dashboards de Escalas e Vendas também.
+**Problema:** O banner mostra apenas "Fevereiro/2026", mas o usuário quer ver a data específica e o dia da semana de onde veio o horário, ex: "25/02/2026, Terça-feira".
 
-**Estratégia de dados:** Reutilizar `birth_date` da tabela `sales_brokers` (fonte única). Sem criar campo novo em `brokers`.
+**Solução:** Em `LocationPeriodTree.tsx`, na função `getPreviousPeriodConfigs`, em vez de gerar label como `format(periodDate, "MMMM/yyyy")`, gerar labels por tipo de dia com a data específica e o dia da semana do config encontrado. Ex: se o weekdayConfig veio de `specific_date = "2026-02-25"`, mostrar `"25/02/2026, Terça-feira"`. Se veio de `period_day_configs`, usar a data do período + dia da semana do config.
 
-**5a. Dashboard Escalas** (`Dashboard.tsx`):
-- Nova query: buscar `brokers` ativos (nomes) + buscar `sales_brokers` ativos com `birth_date` no mês selecionado
-- Cruzar por nome para identificar quais corretores de escalas fazem aniversário
-- Renderizar Card "Aniversariantes do Mês" com icone de bolo, nome e dia
-- Se for hoje, badge "Hoje!" em destaque
+No `SpecificDateShiftDialog.tsx`, o banner já exibe `suggestedFromLabel`, então basta alterar o label gerado.
 
-**5b. Dashboard Vendas** (`VendasDashboard.tsx`):
-- Nova query direta: `sales_brokers` ativos com `birth_date` no mês/ano selecionado
-- Mesmo visual: Card com lista de aniversariantes
+**Arquivos:** `src/components/LocationPeriodTree.tsx`
 
-**Arquivos:** `Dashboard.tsx`, `VendasDashboard.tsx`
+---
+
+### 6. Observações não aparecem no PDF
+
+**Problema:** O `SchedulePDFGenerator.tsx` consulta `schedule_observations` com `as any` cast. Se a tabela `schedule_observations` não foi criada no banco (migração SQL pendente do plano anterior), a query falha silenciosamente e `observationContent` fica vazio.
+
+**Solução:** Verificar se a tabela existe. Se não existe, criar via migração. Se existe, verificar se o `scheduleId` está sendo passado corretamente (já confirmado que sim nas linhas 2098-2106 do `Schedules.tsx`). Também verificar se o `as any` cast está causando problemas de tipo - pode ser necessário regenerar os tipos do Supabase após a migração.
+
+**Ação:** Confirmar com o usuário se a migração SQL de `schedule_observations` já foi executada. Se não, incluir na migração deste plano.
 
 ---
 
 ### Resumo de alterações
 
-| Arquivo | Alterações |
+| Arquivo | Alteração |
 |---------|-----------|
-| `LocationPeriodTree.tsx` | setCalendarMonth no create, validação duplicata, auto-fill horários + banner |
-| `SpecificDateShiftDialog.tsx` | Nova prop `suggestedConfig` com mês de origem |
-| `ScheduleCalendarView.tsx` | Campo Observações com auto-save, nova prop `scheduleId` |
-| `SchedulePDFGenerator.tsx` | Renderizar observações no PDF, nova prop `scheduleId` |
-| `Schedules.tsx` | Passar `scheduleId` para CalendarView e PDFGenerator |
-| `Dashboard.tsx` | Card aniversariantes cruzando brokers + sales_brokers |
-| `VendasDashboard.tsx` | Card aniversariantes de sales_brokers |
-| **Migração SQL** | Tabela `schedule_observations` com RLS |
+| `BrokerPerformanceTab.tsx` | Filtrar corretores com 0 assignments |
+| `BrokerIndividualReport.tsx` | Esconder divs de vendas/avaliação na tela, manter no PDF |
+| `SalesBrokers.tsx` | Adicionar campo CRECI + invalidar query de birthdays |
+| `Dashboard.tsx` | Cruzar por CRECI, ajustar staleTime dos birthdays |
+| `LocationPeriodTree.tsx` | Label com data específica e dia da semana |
+| **Migração SQL** | `ALTER TABLE sales_brokers ADD COLUMN creci text` |
+| **Migração SQL** | Criar `schedule_observations` se não existir |
 
