@@ -288,6 +288,7 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
           const count = new Set(data?.map(s => s.sale_id)).size;
           const [y, m] = month.split("-").map(Number);
           return {
+            yearMonth: month,
             month: format(new Date(y, m - 1, 1), "MMM", { locale: ptBR }),
             vgv: total,
             vendas: count,
@@ -315,6 +316,7 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
             .maybeSingle();
           const [y, m] = month.split("-").map(Number);
           return {
+            yearMonth: month,
             month: format(new Date(y, m - 1, 1), "MMM", { locale: ptBR }),
             total: data?.proposals_count || 0,
             convertidas: data?.proposals_converted || 0,
@@ -343,6 +345,7 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
           const totalVisits = (data?.gimob_key_visits || 0) + (data?.scheduled_visits || 0) + (data?.builder_visits || 0);
           const [y, m] = month.split("-").map(Number);
           return {
+            yearMonth: month,
             month: format(new Date(y, m - 1, 1), "MMM", { locale: ptBR }),
             recebidos: data?.leads_received || 0,
             ativos: data?.leads_active || 0,
@@ -371,6 +374,7 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
             .maybeSingle();
           const [y, m] = month.split("-").map(Number);
           return {
+            yearMonth: month,
             month: format(new Date(y, m - 1, 1), "MMM", { locale: ptBR }),
             nota: data?.average_score || 0,
             classificacao: data?.classification || "-",
@@ -405,10 +409,10 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
     ...queryConfig,
   });
 
-  const reportSalesData = salesData.filter(s => reportMonths.includes(s.month));
-  const reportProposalsData = proposalsData.filter(p => reportMonths.includes(p.month));
-  const reportLeadsData = leadsData.filter(l => reportMonths.includes(l.month));
-  const reportEvaluationsData = evaluationsData.filter(e => reportMonths.includes(e.month));
+  const reportSalesData = salesData.filter(s => reportMonths.includes(s.yearMonth));
+  const reportProposalsData = proposalsData.filter(p => reportMonths.includes(p.yearMonth));
+  const reportLeadsData = leadsData.filter(l => reportMonths.includes(l.yearMonth));
+  const reportEvaluationsData = evaluationsData.filter(e => reportMonths.includes(e.yearMonth));
 
   const totalVGV = reportSalesData.reduce((acc, s) => acc + s.vgv, 0);
   const totalSales = reportSalesData.reduce((acc, s) => acc + s.vendas, 0);
