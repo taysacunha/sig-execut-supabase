@@ -42,7 +42,7 @@ const DeployGuide = () => {
   return (
     <div className="min-h-screen bg-background p-4 md:p-8 max-w-4xl mx-auto">
       <div className="flex items-center gap-4 mb-6">
-        <Link to="/dev">
+        <Link to="/auth">
           <Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button>
         </Link>
         <div>
