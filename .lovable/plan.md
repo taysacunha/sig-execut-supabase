@@ -1,56 +1,57 @@
 
 
-## Plano: Edge Function para registro automatico de desenvolvimento
+## Plano - 4 Correções
 
-### Contexto
+### 1. Dialog de corretores quebrado (sem scroll)
 
-Em um app frontend-only (React/Vite), nao ha como interceptar commits git diretamente. A abordagem viavel e criar uma **API (Edge Function)** que aceita registros de desenvolvimento via POST, permitindo que qualquer automacao externa (git hooks, CI/CD, scripts, ou o proprio AI) registre trabalho automaticamente.
+**Problema:** O `DialogContent` em `SalesBrokers.tsx` (linha 473) não tem limite de altura. Com os novos campos CRECI e Nome de Exibição, o conteúdo ultrapassa a viewport e os botões Cancelar/Salvar ficam inacessíveis.
 
-### O que sera criado
+**Solução:** Adicionar `className="max-w-lg max-h-[90vh] overflow-y-auto"` ao `DialogContent` (linha 473). O `DialogFooter` (linha 638) receberá `className="sticky bottom-0 bg-background pt-4 border-t"` para ficar sempre visível.
 
-**1. Edge Function `log-dev-work`**
-- Aceita POST com autenticacao via header `x-dev-key` (mesmo codigo `S1g.D3v!Sup4b4s3`)
-- Operacoes: `upsert` (criar ou atualizar horas de feature existente) e `increment` (somar horas a feature existente)
-- Busca por `system_name` + `feature_name` para decidir se insere ou atualiza
-- Retorna o registro criado/atualizado
+**Arquivo:** `src/pages/vendas/SalesBrokers.tsx` (linhas 473, 638)
 
-Payload exemplo:
-```json
-{
-  "action": "upsert",
-  "system_name": "vendas",
-  "feature_name": "Dashboard com resumo de VGV",
-  "description": "Adicionado filtro por equipe",
-  "hours": 2.5
-}
-```
+---
 
-Ou para somar horas a uma feature existente:
-```json
-{
-  "action": "increment",
-  "system_name": "vendas", 
-  "feature_name": "Dashboard com resumo de VGV",
-  "add_hours": 1.0
-}
-```
+### 2. Relatório Corretores Vendas - dados de meses sem cadastro
 
-**2. Configuracao no `supabase/config.toml`**
-- Adicionar `[functions.log-dev-work]` com `verify_jwt = false` (autenticacao via x-dev-key)
+**Problema:** No modo mensal, o `months` (linha 200-224) inclui o mês anterior para "contexto de evolução". Os totais (linhas 400-409) e queries de `saleDetails`, `proposalsData`, `leadsData`, `evaluationsData` usam esse array completo, então dados do mês anterior "vazam" para o mês selecionado.
 
-### Fluxo de uso
+**Solução:** Criar um `reportMonths` separado que contém apenas o mês selecionado (sem o anterior). Usar `reportMonths` para calcular totais e buscar `saleDetails`. Manter `months` completo apenas para os gráficos de evolução (`salesData`, `proposalsData`, `leadsData`, `evaluationsData` nos charts).
 
-- **Pelo AI (eu)**: apos cada tarefa, chamo a edge function para registrar as horas
-- **Por git hook**: script `post-commit` no servidor pode chamar a API
-- **Por CI/CD**: step no pipeline que registra o deploy
-- **Manual**: qualquer `curl` ou ferramenta HTTP
+Concretamente:
+- Adicionar `const reportMonths = periodType === "month" ? [months[months.length - 1]] : months;`
+- Alterar `totalVGV`, `totalSales` para somar apenas entries cujo `month` esteja em `reportMonths`
+- Alterar `totalProposals`, `totalConverted`, `totalLeads`, `totalLeadsActive`, `totalVisits`, `avgScore` idem
+- Alterar query de `saleDetails` para usar `reportMonths` no `.in("year_month", ...)`
 
-### Arquivos
+**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas ~200, 384-409)
 
-| Arquivo | Alteracao |
+---
+
+### 3. Divs de vendas/avaliação não aparecem no PDF
+
+**Problema:** `hidden print:block` (linhas 713, 753) funciona com `window.print()` mas **não** com `html2canvas`, que captura o estado visual atual do DOM. Os elementos ficam `display:none` durante a captura.
+
+**Solução:** Usar o estado `isExporting` (já existe, linha 192) para controlar visibilidade:
+- Trocar `className="hidden print:block"` por renderização condicional: `{isExporting && saleDetails.length > 0 && (<Card>...</Card>)}`
+- No `handleExportPDF` (linha 428), o `setIsExporting(true)` já é chamado antes do `html2canvas`. Adicionar um `await new Promise(r => setTimeout(r, 100))` entre o `setIsExporting(true)` e o `html2canvas` para dar tempo ao React de renderizar os blocos.
+
+**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas 711-755, 434-436)
+
+---
+
+### 4. Ajuste de qualidade - acessibilidade do dialog
+
+**Identificado:** O `DialogContent` de corretores já tem `DialogDescription`, então está ok. Verificar se outros dialogs do mesmo arquivo têm `DialogDescription` para evitar warnings no console.
+
+**Arquivo:** `src/pages/vendas/SalesBrokers.tsx`
+
+---
+
+### Resumo
+
+| Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/log-dev-work/index.ts` | Nova edge function |
-| `supabase/config.toml` | Adicionar config da funcao |
-
-Nenhuma alteracao no frontend — a pagina `/dev` ja exibe os dados da tabela automaticamente.
+| `SalesBrokers.tsx` | Scroll + footer sticky no dialog |
+| `BrokerIndividualReport.tsx` | `reportMonths` para totais, renderização condicional por `isExporting` |
 

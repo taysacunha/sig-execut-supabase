@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.deactivate-expired-notice]
 verify_jwt = false
+
+[functions.log-dev-work]
+verify_jwt = false
