@@ -250,7 +250,7 @@ export default function EstoqueGestores() {
 
   const handleSubmit = () => {
     if (!form.user_id) return toast.error("Selecione um usuário");
-    if (!form.unidade_id) return toast.error("Selecione a unidade");
+    if (form.unidade_ids.length === 0) return toast.error("Selecione pelo menos uma unidade");
     saveMutation.mutate(form);
   };
 
