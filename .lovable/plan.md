@@ -1,57 +1,76 @@
 
 
-## Plano - 4 Correções
+## Plano: Controle de Acesso por Unidade no Estoque
 
-### 1. Dialog de corretores quebrado (sem scroll)
+### Problema
 
-**Problema:** O `DialogContent` em `SalesBrokers.tsx` (linha 473) não tem limite de altura. Com os novos campos CRECI e Nome de Exibição, o conteúdo ultrapassa a viewport e os botões Cancelar/Salvar ficam inacessíveis.
+Hoje qualquer usuário com acesso ao módulo de estoque pode solicitar materiais de qualquer unidade. Não existe vínculo entre o usuário (auth) e a(s) unidade(s) que ele pertence. A tabela `ferias_colaboradores` tem `unidade_id` mas **não tem `user_id`** (é cadastro de RH, não de login), então não serve para isso.
 
-**Solução:** Adicionar `className="max-w-lg max-h-[90vh] overflow-y-auto"` ao `DialogContent` (linha 473). O `DialogFooter` (linha 638) receberá `className="sticky bottom-0 bg-background pt-4 border-t"` para ficar sempre visível.
+### Solução Proposta: Tabela `estoque_usuarios_unidades`
 
-**Arquivo:** `src/pages/vendas/SalesBrokers.tsx` (linhas 473, 638)
+Criar uma tabela simples que vincula usuários às unidades do estoque:
 
----
+```text
+estoque_usuarios_unidades
+├── id (uuid, PK)
+├── user_id (uuid, NOT NULL) → auth.users
+├── unidade_id (uuid, NOT NULL) → ferias_unidades
+├── created_at (timestamp)
+└── UNIQUE(user_id, unidade_id)
+```
 
-### 2. Relatório Corretores Vendas - dados de meses sem cadastro
+**Por que uma tabela nova?**
+- Separação clara: o vínculo de estoque não interfere em férias/escalas
+- Um usuário pode pertencer a múltiplas unidades (ex: gestor de Bessa e Tambaú)
+- Gestores (`estoque_gestores`) já têm vínculo com unidade — podemos reaproveitar automaticamente
 
-**Problema:** No modo mensal, o `months` (linha 200-224) inclui o mês anterior para "contexto de evolução". Os totais (linhas 400-409) e queries de `saleDetails`, `proposalsData`, `leadsData`, `evaluationsData` usam esse array completo, então dados do mês anterior "vazam" para o mês selecionado.
+**Regra de acesso:**
+- Se o usuário tem registro(s) em `estoque_usuarios_unidades` → só vê/solicita das unidades vinculadas
+- Gestores (`estoque_gestores`) automaticamente têm acesso às unidades que gerenciam (sem precisar duplicar cadastro)
+- Admins/super_admins → acesso a todas as unidades (sem necessidade de vínculo)
 
-**Solução:** Criar um `reportMonths` separado que contém apenas o mês selecionado (sem o anterior). Usar `reportMonths` para calcular totais e buscar `saleDetails`. Manter `months` completo apenas para os gráficos de evolução (`salesData`, `proposalsData`, `leadsData`, `evaluationsData` nos charts).
+### Impacto no Sistema
 
-Concretamente:
-- Adicionar `const reportMonths = periodType === "month" ? [months[months.length - 1]] : months;`
-- Alterar `totalVGV`, `totalSales` para somar apenas entries cujo `month` esteja em `reportMonths`
-- Alterar `totalProposals`, `totalConverted`, `totalLeads`, `totalLeadsActive`, `totalVisits`, `avgScore` idem
-- Alterar query de `saleDetails` para usar `reportMonths` no `.in("year_month", ...)`
+#### 1. Nova tabela + RLS
+- Criar `estoque_usuarios_unidades` com políticas RLS
+- Admins podem gerenciar, usuários podem ver seus próprios vínculos
 
-**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas ~200, 384-409)
+#### 2. Página de Gestão (`EstoqueGestores.tsx`)
+- Adicionar uma nova aba ou seção "Usuários por Unidade" onde admins vinculam usuários às unidades
+- Reaproveitar o padrão existente (select de usuário + select de unidade)
 
----
+#### 3. Solicitações (`EstoqueSolicitacoes.tsx`)
+- Ao criar solicitação: filtrar o select de unidades mostrando apenas as unidades do usuário logado
+- Se o usuário tiver apenas 1 unidade → preencher automaticamente
 
-### 3. Divs de vendas/avaliação não aparecem no PDF
+#### 4. Hook `useUsuarioUnidades`
+- Novo hook que busca as unidades do usuário logado (da tabela nova + estoque_gestores)
+- Retorna lista de `unidade_id` permitidos
+- Admins retornam todas
 
-**Problema:** `hidden print:block` (linhas 713, 753) funciona com `window.print()` mas **não** com `html2canvas`, que captura o estado visual atual do DOM. Os elementos ficam `display:none` durante a captura.
+#### 5. Saldos e outras páginas
+- Filtrar visualização de saldos pelas unidades do usuário (opcional, pode ser implementado depois)
 
-**Solução:** Usar o estado `isExporting` (já existe, linha 192) para controlar visibilidade:
-- Trocar `className="hidden print:block"` por renderização condicional: `{isExporting && saleDetails.length > 0 && (<Card>...</Card>)}`
-- No `handleExportPDF` (linha 428), o `setIsExporting(true)` já é chamado antes do `html2canvas`. Adicionar um `await new Promise(r => setTimeout(r, 100))` entre o `setIsExporting(true)` e o `html2canvas` para dar tempo ao React de renderizar os blocos.
-
-**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas 711-755, 434-436)
-
----
-
-### 4. Ajuste de qualidade - acessibilidade do dialog
-
-**Identificado:** O `DialogContent` de corretores já tem `DialogDescription`, então está ok. Verificar se outros dialogs do mesmo arquivo têm `DialogDescription` para evitar warnings no console.
-
-**Arquivo:** `src/pages/vendas/SalesBrokers.tsx`
-
----
-
-### Resumo
+### Arquivos a Criar/Alterar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `SalesBrokers.tsx` | Scroll + footer sticky no dialog |
-| `BrokerIndividualReport.tsx` | `reportMonths` para totais, renderização condicional por `isExporting` |
+| **Migração SQL** | Criar tabela `estoque_usuarios_unidades` + RLS |
+| `src/hooks/useUsuarioUnidades.ts` | **Novo** — hook que retorna unidades permitidas do usuário |
+| `EstoqueSolicitacoes.tsx` | Filtrar select de unidades pelas unidades do usuário |
+| `EstoqueGestores.tsx` | Adicionar seção para vincular usuários a unidades |
+
+### Fluxo
+
+```text
+Admin cadastra: Usuário X → Unidade Bessa
+                Usuário X → Unidade Tambaú (se necessário)
+
+Usuário X abre "Nova Solicitação":
+  → Select de unidade mostra apenas: Bessa, Tambaú
+  → Não vê outras unidades
+
+Gestor Y (gestora do Bessa via estoque_gestores):
+  → Automaticamente tem acesso ao Bessa sem cadastro extra
+```
 
