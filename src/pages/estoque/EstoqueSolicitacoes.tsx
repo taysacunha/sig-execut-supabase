@@ -25,6 +25,7 @@ interface Solicitacao {
   solicitante_user_id: string;
   solicitante_nome: string;
   unidade_id: string | null;
+  setor_id: string | null;
   status: string;
   observacoes: string | null;
   created_at: string;
