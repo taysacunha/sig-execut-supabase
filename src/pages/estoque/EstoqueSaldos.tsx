@@ -228,14 +228,14 @@ export default function EstoqueSaldos() {
     setObservacoes("");
   };
 
-  const filtered = saldos.filter((s) => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    return (
-      s.material_nome?.toLowerCase().includes(term) ||
-      s.local_nome?.toLowerCase().includes(term) ||
-      s.unidade_nome?.toLowerCase().includes(term)
-    );
+  const {
+    searchTerm, setSearchTerm, currentPage, setCurrentPage,
+    itemsPerPage, setItemsPerPage, sortField, sortDirection, setSorting,
+    paginatedData, filteredData, totalPages,
+  } = useTableControls({
+    data: saldos,
+    searchField: ["material_nome", "local_nome", "unidade_nome"],
+    defaultItemsPerPage: 25,
   });
 
   const lowStockCount = saldos.filter((s) => s.quantidade <= (s.material_estoque_minimo || 0) && s.material_estoque_minimo! > 0).length;
