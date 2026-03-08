@@ -1,57 +1,27 @@
 
 
-## Plano - 4 Correções
+## Plano: Corrigir PDF do Relatório de Corretores (Avaliação não aparece)
 
-### 1. Dialog de corretores quebrado (sem scroll)
+### Problema
 
-**Problema:** O `DialogContent` em `SalesBrokers.tsx` (linha 473) não tem limite de altura. Com os novos campos CRECI e Nome de Exibição, o conteúdo ultrapassa a viewport e os botões Cancelar/Salvar ficam inacessíveis.
+O `EvaluationDetailsPDF` é renderizado condicionalmente com `{isExporting && ...}`. Quando `isExporting` vira `true`, o componente monta e **inicia** as queries ao Supabase, mas o `html2canvas` roda apenas 150ms depois -- tempo insuficiente para as queries completarem. Resultado: a avaliação nunca aparece no PDF.
 
-**Solução:** Adicionar `className="max-w-lg max-h-[90vh] overflow-y-auto"` ao `DialogContent` (linha 473). O `DialogFooter` (linha 638) receberá `className="sticky bottom-0 bg-background pt-4 border-t"` para ficar sempre visível.
+A parte de vendas (`saleDetails`) funciona porque os dados já estão carregados antes do export (a query roda sempre que há corretor selecionado).
 
-**Arquivo:** `src/pages/vendas/SalesBrokers.tsx` (linhas 473, 638)
+### Solução
 
----
+1. **Mover as queries de avaliação para fora do componente `EvaluationDetailsPDF`** -- buscar os dados no componente pai (`BrokerIndividualReport`) com `enabled: !!selectedBrokerId`, assim os dados já estarão prontos quando o export iniciar.
 
-### 2. Relatório Corretores Vendas - dados de meses sem cadastro
+2. **Renderizar o bloco de avaliação no PDF** usando os dados pré-carregados + `{isExporting && hasData && <Card>...</Card>}` -- sem componente filho com queries próprias.
 
-**Problema:** No modo mensal, o `months` (linha 200-224) inclui o mês anterior para "contexto de evolução". Os totais (linhas 400-409) e queries de `saleDetails`, `proposalsData`, `leadsData`, `evaluationsData` usam esse array completo, então dados do mês anterior "vazam" para o mês selecionado.
+3. **Aumentar o delay** de 150ms para ~300ms como margem de segurança para o React re-render.
 
-**Solução:** Criar um `reportMonths` separado que contém apenas o mês selecionado (sem o anterior). Usar `reportMonths` para calcular totais e buscar `saleDetails`. Manter `months` completo apenas para os gráficos de evolução (`salesData`, `proposalsData`, `leadsData`, `evaluationsData` nos charts).
+### Alterações em `BrokerIndividualReport.tsx`
 
-Concretamente:
-- Adicionar `const reportMonths = periodType === "month" ? [months[months.length - 1]] : months;`
-- Alterar `totalVGV`, `totalSales` para somar apenas entries cujo `month` esteja em `reportMonths`
-- Alterar `totalProposals`, `totalConverted`, `totalLeads`, `totalLeadsActive`, `totalVisits`, `avgScore` idem
-- Alterar query de `saleDetails` para usar `reportMonths` no `.in("year_month", ...)`
-
-**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas ~200, 384-409)
-
----
-
-### 3. Divs de vendas/avaliação não aparecem no PDF
-
-**Problema:** `hidden print:block` (linhas 713, 753) funciona com `window.print()` mas **não** com `html2canvas`, que captura o estado visual atual do DOM. Os elementos ficam `display:none` durante a captura.
-
-**Solução:** Usar o estado `isExporting` (já existe, linha 192) para controlar visibilidade:
-- Trocar `className="hidden print:block"` por renderização condicional: `{isExporting && saleDetails.length > 0 && (<Card>...</Card>)}`
-- No `handleExportPDF` (linha 428), o `setIsExporting(true)` já é chamado antes do `html2canvas`. Adicionar um `await new Promise(r => setTimeout(r, 100))` entre o `setIsExporting(true)` e o `html2canvas` para dar tempo ao React de renderizar os blocos.
-
-**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas 711-755, 434-436)
-
----
-
-### 4. Ajuste de qualidade - acessibilidade do dialog
-
-**Identificado:** O `DialogContent` de corretores já tem `DialogDescription`, então está ok. Verificar se outros dialogs do mesmo arquivo têm `DialogDescription` para evitar warnings no console.
-
-**Arquivo:** `src/pages/vendas/SalesBrokers.tsx`
-
----
-
-### Resumo
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `SalesBrokers.tsx` | Scroll + footer sticky no dialog |
-| `BrokerIndividualReport.tsx` | `reportMonths` para totais, renderização condicional por `isExporting` |
+| Trecho | Alteração |
+|--------|-----------|
+| Queries (após linha ~396) | Adicionar query de `broker_evaluations` (obs_feedbacks, acoes_melhorias, metas) e `monthly_leads.last_visit_date` com `enabled: !!selectedBrokerId` |
+| Linhas 771-774 | Substituir `<EvaluationDetailsPDF>` por bloco inline usando dados pré-carregados |
+| Linha 454 | Aumentar delay para 300ms |
+| Componente `EvaluationDetailsPDF` (linhas 82-179) | Pode ser removido ou mantido (não será mais usado no export) |
 
