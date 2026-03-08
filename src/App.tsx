@@ -185,6 +185,7 @@ const App = () => {
               <Route path="saldos" element={<EstoqueSaldos />} />
               <Route path="solicitacoes" element={<EstoqueSolicitacoes />} />
               <Route path="movimentacoes" element={<EstoqueMovimentacoes />} />
+              <Route path="notificacoes" element={<EstoqueNotificacoes />} />
               <Route path="gestores" element={<EstoqueGestores />} />
               <Route path="perfil" element={<Profile />} />
               <Route path="usuarios" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><UserManagement /></RoleGuard>} />
