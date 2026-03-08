@@ -1,4 +1,4 @@
-import { Home, Package, MapPin, Users, UserCircle, Shield, History, LogOut, ArrowLeft, Crown, Briefcase, User } from "lucide-react";
+import { Home, Package, MapPin, Users, UserCircle, Shield, History, LogOut, ArrowLeft, Crown, Briefcase, User, ClipboardList, PackageOpen, ArrowDownUp } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
