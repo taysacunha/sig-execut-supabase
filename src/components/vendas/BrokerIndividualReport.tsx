@@ -443,16 +443,50 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      const margin = 5;
-      const maxWidth = pdfWidth - margin * 2;
-      const maxHeight = pdfHeight - margin * 2;
-      const ratio = Math.min(maxWidth / imgWidth, maxHeight / imgHeight);
-      const imgX = (pdfWidth - imgWidth * ratio) / 2;
-      const imgY = margin;
+      const margin = 8;
+      const usableWidth = pdfWidth - margin * 2;
+      const usableHeight = pdfHeight - margin * 2;
 
-      pdf.addImage(imgData, "PNG", imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+      // Scale image to fit width, then paginate vertically
+      const scaledWidth = usableWidth;
+      const scaledHeight = (canvas.height * usableWidth) / canvas.width;
+
+      let remainingHeight = scaledHeight;
+      let sourceY = 0;
+      let pageIndex = 0;
+
+      while (remainingHeight > 0) {
+        if (pageIndex > 0) {
+          pdf.addPage();
+        }
+
+        const sliceHeight = Math.min(remainingHeight, usableHeight);
+        // Calculate source slice in canvas pixels
+        const srcSliceHeight = (sliceHeight / scaledHeight) * canvas.height;
+
+        // Create a temporary canvas for this page slice
+        const pageCanvas = document.createElement("canvas");
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = Math.ceil(srcSliceHeight);
+        const ctx = pageCanvas.getContext("2d");
+        if (ctx) {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+          ctx.drawImage(
+            canvas,
+            0, Math.floor(sourceY), canvas.width, Math.ceil(srcSliceHeight),
+            0, 0, pageCanvas.width, Math.ceil(srcSliceHeight)
+          );
+        }
+
+        const pageImgData = pageCanvas.toDataURL("image/png");
+        pdf.addImage(pageImgData, "PNG", margin, margin, scaledWidth, sliceHeight);
+
+        sourceY += srcSliceHeight;
+        remainingHeight -= sliceHeight;
+        pageIndex++;
+      }
+
       pdf.save(`relatorio_${selectedBroker?.name || "corretor"}_${selectedYear}.pdf`);
       toast.success("PDF exportado com sucesso!");
     } catch (error) {
