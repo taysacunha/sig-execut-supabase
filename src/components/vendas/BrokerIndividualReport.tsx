@@ -420,20 +420,6 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
       // Wait for React to render PDF-only blocks
       await new Promise((r) => setTimeout(r, 450));
 
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: "#ffffff",
-        foreignObjectRendering: false,
-        onclone: (clonedDoc) => {
-          const svgs = clonedDoc.querySelectorAll("svg");
-          svgs.forEach((svg) => {
-            svg.style.fontFamily = "sans-serif";
-          });
-        },
-      });
-
       // Capture each direct child section separately to avoid splitting blocks across pages
       const reportEl = reportRef.current;
       const sections = Array.from(reportEl.children) as HTMLElement[];
