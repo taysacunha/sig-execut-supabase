@@ -102,6 +102,12 @@ export default function EstoqueSolicitacoes() {
     }
   }, [unidadesPermitidas, unidadeId]);
 
+  // Clear items when unit changes
+  const handleUnidadeChange = (newUnidadeId: string) => {
+    setUnidadeId(newUnidadeId);
+    setItens([{ material_id: "", quantidade: 1 }]);
+  };
+
   const { data: solicitacoes = [], isLoading } = useQuery({
     queryKey: ["estoque-solicitacoes"],
     queryFn: async () => {
@@ -113,7 +119,45 @@ export default function EstoqueSolicitacoes() {
     },
   });
 
-  const { data: materiais = [] } = useQuery({
+  // Fetch materials available in the selected unit (have stock > 0)
+  const { data: materiaisDisponiveis = [] } = useQuery({
+    queryKey: ["estoque-materiais-por-unidade", unidadeId],
+    queryFn: async () => {
+      if (!unidadeId) return [];
+      // Get storage locations for this unit
+      const { data: locais, error: locaisError } = await fromEstoque("estoque_locais_armazenamento")
+        .select("id")
+        .eq("unidade_id", unidadeId)
+        .eq("is_active", true);
+      if (locaisError) throw locaisError;
+      if (!locais || locais.length === 0) return [];
+
+      const localIds = (locais as any[]).map((l: any) => l.id);
+
+      // Get materials with stock > 0 in those locations
+      const { data: saldos, error: saldosError } = await fromEstoque("estoque_saldos")
+        .select("material_id")
+        .in("local_armazenamento_id", localIds)
+        .gt("quantidade", 0);
+      if (saldosError) throw saldosError;
+      if (!saldos || saldos.length === 0) return [];
+
+      const materialIds = [...new Set((saldos as any[]).map((s: any) => s.material_id))];
+
+      // Fetch material details
+      const { data: mats, error: matsError } = await fromEstoque("estoque_materiais")
+        .select("id, nome, unidade_medida")
+        .in("id", materialIds)
+        .eq("is_active", true)
+        .order("nome");
+      if (matsError) throw matsError;
+      return mats as unknown as Material[];
+    },
+    enabled: !!unidadeId,
+  });
+
+  // Also fetch all materials for the view dialog (to resolve names)
+  const { data: todosMateriais = [] } = useQuery({
     queryKey: ["estoque-materiais-ativos"],
     queryFn: async () => {
       const { data, error } = await fromEstoque("estoque_materiais")
@@ -148,7 +192,7 @@ export default function EstoqueSolicitacoes() {
       if (error) throw error;
       return (data as unknown as SolicitacaoItem[]).map((item) => ({
         ...item,
-        material_nome: materiais.find((m) => m.id === item.material_id)?.nome || "—",
+        material_nome: todosMateriais.find((m) => m.id === item.material_id)?.nome || "—",
       }));
     },
     enabled: !!viewDialog?.id,
@@ -385,7 +429,7 @@ export default function EstoqueSolicitacoes() {
           <div className="space-y-4">
             <div>
               <Label>Unidade *</Label>
-              <Select value={unidadeId} onValueChange={setUnidadeId}>
+              <Select value={unidadeId} onValueChange={handleUnidadeChange}>
                 <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                 <SelectContent>
                   {unidadesPermitidas.map((u) => (
@@ -406,17 +450,23 @@ export default function EstoqueSolicitacoes() {
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <Label>Itens</Label>
-                <Button type="button" size="sm" variant="outline" onClick={addItem}>
+                <Button type="button" size="sm" variant="outline" onClick={addItem} disabled={materiaisDisponiveis.length === 0}>
                   <Plus className="h-3 w-3 mr-1" /> Item
                 </Button>
               </div>
+              {unidadeId && materiaisDisponiveis.length === 0 && (
+                <p className="text-sm text-muted-foreground italic">Nenhum material com saldo disponível nesta unidade.</p>
+              )}
+              {!unidadeId && (
+                <p className="text-sm text-muted-foreground italic">Selecione uma unidade para ver os materiais disponíveis.</p>
+              )}
               {itens.map((item, idx) => (
                 <div key={idx} className="flex gap-2 items-end">
                   <div className="flex-1">
                     <Select value={item.material_id} onValueChange={(v) => updateItem(idx, "material_id", v)}>
                       <SelectTrigger><SelectValue placeholder="Material..." /></SelectTrigger>
                       <SelectContent>
-                        {materiais.map((m) => (
+                        {materiaisDisponiveis.map((m) => (
                           <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
                         ))}
                       </SelectContent>

@@ -1,41 +1,57 @@
 
 
-## Plano: Filtrar Materiais por Unidade na Solicitação
+## Plano - 4 Correções
 
-### Problema
+### 1. Dialog de corretores quebrado (sem scroll)
 
-Ao criar uma solicitação, o select de materiais mostra **todos** os materiais ativos do sistema, independentemente da unidade selecionada. Exemplo: o Bessa não tem nenhum material cadastrado, mas aparece "Resma A4" que só existe em Tambaú.
+**Problema:** O `DialogContent` em `SalesBrokers.tsx` (linha 473) não tem limite de altura. Com os novos campos CRECI e Nome de Exibição, o conteúdo ultrapassa a viewport e os botões Cancelar/Salvar ficam inacessíveis.
 
-### Solução
+**Solução:** Adicionar `className="max-w-lg max-h-[90vh] overflow-y-auto"` ao `DialogContent` (linha 473). O `DialogFooter` (linha 638) receberá `className="sticky bottom-0 bg-background pt-4 border-t"` para ficar sempre visível.
 
-Buscar os materiais que possuem saldo (`estoque_saldos`) em locais (`estoque_locais_armazenamento`) da unidade selecionada. Quando o usuário seleciona a unidade (ou ela é auto-preenchida), o select de materiais mostra apenas os que existem naquela unidade.
+**Arquivo:** `src/pages/vendas/SalesBrokers.tsx` (linhas 473, 638)
 
-### Alterações em `EstoqueSolicitacoes.tsx`
+---
 
-1. **Buscar saldos + locais** para identificar quais materiais existem na unidade selecionada
-   - Query: `estoque_saldos` JOIN com `estoque_locais_armazenamento` filtrando por `unidade_id` e `quantidade > 0`
-   - Extrair lista de `material_id` únicos
+### 2. Relatório Corretores Vendas - dados de meses sem cadastro
 
-2. **Filtrar o select de materiais** usando essa lista
-   - Se nenhuma unidade selecionada: select vazio
-   - Se unidade selecionada mas sem materiais: mensagem informativa "Nenhum material disponível nesta unidade"
+**Problema:** No modo mensal, o `months` (linha 200-224) inclui o mês anterior para "contexto de evolução". Os totais (linhas 400-409) e queries de `saleDetails`, `proposalsData`, `leadsData`, `evaluationsData` usam esse array completo, então dados do mês anterior "vazam" para o mês selecionado.
 
-3. **Limpar itens ao trocar unidade** — quando o usuário muda a unidade, resetar os itens selecionados (pois os materiais mudam)
+**Solução:** Criar um `reportMonths` separado que contém apenas o mês selecionado (sem o anterior). Usar `reportMonths` para calcular totais e buscar `saleDetails`. Manter `months` completo apenas para os gráficos de evolução (`salesData`, `proposalsData`, `leadsData`, `evaluationsData` nos charts).
 
-4. **Query reativa** — a query de materiais disponíveis depende do `unidadeId` selecionado, usando `enabled: !!unidadeId`
+Concretamente:
+- Adicionar `const reportMonths = periodType === "month" ? [months[months.length - 1]] : months;`
+- Alterar `totalVGV`, `totalSales` para somar apenas entries cujo `month` esteja em `reportMonths`
+- Alterar `totalProposals`, `totalConverted`, `totalLeads`, `totalLeadsActive`, `totalVisits`, `avgScore` idem
+- Alterar query de `saleDetails` para usar `reportMonths` no `.in("year_month", ...)`
 
-### Fluxo da lógica
+**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas ~200, 384-409)
 
-```text
-Usuário seleciona Unidade "Bessa"
-  → Query: locais dessa unidade → saldos nesses locais → material_ids com quantidade > 0
-  → Select de materiais mostra apenas esses
-  → Se nenhum material: "Nenhum material disponível nesta unidade"
-```
+---
 
-### Arquivo a alterar
+### 3. Divs de vendas/avaliação não aparecem no PDF
+
+**Problema:** `hidden print:block` (linhas 713, 753) funciona com `window.print()` mas **não** com `html2canvas`, que captura o estado visual atual do DOM. Os elementos ficam `display:none` durante a captura.
+
+**Solução:** Usar o estado `isExporting` (já existe, linha 192) para controlar visibilidade:
+- Trocar `className="hidden print:block"` por renderização condicional: `{isExporting && saleDetails.length > 0 && (<Card>...</Card>)}`
+- No `handleExportPDF` (linha 428), o `setIsExporting(true)` já é chamado antes do `html2canvas`. Adicionar um `await new Promise(r => setTimeout(r, 100))` entre o `setIsExporting(true)` e o `html2canvas` para dar tempo ao React de renderizar os blocos.
+
+**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas 711-755, 434-436)
+
+---
+
+### 4. Ajuste de qualidade - acessibilidade do dialog
+
+**Identificado:** O `DialogContent` de corretores já tem `DialogDescription`, então está ok. Verificar se outros dialogs do mesmo arquivo têm `DialogDescription` para evitar warnings no console.
+
+**Arquivo:** `src/pages/vendas/SalesBrokers.tsx`
+
+---
+
+### Resumo
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `EstoqueSolicitacoes.tsx` | Nova query de materiais por unidade, filtrar select, limpar itens ao trocar unidade |
+| `SalesBrokers.tsx` | Scroll + footer sticky no dialog |
+| `BrokerIndividualReport.tsx` | `reportMonths` para totais, renderização condicional por `isExporting` |
 

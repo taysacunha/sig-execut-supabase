@@ -734,6 +734,35 @@ export type Database = {
           },
         ]
       }
+      estoque_usuarios_unidades: {
+        Row: {
+          created_at: string | null
+          id: string
+          unidade_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          unidade_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          unidade_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estoque_usuarios_unidades_unidade_id_fkey"
+            columns: ["unidade_id"]
+            isOneToOne: false
+            referencedRelation: "ferias_unidades"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ferias_audit_logs: {
         Row: {
           action: string
