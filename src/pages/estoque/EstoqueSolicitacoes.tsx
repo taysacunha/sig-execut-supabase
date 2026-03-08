@@ -229,6 +229,7 @@ export default function EstoqueSolicitacoes() {
           solicitante_user_id: user.id,
           solicitante_nome: userName,
           unidade_id: unidadeId || null,
+          setor_id: setorId || null,
           observacoes: observacoes || null,
         } as any)
         .select("id")
