@@ -84,6 +84,7 @@ export default function EstoqueSolicitacoes() {
   const queryClient = useQueryClient();
   const { canEdit, user } = useSystemAccess();
   const canEditEstoque = canEdit("estoque");
+  const { unidadesPermitidas } = useUsuarioUnidades();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewDialog, setViewDialog] = useState<Solicitacao | null>(null);
@@ -93,6 +94,13 @@ export default function EstoqueSolicitacoes() {
   const [unidadeId, setUnidadeId] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [itens, setItens] = useState<{ material_id: string; quantidade: number }[]>([{ material_id: "", quantidade: 1 }]);
+
+  // Auto-fill unit if user has only one
+  useEffect(() => {
+    if (unidadesPermitidas.length === 1 && !unidadeId) {
+      setUnidadeId(unidadesPermitidas[0].id);
+    }
+  }, [unidadesPermitidas, unidadeId]);
 
   const { data: solicitacoes = [], isLoading } = useQuery({
     queryKey: ["estoque-solicitacoes"],
