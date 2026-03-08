@@ -92,6 +92,8 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
   const [selectedQuarter, setSelectedQuarter] = useState("1");
   const [selectedSemester, setSelectedSemester] = useState("1");
   const [isExporting, setIsExporting] = useState(false);
+  const [pdfEvaluationSnapshot, setPdfEvaluationSnapshot] = useState<any | null>(null);
+  const [pdfLastVisitSnapshot, setPdfLastVisitSnapshot] = useState<string | null>(null);
   const [evaluationDetailsOpen, setEvaluationDetailsOpen] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
 
@@ -390,21 +392,44 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
       return;
     }
 
-    setIsExporting(true);
     try {
+      const [evaluationRes, lastVisitRes] = await Promise.all([
+        supabase
+          .from("broker_evaluations")
+          .select("year_month, obs_feedbacks, acoes_melhorias_c2s, metas_acoes_futuras, average_score")
+          .eq("broker_id", selectedBrokerId)
+          .in("year_month", reportMonths)
+          .order("year_month", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("monthly_leads")
+          .select("last_visit_date")
+          .eq("broker_id", selectedBrokerId)
+          .in("year_month", reportMonths)
+          .not("last_visit_date", "is", null)
+          .order("last_visit_date", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+      setPdfEvaluationSnapshot(evaluationRes.data ?? null);
+      setPdfLastVisitSnapshot(lastVisitRes.data?.last_visit_date ?? null);
+
+      setIsExporting(true);
       // Wait for React to render PDF-only blocks
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise((r) => setTimeout(r, 450));
+
       const canvas = await html2canvas(reportRef.current, {
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: "#ffffff",
-        foreignObjectRendering: false, // Evitar problemas com SVG
+        foreignObjectRendering: false,
         onclone: (clonedDoc) => {
-          // Forçar estilos sólidos nos elementos SVG para captura
-          const svgs = clonedDoc.querySelectorAll('svg');
-          svgs.forEach(svg => {
-            svg.style.fontFamily = 'sans-serif';
+          const svgs = clonedDoc.querySelectorAll("svg");
+          svgs.forEach((svg) => {
+            svg.style.fontFamily = "sans-serif";
           });
         },
       });
@@ -420,9 +445,12 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
       const pdfHeight = pdf.internal.pageSize.getHeight();
       const imgWidth = canvas.width;
       const imgHeight = canvas.height;
-      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      const margin = 5;
+      const maxWidth = pdfWidth - margin * 2;
+      const maxHeight = pdfHeight - margin * 2;
+      const ratio = Math.min(maxWidth / imgWidth, maxHeight / imgHeight);
       const imgX = (pdfWidth - imgWidth * ratio) / 2;
-      const imgY = 10;
+      const imgY = margin;
 
       pdf.addImage(imgData, "PNG", imgX, imgY, imgWidth * ratio, imgHeight * ratio);
       pdf.save(`relatorio_${selectedBroker?.name || "corretor"}_${selectedYear}.pdf`);
@@ -432,6 +460,8 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
       toast.error("Erro ao exportar PDF");
     } finally {
       setIsExporting(false);
+      setPdfEvaluationSnapshot(null);
+      setPdfLastVisitSnapshot(null);
     }
   };
 
@@ -710,55 +740,55 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
             </Card>
           )}
 
-          {/* Detalhes da Avaliação - apenas no PDF (dados pré-carregados) */}
-          {isExporting && (evalDetailsPdf?.obs_feedbacks || evalDetailsPdf?.acoes_melhorias_c2s || evalDetailsPdf?.metas_acoes_futuras || lastVisitDatePdf) && (
+          {/* Detalhes da Avaliação - apenas no PDF (snapshot do export) */}
+          {isExporting && (((pdfEvaluationSnapshot ?? evalDetailsPdf)?.obs_feedbacks) || ((pdfEvaluationSnapshot ?? evalDetailsPdf)?.acoes_melhorias_c2s) || ((pdfEvaluationSnapshot ?? evalDetailsPdf)?.metas_acoes_futuras) || (pdfLastVisitSnapshot ?? lastVisitDatePdf)) && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Detalhes da Avaliação</CardTitle>
-                {evalDetailsPdf?.year_month && (
+                {(pdfEvaluationSnapshot ?? evalDetailsPdf)?.year_month && (
                   <p className="text-xs text-muted-foreground">
-                    Ref: {evalDetailsPdf.year_month}
-                    {evalDetailsPdf.average_score !== null && ` (Nota: ${evalDetailsPdf.average_score.toFixed(1)})`}
+                    Ref: {(pdfEvaluationSnapshot ?? evalDetailsPdf).year_month}
+                    {(pdfEvaluationSnapshot ?? evalDetailsPdf).average_score !== null && ` (Nota: ${(pdfEvaluationSnapshot ?? evalDetailsPdf).average_score.toFixed(1)})`}
                   </p>
                 )}
               </CardHeader>
               <CardContent className="space-y-3">
-                {lastVisitDatePdf && (
+                {(pdfLastVisitSnapshot ?? lastVisitDatePdf) && (
                   <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                     <div className="flex items-center gap-2 text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">
                       <Calendar className="h-3 w-3" />
                       Última Visita
                     </div>
                     <p className="text-sm font-medium">
-                      {(() => { const [y,m,d] = lastVisitDatePdf.split("-").map(Number); return new Date(y, m-1, d).toLocaleDateString("pt-BR"); })()}
+                      {(() => { const [y,m,d] = (pdfLastVisitSnapshot ?? lastVisitDatePdf).split("-").map(Number); return new Date(y, m-1, d).toLocaleDateString("pt-BR"); })()}
                     </p>
                   </div>
                 )}
-                {evalDetailsPdf?.obs_feedbacks && (
+                {(pdfEvaluationSnapshot ?? evalDetailsPdf)?.obs_feedbacks && (
                   <div className="p-3 bg-muted/50 rounded-lg">
                     <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-1">
                       <MessageSquare className="h-3 w-3" />
                       OBS/Feedbacks
                     </div>
-                    <p className="text-sm whitespace-pre-wrap">{evalDetailsPdf.obs_feedbacks}</p>
+                    <p className="text-sm whitespace-pre-wrap">{(pdfEvaluationSnapshot ?? evalDetailsPdf).obs_feedbacks}</p>
                   </div>
                 )}
-                {evalDetailsPdf?.acoes_melhorias_c2s && (
+                {(pdfEvaluationSnapshot ?? evalDetailsPdf)?.acoes_melhorias_c2s && (
                   <div className="p-3 bg-muted/50 rounded-lg">
                     <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-1">
                       <TrendingUpIcon2 className="h-3 w-3" />
                       Ações para Melhorias C2S
                     </div>
-                    <p className="text-sm whitespace-pre-wrap">{evalDetailsPdf.acoes_melhorias_c2s}</p>
+                    <p className="text-sm whitespace-pre-wrap">{(pdfEvaluationSnapshot ?? evalDetailsPdf).acoes_melhorias_c2s}</p>
                   </div>
                 )}
-                {evalDetailsPdf?.metas_acoes_futuras && (
+                {(pdfEvaluationSnapshot ?? evalDetailsPdf)?.metas_acoes_futuras && (
                   <div className="p-3 bg-muted/50 rounded-lg">
                     <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-1">
                       <Target className="h-3 w-3" />
                       Metas/Ações Futuras
                     </div>
-                    <p className="text-sm whitespace-pre-wrap">{evalDetailsPdf.metas_acoes_futuras}</p>
+                    <p className="text-sm whitespace-pre-wrap">{(pdfEvaluationSnapshot ?? evalDetailsPdf).metas_acoes_futuras}</p>
                   </div>
                 )}
               </CardContent>
