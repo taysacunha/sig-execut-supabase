@@ -434,7 +434,10 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
         },
       });
 
-      const imgData = canvas.toDataURL("image/png");
+      // Capture each direct child section separately to avoid splitting blocks across pages
+      const reportEl = reportRef.current;
+      const sections = Array.from(reportEl.children) as HTMLElement[];
+
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
@@ -447,44 +450,37 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
       const usableWidth = pdfWidth - margin * 2;
       const usableHeight = pdfHeight - margin * 2;
 
-      // Scale image to fit width, then paginate vertically
-      const scaledWidth = usableWidth;
-      const scaledHeight = (canvas.height * usableWidth) / canvas.width;
+      let cursorY = margin; // current Y position on current page
+      let isFirstSection = true;
 
-      let remainingHeight = scaledHeight;
-      let sourceY = 0;
-      let pageIndex = 0;
+      for (const section of sections) {
+        const sectionCanvas = await html2canvas(section, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: "#ffffff",
+          foreignObjectRendering: false,
+          onclone: (clonedDoc) => {
+            const svgs = clonedDoc.querySelectorAll("svg");
+            svgs.forEach((svg) => {
+              svg.style.fontFamily = "sans-serif";
+            });
+          },
+        });
 
-      while (remainingHeight > 0) {
-        if (pageIndex > 0) {
+        const sectionImgData = sectionCanvas.toDataURL("image/png");
+        const sectionScaledHeight = (sectionCanvas.height * usableWidth) / sectionCanvas.width;
+
+        // If this section doesn't fit on current page, start a new page
+        if (!isFirstSection && cursorY + sectionScaledHeight > pdfHeight - margin) {
           pdf.addPage();
+          cursorY = margin;
         }
 
-        const sliceHeight = Math.min(remainingHeight, usableHeight);
-        // Calculate source slice in canvas pixels
-        const srcSliceHeight = (sliceHeight / scaledHeight) * canvas.height;
-
-        // Create a temporary canvas for this page slice
-        const pageCanvas = document.createElement("canvas");
-        pageCanvas.width = canvas.width;
-        pageCanvas.height = Math.ceil(srcSliceHeight);
-        const ctx = pageCanvas.getContext("2d");
-        if (ctx) {
-          ctx.fillStyle = "#ffffff";
-          ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-          ctx.drawImage(
-            canvas,
-            0, Math.floor(sourceY), canvas.width, Math.ceil(srcSliceHeight),
-            0, 0, pageCanvas.width, Math.ceil(srcSliceHeight)
-          );
-        }
-
-        const pageImgData = pageCanvas.toDataURL("image/png");
-        pdf.addImage(pageImgData, "PNG", margin, margin, scaledWidth, sliceHeight);
-
-        sourceY += srcSliceHeight;
-        remainingHeight -= sliceHeight;
-        pageIndex++;
+        // If a single section is taller than usable height, we still place it (it will overflow, but won't be split mid-text)
+        pdf.addImage(sectionImgData, "PNG", margin, cursorY, usableWidth, sectionScaledHeight);
+        cursorY += sectionScaledHeight + 3; // 3mm gap between sections
+        isFirstSection = false;
       }
 
       pdf.save(`relatorio_${selectedBroker?.name || "corretor"}_${selectedYear}.pdf`);
