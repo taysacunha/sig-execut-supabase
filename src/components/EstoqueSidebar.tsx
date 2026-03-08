@@ -35,7 +35,6 @@ const moduleMenuItems: MenuItem[] = [
   { title: "Solicitações", url: "/estoque/solicitacoes", icon: ClipboardList },
   { title: "Movimentações", url: "/estoque/movimentacoes", icon: ArrowDownUp },
   { title: "Notificações", url: "/estoque/notificacoes", icon: Bell },
-  { title: "Gestores", url: "/estoque/gestores", icon: Users },
   { title: "Perfil", url: "/estoque/perfil", icon: UserCircle },
 ];
 
