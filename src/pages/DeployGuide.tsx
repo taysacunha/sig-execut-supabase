@@ -582,7 +582,7 @@ docker compose logs -f functions  # Edge Functions`}</CodeBlock>
             "SMTP configurado (testar enviando convite de usuário)",
             "Banco de dados público migrado e verificado no Studio",
             "Usuários (auth.users) migrados — testar login com conta existente",
-            "Edge Functions deployadas (testar invite-user, list-users)",
+            "Edge Functions deployadas (testar invite-user, list-users, log-dev-work)",
             "Frontend buildado com VITE_SUPABASE_URL correto",
             "Nginx servindo frontend + proxy para Supabase API",
             "HTTPS configurado (se acesso externo)",
