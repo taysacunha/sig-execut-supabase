@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Pencil, Package, Loader2 } from "lucide-react";
+import { Plus, Pencil, Package, Loader2, Trash2, RotateCcw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { useTableControls } from "@/hooks/useTableControls";
@@ -46,9 +47,11 @@ export default function EstoqueMateriais() {
   const { canEdit } = useSystemAccess();
   const canEditEstoque = canEdit("estoque");
 
+  const [activeTab, setActiveTab] = useState("ativos");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [toggleConfirm, setToggleConfirm] = useState<{ id: string; nome: string; newActive: boolean } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; nome: string } | null>(null);
   const [form, setForm] = useState({
     nome: "",
     descricao: "",
@@ -66,15 +69,33 @@ export default function EstoqueMateriais() {
     },
   });
 
-  const {
-    searchTerm, setSearchTerm, currentPage, setCurrentPage,
-    itemsPerPage, setItemsPerPage, sortField, sortDirection, setSorting,
-    paginatedData, filteredData, totalPages,
-  } = useTableControls({
-    data: materiais,
+  const { data: saldos = [] } = useQuery({
+    queryKey: ["estoque-saldos-check"],
+    queryFn: async () => {
+      const { data, error } = await fromEstoque("estoque_saldos").select("material_id, quantidade");
+      if (error) throw error;
+      return (data || []) as unknown as { material_id: string; quantidade: number }[];
+    },
+  });
+
+  const materiaisAtivos = useMemo(() => materiais.filter((m) => m.is_active), [materiais]);
+  const materiaisInativos = useMemo(() => materiais.filter((m) => !m.is_active), [materiais]);
+
+  const activeControls = useTableControls({
+    data: materiaisAtivos,
     searchField: ["nome", "categoria"],
     defaultItemsPerPage: 25,
   });
+
+  const inactiveControls = useTableControls({
+    data: materiaisInativos,
+    searchField: ["nome", "categoria"],
+    defaultItemsPerPage: 25,
+  });
+
+  const materialHasBalance = (materialId: string) => {
+    return saldos.some((s) => s.material_id === materialId && s.quantidade > 0);
+  };
 
   const saveMutation = useMutation({
     mutationFn: async (values: typeof form & { id?: string }) => {
@@ -103,13 +124,41 @@ export default function EstoqueMateriais() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
+      // If deactivating, check for balance
+      if (!is_active && materialHasBalance(id)) {
+        throw new Error("Zere o saldo deste material em todos os locais antes de desativar");
+      }
       const { error } = await fromEstoque("estoque_materiais").update({ is_active }).eq("id", id);
+      if (error) throw error;
+      // Clean up zero-balance records when deactivating
+      if (!is_active) {
+        await fromEstoque("estoque_saldos").delete().eq("material_id", id).eq("quantidade", 0);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["estoque-materiais"] });
+      queryClient.invalidateQueries({ queryKey: ["estoque-saldos-check"] });
+      toast.success("Status alterado!");
+      setToggleConfirm(null);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+      setToggleConfirm(null);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      // Remove zero-balance records first
+      await fromEstoque("estoque_saldos").delete().eq("material_id", id);
+      const { error } = await fromEstoque("estoque_materiais").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["estoque-materiais"] });
-      toast.success("Status alterado!");
-      setToggleConfirm(null);
+      queryClient.invalidateQueries({ queryKey: ["estoque-saldos-check"] });
+      toast.success("Material excluído definitivamente!");
+      setDeleteConfirm(null);
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -137,7 +186,85 @@ export default function EstoqueMateriais() {
     saveMutation.mutate({ ...form, id: editingMaterial?.id });
   };
 
+  const handleDeactivate = (id: string, nome: string) => {
+    if (materialHasBalance(id)) {
+      return toast.error("Zere o saldo deste material em todos os locais antes de desativar");
+    }
+    setToggleConfirm({ id, nome, newActive: false });
+  };
+
   const unidadeLabel = (val: string) => UNIDADES_MEDIDA.find((u) => u.value === val)?.label || val;
+
+  const renderTable = (controls: ReturnType<typeof useTableControls<Material>>, isInactiveTab: boolean) => {
+    const { paginatedData, filteredData, currentPage, totalPages, itemsPerPage, setCurrentPage, setItemsPerPage, sortField, sortDirection, setSorting } = controls;
+
+    if (paginatedData.length === 0) {
+      return <p className="text-center text-muted-foreground py-8">{isInactiveTab ? "Nenhum material inativo" : "Nenhum material encontrado"}</p>;
+    }
+
+    return (
+      <>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>
+                <SortableHeader label="Nome" field="nome" currentField={sortField as string} direction={sortDirection} onSort={setSorting as any} />
+              </TableHead>
+              <TableHead>
+                <SortableHeader label="Categoria" field="categoria" currentField={sortField as string} direction={sortDirection} onSort={setSorting as any} />
+              </TableHead>
+              <TableHead>Unidade</TableHead>
+              <TableHead className="text-center">
+                <SortableHeader label="Estoque Mín." field="estoque_minimo" currentField={sortField as string} direction={sortDirection} onSort={setSorting as any} />
+              </TableHead>
+              {canEditEstoque && <TableHead className="text-right">Ações</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {paginatedData.map((m) => (
+              <TableRow key={m.id}>
+                <TableCell className="font-medium">{m.nome}</TableCell>
+                <TableCell>{m.categoria || "—"}</TableCell>
+                <TableCell>{unidadeLabel(m.unidade_medida)}</TableCell>
+                <TableCell className="text-center">{m.estoque_minimo}</TableCell>
+                {canEditEstoque && (
+                  <TableCell className="text-right space-x-1">
+                    {isInactiveTab ? (
+                      <>
+                        <Button variant="ghost" size="icon" title="Reativar" onClick={() => setToggleConfirm({ id: m.id, nome: m.nome, newActive: true })}>
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" title="Excluir definitivamente" className="text-destructive hover:text-destructive" onClick={() => setDeleteConfirm({ id: m.id, nome: m.nome })}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(m)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" title="Desativar" onClick={() => handleDeactivate(m.id, m.nome)}>
+                          <span className="text-xs">⏸</span>
+                        </Button>
+                      </>
+                    )}
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        <TablePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+          onItemsPerPageChange={setItemsPerPage}
+          totalItems={filteredData.length}
+        />
+      </>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -155,78 +282,39 @@ export default function EstoqueMateriais() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5" /> Materiais Cadastrados
-            </CardTitle>
-            <TableSearch value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por nome ou categoria..." />
-          </div>
+          <CardTitle className="flex items-center gap-2">
+            <Package className="h-5 w-5" /> Materiais Cadastrados
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : paginatedData.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">Nenhum material encontrado</p>
           ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>
-                      <SortableHeader label="Nome" field="nome" currentField={sortField as string} direction={sortDirection} onSort={setSorting as any} />
-                    </TableHead>
-                    <TableHead>
-                      <SortableHeader label="Categoria" field="categoria" currentField={sortField as string} direction={sortDirection} onSort={setSorting as any} />
-                    </TableHead>
-                    <TableHead>Unidade</TableHead>
-                    <TableHead className="text-center">
-                      <SortableHeader label="Estoque Mín." field="estoque_minimo" currentField={sortField as string} direction={sortDirection} onSort={setSorting as any} />
-                    </TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                    {canEditEstoque && <TableHead className="text-right">Ações</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedData.map((m) => (
-                    <TableRow key={m.id}>
-                      <TableCell className="font-medium">{m.nome}</TableCell>
-                      <TableCell>{m.categoria || "—"}</TableCell>
-                      <TableCell>{unidadeLabel(m.unidade_medida)}</TableCell>
-                      <TableCell className="text-center">{m.estoque_minimo}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={m.is_active ? "default" : "secondary"}>
-                          {m.is_active ? "Ativo" : "Inativo"}
-                        </Badge>
-                      </TableCell>
-                      {canEditEstoque && (
-                        <TableCell className="text-right space-x-2">
-                          <Button variant="ghost" size="icon" onClick={() => openEdit(m)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setToggleConfirm({ id: m.id, nome: m.nome, newActive: !m.is_active })}
-                          >
-                            <span className="text-xs">{m.is_active ? "⏸" : "▶"}</span>
-                          </Button>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              <TablePagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                itemsPerPage={itemsPerPage}
-                onPageChange={setCurrentPage}
-                onItemsPerPageChange={setItemsPerPage}
-                totalItems={filteredData.length}
-              />
-            </>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <div className="flex items-center justify-between mb-4">
+                <TabsList>
+                  <TabsTrigger value="ativos">
+                    Ativos <Badge variant="secondary" className="ml-2">{materiaisAtivos.length}</Badge>
+                  </TabsTrigger>
+                  <TabsTrigger value="inativos">
+                    Inativos <Badge variant="secondary" className="ml-2">{materiaisInativos.length}</Badge>
+                  </TabsTrigger>
+                </TabsList>
+                <TableSearch
+                  value={activeTab === "ativos" ? activeControls.searchTerm : inactiveControls.searchTerm}
+                  onChange={activeTab === "ativos" ? activeControls.setSearchTerm : inactiveControls.setSearchTerm}
+                  placeholder="Buscar por nome ou categoria..."
+                />
+              </div>
+              <TabsContent value="ativos">
+                {renderTable(activeControls, false)}
+              </TabsContent>
+              <TabsContent value="inativos">
+                {renderTable(inactiveControls, true)}
+              </TabsContent>
+            </Tabs>
           )}
         </CardContent>
       </Card>
@@ -283,19 +371,43 @@ export default function EstoqueMateriais() {
         </DialogContent>
       </Dialog>
 
-      {/* Confirmação */}
+      {/* Confirmação ativação/desativação */}
       <AlertDialog open={!!toggleConfirm} onOpenChange={(open) => { if (!open) setToggleConfirm(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar {toggleConfirm?.newActive ? "ativação" : "desativação"}</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja {toggleConfirm?.newActive ? "ativar" : "desativar"} o material <strong>{toggleConfirm?.nome}</strong>?
+              Tem certeza que deseja {toggleConfirm?.newActive ? "reativar" : "desativar"} o material <strong>{toggleConfirm?.nome}</strong>?
+              {!toggleConfirm?.newActive && " Saldos zerados vinculados serão removidos."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={() => toggleConfirm && toggleMutation.mutate({ id: toggleConfirm.id, is_active: toggleConfirm.newActive })}>
-              {toggleConfirm?.newActive ? "Ativar" : "Desativar"}
+              {toggleConfirm?.newActive ? "Reativar" : "Desativar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmação exclusão definitiva */}
+      <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir material definitivamente</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir permanentemente o material <strong>{deleteConfirm?.nome}</strong>?
+              <br /><br />
+              <span className="font-semibold text-destructive">Esta ação é irreversível.</span> O registro será removido do sistema e ficará apenas no histórico de auditoria.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteConfirm && deleteMutation.mutate(deleteConfirm.id)}
+            >
+              Excluir Permanentemente
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
