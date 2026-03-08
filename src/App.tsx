@@ -10,6 +10,7 @@ import { RoleGuard } from "@/components/RoleGuard";
 import { EscalasLayout } from "@/layouts/EscalasLayout";
 import { VendasLayout } from "@/layouts/VendasLayout";
 import { FeriasLayout } from "@/layouts/FeriasLayout";
+import { EstoqueLayout } from "@/layouts/EstoqueLayout";
 import { StandaloneLayout } from "@/layouts/StandaloneLayout";
 import { useSessionControl } from "@/hooks/useSessionControl";
 import { useInactivityLogout } from "@/hooks/useInactivityLogout";
@@ -49,11 +50,17 @@ const FeriasColaboradores = lazy(() => import("./pages/ferias/FeriasColaboradore
 const FeriasFerias = lazy(() => import("./pages/ferias/FeriasFerias"));
 const FeriasFolgas = lazy(() => import("./pages/ferias/FeriasFolgas"));
 const FeriasAniversariantes = lazy(() => import("./pages/ferias/FeriasAniversariantes"));
-
 const FeriasCalendario = lazy(() => import("./pages/ferias/FeriasCalendario"));
 const FeriasConfiguracoes = lazy(() => import("./pages/ferias/FeriasConfiguracoes"));
 const FeriasRelatorios = lazy(() => import("./pages/ferias/FeriasRelatorios"));
 const FeriasCreditos = lazy(() => import("./pages/ferias/FeriasCreditos"));
+
+// Estoque
+const EstoqueDashboard = lazy(() => import("./pages/estoque/EstoqueDashboard"));
+const EstoqueMateriais = lazy(() => import("./pages/estoque/EstoqueMateriais"));
+const EstoqueLocais = lazy(() => import("./pages/estoque/EstoqueLocais"));
+const EstoqueGestores = lazy(() => import("./pages/estoque/EstoqueGestores"));
+const EstoqueAuditLogs = lazy(() => import("./pages/estoque/EstoqueAuditLogs"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -65,10 +72,7 @@ const queryClient = new QueryClient({
 });
 
 const App = () => {
-  // Proteção de fluxos de autenticação (convite/recovery)
   useSessionControl();
-  
-  // Logout automático após 30 minutos de inatividade real
   useInactivityLogout(30);
 
   useEffect(() => {
@@ -77,7 +81,6 @@ const App = () => {
       import("./pages/Locations");
       import("./pages/Schedules");
     }, 2000);
-    
     return () => clearTimeout(timer);
   }, []);
 
@@ -90,7 +93,6 @@ const App = () => {
           <Routes>
             <Route path="/auth" element={<Auth />} />
             
-            {/* Página de seleção de sistema */}
             <Route
               path="/"
               element={
@@ -118,52 +120,23 @@ const App = () => {
               <Route path="consultas" element={<Queries />} />
               <Route path="relatorios" element={<EscalasReports />} />
               <Route path="perfil" element={<Profile />} />
-              <Route 
-                path="usuarios" 
-                element={
-                  <RoleGuard allowedRoles={["super_admin", "admin"]}>
-                    <UserManagement />
-                  </RoleGuard>
-                } 
-              />
-              <Route 
-                path="auditoria" 
-                element={
-                  <RoleGuard allowedRoles={["super_admin", "admin"]}>
-                    <EscalasAuditLogs />
-                  </RoleGuard>
-                } 
-              />
+              <Route path="usuarios" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><UserManagement /></RoleGuard>} />
+              <Route path="auditoria" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><EscalasAuditLogs /></RoleGuard>} />
               <Route path="ajuda" element={<Help />} />
             </Route>
 
             {/* Gerenciamento Global de Usuários */}
             <Route
               path="/usuarios"
-              element={
-                <ProtectedRoute>
-                  <StandaloneLayout />
-                </ProtectedRoute>
-              }
+              element={<ProtectedRoute><StandaloneLayout /></ProtectedRoute>}
             >
-              <Route 
-                index 
-                element={
-                  <RoleGuard allowedRoles={["super_admin", "admin"]}>
-                    <UserManagement />
-                  </RoleGuard>
-                } 
-              />
+              <Route index element={<RoleGuard allowedRoles={["super_admin", "admin"]}><UserManagement /></RoleGuard>} />
             </Route>
 
             {/* Sistema de Vendas */}
             <Route
               path="/vendas"
-              element={
-                <ProtectedRoute>
-                  <VendasLayout />
-                </ProtectedRoute>
-              }
+              element={<ProtectedRoute><VendasLayout /></ProtectedRoute>}
             >
               <Route index element={<VendasDashboard />} />
               <Route path="equipes" element={<SalesTeams />} />
@@ -174,32 +147,14 @@ const App = () => {
               <Route path="avaliacoes" element={<Evaluations />} />
               <Route path="relatorios" element={<SalesReports />} />
               <Route path="perfil" element={<Profile />} />
-              <Route 
-                path="usuarios" 
-                element={
-                  <RoleGuard allowedRoles={["super_admin", "admin"]}>
-                    <UserManagement />
-                  </RoleGuard>
-                } 
-              />
-              <Route 
-                path="auditoria" 
-                element={
-                  <RoleGuard allowedRoles={["super_admin", "admin"]}>
-                    <VendasAuditLogs />
-                  </RoleGuard>
-                } 
-              />
+              <Route path="usuarios" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><UserManagement /></RoleGuard>} />
+              <Route path="auditoria" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><VendasAuditLogs /></RoleGuard>} />
             </Route>
 
             {/* Sistema de Férias */}
             <Route
               path="/ferias"
-              element={
-                <ProtectedRoute>
-                  <FeriasLayout />
-                </ProtectedRoute>
-              }
+              element={<ProtectedRoute><FeriasLayout /></ProtectedRoute>}
             >
               <Route index element={<FeriasDashboard />} />
               <Route path="colaboradores" element={<FeriasColaboradores />} />
@@ -208,19 +163,25 @@ const App = () => {
               <Route path="folgas" element={<FeriasFolgas />} />
               <Route path="aniversariantes" element={<FeriasAniversariantes />} />
               <Route path="calendario" element={<FeriasCalendario />} />
-              
               <Route path="relatorios" element={<FeriasRelatorios />} />
               <Route path="creditos" element={<FeriasCreditos />} />
               <Route path="configuracoes" element={<FeriasConfiguracoes />} />
               <Route path="perfil" element={<Profile />} />
-              <Route
-                path="usuarios" 
-                element={
-                  <RoleGuard allowedRoles={["super_admin", "admin"]}>
-                    <UserManagement />
-                  </RoleGuard>
-                } 
-              />
+              <Route path="usuarios" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><UserManagement /></RoleGuard>} />
+            </Route>
+
+            {/* Sistema de Estoque */}
+            <Route
+              path="/estoque"
+              element={<ProtectedRoute><EstoqueLayout /></ProtectedRoute>}
+            >
+              <Route index element={<EstoqueDashboard />} />
+              <Route path="materiais" element={<EstoqueMateriais />} />
+              <Route path="locais" element={<EstoqueLocais />} />
+              <Route path="gestores" element={<EstoqueGestores />} />
+              <Route path="perfil" element={<Profile />} />
+              <Route path="usuarios" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><UserManagement /></RoleGuard>} />
+              <Route path="auditoria" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><EstoqueAuditLogs /></RoleGuard>} />
             </Route>
 
             {/* 404 */}

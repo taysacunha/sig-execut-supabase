@@ -36,6 +36,9 @@ const UNIDADES_MEDIDA = [
   { value: "rs", label: "Resma" },
 ];
 
+// Helper to bypass Supabase typed client for tables not yet in types.ts
+const fromEstoque = (table: string) => supabase.from(table as any);
+
 export default function EstoqueMateriais() {
   const queryClient = useQueryClient();
   const { canEdit } = useSystemAccess();
@@ -55,12 +58,11 @@ export default function EstoqueMateriais() {
   const { data: materiais = [], isLoading } = useQuery({
     queryKey: ["estoque-materiais"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("estoque_materiais")
+      const { data, error } = await fromEstoque("estoque_materiais")
         .select("*")
         .order("nome");
       if (error) throw error;
-      return data as Material[];
+      return (data || []) as Material[];
     },
   });
 
@@ -74,10 +76,10 @@ export default function EstoqueMateriais() {
         estoque_minimo: values.estoque_minimo,
       };
       if (values.id) {
-        const { error } = await supabase.from("estoque_materiais").update(payload).eq("id", values.id);
+        const { error } = await fromEstoque("estoque_materiais").update(payload).eq("id", values.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("estoque_materiais").insert(payload);
+        const { error } = await fromEstoque("estoque_materiais").insert(payload);
         if (error) throw error;
       }
     },
@@ -91,7 +93,7 @@ export default function EstoqueMateriais() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { error } = await supabase.from("estoque_materiais").update({ is_active }).eq("id", id);
+      const { error } = await fromEstoque("estoque_materiais").update({ is_active }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {

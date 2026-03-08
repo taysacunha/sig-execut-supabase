@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Trash2, Users, Loader2, Building2 } from "lucide-react";
+import { Plus, Trash2, Loader2, Building2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,8 @@ interface Unidade {
   nome: string;
 }
 
+const fromEstoque = (table: string) => supabase.from(table as any);
+
 export default function EstoqueGestores() {
   const queryClient = useQueryClient();
   const { canEdit } = useSystemAccess();
@@ -46,15 +48,15 @@ export default function EstoqueGestores() {
   const { data: gestores = [], isLoading } = useQuery({
     queryKey: ["estoque-gestores"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("estoque_gestores").select("*").order("nome_gestor");
+      const { data, error } = await fromEstoque("estoque_gestores").select("*").order("nome_gestor");
       if (error) throw error;
-      return data as Gestor[];
+      return (data || []) as Gestor[];
     },
   });
 
   const saveMutation = useMutation({
     mutationFn: async (values: typeof form) => {
-      const { error } = await supabase.from("estoque_gestores").insert({
+      const { error } = await fromEstoque("estoque_gestores").insert({
         user_id: values.user_id,
         unidade_id: values.unidade_id,
         nome_gestor: values.nome_gestor,
@@ -71,7 +73,7 @@ export default function EstoqueGestores() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("estoque_gestores").delete().eq("id", id);
+      const { error } = await fromEstoque("estoque_gestores").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -93,9 +95,6 @@ export default function EstoqueGestores() {
     saveMutation.mutate(form);
   };
 
-  const getUnidadeNome = (id: string) => unidades.find((u) => u.id === id)?.nome || "—";
-
-  // Agrupa por unidade
   const gestoresByUnidade = unidades
     .map((u) => ({
       unidade: u,

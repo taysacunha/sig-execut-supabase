@@ -33,10 +33,14 @@ const TIPOS = [
   { value: "prateleira", label: "Prateleira" },
 ];
 
-function buildTree(locais: Local[], parentId: string | null = null): (Local & { children: Local[] })[] {
+const fromEstoque = (table: string) => supabase.from(table as any);
+
+type LocalWithChildren = Local & { children: LocalWithChildren[] };
+
+function buildTree(locais: Local[], parentId: string | null = null): LocalWithChildren[] {
   return locais
     .filter((l) => l.parent_id === parentId)
-    .map((l) => ({ ...l, children: buildTree(locais, l.id) as any }));
+    .map((l) => ({ ...l, children: buildTree(locais, l.id) }));
 }
 
 function LocalNode({
@@ -46,7 +50,7 @@ function LocalNode({
   onEdit,
   onToggle,
 }: {
-  local: Local & { children: any[] };
+  local: LocalWithChildren;
   level: number;
   canEdit: boolean;
   onEdit: (l: Local) => void;
@@ -88,7 +92,7 @@ function LocalNode({
         </div>
         {hasChildren && (
           <CollapsibleContent>
-            {local.children.map((child: any) => (
+            {local.children.map((child) => (
               <LocalNode key={child.id} local={child} level={level + 1} canEdit={canEdit} onEdit={onEdit} onToggle={onToggle} />
             ))}
           </CollapsibleContent>
@@ -119,9 +123,9 @@ export default function EstoqueLocais() {
   const { data: locais = [], isLoading } = useQuery({
     queryKey: ["estoque-locais"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("estoque_locais_armazenamento").select("*").order("nome");
+      const { data, error } = await fromEstoque("estoque_locais_armazenamento").select("*").order("nome");
       if (error) throw error;
-      return data as Local[];
+      return (data || []) as Local[];
     },
   });
 
@@ -134,10 +138,10 @@ export default function EstoqueLocais() {
         parent_id: values.parent_id || null,
       };
       if (values.id) {
-        const { error } = await supabase.from("estoque_locais_armazenamento").update(payload).eq("id", values.id);
+        const { error } = await fromEstoque("estoque_locais_armazenamento").update(payload).eq("id", values.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("estoque_locais_armazenamento").insert(payload);
+        const { error } = await fromEstoque("estoque_locais_armazenamento").insert(payload);
         if (error) throw error;
       }
     },
@@ -151,7 +155,7 @@ export default function EstoqueLocais() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { error } = await supabase.from("estoque_locais_armazenamento").update({ is_active }).eq("id", id);
+      const { error } = await fromEstoque("estoque_locais_armazenamento").update({ is_active }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -178,12 +182,10 @@ export default function EstoqueLocais() {
     saveMutation.mutate({ ...form, id: editing?.id });
   };
 
-  // Filtra locais possíveis como pai (mesma unidade, não pode ser ele mesmo)
   const possibleParents = locais.filter(
     (l) => l.unidade_id === form.unidade_id && l.id !== editing?.id && l.is_active
   );
 
-  // Agrupa por unidade
   const locaisByUnidade = unidades.map((u) => ({
     unidade: u,
     tree: buildTree(locais.filter((l) => l.unidade_id === u.id)),
