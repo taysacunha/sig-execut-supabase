@@ -56,7 +56,7 @@ const DeployGuide = () => {
           <Terminal className="h-5 w-5 text-primary mt-0.5" />
           <div className="text-sm">
             <p className="font-semibold">Stack utilizada:</p>
-            <p className="text-muted-foreground">Docker Engine (WSL2) · Supabase Self-Hosted · Nginx · Let's Encrypt (Certbot)</p>
+            <p className="text-muted-foreground">Docker Desktop ou Docker Engine (WSL2) · Supabase Self-Hosted · Nginx · Let's Encrypt (Certbot)</p>
           </div>
         </CardContent>
       </Card>
@@ -70,9 +70,38 @@ const DeployGuide = () => {
 # Depois, defina o WSL2 como padrão:
 wsl --set-default-version 2`}</CodeBlock>
 
-        <p><strong>1.2 — Instalar Docker Engine no WSL2 (gratuito):</strong></p>
+        <p><strong>1.2 — Instalar Docker (duas opções):</strong></p>
+
+        <InfoBox>
+          <p><strong>Docker Desktop vs Docker Engine — qual a diferença?</strong></p>
+          <ul className="list-disc pl-5 mt-2 space-y-1">
+            <li><strong>Docker Desktop</strong> = aplicação com interface gráfica (GUI) que inclui o Docker Engine embutido + Docker Compose + gerenciamento visual de containers, imagens e volumes. Funciona diretamente no Windows (usa WSL2 internamente).</li>
+            <li><strong>Docker Engine</strong> = motor principal que executa os containers. É CLI puro (linha de comando), open-source e sem restrições de licença. Instalado manualmente dentro do WSL2.</li>
+          </ul>
+          <p className="mt-2 font-medium">Em resumo: Docker Desktop = GUI + Engine embutido. Docker Engine = apenas o motor, sem GUI.</p>
+        </InfoBox>
+
+        <p><strong>Opção A — Docker Desktop (recomendado para pequenas empresas):</strong></p>
+        <InfoBox>
+          <p><strong>Gratuito</strong> para empresas com menos de 250 funcionários <strong>e</strong> receita anual abaixo de US$10 milhões. Ideal para quem prefere interface gráfica e facilidade de gerenciamento.</p>
+        </InfoBox>
+        <CodeBlock>{`# 1. Baixe o Docker Desktop para Windows:
+#    https://www.docker.com/products/docker-desktop/
+#
+# 2. Execute o instalador e marque "Use WSL 2 instead of Hyper-V"
+#
+# 3. Após instalar, abra o Docker Desktop (ele inicia automaticamente com o Windows)
+#
+# 4. Verifique no PowerShell ou terminal WSL:
+docker --version
+docker compose version
+#
+# Pronto! O Docker Desktop já integra com o WSL2 automaticamente.
+# Você pode gerenciar containers pela interface gráfica ou pelo terminal.`}</CodeBlock>
+
+        <p><strong>Opção B — Docker Engine no WSL2 (sem licença, CLI puro):</strong></p>
         <WarningBox>
-          <p><strong>Docker Desktop</strong> exige licença paga para uso comercial (empresas com mais de 250 funcionários ou receita anual acima de US$10M). A alternativa gratuita é instalar o <strong>Docker Engine</strong> diretamente dentro do WSL2.</p>
+          <p>Use esta opção se a empresa <strong>não se qualifica</strong> para o Docker Desktop gratuito, ou se prefere uma instalação mais leve sem GUI.</p>
         </WarningBox>
         <CodeBlock>{`# Abra o terminal WSL (Ubuntu):
 wsl
@@ -98,7 +127,7 @@ docker --version
 docker compose version`}</CodeBlock>
 
         <InfoBox>
-          <p>Para que o Docker inicie automaticamente quando o servidor ligar, crie uma tarefa no <strong>Task Scheduler</strong> do Windows que execute <code>wsl -d Ubuntu -u root service docker start</code> na inicialização.</p>
+          <p><strong>Auto-start:</strong> Se usar Docker Desktop, ele já inicia com o Windows. Se usar Docker Engine no WSL2, crie uma tarefa no <strong>Task Scheduler</strong> do Windows que execute <code>wsl -d Ubuntu -u root service docker start</code> na inicialização.</p>
         </InfoBox>
 
         <p><strong>1.3 — Instalar Git e Node.js:</strong></p>
@@ -225,12 +254,13 @@ psql "postgresql://postgres:SENHA@localhost:5432/postgres" -f backup_public.sql`
 
       {/* ============ STEP 5 ============ */}
       <Step n={5} title="Deploy das Edge Functions">
-        <p>O sistema possui 4 Edge Functions que precisam ser deployadas:</p>
+        <p>O sistema possui 5 Edge Functions que precisam ser deployadas:</p>
         <ul className="list-disc pl-5 space-y-1">
           <li><code>invite-user</code> — Convite de usuários por e-mail</li>
           <li><code>list-users</code> — Listagem de usuários (admin)</li>
           <li><code>manage-user</code> — Gerenciamento de usuários (ativar/desativar)</li>
           <li><code>deactivate-expired-notice</code> — Desativação automática de avisos prévios</li>
+          <li><code>log-dev-work</code> — Registro automatizado de horas de desenvolvimento</li>
         </ul>
 
         <p><strong>5.1 — Clonar o repositório do projeto:</strong></p>
@@ -246,7 +276,8 @@ supabase link --project-ref msbhhsrtfqfqcsofnsuy
 supabase functions deploy invite-user --no-verify-jwt
 supabase functions deploy list-users --no-verify-jwt
 supabase functions deploy manage-user --no-verify-jwt
-supabase functions deploy deactivate-expired-notice --no-verify-jwt`}</CodeBlock>
+supabase functions deploy deactivate-expired-notice --no-verify-jwt
+supabase functions deploy log-dev-work --no-verify-jwt`}</CodeBlock>
 
         <InfoBox>
           <p>No Supabase Self-Hosted, as Edge Functions rodam no container <code>supabase-edge-functions</code> via Deno. Verifique no <code>docker compose ps</code> se o container está rodando. As funções ficam em <code>supabase/functions/</code>.</p>
@@ -545,13 +576,13 @@ docker compose logs -f functions  # Edge Functions`}</CodeBlock>
       <Step n={12} title="Checklist Final">
         <div className="space-y-2">
           {[
-            "WSL2 instalado e Docker Engine funcionando dentro dele",
+            "WSL2 instalado e Docker (Desktop ou Engine) funcionando",
             "Supabase Self-Hosted rodando (docker compose ps — ~15 containers)",
             "JWT_SECRET, ANON_KEY e SERVICE_ROLE_KEY configurados no .env",
             "SMTP configurado (testar enviando convite de usuário)",
             "Banco de dados público migrado e verificado no Studio",
             "Usuários (auth.users) migrados — testar login com conta existente",
-            "Edge Functions deployadas (testar invite-user, list-users)",
+            "Edge Functions deployadas (testar invite-user, list-users, log-dev-work)",
             "Frontend buildado com VITE_SUPABASE_URL correto",
             "Nginx servindo frontend + proxy para Supabase API",
             "HTTPS configurado (se acesso externo)",

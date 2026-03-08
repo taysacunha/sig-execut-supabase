@@ -19,5 +19,12 @@ CREATE TRIGGER handle_dev_tracker_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_updated_at();
 
--- Sem RLS - página protegida por código secreto no frontend
-ALTER TABLE public.dev_tracker DISABLE ROW LEVEL SECURITY;
+-- RLS habilitado com policy restritiva para admins
+ALTER TABLE public.dev_tracker ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins can manage dev_tracker"
+  ON public.dev_tracker
+  FOR ALL
+  TO authenticated
+  USING (public.is_admin_or_super(auth.uid()))
+  WITH CHECK (public.is_admin_or_super(auth.uid()));
