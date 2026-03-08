@@ -277,12 +277,7 @@ export default function EstoqueSaldos() {
       {/* Search */}
       <Card>
         <CardContent className="pt-4">
-          <Input
-            placeholder="Buscar por material, local ou unidade..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="max-w-sm"
-          />
+          <TableSearch value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por material, local ou unidade..." />
         </CardContent>
       </Card>
 
