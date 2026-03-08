@@ -1,57 +1,44 @@
 
 
-## Plano - 4 Correções
+## Plano: Adicionar Setor ao Vínculo Usuário-Unidade + Sidebar
 
-### 1. Dialog de corretores quebrado (sem scroll)
+### Alterações
 
-**Problema:** O `DialogContent` em `SalesBrokers.tsx` (linha 473) não tem limite de altura. Com os novos campos CRECI e Nome de Exibição, o conteúdo ultrapassa a viewport e os botões Cancelar/Salvar ficam inacessíveis.
+#### 1. Migração SQL
+- `ALTER TABLE estoque_usuarios_unidades ADD COLUMN setor_id uuid REFERENCES ferias_setores(id) ON DELETE SET NULL`
+- `ALTER TABLE estoque_solicitacoes ADD COLUMN setor_id uuid REFERENCES ferias_setores(id) ON DELETE SET NULL`
 
-**Solução:** Adicionar `className="max-w-lg max-h-[90vh] overflow-y-auto"` ao `DialogContent` (linha 473). O `DialogFooter` (linha 638) receberá `className="sticky bottom-0 bg-background pt-4 border-t"` para ficar sempre visível.
+#### 2. `EstoqueSidebar.tsx`
+- Renomear "Gestores" para "Gestores e Usuários" no menu
+- Esse item só aparece para `super_admin` e `admin` — mover da lista `moduleMenuItems` para `adminMenuItems` (ou filtrar condicionalmente)
 
-**Arquivo:** `src/pages/vendas/SalesBrokers.tsx` (linhas 473, 638)
+#### 3. `EstoqueGestores.tsx` — Aba "Usuários por Unidade"
+- Buscar setores ativos de `ferias_setores` (`is_active = true`)
+- No dialog de vincular usuário: adicionar select de setor (obrigatório), filtrando setores ativos
+- Na tabela de vínculos: mostrar coluna "Setor"
+- No insert: gravar `setor_id` junto com `user_id` e `unidade_id`
+- Na tabela: mostrar alerta visual (badge vermelha) quando o setor vinculado está inativo/excluído, com tooltip "Setor desativado — realoque este usuário"
+- Permitir editar o setor de um vínculo existente (botão de editar ao lado do excluir)
 
----
+#### 4. `useUsuarioUnidades.ts`
+- Retornar `setor_id` e `setor_nome` nos vínculos do usuário
 
-### 2. Relatório Corretores Vendas - dados de meses sem cadastro
+#### 5. `EstoqueSolicitacoes.tsx`
+- Ao criar solicitação: auto-preencher `setor_id` do vínculo do usuário com a unidade selecionada
+- Gravar `setor_id` na solicitação
+- Na tabela e dialog de visualização: mostrar coluna/campo "Setor" para o gestor saber onde entregar
 
-**Problema:** No modo mensal, o `months` (linha 200-224) inclui o mês anterior para "contexto de evolução". Os totais (linhas 400-409) e queries de `saleDetails`, `proposalsData`, `leadsData`, `evaluationsData` usam esse array completo, então dados do mês anterior "vazam" para o mês selecionado.
+#### 6. Alerta de setor desativado
+- Na aba "Usuários por Unidade": buscar setores vinculados e verificar `is_active`
+- Se o setor está inativo: mostrar badge "Setor desativado" na linha + alerta no topo da página com contagem de usuários afetados
 
-**Solução:** Criar um `reportMonths` separado que contém apenas o mês selecionado (sem o anterior). Usar `reportMonths` para calcular totais e buscar `saleDetails`. Manter `months` completo apenas para os gráficos de evolução (`salesData`, `proposalsData`, `leadsData`, `evaluationsData` nos charts).
-
-Concretamente:
-- Adicionar `const reportMonths = periodType === "month" ? [months[months.length - 1]] : months;`
-- Alterar `totalVGV`, `totalSales` para somar apenas entries cujo `month` esteja em `reportMonths`
-- Alterar `totalProposals`, `totalConverted`, `totalLeads`, `totalLeadsActive`, `totalVisits`, `avgScore` idem
-- Alterar query de `saleDetails` para usar `reportMonths` no `.in("year_month", ...)`
-
-**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas ~200, 384-409)
-
----
-
-### 3. Divs de vendas/avaliação não aparecem no PDF
-
-**Problema:** `hidden print:block` (linhas 713, 753) funciona com `window.print()` mas **não** com `html2canvas`, que captura o estado visual atual do DOM. Os elementos ficam `display:none` durante a captura.
-
-**Solução:** Usar o estado `isExporting` (já existe, linha 192) para controlar visibilidade:
-- Trocar `className="hidden print:block"` por renderização condicional: `{isExporting && saleDetails.length > 0 && (<Card>...</Card>)}`
-- No `handleExportPDF` (linha 428), o `setIsExporting(true)` já é chamado antes do `html2canvas`. Adicionar um `await new Promise(r => setTimeout(r, 100))` entre o `setIsExporting(true)` e o `html2canvas` para dar tempo ao React de renderizar os blocos.
-
-**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas 711-755, 434-436)
-
----
-
-### 4. Ajuste de qualidade - acessibilidade do dialog
-
-**Identificado:** O `DialogContent` de corretores já tem `DialogDescription`, então está ok. Verificar se outros dialogs do mesmo arquivo têm `DialogDescription` para evitar warnings no console.
-
-**Arquivo:** `src/pages/vendas/SalesBrokers.tsx`
-
----
-
-### Resumo
+### Arquivos a alterar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `SalesBrokers.tsx` | Scroll + footer sticky no dialog |
-| `BrokerIndividualReport.tsx` | `reportMonths` para totais, renderização condicional por `isExporting` |
+| Migração SQL | `setor_id` em `estoque_usuarios_unidades` e `estoque_solicitacoes` |
+| `EstoqueSidebar.tsx` | Renomear item + mover para admin-only |
+| `EstoqueGestores.tsx` | Select de setor no vínculo, coluna setor na tabela, alerta de setor inativo, edição de setor |
+| `useUsuarioUnidades.ts` | Retornar setor_id/setor_nome |
+| `EstoqueSolicitacoes.tsx` | Auto-preencher setor, gravar, exibir na tabela/dialog |
 
