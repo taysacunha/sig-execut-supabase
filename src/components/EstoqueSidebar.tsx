@@ -1,9 +1,10 @@
-import { Home, Package, MapPin, Users, UserCircle, Shield, History, LogOut, ArrowLeft, Crown, Briefcase, User, ClipboardList, PackageOpen, ArrowDownUp } from "lucide-react";
+import { Home, Package, MapPin, Users, UserCircle, Shield, History, LogOut, ArrowLeft, Crown, Briefcase, User, ClipboardList, PackageOpen, ArrowDownUp, Bell } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useUserRole, AppRole } from "@/hooks/useUserRole";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
+import { useEstoqueNotificacoes } from "@/hooks/useEstoqueNotificacoes";
 import {
   Sidebar,
   SidebarContent,
@@ -33,6 +34,7 @@ const moduleMenuItems: MenuItem[] = [
   { title: "Saldos", url: "/estoque/saldos", icon: PackageOpen },
   { title: "Solicitações", url: "/estoque/solicitacoes", icon: ClipboardList },
   { title: "Movimentações", url: "/estoque/movimentacoes", icon: ArrowDownUp },
+  { title: "Notificações", url: "/estoque/notificacoes", icon: Bell },
   { title: "Gestores", url: "/estoque/gestores", icon: Users },
   { title: "Perfil", url: "/estoque/perfil", icon: UserCircle },
 ];
@@ -73,6 +75,7 @@ export function EstoqueSidebar() {
   const navigate = useNavigate();
   const { role, loading: roleLoading, hasAccess: hasRoleAccess } = useUserRole();
   const { hasAccess: hasSystemAccess, loading: systemLoading } = useSystemAccess();
+  const { unreadCount } = useEstoqueNotificacoes();
 
   const loading = roleLoading || systemLoading;
 
@@ -137,7 +140,12 @@ export function EstoqueSidebar() {
                         }
                       >
                         <item.icon className="h-6 w-6" />
-                        <span>{item.title}</span>
+                        <span className="flex-1">{item.title}</span>
+                        {item.title === "Notificações" && unreadCount > 0 && (
+                          <Badge className="bg-destructive text-destructive-foreground text-xs h-5 min-w-[20px] flex items-center justify-center">
+                            {unreadCount}
+                          </Badge>
+                        )}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

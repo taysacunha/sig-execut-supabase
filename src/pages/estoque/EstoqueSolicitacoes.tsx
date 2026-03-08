@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
+import { notificarGestoresUnidade, criarNotificacao } from "@/hooks/useEstoqueNotificacoes";
 
 const fromEstoque = (table: string) => supabase.from(table as any);
 
@@ -174,6 +175,11 @@ export default function EstoqueSolicitacoes() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["estoque-solicitacoes"] });
+      // Notify managers of the selected unit
+      if (unidadeId) {
+        const userName = user?.user_metadata?.name || user?.email || "Usuário";
+        notificarGestoresUnidade(unidadeId, `Nova solicitação de materiais criada por ${userName}`);
+      }
       toast.success("Solicitação criada com sucesso!");
       resetForm();
     },
@@ -181,11 +187,21 @@ export default function EstoqueSolicitacoes() {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, newStatus }: { id: string; newStatus: string }) => {
+    mutationFn: async ({ id, newStatus, solicitacao }: { id: string; newStatus: string; solicitacao: Solicitacao }) => {
       const { error } = await fromEstoque("estoque_solicitacoes")
         .update({ status: newStatus } as any)
         .eq("id", id);
       if (error) throw error;
+
+      // Notify the requester about status change
+      const statusLabel = STATUS_LABELS[newStatus] || newStatus;
+      await criarNotificacao({
+        user_id: solicitacao.solicitante_user_id,
+        tipo: newStatus === "entregue" ? "material_entregue" : "status_atualizado",
+        mensagem: `Sua solicitação foi atualizada para: ${statusLabel}`,
+        referencia_id: id,
+        referencia_tipo: "solicitacao",
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["estoque-solicitacoes"] });
@@ -310,7 +326,7 @@ export default function EstoqueSolicitacoes() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => updateStatusMutation.mutate({ id: sol.id, newStatus: NEXT_STATUS[sol.status] })}
+                          onClick={() => updateStatusMutation.mutate({ id: sol.id, newStatus: NEXT_STATUS[sol.status], solicitacao: sol })}
                         >
                           {sol.status === "pendente" && <CheckCircle className="h-4 w-4 mr-1" />}
                           {sol.status === "aprovada" && <Package className="h-4 w-4 mr-1" />}
