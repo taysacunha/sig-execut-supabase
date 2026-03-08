@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useUserRole, AppRole } from "@/hooks/useUserRole";
 import { RoleGuard } from "@/components/RoleGuard";
 import { toast } from "sonner";
-import { Loader2, Shield, Crown, Briefcase, UserPlus, Mail, Ban, Trash2, RefreshCw, Calendar, TrendingUp, User, Eye, Edit, Pencil, History, Users } from "lucide-react";
+import { Loader2, Shield, Crown, Briefcase, UserPlus, Mail, Ban, Trash2, RefreshCw, Calendar, TrendingUp, User, Eye, Edit, Pencil, History, Users, Package } from "lucide-react";
 import { AuditLogsPanel } from "@/components/AuditLogsPanel";
 import { useTableControls } from "@/hooks/useTableControls";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
