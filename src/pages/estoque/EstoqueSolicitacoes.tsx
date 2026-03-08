@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
+import { notificarGestoresUnidade, criarNotificacao } from "@/hooks/useEstoqueNotificacoes";
 
 const fromEstoque = (table: string) => supabase.from(table as any);
 
