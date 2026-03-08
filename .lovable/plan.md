@@ -1,57 +1,45 @@
 
 
-## Plano - 4 Correções
+## Plano: Página de Desenvolvimento Protegida por Código + Guia de Deploy
 
-### 1. Dialog de corretores quebrado (sem scroll)
+### Parte 1: Página de Registro de Desenvolvimento
 
-**Problema:** O `DialogContent` em `SalesBrokers.tsx` (linha 473) não tem limite de altura. Com os novos campos CRECI e Nome de Exibição, o conteúdo ultrapassa a viewport e os botões Cancelar/Salvar ficam inacessíveis.
+**Proteção**: Ao acessar `/dev`, aparece um campo de senha. Somente com o código correto (hardcoded no frontend, ex: `EXECUT2026`) o conteudo é exibido. Sem envolvimento de banco para a autenticação da página.
 
-**Solução:** Adicionar `className="max-w-lg max-h-[90vh] overflow-y-auto"` ao `DialogContent` (linha 473). O `DialogFooter` (linha 638) receberá `className="sticky bottom-0 bg-background pt-4 border-t"` para ficar sempre visível.
+**Dados no Supabase**: Criar tabela `dev_tracker` para armazenar funcionalidades, horas e valores, editáveis pela interface.
 
-**Arquivo:** `src/pages/vendas/SalesBrokers.tsx` (linhas 473, 638)
+**Estrutura da tabela `dev_tracker`**:
+- `id` (uuid, PK)
+- `system_name` (text) - ex: "escalas", "vendas", "ferias", "estoque", "infraestrutura"
+- `feature_name` (text) - nome da funcionalidade
+- `description` (text) - descrição
+- `hours` (numeric) - horas gastas
+- `cost` (numeric) - valor em R$
+- `created_at`, `updated_at` (timestamps)
+- Sem RLS (página protegida por código, não por auth)
 
----
+**Interface**:
+- Tabela agrupada por sistema com subtotais de horas e valores
+- Total geral no final
+- Botões para adicionar, editar e remover funcionalidades inline
+- Export PDF
+- Estes dois itens (tracker + deploy guide) NÃO entram nos registros
 
-### 2. Relatório Corretores Vendas - dados de meses sem cadastro
+### Parte 2: Guia de Deploy Self-Hosted
 
-**Problema:** No modo mensal, o `months` (linha 200-224) inclui o mês anterior para "contexto de evolução". Os totais (linhas 400-409) e queries de `saleDetails`, `proposalsData`, `leadsData`, `evaluationsData` usam esse array completo, então dados do mês anterior "vazam" para o mês selecionado.
+Página `/dev/deploy-guide` (mesma proteção por código) com instruções para:
+1. Pré-requisitos no Windows Server 2022 (Docker, WSL2, Git)
+2. Supabase Self-Hosted via Docker Compose
+3. Build do frontend e servir com Nginx
+4. Configuração de domínio + HTTPS com Let's Encrypt
+5. Migração do banco de dados
 
-**Solução:** Criar um `reportMonths` separado que contém apenas o mês selecionado (sem o anterior). Usar `reportMonths` para calcular totais e buscar `saleDetails`. Manter `months` completo apenas para os gráficos de evolução (`salesData`, `proposalsData`, `leadsData`, `evaluationsData` nos charts).
+### Arquivos
 
-Concretamente:
-- Adicionar `const reportMonths = periodType === "month" ? [months[months.length - 1]] : months;`
-- Alterar `totalVGV`, `totalSales` para somar apenas entries cujo `month` esteja em `reportMonths`
-- Alterar `totalProposals`, `totalConverted`, `totalLeads`, `totalLeadsActive`, `totalVisits`, `avgScore` idem
-- Alterar query de `saleDetails` para usar `reportMonths` no `.in("year_month", ...)`
-
-**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas ~200, 384-409)
-
----
-
-### 3. Divs de vendas/avaliação não aparecem no PDF
-
-**Problema:** `hidden print:block` (linhas 713, 753) funciona com `window.print()` mas **não** com `html2canvas`, que captura o estado visual atual do DOM. Os elementos ficam `display:none` durante a captura.
-
-**Solução:** Usar o estado `isExporting` (já existe, linha 192) para controlar visibilidade:
-- Trocar `className="hidden print:block"` por renderização condicional: `{isExporting && saleDetails.length > 0 && (<Card>...</Card>)}`
-- No `handleExportPDF` (linha 428), o `setIsExporting(true)` já é chamado antes do `html2canvas`. Adicionar um `await new Promise(r => setTimeout(r, 100))` entre o `setIsExporting(true)` e o `html2canvas` para dar tempo ao React de renderizar os blocos.
-
-**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas 711-755, 434-436)
-
----
-
-### 4. Ajuste de qualidade - acessibilidade do dialog
-
-**Identificado:** O `DialogContent` de corretores já tem `DialogDescription`, então está ok. Verificar se outros dialogs do mesmo arquivo têm `DialogDescription` para evitar warnings no console.
-
-**Arquivo:** `src/pages/vendas/SalesBrokers.tsx`
-
----
-
-### Resumo
-
-| Arquivo | Alteração |
+| Arquivo | Descrição |
 |---------|-----------|
-| `SalesBrokers.tsx` | Scroll + footer sticky no dialog |
-| `BrokerIndividualReport.tsx` | `reportMonths` para totais, renderização condicional por `isExporting` |
+| `src/pages/DevTracker.tsx` | Página com tabela editável + proteção por código |
+| `src/pages/DeployGuide.tsx` | Guia de deploy self-hosted |
+| `src/App.tsx` | Rotas `/dev` e `/dev/deploy-guide` (sem ProtectedRoute, sem menu) |
+| Migration SQL | Tabela `dev_tracker` no Supabase |
 
