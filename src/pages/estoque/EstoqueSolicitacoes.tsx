@@ -300,6 +300,7 @@ export default function EstoqueSolicitacoes() {
   const resetForm = () => {
     setDialogOpen(false);
     setUnidadeId("");
+    setSetorId("");
     setObservacoes("");
     setItens([{ material_id: "", quantidade: 1 }]);
   };
