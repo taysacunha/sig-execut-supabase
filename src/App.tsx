@@ -61,6 +61,9 @@ const EstoqueMateriais = lazy(() => import("./pages/estoque/EstoqueMateriais"));
 const EstoqueLocais = lazy(() => import("./pages/estoque/EstoqueLocais"));
 const EstoqueGestores = lazy(() => import("./pages/estoque/EstoqueGestores"));
 const EstoqueAuditLogs = lazy(() => import("./pages/estoque/EstoqueAuditLogs"));
+const EstoqueSolicitacoes = lazy(() => import("./pages/estoque/EstoqueSolicitacoes"));
+const EstoqueSaldos = lazy(() => import("./pages/estoque/EstoqueSaldos"));
+const EstoqueMovimentacoes = lazy(() => import("./pages/estoque/EstoqueMovimentacoes"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -178,6 +181,9 @@ const App = () => {
               <Route index element={<EstoqueDashboard />} />
               <Route path="materiais" element={<EstoqueMateriais />} />
               <Route path="locais" element={<EstoqueLocais />} />
+              <Route path="saldos" element={<EstoqueSaldos />} />
+              <Route path="solicitacoes" element={<EstoqueSolicitacoes />} />
+              <Route path="movimentacoes" element={<EstoqueMovimentacoes />} />
               <Route path="gestores" element={<EstoqueGestores />} />
               <Route path="perfil" element={<Profile />} />
               <Route path="usuarios" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><UserManagement /></RoleGuard>} />
