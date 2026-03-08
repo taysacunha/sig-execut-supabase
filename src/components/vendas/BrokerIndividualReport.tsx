@@ -716,47 +716,6 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
             months={months}
           />
 
-          {/* Detalhes das Vendas - apenas no PDF */}
-          {isExporting && saleDetails.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Detalhes das Vendas</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Imóvel</TableHead>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Papel</TableHead>
-                      <TableHead className="text-right">Valor</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {saleDetails.map((sale: any, idx: number) => {
-                      const [y,m,d] = (sale.sale_date || "").split("-").map(Number);
-                      const dateStr = y ? new Date(y, m-1, d).toLocaleDateString("pt-BR") : "-";
-                      return (
-                        <TableRow key={idx}>
-                          <TableCell className="font-medium">{sale.property_name || "Sem nome"}</TableCell>
-                          <TableCell>{dateStr}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">
-                              {sale.role === "owner" ? "Titular" : "Parceiro"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-primary">
-                            {Number(sale.proportional_value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Detalhes da Avaliação - apenas no PDF (snapshot do export) */}
           {isExporting && (((pdfEvaluationSnapshot ?? evalDetailsPdf)?.obs_feedbacks) || ((pdfEvaluationSnapshot ?? evalDetailsPdf)?.acoes_melhorias_c2s) || ((pdfEvaluationSnapshot ?? evalDetailsPdf)?.metas_acoes_futuras) || (pdfLastVisitSnapshot ?? lastVisitDatePdf)) && (
             <Card>
@@ -808,6 +767,47 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
                     <p className="text-sm whitespace-pre-wrap">{(pdfEvaluationSnapshot ?? evalDetailsPdf).metas_acoes_futuras}</p>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Detalhes das Vendas - apenas no PDF */}
+          {isExporting && saleDetails.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Detalhes das Vendas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Imóvel</TableHead>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Papel</TableHead>
+                      <TableHead className="text-right">Valor</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {saleDetails.map((sale: any, idx: number) => {
+                      const [y,m,d] = (sale.sale_date || "").split("-").map(Number);
+                      const dateStr = y ? new Date(y, m-1, d).toLocaleDateString("pt-BR") : "-";
+                      return (
+                        <TableRow key={idx}>
+                          <TableCell className="font-medium">{sale.property_name || "Sem nome"}</TableCell>
+                          <TableCell>{dateStr}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">
+                              {sale.role === "owner" ? "Titular" : "Parceiro"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-primary">
+                            {Number(sale.proportional_value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           )}
