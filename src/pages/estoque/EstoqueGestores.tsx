@@ -2,16 +2,15 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Trash2, Loader2, Building2 } from "lucide-react";
+import { Plus, Trash2, Loader2, Building2, UserPlus, Mail } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useSystemAccess } from "@/hooks/useSystemAccess";
+import { useUserRole } from "@/hooks/useUserRole";
 
 interface Gestor {
   id: string;
@@ -26,15 +25,21 @@ interface Unidade {
   nome: string;
 }
 
+interface SystemUser {
+  id: string;
+  email: string;
+  name: string | null;
+}
+
 const fromEstoque = (table: string) => supabase.from(table as any);
 
 export default function EstoqueGestores() {
   const queryClient = useQueryClient();
-  const { canEdit } = useSystemAccess();
-  const canEditEstoque = canEdit("estoque");
+  const { role } = useUserRole();
+  const canManage = role === "super_admin" || role === "admin";
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState({ user_id: "", unidade_id: "", nome_gestor: "" });
+  const [form, setForm] = useState({ user_id: "", unidade_id: "" });
 
   const { data: unidades = [] } = useQuery({
     queryKey: ["ferias-unidades-estoque"],
@@ -54,12 +59,36 @@ export default function EstoqueGestores() {
     },
   });
 
+  // Fetch system users via edge function (same as UserManagement)
+  const { data: systemUsers = [] } = useQuery({
+    queryKey: ["system-users-for-gestores"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("list-users");
+      if (error) throw error;
+      const users = data?.users || [];
+      return users.map((u: any) => ({
+        id: u.id,
+        email: u.email,
+        name: u.name || u.user_metadata?.name || u.email,
+      })) as SystemUser[];
+    },
+    enabled: canManage,
+  });
+
+  // Filter out users already added as gestores
+  const existingUserIds = new Set(gestores.map((g) => g.user_id));
+  const availableUsers = systemUsers.filter((u) => !existingUserIds.has(u.id));
+
+  const selectedUser = systemUsers.find((u) => u.id === form.user_id);
+
   const saveMutation = useMutation({
     mutationFn: async (values: typeof form) => {
+      const user = systemUsers.find((u) => u.id === values.user_id);
+      if (!user) throw new Error("Usuário não encontrado");
       const { error } = await fromEstoque("estoque_gestores").insert({
         user_id: values.user_id,
         unidade_id: values.unidade_id,
-        nome_gestor: values.nome_gestor,
+        nome_gestor: user.name || user.email,
       });
       if (error) throw error;
     },
@@ -85,14 +114,19 @@ export default function EstoqueGestores() {
 
   const closeDialog = () => {
     setDialogOpen(false);
-    setForm({ user_id: "", unidade_id: "", nome_gestor: "" });
+    setForm({ user_id: "", unidade_id: "" });
   };
 
   const handleSubmit = () => {
-    if (!form.nome_gestor.trim()) return toast.error("Nome é obrigatório");
+    if (!form.user_id) return toast.error("Selecione um usuário");
     if (!form.unidade_id) return toast.error("Selecione a unidade");
-    if (!form.user_id.trim()) return toast.error("ID do usuário é obrigatório");
     saveMutation.mutate(form);
+  };
+
+  // Find user email/name for display in table
+  const getUserDisplay = (userId: string) => {
+    const user = systemUsers.find((u) => u.id === userId);
+    return user?.email || "";
   };
 
   const gestoresByUnidade = unidades
@@ -111,7 +145,7 @@ export default function EstoqueGestores() {
           <h1 className="text-3xl font-bold tracking-tight">Gestores de Estoque</h1>
           <p className="text-muted-foreground">Defina quem gerencia o estoque de cada unidade</p>
         </div>
-        {canEditEstoque && (
+        {canManage && (
           <Button onClick={() => setDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" /> Novo Gestor
           </Button>
@@ -135,15 +169,22 @@ export default function EstoqueGestores() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Nome do Gestor</TableHead>
-                      {canEditEstoque && <TableHead className="text-right">Ações</TableHead>}
+                      <TableHead>Nome</TableHead>
+                      <TableHead>E-mail</TableHead>
+                      {canManage && <TableHead className="text-right">Ações</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {gs.map((g) => (
                       <TableRow key={g.id}>
                         <TableCell className="font-medium">{g.nome_gestor}</TableCell>
-                        {canEditEstoque && (
+                        <TableCell className="text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Mail className="h-3 w-3" />
+                            {getUserDisplay(g.user_id)}
+                          </span>
+                        </TableCell>
+                        {canManage && (
                           <TableCell className="text-right">
                             <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(g.id)}>
                               <Trash2 className="h-4 w-4" />
@@ -186,9 +227,39 @@ export default function EstoqueGestores() {
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Novo Gestor de Estoque</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              Novo Gestor de Estoque
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div>
+              <Label>Usuário *</Label>
+              <Select value={form.user_id} onValueChange={(v) => setForm({ ...form, user_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Selecione o usuário" /></SelectTrigger>
+                <SelectContent>
+                  {availableUsers.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">
+                      Todos os usuários já são gestores
+                    </div>
+                  ) : (
+                    availableUsers.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        <span className="flex items-center gap-2">
+                          <span className="font-medium">{u.name}</span>
+                          <span className="text-muted-foreground text-xs">({u.email})</span>
+                        </span>
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              {selectedUser && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {selectedUser.email}
+                </p>
+              )}
+            </div>
             <div>
               <Label>Unidade *</Label>
               <Select value={form.unidade_id} onValueChange={(v) => setForm({ ...form, unidade_id: v })}>
@@ -199,14 +270,6 @@ export default function EstoqueGestores() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label>Nome do Gestor *</Label>
-              <Input value={form.nome_gestor} onChange={(e) => setForm({ ...form, nome_gestor: e.target.value })} placeholder="Nome completo do gestor" />
-            </div>
-            <div>
-              <Label>ID do Usuário (auth) *</Label>
-              <Input value={form.user_id} onChange={(e) => setForm({ ...form, user_id: e.target.value })} placeholder="UUID do usuário no sistema" />
             </div>
           </div>
           <DialogFooter>
