@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Trash2, Loader2, Building2, UserPlus, Mail, Users, AlertTriangle, Pencil } from "lucide-react";
+import { Plus, Trash2, Loader2, Building2, UserPlus, Mail, Users, AlertTriangle, Pencil, Check } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -60,7 +61,7 @@ export default function EstoqueGestores() {
   const canManage = role === "super_admin" || role === "admin";
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState({ user_id: "", unidade_id: "" });
+  const [form, setForm] = useState<{ user_id: string; unidade_ids: string[] }>({ user_id: "", unidade_ids: [] });
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; nome: string } | null>(null);
 
   // User-unit link state
@@ -147,20 +148,25 @@ export default function EstoqueGestores() {
   });
 
   // ===== GESTORES =====
+  // For the selected user, find which unidades they're already gestor of
   const existingUserIds = new Set(gestores.map((g) => g.user_id));
-  const availableUsers = systemUsers.filter((u) => !existingUserIds.has(u.id));
+  const availableUsers = systemUsers.filter((u) => !existingUserIds.has(u.id) || gestores.filter((g) => g.user_id === u.id).length < unidades.length);
   const selectedUser = systemUsers.find((u) => u.id === form.user_id);
+  const unidadesJaGestor = new Set(gestores.filter((g) => g.user_id === form.user_id).map((g) => g.unidade_id));
+  const unidadesDisponiveis = unidades.filter((u) => !unidadesJaGestor.has(u.id));
 
   const saveMutation = useMutation({
-    mutationFn: async (values: typeof form) => {
+    mutationFn: async (values: { user_id: string; unidade_ids: string[] }) => {
       const user = systemUsers.find((u) => u.id === values.user_id);
       if (!user) throw new Error("Usuário não encontrado");
-      const { error } = await fromEstoque("estoque_gestores").insert({
-        user_id: values.user_id,
-        unidade_id: values.unidade_id,
-        nome_gestor: user.name || user.email,
-      });
-      if (error) throw error;
+      for (const unidade_id of values.unidade_ids) {
+        const { error } = await fromEstoque("estoque_gestores").insert({
+          user_id: values.user_id,
+          unidade_id,
+          nome_gestor: user.name || user.email,
+        });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["estoque-gestores"] });
@@ -234,7 +240,7 @@ export default function EstoqueGestores() {
 
   const closeDialog = () => {
     setDialogOpen(false);
-    setForm({ user_id: "", unidade_id: "" });
+    setForm({ user_id: "", unidade_ids: [] });
   };
 
   const closeLinkDialog = () => {
@@ -244,7 +250,7 @@ export default function EstoqueGestores() {
 
   const handleSubmit = () => {
     if (!form.user_id) return toast.error("Selecione um usuário");
-    if (!form.unidade_id) return toast.error("Selecione a unidade");
+    if (form.unidade_ids.length === 0) return toast.error("Selecione pelo menos uma unidade");
     saveMutation.mutate(form);
   };
 
@@ -596,7 +602,7 @@ export default function EstoqueGestores() {
           <div className="space-y-4">
             <div>
               <Label>Usuário *</Label>
-              <Select value={form.user_id} onValueChange={(v) => setForm({ ...form, user_id: v })}>
+              <Select value={form.user_id} onValueChange={(v) => setForm({ ...form, user_id: v, unidade_ids: [] })}>
                 <SelectTrigger><SelectValue placeholder="Selecione o usuário" /></SelectTrigger>
                 <SelectContent>
                   {availableUsers.length === 0 ? (
@@ -622,15 +628,31 @@ export default function EstoqueGestores() {
               )}
             </div>
             <div>
-              <Label>Unidade *</Label>
-              <Select value={form.unidade_id} onValueChange={(v) => setForm({ ...form, unidade_id: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecione a unidade" /></SelectTrigger>
-                <SelectContent>
-                  {unidades.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>
+              <Label>Unidades * <span className="text-xs text-muted-foreground font-normal">(selecione uma ou mais)</span></Label>
+              {unidadesDisponiveis.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">
+                  {form.user_id ? "Este usuário já é gestor de todas as unidades" : "Selecione um usuário primeiro"}
+                </p>
+              ) : (
+                <div className="space-y-2 mt-2 border rounded-md p-3">
+                  {unidadesDisponiveis.map((u) => (
+                    <label key={u.id} className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={form.unidade_ids.includes(u.id)}
+                        onCheckedChange={(checked) => {
+                          setForm((prev) => ({
+                            ...prev,
+                            unidade_ids: checked
+                              ? [...prev.unidade_ids, u.id]
+                              : prev.unidade_ids.filter((id) => id !== u.id),
+                          }));
+                        }}
+                      />
+                      <span className="text-sm">{u.nome}</span>
+                    </label>
                   ))}
-                </SelectContent>
-              </Select>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>

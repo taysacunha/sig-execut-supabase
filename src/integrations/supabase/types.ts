@@ -698,6 +698,7 @@ export type Database = {
           created_at: string | null
           id: string
           observacoes: string | null
+          setor_id: string | null
           solicitante_nome: string
           solicitante_user_id: string
           status: string
@@ -708,6 +709,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           observacoes?: string | null
+          setor_id?: string | null
           solicitante_nome: string
           solicitante_user_id: string
           status?: string
@@ -718,6 +720,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           observacoes?: string | null
+          setor_id?: string | null
           solicitante_nome?: string
           solicitante_user_id?: string
           status?: string
@@ -725,6 +728,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "estoque_solicitacoes_setor_id_fkey"
+            columns: ["setor_id"]
+            isOneToOne: false
+            referencedRelation: "ferias_setores"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "estoque_solicitacoes_unidade_id_fkey"
             columns: ["unidade_id"]
@@ -738,22 +748,32 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
+          setor_id: string | null
           unidade_id: string
           user_id: string
         }
         Insert: {
           created_at?: string | null
           id?: string
+          setor_id?: string | null
           unidade_id: string
           user_id: string
         }
         Update: {
           created_at?: string | null
           id?: string
+          setor_id?: string | null
           unidade_id?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "estoque_usuarios_unidades_setor_id_fkey"
+            columns: ["setor_id"]
+            isOneToOne: false
+            referencedRelation: "ferias_setores"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "estoque_usuarios_unidades_unidade_id_fkey"
             columns: ["unidade_id"]
