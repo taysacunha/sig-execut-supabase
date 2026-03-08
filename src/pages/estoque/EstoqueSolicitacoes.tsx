@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { notificarGestoresUnidade, criarNotificacao } from "@/hooks/useEstoqueNotificacoes";
 import { useTableControls } from "@/hooks/useTableControls";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
+import { useUsuarioUnidades } from "@/hooks/useUsuarioUnidades";
 
 const fromEstoque = (table: string) => supabase.from(table as any);
 
