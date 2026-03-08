@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useUserRole, AppRole } from "@/hooks/useUserRole";
 import { RoleGuard } from "@/components/RoleGuard";
 import { toast } from "sonner";
-import { Loader2, Shield, Crown, Briefcase, UserPlus, Mail, Ban, Trash2, RefreshCw, Calendar, TrendingUp, User, Eye, Edit, Pencil, History, Users } from "lucide-react";
+import { Loader2, Shield, Crown, Briefcase, UserPlus, Mail, Ban, Trash2, RefreshCw, Calendar, TrendingUp, User, Eye, Edit, Pencil, History, Users, Package } from "lucide-react";
 import { AuditLogsPanel } from "@/components/AuditLogsPanel";
 import { useTableControls } from "@/hooks/useTableControls";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
@@ -62,7 +62,7 @@ import {
 } from "@/components/ui/tooltip";
 
 type SystemRole = "super_admin" | "admin" | "manager" | "supervisor" | "collaborator";
-type SystemName = "escalas" | "vendas" | "ferias";
+type SystemName = "escalas" | "vendas" | "ferias" | "estoque";
 type PermissionType = "view_only" | "view_edit";
 
 interface SystemAccess {
@@ -109,12 +109,14 @@ const systemLabels: Record<SystemName, string> = {
   escalas: "Escalas",
   vendas: "Vendas",
   ferias: "Férias e Folgas",
+  estoque: "Estoques",
 };
 
 const systemIcons: Record<SystemName, React.ReactNode> = {
   escalas: <Calendar className="h-3 w-3" />,
   vendas: <TrendingUp className="h-3 w-3" />,
   ferias: <Calendar className="h-3 w-3" />,
+  estoque: <Package className="h-3 w-3" />,
 };
 
 const permissionLabels: Record<PermissionType, string> = {
@@ -561,7 +563,7 @@ function UserManagementContent() {
 
                 <div className="space-y-2">
                   <Label>Sistemas e Permissões</Label>
-                  {(["escalas", "vendas", "ferias"] as SystemName[]).map(sys => {
+                  {(["escalas", "vendas", "ferias", "estoque"] as SystemName[]).map(sys => {
                     const access = inviteSystems.find(s => s.system_name === sys);
                     return (
                       <div key={sys} className="flex items-center gap-3 p-2 border rounded">
@@ -851,7 +853,7 @@ function UserManagementContent() {
 
                   <div className="space-y-2">
                     <Label>Sistemas e Permissões</Label>
-                    {(["escalas", "vendas", "ferias"] as SystemName[]).map(sys => {
+                    {(["escalas", "vendas", "ferias", "estoque"] as SystemName[]).map(sys => {
                       const access = editSystems.find(s => s.system_name === sys);
                       return (
                         <div key={sys} className="flex items-center gap-3 p-2 border rounded">
