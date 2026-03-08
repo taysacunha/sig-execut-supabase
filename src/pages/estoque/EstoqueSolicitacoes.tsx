@@ -93,6 +93,7 @@ export default function EstoqueSolicitacoes() {
 
   // Form state
   const [unidadeId, setUnidadeId] = useState("");
+  const [setorId, setSetorId] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [itens, setItens] = useState<{ material_id: string; quantidade: number }[]>([{ material_id: "", quantidade: 1 }]);
 
