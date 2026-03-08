@@ -1,47 +1,57 @@
 
 
-## Plano: Remover senha do Deploy Guide + Revisar e completar o guia
+## Plano - 4 Correções
 
-### Parte 1: Remover autenticação do DeployGuide
+### 1. Dialog de corretores quebrado (sem scroll)
 
-A página `/dev/deploy-guide` atualmente exige o código `EXECUT2026` (desatualizado). Remover toda a lógica de autenticação, deixando apenas o conteudo do guia acessivel diretamente.
+**Problema:** O `DialogContent` em `SalesBrokers.tsx` (linha 473) não tem limite de altura. Com os novos campos CRECI e Nome de Exibição, o conteúdo ultrapassa a viewport e os botões Cancelar/Salvar ficam inacessíveis.
 
-### Parte 2: Lacunas identificadas no guia atual
+**Solução:** Adicionar `className="max-w-lg max-h-[90vh] overflow-y-auto"` ao `DialogContent` (linha 473). O `DialogFooter` (linha 638) receberá `className="sticky bottom-0 bg-background pt-4 border-t"` para ficar sempre visível.
 
-Apos analise do projeto, os seguintes pontos estao faltando ou incompletos:
+**Arquivo:** `src/pages/vendas/SalesBrokers.tsx` (linhas 473, 638)
 
-**1. Migracao de Auth Users**
-O `pg_dump --schema=public` nao exporta a tabela `auth.users` (schema `auth`). Sem isso, todos os usuarios perdem acesso. Precisa incluir instrucoes para exportar `auth.users` e `auth.identities` separadamente.
+---
 
-**2. Edge Functions**
-O projeto tem 4 Edge Functions (`invite-user`, `list-users`, `manage-user`, `deactivate-expired-notice`). O guia menciona que "rodam via Deno Deploy local" mas nao explica como fazer o deploy delas no Supabase self-hosted. Precisa de um passo dedicado com `supabase functions deploy`.
+### 2. Relatório Corretores Vendas - dados de meses sem cadastro
 
-**3. Migracoes SQL**
-Ha uma pasta `supabase/migrations/` com migrations. O guia nao menciona a execucao dessas migrations caso o `pg_dump` nao seja suficiente ou para setup do zero.
+**Problema:** No modo mensal, o `months` (linha 200-224) inclui o mês anterior para "contexto de evolução". Os totais (linhas 400-409) e queries de `saleDetails`, `proposalsData`, `leadsData`, `evaluationsData` usam esse array completo, então dados do mês anterior "vazam" para o mês selecionado.
 
-**4. Configuracao SMTP para emails**
-O sistema envia convites por e-mail (invite-user). No Supabase self-hosted, o SMTP precisa ser configurado manualmente no `.env` do Docker (variaveis `SMTP_HOST`, `SMTP_PORT`, etc). Sem isso, convites e recuperacao de senha nao funcionam.
+**Solução:** Criar um `reportMonths` separado que contém apenas o mês selecionado (sem o anterior). Usar `reportMonths` para calcular totais e buscar `saleDetails`. Manter `months` completo apenas para os gráficos de evolução (`salesData`, `proposalsData`, `leadsData`, `evaluationsData` nos charts).
 
-**5. Storage / Buckets**
-Se o projeto usa Storage do Supabase, precisa migrar os buckets tambem.
+Concretamente:
+- Adicionar `const reportMonths = periodType === "month" ? [months[months.length - 1]] : months;`
+- Alterar `totalVGV`, `totalSales` para somar apenas entries cujo `month` esteja em `reportMonths`
+- Alterar `totalProposals`, `totalConverted`, `totalLeads`, `totalLeadsActive`, `totalVisits`, `avgScore` idem
+- Alterar query de `saleDetails` para usar `reportMonths` no `.in("year_month", ...)`
 
-**6. Proxy do Supabase incompleto**
-O Nginx faz proxy de `/supabase/` para `http://host.docker.internal:8000/`, mas o frontend aponta `VITE_SUPABASE_URL` diretamente para a API. Precisa alinhar: ou o frontend aponta para o proxy, ou o Nginx faz proxy de endpoints especificos (`/rest/`, `/auth/`, `/realtime/`, `/storage/`).
+**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas ~200, 384-409)
 
-**7. HTTPS completo**
-O bloco HTTPS esta comentado e incompleto. Precisa do config completo com redirect HTTP->HTTPS e headers de seguranca.
+---
 
-**8. Backup automatizado**
-Menciona backup mas nao da o script completo para agendar no Task Scheduler.
+### 3. Divs de vendas/avaliação não aparecem no PDF
 
-**9. Docker Desktop em producao**
-Docker Desktop exige licenca paga para uso comercial. Alternativa: instalar Docker Engine diretamente no WSL2 (gratuito).
+**Problema:** `hidden print:block` (linhas 713, 753) funciona com `window.print()` mas **não** com `html2canvas`, que captura o estado visual atual do DOM. Os elementos ficam `display:none` durante a captura.
 
-### Implementacao
+**Solução:** Usar o estado `isExporting` (já existe, linha 192) para controlar visibilidade:
+- Trocar `className="hidden print:block"` por renderização condicional: `{isExporting && saleDetails.length > 0 && (<Card>...</Card>)}`
+- No `handleExportPDF` (linha 428), o `setIsExporting(true)` já é chamado antes do `html2canvas`. Adicionar um `await new Promise(r => setTimeout(r, 100))` entre o `setIsExporting(true)` e o `html2canvas` para dar tempo ao React de renderizar os blocos.
 
-| Arquivo | Alteracao |
+**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas 711-755, 434-436)
+
+---
+
+### 4. Ajuste de qualidade - acessibilidade do dialog
+
+**Identificado:** O `DialogContent` de corretores já tem `DialogDescription`, então está ok. Verificar se outros dialogs do mesmo arquivo têm `DialogDescription` para evitar warnings no console.
+
+**Arquivo:** `src/pages/vendas/SalesBrokers.tsx`
+
+---
+
+### Resumo
+
+| Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/DeployGuide.tsx` | Remover auth gate, adicionar Steps 3.5 (Auth migration), Step 4.5 (Edge Functions deploy), Step 2.5 (SMTP config), melhorar Step 5 (Nginx completo com HTTPS), adicionar nota sobre licenca Docker Desktop, script de backup |
-
-Um unico arquivo modificado. O guia passara de 8 para ~10 passos cobrindo todos os aspectos necessarios para o sistema funcionar completamente no servidor.
+| `SalesBrokers.tsx` | Scroll + footer sticky no dialog |
+| `BrokerIndividualReport.tsx` | `reportMonths` para totais, renderização condicional por `isExporting` |
 
