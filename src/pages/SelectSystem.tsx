@@ -60,6 +60,13 @@ const systemConfigs: Record<SystemName, { title: string; description: string; ic
     color: "bg-card",
     route: "/ferias",
   },
+  estoque: {
+    title: "Gestão de Estoques",
+    description: "Materiais, solicitações e movimentações",
+    icon: <Package className="h-8 w-8 text-amber-600" />,
+    color: "bg-card",
+    route: "/estoque",
+  },
 };
 
 const roleLabels: Record<string, string> = {

@@ -88,6 +88,7 @@ const actionColors: Record<string, string> = {
 const moduleLabels: Record<string, string> = {
   escalas: "Escalas",
   vendas: "Vendas",
+  estoque: "Estoques",
   sistema: "Sistema",
 };
 
@@ -104,10 +105,18 @@ const tableLabels: Record<string, string> = {
   proposals: "Propostas",
   user_roles: "Permissões",
   system_access: "Acessos ao Sistema",
+  estoque_materiais: "Materiais",
+  estoque_locais_armazenamento: "Locais de Armazenamento",
+  estoque_saldos: "Saldos",
+  estoque_gestores: "Gestores",
+  estoque_solicitacoes: "Solicitações",
+  estoque_solicitacao_itens: "Itens de Solicitação",
+  estoque_movimentacoes: "Movimentações",
+  estoque_notificacoes: "Notificações",
 };
 
 interface AuditLogsPanelProps {
-  defaultModule?: "escalas" | "vendas" | "sistema" | "all";
+  defaultModule?: "escalas" | "vendas" | "estoque" | "sistema" | "all";
   defaultTab?: "admin" | "modules";
   showAdminTab?: boolean;
 }
