@@ -1,57 +1,47 @@
 
 
-## Plano - 4 Correções
+## Plano: Atualizar guia de deploy + análise de alertas de segurança
 
-### 1. Dialog de corretores quebrado (sem scroll)
+### 1. Atualizar Step 1.2 — Docker Desktop como opção principal
 
-**Problema:** O `DialogContent` em `SalesBrokers.tsx` (linha 473) não tem limite de altura. Com os novos campos CRECI e Nome de Exibição, o conteúdo ultrapassa a viewport e os botões Cancelar/Salvar ficam inacessíveis.
+No Step 1 (linhas 73-98), substituir o conteúdo para:
+- Recomendar **Docker Desktop** como opção principal para pequenas empresas (gratuito para menos de 250 funcionários / US$10M receita)
+- Explicar a diferença: Docker Desktop = GUI + Docker Engine embutido; Docker Engine = CLI puro, sem licença
+- Manter instruções de ambas as opções (Desktop e Engine) para o usuário escolher
+- Atualizar a stack description (linha 59) para mencionar "Docker Desktop ou Docker Engine"
+- Atualizar checklist (linha 548) para refletir ambas as opções
 
-**Solução:** Adicionar `className="max-w-lg max-h-[90vh] overflow-y-auto"` ao `DialogContent` (linha 473). O `DialogFooter` (linha 638) receberá `className="sticky bottom-0 bg-background pt-4 border-t"` para ficar sempre visível.
+### 2. Adicionar Edge Function `log-dev-work` no Step 5
 
-**Arquivo:** `src/pages/vendas/SalesBrokers.tsx` (linhas 473, 638)
+Adicionar `log-dev-work` na lista de Edge Functions (linha 229-234), já que foi criada recentemente.
 
----
+### 3. Análise dos alertas de segurança
 
-### 2. Relatório Corretores Vendas - dados de meses sem cadastro
+| Alerta | Nível | Veredicto |
+|--------|-------|-----------|
+| **Security Definer View** | error | Investigar — pode ser a view `has_role` ou similar. Precisa verificar qual view é. |
+| **RLS Disabled in Public** | error | Confirma: `dev_tracker` sem RLS. Corrigir habilitando RLS + policy para admin only. |
+| **RLS Policy Always True** | warn | `ferias_folgas_creditos` com policy `true` para todos os comandos. Corrigir restringindo acesso. |
+| **Leaked Password Protection** | warn | Config do Supabase Auth — habilitar nas settings do projeto. Não requer código. |
+| **ferias_folgas_creditos unrestricted** | error | Mesmo que o "always true" acima. Precisa de policies restritivas. |
+| **dev_tracker no RLS** | warn | Já identificado acima. |
 
-**Problema:** No modo mensal, o `months` (linha 200-224) inclui o mês anterior para "contexto de evolução". Os totais (linhas 400-409) e queries de `saleDetails`, `proposalsData`, `leadsData`, `evaluationsData` usam esse array completo, então dados do mês anterior "vazam" para o mês selecionado.
+**Ações no código (DeployGuide.tsx):**
+- Atualizar Docker section
+- Adicionar log-dev-work nas Edge Functions
 
-**Solução:** Criar um `reportMonths` separado que contém apenas o mês selecionado (sem o anterior). Usar `reportMonths` para calcular totais e buscar `saleDetails`. Manter `months` completo apenas para os gráficos de evolução (`salesData`, `proposalsData`, `leadsData`, `evaluationsData` nos charts).
+**Ações no banco (migrations):**
+- Habilitar RLS no `dev_tracker` + policy admin-only
+- Substituir policy permissiva no `ferias_folgas_creditos` por policies restritivas por operação
 
-Concretamente:
-- Adicionar `const reportMonths = periodType === "month" ? [months[months.length - 1]] : months;`
-- Alterar `totalVGV`, `totalSales` para somar apenas entries cujo `month` esteja em `reportMonths`
-- Alterar `totalProposals`, `totalConverted`, `totalLeads`, `totalLeadsActive`, `totalVisits`, `avgScore` idem
-- Alterar query de `saleDetails` para usar `reportMonths` no `.in("year_month", ...)`
-
-**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas ~200, 384-409)
-
----
-
-### 3. Divs de vendas/avaliação não aparecem no PDF
-
-**Problema:** `hidden print:block` (linhas 713, 753) funciona com `window.print()` mas **não** com `html2canvas`, que captura o estado visual atual do DOM. Os elementos ficam `display:none` durante a captura.
-
-**Solução:** Usar o estado `isExporting` (já existe, linha 192) para controlar visibilidade:
-- Trocar `className="hidden print:block"` por renderização condicional: `{isExporting && saleDetails.length > 0 && (<Card>...</Card>)}`
-- No `handleExportPDF` (linha 428), o `setIsExporting(true)` já é chamado antes do `html2canvas`. Adicionar um `await new Promise(r => setTimeout(r, 100))` entre o `setIsExporting(true)` e o `html2canvas` para dar tempo ao React de renderizar os blocos.
-
-**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas 711-755, 434-436)
-
----
-
-### 4. Ajuste de qualidade - acessibilidade do dialog
-
-**Identificado:** O `DialogContent` de corretores já tem `DialogDescription`, então está ok. Verificar se outros dialogs do mesmo arquivo têm `DialogDescription` para evitar warnings no console.
-
-**Arquivo:** `src/pages/vendas/SalesBrokers.tsx`
-
----
-
-### Resumo
+### Arquivos afetados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `SalesBrokers.tsx` | Scroll + footer sticky no dialog |
-| `BrokerIndividualReport.tsx` | `reportMonths` para totais, renderização condicional por `isExporting` |
+| `src/pages/DeployGuide.tsx` | Atualizar Step 1.2 (Docker Desktop vs Engine), Step 5 (adicionar log-dev-work), checklist |
+| Migration SQL (via Supabase) | RLS no `dev_tracker`, policies restritivas no `ferias_folgas_creditos` |
+
+### Sobre os alertas que NÃO requerem ação no código
+- **Leaked Password Protection**: habilitar via dashboard Supabase (Settings > Auth > Password Protection)
+- **Security Definer View**: precisa identificar qual view é afetada para avaliar se é falso positivo
 
