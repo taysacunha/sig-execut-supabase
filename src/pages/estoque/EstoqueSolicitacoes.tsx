@@ -190,6 +190,16 @@ export default function EstoqueSolicitacoes() {
     },
   });
 
+  // Fetch setores for display
+  const { data: setores = [] } = useQuery({
+    queryKey: ["ferias-setores-solicitacoes"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("ferias_setores").select("id, nome").order("nome");
+      if (error) throw error;
+      return data as { id: string; nome: string }[];
+    },
+  });
+
   const { data: viewItens = [] } = useQuery({
     queryKey: ["estoque-solicitacao-itens", viewDialog?.id],
     queryFn: async () => {
