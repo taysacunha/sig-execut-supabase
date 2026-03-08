@@ -326,6 +326,10 @@ export default function EstoqueSolicitacoes() {
   });
 
   const getUnidadeNome = (id: string | null) => unidades.find((u) => u.id === id)?.nome || "—";
+  const getSetorNome = (id: string | null) => {
+    if (!id) return "—";
+    return setores.find((s) => s.id === id)?.nome || "—";
+  };
 
   return (
     <div className="space-y-6">
