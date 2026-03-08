@@ -254,12 +254,13 @@ psql "postgresql://postgres:SENHA@localhost:5432/postgres" -f backup_public.sql`
 
       {/* ============ STEP 5 ============ */}
       <Step n={5} title="Deploy das Edge Functions">
-        <p>O sistema possui 4 Edge Functions que precisam ser deployadas:</p>
+        <p>O sistema possui 5 Edge Functions que precisam ser deployadas:</p>
         <ul className="list-disc pl-5 space-y-1">
           <li><code>invite-user</code> — Convite de usuários por e-mail</li>
           <li><code>list-users</code> — Listagem de usuários (admin)</li>
           <li><code>manage-user</code> — Gerenciamento de usuários (ativar/desativar)</li>
           <li><code>deactivate-expired-notice</code> — Desativação automática de avisos prévios</li>
+          <li><code>log-dev-work</code> — Registro automatizado de horas de desenvolvimento</li>
         </ul>
 
         <p><strong>5.1 — Clonar o repositório do projeto:</strong></p>
