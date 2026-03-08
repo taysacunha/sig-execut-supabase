@@ -75,6 +75,7 @@ export function EstoqueSidebar() {
   const navigate = useNavigate();
   const { role, loading: roleLoading, hasAccess: hasRoleAccess } = useUserRole();
   const { hasAccess: hasSystemAccess, loading: systemLoading } = useSystemAccess();
+  const { unreadCount } = useEstoqueNotificacoes();
 
   const loading = roleLoading || systemLoading;
 
