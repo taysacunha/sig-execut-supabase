@@ -1,57 +1,87 @@
 
 
-## Plano - 4 Correções
+## Plano: Ciclo de Vida Completo para Materiais, Locais e Unidades no Estoque
 
-### 1. Dialog de corretores quebrado (sem scroll)
+### Problema
 
-**Problema:** O `DialogContent` em `SalesBrokers.tsx` (linha 473) não tem limite de altura. Com os novos campos CRECI e Nome de Exibição, o conteúdo ultrapassa a viewport e os botões Cancelar/Salvar ficam inacessíveis.
+Atualmente, itens ativos e inativos aparecem misturados na mesma tabela. Não existe opção de exclusão definitiva. Não há validação de dependências antes de desativar/excluir (ex: desativar um local que tem saldo, ou um material com estoque). Unidades não têm controle nenhum nesse sentido.
 
-**Solução:** Adicionar `className="max-w-lg max-h-[90vh] overflow-y-auto"` ao `DialogContent` (linha 473). O `DialogFooter` (linha 638) receberá `className="sticky bottom-0 bg-background pt-4 border-t"` para ficar sempre visível.
+### Solução Proposta
 
-**Arquivo:** `src/pages/vendas/SalesBrokers.tsx` (linhas 473, 638)
+#### 1. Materiais (`EstoqueMateriais.tsx`)
 
----
+**Abas Ativos / Inativos:**
+- Tabs separando materiais ativos e inativos
+- Por padrão, mostra só ativos
+- Aba "Inativos" mostra materiais desativados com opções de reativar ou excluir
 
-### 2. Relatório Corretores Vendas - dados de meses sem cadastro
+**Desativação com validação:**
+- Ao desativar: verificar se existem saldos > 0 em qualquer local
+- Se houver saldo: bloquear e informar "Zere o saldo deste material em todos os locais antes de desativar"
+- Se não houver: desativa normalmente (saldos zerados são removidos automaticamente)
 
-**Problema:** No modo mensal, o `months` (linha 200-224) inclui o mês anterior para "contexto de evolução". Os totais (linhas 400-409) e queries de `saleDetails`, `proposalsData`, `leadsData`, `evaluationsData` usam esse array completo, então dados do mês anterior "vazam" para o mês selecionado.
+**Exclusão definitiva:**
+- Botão de excluir visível APENAS na aba de inativos
+- AlertDialog de confirmação com texto forte ("Esta ação é irreversível")
+- DELETE real no banco (a auditoria já captura via trigger)
+- Antes de excluir: remover saldos zerados vinculados ao material
 
-**Solução:** Criar um `reportMonths` separado que contém apenas o mês selecionado (sem o anterior). Usar `reportMonths` para calcular totais e buscar `saleDetails`. Manter `months` completo apenas para os gráficos de evolução (`salesData`, `proposalsData`, `leadsData`, `evaluationsData` nos charts).
+#### 2. Locais de Armazenamento (`EstoqueLocais.tsx`)
 
-Concretamente:
-- Adicionar `const reportMonths = periodType === "month" ? [months[months.length - 1]] : months;`
-- Alterar `totalVGV`, `totalSales` para somar apenas entries cujo `month` esteja em `reportMonths`
-- Alterar `totalProposals`, `totalConverted`, `totalLeads`, `totalLeadsActive`, `totalVisits`, `avgScore` idem
-- Alterar query de `saleDetails` para usar `reportMonths` no `.in("year_month", ...)`
+**Mesma estrutura de abas Ativos / Inativos**
 
-**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas ~200, 384-409)
+**Desativação com validação:**
+- Verificar se existem saldos > 0 neste local
+- Se houver: bloquear e informar "Transfira ou zere o estoque deste local antes de desativar"
 
----
+**Exclusão definitiva:**
+- Apenas na aba de inativos
+- Remover saldos zerados vinculados antes de excluir
 
-### 3. Divs de vendas/avaliação não aparecem no PDF
+#### 3. Unidades (contexto)
 
-**Problema:** `hidden print:block` (linhas 713, 753) funciona com `window.print()` mas **não** com `html2canvas`, que captura o estado visual atual do DOM. Os elementos ficam `display:none` durante a captura.
+As unidades vêm da tabela `ferias_unidades` e são compartilhadas com outros módulos. Não vamos adicionar exclusão/desativação de unidades diretamente na página de estoque, pois isso impactaria férias e outros módulos. Porém:
 
-**Solução:** Usar o estado `isExporting` (já existe, linha 192) para controlar visibilidade:
-- Trocar `className="hidden print:block"` por renderização condicional: `{isExporting && saleDetails.length > 0 && (<Card>...</Card>)}`
-- No `handleExportPDF` (linha 428), o `setIsExporting(true)` já é chamado antes do `html2canvas`. Adicionar um `await new Promise(r => setTimeout(r, 100))` entre o `setIsExporting(true)` e o `html2canvas` para dar tempo ao React de renderizar os blocos.
+- Ao desativar um local, os selects de unidade já filtram por `is_active = true` das unidades
+- Se uma unidade for desativada no módulo de férias/estrutura, os locais dessa unidade continuam existindo mas a unidade não aparece mais para novos cadastros
+- Na página de Locais, exibir um alerta visual se um local pertence a uma unidade inativa
 
-**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas 711-755, 434-436)
+#### 4. Efeitos cascata automáticos
 
----
+Ao desativar um material:
+- Saldos zerados desse material são removidos
+- Material some dos selects de Entrada/Ajuste/Transferência (já filtra `is_active = true`)
 
-### 4. Ajuste de qualidade - acessibilidade do dialog
+Ao desativar um local:
+- Saldos zerados desse local são removidos
+- Local some dos selects de Entrada/Ajuste/Transferência (já filtra `is_active = true`)
 
-**Identificado:** O `DialogContent` de corretores já tem `DialogDescription`, então está ok. Verificar se outros dialogs do mesmo arquivo têm `DialogDescription` para evitar warnings no console.
+### Detalhes Técnicos
 
-**Arquivo:** `src/pages/vendas/SalesBrokers.tsx`
-
----
-
-### Resumo
+**Arquivos a alterar:**
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `SalesBrokers.tsx` | Scroll + footer sticky no dialog |
-| `BrokerIndividualReport.tsx` | `reportMonths` para totais, renderização condicional por `isExporting` |
+| `EstoqueMateriais.tsx` | Adicionar Tabs ativo/inativo, validação de saldo antes de desativar, botão excluir na aba inativos, deleteMutation com limpeza de saldos |
+| `EstoqueLocais.tsx` | Mesma estrutura: Tabs, validação de saldo, exclusão na aba inativos |
+
+**Nenhuma migração de banco necessária** - as tabelas já suportam `is_active` e DELETE. Os triggers de auditoria já capturam exclusões.
+
+**Fluxo de desativação (material ou local):**
+
+```text
+Clique "Desativar" → Verificar saldos > 0?
+  ├─ SIM → Toast erro: "Transfira/zere o estoque antes"
+  └─ NÃO → AlertDialog confirmação → Desativa + limpa saldos zerados
+```
+
+**Fluxo de exclusão:**
+
+```text
+(Só visível na aba Inativos)
+Clique "Excluir" → AlertDialog "Ação irreversível"
+  → DELETE saldos zerados vinculados
+  → DELETE do registro
+  → Auditoria registra automaticamente
+```
 
