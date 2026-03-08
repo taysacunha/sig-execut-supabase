@@ -3,7 +3,7 @@ import { useSystemAccess, SystemName } from "@/hooks/useSystemAccess";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, TrendingUp, Loader2, LogOut, Crown, Briefcase, User, Users, Palmtree } from "lucide-react";
+import { Calendar, TrendingUp, Loader2, LogOut, Crown, Briefcase, User, Users, Palmtree, Package } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
