@@ -382,6 +382,358 @@ export type Database = {
         }
         Relationships: []
       }
+      estoque_gestores: {
+        Row: {
+          created_at: string | null
+          id: string
+          nome_gestor: string
+          unidade_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          nome_gestor: string
+          unidade_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          nome_gestor?: string
+          unidade_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estoque_gestores_unidade_id_fkey"
+            columns: ["unidade_id"]
+            isOneToOne: false
+            referencedRelation: "ferias_unidades"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estoque_locais_armazenamento: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          nome: string
+          parent_id: string | null
+          tipo: string
+          unidade_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          nome: string
+          parent_id?: string | null
+          tipo?: string
+          unidade_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          nome?: string
+          parent_id?: string | null
+          tipo?: string
+          unidade_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estoque_locais_armazenamento_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_locais_armazenamento"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_locais_armazenamento_unidade_id_fkey"
+            columns: ["unidade_id"]
+            isOneToOne: false
+            referencedRelation: "ferias_unidades"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estoque_materiais: {
+        Row: {
+          categoria: string | null
+          created_at: string | null
+          descricao: string | null
+          estoque_minimo: number | null
+          id: string
+          is_active: boolean | null
+          nome: string
+          unidade_medida: string
+          updated_at: string | null
+        }
+        Insert: {
+          categoria?: string | null
+          created_at?: string | null
+          descricao?: string | null
+          estoque_minimo?: number | null
+          id?: string
+          is_active?: boolean | null
+          nome: string
+          unidade_medida?: string
+          updated_at?: string | null
+        }
+        Update: {
+          categoria?: string | null
+          created_at?: string | null
+          descricao?: string | null
+          estoque_minimo?: number | null
+          id?: string
+          is_active?: boolean | null
+          nome?: string
+          unidade_medida?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      estoque_movimentacoes: {
+        Row: {
+          created_at: string | null
+          id: string
+          local_destino_id: string | null
+          local_origem_id: string | null
+          material_id: string
+          observacoes: string | null
+          quantidade: number
+          recebido_em: string | null
+          recebido_por_user_id: string | null
+          responsavel_user_id: string | null
+          solicitacao_id: string | null
+          tipo: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          local_destino_id?: string | null
+          local_origem_id?: string | null
+          material_id: string
+          observacoes?: string | null
+          quantidade: number
+          recebido_em?: string | null
+          recebido_por_user_id?: string | null
+          responsavel_user_id?: string | null
+          solicitacao_id?: string | null
+          tipo: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          local_destino_id?: string | null
+          local_origem_id?: string | null
+          material_id?: string
+          observacoes?: string | null
+          quantidade?: number
+          recebido_em?: string | null
+          recebido_por_user_id?: string | null
+          responsavel_user_id?: string | null
+          solicitacao_id?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estoque_movimentacoes_local_destino_id_fkey"
+            columns: ["local_destino_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_locais_armazenamento"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_movimentacoes_local_origem_id_fkey"
+            columns: ["local_origem_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_locais_armazenamento"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_movimentacoes_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_materiais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_movimentacoes_solicitacao_id_fkey"
+            columns: ["solicitacao_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_solicitacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estoque_notificacoes: {
+        Row: {
+          created_at: string | null
+          id: string
+          lida: boolean | null
+          mensagem: string
+          referencia_id: string | null
+          referencia_tipo: string | null
+          tipo: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          lida?: boolean | null
+          mensagem: string
+          referencia_id?: string | null
+          referencia_tipo?: string | null
+          tipo: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          lida?: boolean | null
+          mensagem?: string
+          referencia_id?: string | null
+          referencia_tipo?: string | null
+          tipo?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      estoque_saldos: {
+        Row: {
+          id: string
+          local_armazenamento_id: string
+          material_id: string
+          quantidade: number
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          local_armazenamento_id: string
+          material_id: string
+          quantidade?: number
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          local_armazenamento_id?: string
+          material_id?: string
+          quantidade?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estoque_saldos_local_armazenamento_id_fkey"
+            columns: ["local_armazenamento_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_locais_armazenamento"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_saldos_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_materiais"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estoque_solicitacao_itens: {
+        Row: {
+          id: string
+          local_armazenamento_id: string | null
+          material_id: string
+          quantidade_atendida: number | null
+          quantidade_solicitada: number
+          solicitacao_id: string
+        }
+        Insert: {
+          id?: string
+          local_armazenamento_id?: string | null
+          material_id: string
+          quantidade_atendida?: number | null
+          quantidade_solicitada?: number
+          solicitacao_id: string
+        }
+        Update: {
+          id?: string
+          local_armazenamento_id?: string | null
+          material_id?: string
+          quantidade_atendida?: number | null
+          quantidade_solicitada?: number
+          solicitacao_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estoque_solicitacao_itens_local_armazenamento_id_fkey"
+            columns: ["local_armazenamento_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_locais_armazenamento"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_solicitacao_itens_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_materiais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_solicitacao_itens_solicitacao_id_fkey"
+            columns: ["solicitacao_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_solicitacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estoque_solicitacoes: {
+        Row: {
+          created_at: string | null
+          id: string
+          observacoes: string | null
+          solicitante_nome: string
+          solicitante_user_id: string
+          status: string
+          unidade_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          observacoes?: string | null
+          solicitante_nome: string
+          solicitante_user_id: string
+          status?: string
+          unidade_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          observacoes?: string | null
+          solicitante_nome?: string
+          solicitante_user_id?: string
+          status?: string
+          unidade_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estoque_solicitacoes_unidade_id_fkey"
+            columns: ["unidade_id"]
+            isOneToOne: false
+            referencedRelation: "ferias_unidades"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ferias_audit_logs: {
         Row: {
           action: string
