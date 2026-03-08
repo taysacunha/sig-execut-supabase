@@ -276,7 +276,8 @@ supabase link --project-ref msbhhsrtfqfqcsofnsuy
 supabase functions deploy invite-user --no-verify-jwt
 supabase functions deploy list-users --no-verify-jwt
 supabase functions deploy manage-user --no-verify-jwt
-supabase functions deploy deactivate-expired-notice --no-verify-jwt`}</CodeBlock>
+supabase functions deploy deactivate-expired-notice --no-verify-jwt
+supabase functions deploy log-dev-work --no-verify-jwt`}</CodeBlock>
 
         <InfoBox>
           <p>No Supabase Self-Hosted, as Edge Functions rodam no container <code>supabase-edge-functions</code> via Deno. Verifique no <code>docker compose ps</code> se o container está rodando. As funções ficam em <code>supabase/functions/</code>.</p>
