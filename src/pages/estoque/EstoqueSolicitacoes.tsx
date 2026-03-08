@@ -100,7 +100,10 @@ export default function EstoqueSolicitacoes() {
   // Auto-fill unit if user has only one
   useEffect(() => {
     if (unidadesPermitidas.length === 1 && !unidadeId) {
-      setUnidadeId(unidadesPermitidas[0].id);
+      const uid = unidadesPermitidas[0].id;
+      setUnidadeId(uid);
+      const setor = getSetorParaUnidade(uid);
+      if (setor.setor_id) setSetorId(setor.setor_id);
     }
   }, [unidadesPermitidas, unidadeId]);
 
