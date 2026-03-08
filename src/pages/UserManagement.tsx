@@ -109,12 +109,14 @@ const systemLabels: Record<SystemName, string> = {
   escalas: "Escalas",
   vendas: "Vendas",
   ferias: "Férias e Folgas",
+  estoque: "Estoques",
 };
 
 const systemIcons: Record<SystemName, React.ReactNode> = {
   escalas: <Calendar className="h-3 w-3" />,
   vendas: <TrendingUp className="h-3 w-3" />,
   ferias: <Calendar className="h-3 w-3" />,
+  estoque: <Package className="h-3 w-3" />,
 };
 
 const permissionLabels: Record<PermissionType, string> = {
