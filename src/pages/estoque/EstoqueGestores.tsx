@@ -148,20 +148,25 @@ export default function EstoqueGestores() {
   });
 
   // ===== GESTORES =====
+  // For the selected user, find which unidades they're already gestor of
   const existingUserIds = new Set(gestores.map((g) => g.user_id));
-  const availableUsers = systemUsers.filter((u) => !existingUserIds.has(u.id));
+  const availableUsers = systemUsers.filter((u) => !existingUserIds.has(u.id) || gestores.filter((g) => g.user_id === u.id).length < unidades.length);
   const selectedUser = systemUsers.find((u) => u.id === form.user_id);
+  const unidadesJaGestor = new Set(gestores.filter((g) => g.user_id === form.user_id).map((g) => g.unidade_id));
+  const unidadesDisponiveis = unidades.filter((u) => !unidadesJaGestor.has(u.id));
 
   const saveMutation = useMutation({
-    mutationFn: async (values: typeof form) => {
+    mutationFn: async (values: { user_id: string; unidade_ids: string[] }) => {
       const user = systemUsers.find((u) => u.id === values.user_id);
       if (!user) throw new Error("Usuário não encontrado");
-      const { error } = await fromEstoque("estoque_gestores").insert({
-        user_id: values.user_id,
-        unidade_id: values.unidade_id,
-        nome_gestor: user.name || user.email,
-      });
-      if (error) throw error;
+      for (const unidade_id of values.unidade_ids) {
+        const { error } = await fromEstoque("estoque_gestores").insert({
+          user_id: values.user_id,
+          unidade_id,
+          nome_gestor: user.name || user.email,
+        });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["estoque-gestores"] });
