@@ -277,10 +277,10 @@ export default function EstoqueLocais() {
             </div>
             <div>
               <Label>Local Pai (opcional)</Label>
-              <Select value={form.parent_id} onValueChange={(v) => setForm({ ...form, parent_id: v })}>
+              <Select value={form.parent_id || "__none__"} onValueChange={(v) => setForm({ ...form, parent_id: v === "__none__" ? "" : v })}>
                 <SelectTrigger><SelectValue placeholder="Nenhum (raiz)" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhum (raiz)</SelectItem>
+                  <SelectItem value="__none__">Nenhum (raiz)</SelectItem>
                   {possibleParents.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.nome} ({TIPOS.find((t) => t.value === p.tipo)?.label})
