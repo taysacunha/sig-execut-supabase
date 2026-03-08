@@ -240,7 +240,7 @@ export default function EstoqueGestores() {
 
   const closeDialog = () => {
     setDialogOpen(false);
-    setForm({ user_id: "", unidade_id: "" });
+    setForm({ user_id: "", unidade_ids: [] });
   };
 
   const closeLinkDialog = () => {
