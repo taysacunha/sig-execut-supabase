@@ -155,12 +155,22 @@ export default function EstoqueGestores() {
     return user?.email || "";
   };
 
-  const gestoresByUnidade = unidades
-    .map((u) => ({
-      unidade: u,
-      gestores: gestores.filter((g) => g.unidade_id === u.id),
-    }))
-    .filter((g) => g.gestores.length > 0);
+  // Enrich gestores with unidade nome for search
+  const gestoresEnriched = gestores.map((g) => ({
+    ...g,
+    unidade_nome: unidades.find((u) => u.id === g.unidade_id)?.nome || "—",
+    email: getUserDisplay(g.user_id),
+  }));
+
+  const {
+    searchTerm, setSearchTerm, currentPage, setCurrentPage,
+    itemsPerPage, setItemsPerPage, sortField, sortDirection, setSorting,
+    paginatedData, filteredData, totalPages,
+  } = useTableControls({
+    data: gestoresEnriched,
+    searchField: ["nome_gestor", "unidade_nome", "email"],
+    defaultItemsPerPage: 25,
+  });
 
   const unidadesSemGestor = unidades.filter((u) => !gestores.some((g) => g.unidade_id === u.id));
 
