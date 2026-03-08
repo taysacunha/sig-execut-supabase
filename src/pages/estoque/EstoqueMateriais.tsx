@@ -62,7 +62,7 @@ export default function EstoqueMateriais() {
         .select("*")
         .order("nome");
       if (error) throw error;
-      return (data || []) as Material[];
+      return (data || []) as unknown as Material[];
     },
   });
 

@@ -125,7 +125,7 @@ export default function EstoqueLocais() {
     queryFn: async () => {
       const { data, error } = await fromEstoque("estoque_locais_armazenamento").select("*").order("nome");
       if (error) throw error;
-      return (data || []) as Local[];
+      return (data || []) as unknown as Local[];
     },
   });
 

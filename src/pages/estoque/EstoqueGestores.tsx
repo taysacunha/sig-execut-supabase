@@ -50,7 +50,7 @@ export default function EstoqueGestores() {
     queryFn: async () => {
       const { data, error } = await fromEstoque("estoque_gestores").select("*").order("nome_gestor");
       if (error) throw error;
-      return (data || []) as Gestor[];
+      return (data || []) as unknown as Gestor[];
     },
   });
 
