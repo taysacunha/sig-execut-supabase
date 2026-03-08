@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Trash2, Loader2, Building2, UserPlus, Mail, Users } from "lucide-react";
+import { Plus, Trash2, Loader2, Building2, UserPlus, Mail, Users, AlertTriangle, Pencil } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -12,9 +12,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTableControls } from "@/hooks/useTableControls";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Gestor {
   id: string;
@@ -28,12 +30,20 @@ interface UsuarioUnidade {
   id: string;
   user_id: string;
   unidade_id: string;
+  setor_id: string | null;
   created_at: string;
 }
 
 interface Unidade {
   id: string;
   nome: string;
+}
+
+interface Setor {
+  id: string;
+  nome: string;
+  is_active: boolean;
+  unidade_id: string | null;
 }
 
 interface SystemUser {
@@ -55,8 +65,12 @@ export default function EstoqueGestores() {
 
   // User-unit link state
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
-  const [linkForm, setLinkForm] = useState({ user_id: "", unidade_id: "" });
+  const [linkForm, setLinkForm] = useState({ user_id: "", unidade_id: "", setor_id: "" });
   const [deleteLinkConfirm, setDeleteLinkConfirm] = useState<{ id: string; nome: string } | null>(null);
+
+  // Edit setor state
+  const [editLinkDialog, setEditLinkDialog] = useState<{ id: string; setor_id: string; nome: string } | null>(null);
+  const [editSetorId, setEditSetorId] = useState("");
 
   const { data: unidades = [] } = useQuery({
     queryKey: ["ferias-unidades-estoque"],
@@ -66,6 +80,18 @@ export default function EstoqueGestores() {
       return data as Unidade[];
     },
   });
+
+  // Fetch all setores (including inactive for displaying alerts)
+  const { data: setores = [] } = useQuery({
+    queryKey: ["ferias-setores-estoque"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("ferias_setores").select("id, nome, is_active, unidade_id").order("nome");
+      if (error) throw error;
+      return data as Setor[];
+    },
+  });
+
+  const setoresAtivos = setores.filter((s) => s.is_active);
 
   const { data: gestores = [], isLoading } = useQuery({
     queryKey: ["estoque-gestores"],
@@ -163,6 +189,7 @@ export default function EstoqueGestores() {
       const { error } = await fromEstoque("estoque_usuarios_unidades").insert({
         user_id: values.user_id,
         unidade_id: values.unidade_id,
+        setor_id: values.setor_id || null,
       } as any);
       if (error) {
         if (error.code === "23505") throw new Error("Este usuário já está vinculado a esta unidade");
@@ -173,6 +200,21 @@ export default function EstoqueGestores() {
       queryClient.invalidateQueries({ queryKey: ["estoque-usuarios-unidades"] });
       toast.success("Usuário vinculado à unidade!");
       closeLinkDialog();
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const updateSetorMutation = useMutation({
+    mutationFn: async ({ id, setor_id }: { id: string; setor_id: string | null }) => {
+      const { error } = await fromEstoque("estoque_usuarios_unidades")
+        .update({ setor_id } as any)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["estoque-usuarios-unidades"] });
+      toast.success("Setor atualizado!");
+      setEditLinkDialog(null);
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -197,7 +239,7 @@ export default function EstoqueGestores() {
 
   const closeLinkDialog = () => {
     setLinkDialogOpen(false);
-    setLinkForm({ user_id: "", unidade_id: "" });
+    setLinkForm({ user_id: "", unidade_id: "", setor_id: "" });
   };
 
   const handleSubmit = () => {
@@ -209,7 +251,14 @@ export default function EstoqueGestores() {
   const handleLinkSubmit = () => {
     if (!linkForm.user_id) return toast.error("Selecione um usuário");
     if (!linkForm.unidade_id) return toast.error("Selecione a unidade");
+    if (!linkForm.setor_id) return toast.error("Selecione o setor");
     saveLinkMutation.mutate(linkForm);
+  };
+
+  const handleEditSetorSubmit = () => {
+    if (!editLinkDialog) return;
+    if (!editSetorId) return toast.error("Selecione o setor");
+    updateSetorMutation.mutate({ id: editLinkDialog.id, setor_id: editSetorId });
   };
 
   const getUserDisplay = (userId: string) => {
@@ -221,6 +270,20 @@ export default function EstoqueGestores() {
     const user = systemUsers.find((u) => u.id === userId);
     return user?.name || user?.email || "—";
   };
+
+  const getSetorNome = (setorId: string | null) => {
+    if (!setorId) return "—";
+    return setores.find((s) => s.id === setorId)?.nome || "—";
+  };
+
+  const isSetorInativo = (setorId: string | null) => {
+    if (!setorId) return false;
+    const setor = setores.find((s) => s.id === setorId);
+    return setor ? !setor.is_active : true; // If not found, treat as inactive
+  };
+
+  // Count users with inactive setores
+  const usersComSetorInativo = usuarioUnidades.filter((l) => isSetorInativo(l.setor_id));
 
   // Enrich gestores with unidade nome for search
   const gestoresEnriched = gestores.map((g) => ({
@@ -241,21 +304,38 @@ export default function EstoqueGestores() {
     nome_usuario: getUserName(l.user_id),
     email: getUserDisplay(l.user_id),
     unidade_nome: unidades.find((u) => u.id === l.unidade_id)?.nome || "—",
+    setor_nome: getSetorNome(l.setor_id),
+    setor_inativo: isSetorInativo(l.setor_id),
   }));
 
   const linksControls = useTableControls({
     data: linksEnriched,
-    searchField: ["nome_usuario", "unidade_nome", "email"],
+    searchField: ["nome_usuario", "unidade_nome", "email", "setor_nome"],
     defaultItemsPerPage: 25,
   });
 
   const unidadesSemGestor = unidades.filter((u) => !gestores.some((g) => g.unidade_id === u.id));
 
+  // Filter setores by selected unidade in link form (if the setor has unidade_id)
+  const setoresFiltrados = linkForm.unidade_id
+    ? setoresAtivos.filter((s) => !s.unidade_id || s.unidade_id === linkForm.unidade_id)
+    : setoresAtivos;
+
+  const setoresFiltradosEdit = editLinkDialog
+    ? (() => {
+        const vinculo = usuarioUnidades.find((l) => l.id === editLinkDialog.id);
+        const unidadeId = vinculo?.unidade_id;
+        return unidadeId
+          ? setoresAtivos.filter((s) => !s.unidade_id || s.unidade_id === unidadeId)
+          : setoresAtivos;
+      })()
+    : setoresAtivos;
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Gestores e Vínculos</h1>
-        <p className="text-muted-foreground">Gerencie gestores de estoque e vínculos de usuários por unidade</p>
+        <h1 className="text-3xl font-bold tracking-tight">Gestores e Usuários</h1>
+        <p className="text-muted-foreground">Gerencie gestores de estoque e vínculos de usuários por unidade e setor</p>
       </div>
 
       <Tabs defaultValue="gestores" className="space-y-4">
@@ -370,9 +450,18 @@ export default function EstoqueGestores() {
 
         {/* ===== ABA VÍNCULOS USUÁRIO-UNIDADE ===== */}
         <TabsContent value="vinculos" className="space-y-4">
+          {usersComSetorInativo.length > 0 && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>{usersComSetorInativo.length}</strong> usuário(s) com setor desativado ou sem setor definido. Realoque-os para evitar problemas nas solicitações.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="flex justify-between items-start">
             <p className="text-sm text-muted-foreground max-w-lg">
-              Vincule usuários às unidades para controlar quais materiais podem solicitar. 
+              Vincule usuários às unidades e setores para controlar quais materiais podem solicitar e para que o gestor saiba onde entregar. 
               Gestores já têm acesso automático às unidades que gerenciam. Admins acessam todas.
             </p>
             {canManage && (
@@ -393,62 +482,98 @@ export default function EstoqueGestores() {
                   <CardTitle className="flex items-center gap-2">
                     <Users className="h-5 w-5" /> Vínculos Cadastrados
                   </CardTitle>
-                  <TableSearch value={linksControls.searchTerm} onChange={linksControls.setSearchTerm} placeholder="Buscar por nome, unidade ou e-mail..." />
+                  <TableSearch value={linksControls.searchTerm} onChange={linksControls.setSearchTerm} placeholder="Buscar por nome, unidade, setor ou e-mail..." />
                 </div>
               </CardHeader>
               <CardContent>
                 {linksControls.paginatedData.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">Nenhum vínculo encontrado</p>
                 ) : (
-                  <>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>
-                            <SortableHeader label="Usuário" field="nome_usuario" currentField={linksControls.sortField as string} direction={linksControls.sortDirection} onSort={linksControls.setSorting as any} />
-                          </TableHead>
-                          <TableHead>
-                            <SortableHeader label="Unidade" field="unidade_nome" currentField={linksControls.sortField as string} direction={linksControls.sortDirection} onSort={linksControls.setSorting as any} />
-                          </TableHead>
-                          <TableHead>E-mail</TableHead>
-                          {canManage && <TableHead className="text-right">Ações</TableHead>}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {linksControls.paginatedData.map((l) => (
-                          <TableRow key={l.id}>
-                            <TableCell className="font-medium">{l.nome_usuario}</TableCell>
-                            <TableCell>{l.unidade_nome}</TableCell>
-                            <TableCell className="text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <Mail className="h-3 w-3" />
-                                {l.email}
-                              </span>
-                            </TableCell>
-                            {canManage && (
-                              <TableCell className="text-right">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => setDeleteLinkConfirm({ id: l.id, nome: `${l.nome_usuario} → ${l.unidade_nome}` })}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
-                            )}
+                  <TooltipProvider>
+                    <>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>
+                              <SortableHeader label="Usuário" field="nome_usuario" currentField={linksControls.sortField as string} direction={linksControls.sortDirection} onSort={linksControls.setSorting as any} />
+                            </TableHead>
+                            <TableHead>
+                              <SortableHeader label="Unidade" field="unidade_nome" currentField={linksControls.sortField as string} direction={linksControls.sortDirection} onSort={linksControls.setSorting as any} />
+                            </TableHead>
+                            <TableHead>
+                              <SortableHeader label="Setor" field="setor_nome" currentField={linksControls.sortField as string} direction={linksControls.sortDirection} onSort={linksControls.setSorting as any} />
+                            </TableHead>
+                            <TableHead>E-mail</TableHead>
+                            {canManage && <TableHead className="text-right">Ações</TableHead>}
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    <TablePagination
-                      currentPage={linksControls.currentPage}
-                      totalPages={linksControls.totalPages}
-                      itemsPerPage={linksControls.itemsPerPage}
-                      onPageChange={linksControls.setCurrentPage}
-                      onItemsPerPageChange={linksControls.setItemsPerPage}
-                      totalItems={linksControls.filteredData.length}
-                    />
-                  </>
+                        </TableHeader>
+                        <TableBody>
+                          {linksControls.paginatedData.map((l) => (
+                            <TableRow key={l.id}>
+                              <TableCell className="font-medium">{l.nome_usuario}</TableCell>
+                              <TableCell>{l.unidade_nome}</TableCell>
+                              <TableCell>
+                                <span className="flex items-center gap-1.5">
+                                  {l.setor_nome}
+                                  {l.setor_inativo && l.setor_id && (
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <Badge variant="destructive" className="text-xs px-1.5 py-0">
+                                          <AlertTriangle className="h-3 w-3 mr-0.5" />
+                                          Inativo
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Setor desativado — realoque este usuário para outro setor
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                  {!l.setor_id && (
+                                    <Badge variant="outline" className="text-xs text-muted-foreground">Sem setor</Badge>
+                                  )}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                <span className="flex items-center gap-1">
+                                  <Mail className="h-3 w-3" />
+                                  {l.email}
+                                </span>
+                              </TableCell>
+                              {canManage && (
+                                <TableCell className="text-right space-x-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      setEditLinkDialog({ id: l.id, setor_id: l.setor_id || "", nome: `${l.nome_usuario} → ${l.unidade_nome}` });
+                                      setEditSetorId(l.setor_id || "");
+                                    }}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setDeleteLinkConfirm({ id: l.id, nome: `${l.nome_usuario} → ${l.unidade_nome}` })}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                      <TablePagination
+                        currentPage={linksControls.currentPage}
+                        totalPages={linksControls.totalPages}
+                        itemsPerPage={linksControls.itemsPerPage}
+                        onPageChange={linksControls.setCurrentPage}
+                        onItemsPerPageChange={linksControls.setItemsPerPage}
+                        totalItems={linksControls.filteredData.length}
+                      />
+                    </>
+                  </TooltipProvider>
                 )}
               </CardContent>
             </Card>
@@ -527,7 +652,7 @@ export default function EstoqueGestores() {
               Vincular Usuário a Unidade
             </DialogTitle>
             <DialogDescription>
-              O usuário poderá solicitar materiais apenas das unidades vinculadas.
+              O usuário poderá solicitar materiais apenas das unidades vinculadas. O setor identifica onde entregar.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -555,7 +680,7 @@ export default function EstoqueGestores() {
             </div>
             <div>
               <Label>Unidade *</Label>
-              <Select value={linkForm.unidade_id} onValueChange={(v) => setLinkForm({ ...linkForm, unidade_id: v })}>
+              <Select value={linkForm.unidade_id} onValueChange={(v) => setLinkForm({ ...linkForm, unidade_id: v, setor_id: "" })}>
                 <SelectTrigger><SelectValue placeholder="Selecione a unidade" /></SelectTrigger>
                 <SelectContent>
                   {unidades.map((u) => (
@@ -564,12 +689,64 @@ export default function EstoqueGestores() {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Label>Setor *</Label>
+              <Select value={linkForm.setor_id} onValueChange={(v) => setLinkForm({ ...linkForm, setor_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Selecione o setor" /></SelectTrigger>
+                <SelectContent>
+                  {setoresFiltrados.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">
+                      Nenhum setor ativo cadastrado
+                    </div>
+                  ) : (
+                    setoresFiltrados.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Setores são cadastrados no módulo de Férias. Apenas setores ativos aparecem aqui.
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeLinkDialog}>Cancelar</Button>
             <Button onClick={handleLinkSubmit} disabled={saveLinkMutation.isPending}>
               {saveLinkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Vincular
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de editar setor */}
+      <Dialog open={!!editLinkDialog} onOpenChange={(open) => { if (!open) setEditLinkDialog(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Alterar Setor</DialogTitle>
+            <DialogDescription>
+              Alterar o setor do vínculo: <strong>{editLinkDialog?.nome}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Novo Setor *</Label>
+              <Select value={editSetorId} onValueChange={setEditSetorId}>
+                <SelectTrigger><SelectValue placeholder="Selecione o setor" /></SelectTrigger>
+                <SelectContent>
+                  {setoresFiltradosEdit.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditLinkDialog(null)}>Cancelar</Button>
+            <Button onClick={handleEditSetorSubmit} disabled={updateSetorMutation.isPending}>
+              {updateSetorMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Salvar
             </Button>
           </DialogFooter>
         </DialogContent>
