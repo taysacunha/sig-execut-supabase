@@ -61,6 +61,9 @@ const EstoqueMateriais = lazy(() => import("./pages/estoque/EstoqueMateriais"));
 const EstoqueLocais = lazy(() => import("./pages/estoque/EstoqueLocais"));
 const EstoqueGestores = lazy(() => import("./pages/estoque/EstoqueGestores"));
 const EstoqueAuditLogs = lazy(() => import("./pages/estoque/EstoqueAuditLogs"));
+const EstoqueSolicitacoes = lazy(() => import("./pages/estoque/EstoqueSolicitacoes"));
+const EstoqueSaldos = lazy(() => import("./pages/estoque/EstoqueSaldos"));
+const EstoqueMovimentacoes = lazy(() => import("./pages/estoque/EstoqueMovimentacoes"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
