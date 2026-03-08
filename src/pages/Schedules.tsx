@@ -722,6 +722,88 @@ const Schedules = () => {
     }
   };
 
+  // ═══════════════════════════════════════════════════════════
+  // HELPER: Buscar configuração de turnos por local/data para validação
+  // Retorna Map<locationId, Map<dateStr, { hasMorning, hasAfternoon }>>
+  // ═══════════════════════════════════════════════════════════
+  const buildLocationShiftConfigs = async (
+    locationIds: string[],
+    assignmentDates: string[]
+  ): Promise<Map<string, Map<string, { hasMorning: boolean; hasAfternoon: boolean }>>> => {
+    const result = new Map<string, Map<string, { hasMorning: boolean; hasAfternoon: boolean }>>();
+    
+    if (locationIds.length === 0 || assignmentDates.length === 0) return result;
+
+    const uniqueDates = [...new Set(assignmentDates)];
+    const minDate = uniqueDates.sort()[0];
+    const maxDate = uniqueDates.sort()[uniqueDates.length - 1];
+
+    // Buscar period_day_configs (configuração por dia da semana)
+    const { data: periods } = await supabase
+      .from("location_periods")
+      .select("id, location_id, start_date, end_date")
+      .in("location_id", locationIds)
+      .lte("start_date", maxDate)
+      .gte("end_date", minDate);
+
+    if (!periods || periods.length === 0) return result;
+
+    const periodIds = periods.map(p => p.id);
+
+    // Buscar configurações em paralelo
+    const [weekdayConfigsRes, specificConfigsRes] = await Promise.all([
+      supabase.from("period_day_configs").select("*").in("period_id", periodIds),
+      supabase.from("period_specific_day_configs").select("*").in("period_id", periodIds)
+    ]);
+
+    const weekdayConfigs = weekdayConfigsRes.data || [];
+    const specificConfigs = specificConfigsRes.data || [];
+
+    const dayMap: Record<number, string> = {
+      0: "sunday", 1: "monday", 2: "tuesday", 3: "wednesday",
+      4: "thursday", 5: "friday", 6: "saturday"
+    };
+
+    for (const dateStr of uniqueDates) {
+      const date = new Date(dateStr + "T00:00:00");
+      const dayName = dayMap[date.getDay()];
+
+      for (const period of periods) {
+        if (dateStr < period.start_date || dateStr > period.end_date) continue;
+
+        if (!result.has(period.location_id)) {
+          result.set(period.location_id, new Map());
+        }
+
+        // Verificar config de data específica primeiro
+        const specificConfig = specificConfigs.find(
+          sc => sc.period_id === period.id && sc.specific_date === dateStr
+        );
+
+        if (specificConfig) {
+          result.get(period.location_id)!.set(dateStr, {
+            hasMorning: specificConfig.has_morning ?? true,
+            hasAfternoon: specificConfig.has_afternoon ?? true
+          });
+        } else {
+          // Fallback: config por dia da semana
+          const weekdayConfig = weekdayConfigs.find(
+            wc => wc.period_id === period.id && wc.weekday === dayName
+          );
+
+          if (weekdayConfig) {
+            result.get(period.location_id)!.set(dateStr, {
+              hasMorning: weekdayConfig.has_morning ?? true,
+              hasAfternoon: weekdayConfig.has_afternoon ?? true
+            });
+          }
+        }
+      }
+    }
+
+    return result;
+  };
+
   // ✅ FUNÇÃO: Re-validar escala existente
   const [isRevalidating, setIsRevalidating] = useState(false);
   
