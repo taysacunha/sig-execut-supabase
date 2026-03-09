@@ -691,20 +691,33 @@ function checkTrulyInviolableRulesWithRelaxation(
   }
   
   // ═══════════════════════════════════════════════════════════
-  // REGRA: Interno + Externo no mesmo dia = PROIBIDO (também no relaxamento)
+  // REGRA: Interno + Externo no mesmo dia (relaxamento)
+  // SÁBADO: PROIBIDO sempre
+  // SEG-SEX: Permitido se em turnos diferentes
   // ═══════════════════════════════════════════════════════════
-  const hasInternalSameDayRelax = context.assignments.some(a =>
+  const isSaturdayRelax = getDay(demand.date) === 6;
+  const internalSameDayRelax = context.assignments.filter(a =>
     a.broker_id === broker.brokerId &&
     a.assignment_date === demand.dateStr &&
     a.location_id !== demand.locationId &&
     context.internalLocationIds?.has(a.location_id)
   );
-  if (hasInternalSameDayRelax) {
-    return { 
-      allowed: false, 
-      reason: "Já tem plantão interno no mesmo dia - não pode acumular externo",
-      rule: "INTERNO_EXTERNO_MESMO_DIA"
-    };
+  if (internalSameDayRelax.length > 0) {
+    if (isSaturdayRelax) {
+      return { 
+        allowed: false, 
+        reason: "Já tem plantão interno no sábado - não pode acumular externo",
+        rule: "INTERNO_EXTERNO_MESMO_DIA"
+      };
+    }
+    const hasSameShiftConflictRelax = internalSameDayRelax.some(a => a.shift_type === demand.shift);
+    if (hasSameShiftConflictRelax) {
+      return { 
+        allowed: false, 
+        reason: "Já tem plantão interno no mesmo turno - conflito de horário",
+        rule: "INTERNO_EXTERNO_MESMO_DIA"
+      };
+    }
   }
   
   // ═══════════════════════════════════════════════════════════

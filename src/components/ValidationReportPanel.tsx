@@ -367,7 +367,7 @@ function RuleExplanation({ rule }: { rule: string }) {
     "DISTRIBUICAO_2_ANTES_3": "Nenhum corretor pode ter 3+ plantões externos enquanto outro corretor elegível tiver menos de 2. Distribuição deve ser equilibrada.",
     "CONCENTRACAO_DOMINGOS": "Um corretor está recebendo muitos domingos no mesmo local. A rotação FIFO deve garantir distribuição equitativa.",
     "FORA_DISPONIBILIDADE": "Corretor foi alocado em um dia que não está na sua disponibilidade global. Verifique o cadastro do corretor em Corretores > Disponibilidade.",
-    "INTERNO_EXTERNO_MESMO_DIA": "Corretor tem plantão interno e externo no mesmo dia. Isso é fisicamente impossível de cumprir — o corretor só pode estar em um lugar.",
+    "INTERNO_EXTERNO_MESMO_DIA": "Interno e externo no mesmo dia: permitido seg-sex em turnos diferentes (manhã/tarde), mas proibido aos sábados ou no mesmo turno.",
     "TURNO_NAO_CONFIGURADO": "Um turno foi gerado para um horário que não está configurado no local. Verifique a configuração de períodos do local em Locais > Períodos.",
   };
 

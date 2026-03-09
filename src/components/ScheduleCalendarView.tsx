@@ -559,9 +559,18 @@ export function ScheduleCalendarView({ assignments, scheduleWeekStart, scheduleW
             placeholder="Adicione observações sobre esta escala..."
             className="min-h-[80px] resize-y"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            {saveMutation.isPending ? "Salvando..." : saveMutation.isSuccess ? "✓ Salvo" : "Auto-save ativado"}
-          </p>
+          <div className="flex items-center gap-3 mt-2">
+            <Button
+              size="sm"
+              onClick={handleSaveObservation}
+              disabled={!observationDirty || saveMutation.isPending}
+            >
+              {saveMutation.isPending ? "Salvando..." : "Salvar Observação"}
+            </Button>
+            {saveMutation.isSuccess && !observationDirty && (
+              <span className="text-xs text-green-600">✓ Salvo</span>
+            )}
+          </div>
         </div>
       )}
     </div>
