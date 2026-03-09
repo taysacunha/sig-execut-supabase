@@ -387,13 +387,18 @@ export function ValidationReportPanel({ result, onClose }: ValidationReportPanel
       {!isFailureResult && result.brokerReports.length > 0 && (
         <ScrollArea className="h-[400px] pr-4">
           {viewMode === "broker" ? (
-            <BrokerView
-              reports={filteredBrokerReports}
-              expandedBrokers={expandedBrokers}
-              toggleBroker={toggleBroker}
-              severityFilter={severityFilter}
-              ruleFilter={ruleFilter}
-            />
+            <>
+              {filteredGlobalViolations.length > 0 && (
+                <GlobalViolationsSection violations={filteredGlobalViolations} />
+              )}
+              <BrokerView
+                reports={filteredBrokerReports}
+                expandedBrokers={expandedBrokers}
+                toggleBroker={toggleBroker}
+                severityFilter={severityFilter}
+                ruleFilter={ruleFilter}
+              />
+            </>
           ) : (
             <RuleView
               violationsByRule={filteredViolationsByRule}
