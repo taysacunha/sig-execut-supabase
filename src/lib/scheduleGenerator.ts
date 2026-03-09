@@ -517,13 +517,13 @@ function checkTrulyInviolableRules(
         rule: "INTERNO_EXTERNO_MESMO_DIA"
       };
     }
-    // Seg-sex: proibido apenas se mesmo turno
+    // Seg-sex: proibido apenas se mesmo turno (conflito físico, não regra de negócio)
     const hasSameShiftConflict = internalSameDayAssignments.some(a => a.shift_type === demand.shift);
     if (hasSameShiftConflict) {
       return { 
         allowed: false, 
         reason: "Já tem plantão interno no mesmo turno - conflito de horário",
-        rule: "INTERNO_EXTERNO_MESMO_DIA"
+        rule: "FÍSICO"
       };
     }
     // Seg-sex em turnos diferentes: permitido (segue verificação)
