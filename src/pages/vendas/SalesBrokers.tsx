@@ -334,6 +334,93 @@ const SalesBrokers = () => {
     }
   };
 
+  const handleExportPDF = useCallback(async () => {
+    const activeBrokers = brokers
+      .filter(b => b.is_active)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    if (activeBrokers.length === 0) {
+      toast.error("Nenhum corretor ativo para exportar");
+      return;
+    }
+
+    try {
+      const doc = new jsPDF();
+      
+      // Load logo
+      let logoBase64: string | null = null;
+      try {
+        const response = await fetch("/src/assets/execut-logo.jpg");
+        const blob = await response.blob();
+        logoBase64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+      } catch {
+        // Logo optional
+      }
+
+      // Header
+      let yPos = 15;
+      if (logoBase64) {
+        doc.addImage(logoBase64, "JPEG", 14, yPos, 25, 25);
+        doc.setFontSize(16);
+        doc.setFont("helvetica", "bold");
+        doc.text("Execut Negócios Imobiliários", 44, yPos + 10);
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "normal");
+        doc.text("Lista de Corretores", 44, yPos + 18);
+        doc.setFontSize(10);
+        doc.text(`Total: ${activeBrokers.length} corretores ativos`, 44, yPos + 25);
+        yPos += 35;
+      } else {
+        doc.setFontSize(16);
+        doc.setFont("helvetica", "bold");
+        doc.text("Execut Negócios Imobiliários", 14, yPos);
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "normal");
+        doc.text(`Lista de Corretores — ${activeBrokers.length} ativos`, 14, yPos + 8);
+        yPos += 18;
+      }
+
+      // Table header
+      doc.setDrawColor(200);
+      doc.setFillColor(240, 240, 240);
+      doc.rect(14, yPos, 182, 8, "F");
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.text("#", 18, yPos + 5.5);
+      doc.text("Nome", 30, yPos + 5.5);
+      doc.text("CRECI", 150, yPos + 5.5);
+      yPos += 10;
+
+      // Table rows
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      activeBrokers.forEach((broker, index) => {
+        if (yPos > 275) {
+          doc.addPage();
+          yPos = 15;
+        }
+        if (index % 2 === 0) {
+          doc.setFillColor(248, 248, 248);
+          doc.rect(14, yPos - 4, 182, 7, "F");
+        }
+        doc.text(String(index + 1), 18, yPos);
+        doc.text(broker.name, 30, yPos);
+        doc.text(broker.creci || "—", 150, yPos);
+        yPos += 7;
+      });
+
+      doc.save("corretores-ativos.pdf");
+      toast.success("PDF exportado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      toast.error("Erro ao gerar PDF");
+    }
+  }, [brokers]);
+
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   return (
@@ -343,12 +430,18 @@ const SalesBrokers = () => {
           <h1 className="text-3xl font-bold text-foreground">Corretores de Vendas</h1>
           <p className="text-muted-foreground">Gerencie os corretores do sistema de vendas</p>
         </div>
-        {canEditVendas && (
-          <Button onClick={handleOpenCreate}>
-            <Plus className="h-4 w-4 mr-2" />
-            Novo Corretor
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExportPDF}>
+            <FileDown className="h-4 w-4 mr-2" />
+            Exportar PDF
           </Button>
-        )}
+          {canEditVendas && (
+            <Button onClick={handleOpenCreate}>
+              <Plus className="h-4 w-4 mr-2" />
+              Novo Corretor
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card>
