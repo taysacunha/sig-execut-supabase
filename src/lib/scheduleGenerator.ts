@@ -497,21 +497,36 @@ function checkTrulyInviolableRules(
   }
   
   // ═══════════════════════════════════════════════════════════
-  // REGRA: Interno + Externo no mesmo dia = PROIBIDO
-  // Corretor com interno não pode receber externo no mesmo dia
+  // REGRA: Interno + Externo no mesmo dia
+  // SÁBADO: PROIBIDO (erro hard)
+  // SEG-SEX: Permitido se em turnos diferentes (interno manhã + externo tarde, etc.)
   // ═══════════════════════════════════════════════════════════
-  const hasInternalSameDay = context.assignments.some(a =>
+  const isSaturday = getDay(demand.date) === 6;
+  const internalSameDayAssignments = context.assignments.filter(a =>
     a.broker_id === broker.brokerId &&
     a.assignment_date === demand.dateStr &&
     a.location_id !== demand.locationId &&
     context.internalLocationIds?.has(a.location_id)
   );
-  if (hasInternalSameDay) {
-    return { 
-      allowed: false, 
-      reason: "Já tem plantão interno no mesmo dia - não pode acumular externo",
-      rule: "INTERNO_EXTERNO_MESMO_DIA"
-    };
+  if (internalSameDayAssignments.length > 0) {
+    if (isSaturday) {
+      // Sábado: proibido sempre
+      return { 
+        allowed: false, 
+        reason: "Já tem plantão interno no sábado - não pode acumular externo",
+        rule: "INTERNO_EXTERNO_MESMO_DIA"
+      };
+    }
+    // Seg-sex: proibido apenas se mesmo turno
+    const hasSameShiftConflict = internalSameDayAssignments.some(a => a.shift_type === demand.shift);
+    if (hasSameShiftConflict) {
+      return { 
+        allowed: false, 
+        reason: "Já tem plantão interno no mesmo turno - conflito de horário",
+        rule: "INTERNO_EXTERNO_MESMO_DIA"
+      };
+    }
+    // Seg-sex em turnos diferentes: permitido (segue verificação)
   }
   
   // REGRA 8: Dias consecutivos externos - NÃO verificada aqui
