@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, UserPlus, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, UserPlus, Loader2, FileDown } from "lucide-react";
+import { jsPDF } from "jspdf";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
