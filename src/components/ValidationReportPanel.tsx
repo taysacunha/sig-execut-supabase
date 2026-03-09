@@ -47,7 +47,7 @@ const ruleExplanations: Record<string, string> = {
   "DISTRIBUICAO_2_ANTES_3": "Nenhum corretor pode ter 3+ plantões enquanto outro tiver menos de 2.",
   "CONCENTRACAO_DOMINGOS": "Um corretor recebe muitos domingos no mesmo local.",
   "FORA_DISPONIBILIDADE": "Corretor alocado em dia fora da sua disponibilidade.",
-  "INTERNO_EXTERNO_MESMO_DIA": "Interno e externo no mesmo dia: proibido aos sábados ou no mesmo turno.",
+  "INTERNO_EXTERNO_MESMO_DIA": "Interno e externo no mesmo dia é proibido apenas aos sábados. De segunda a sexta é permitido em turnos diferentes.",
   "TURNO_NAO_CONFIGURADO": "Turno gerado para horário não configurado no local.",
 };
 

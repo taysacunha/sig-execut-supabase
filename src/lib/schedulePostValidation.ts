@@ -178,28 +178,25 @@ export function validateGeneratedSchedule(
       
       if (hasInternal && hasExternal) {
         const date = new Date(dateStr + "T00:00:00");
-        const dayOfWeek = date.getDay();
-        const isSaturday = dayOfWeek === 6;
-        const dayLabel = format(date, "EEEE dd/MM", { locale: ptBR });
-        const internalLocs = dayAssignments.filter(a => a.location_type === "internal").map(a => a.location_name);
-        const externalLocs = dayAssignments.filter(a => a.location_type === "external").map(a => a.location_name);
+        const isSaturday = date.getDay() === 6;
         
-        // Sábado: sempre erro. Seg-sex: apenas warning (turnos diferentes são permitidos)
-        const internalShifts = dayAssignments.filter(a => a.location_type === "internal").map(a => a.shift_type);
-        const externalShifts = dayAssignments.filter(a => a.location_type === "external").map(a => a.shift_type);
-        const hasSameShiftConflict = internalShifts.some(s => externalShifts.includes(s));
-        
-        const severity: "error" | "warning" = isSaturday || hasSameShiftConflict ? "error" : "warning";
-        
-        brokerViolations.push({
-          rule: "INTERNO_EXTERNO_MESMO_DIA",
-          severity,
-          brokerName,
-          brokerId,
-          details: `${brokerName} com interno (${internalLocs.join(", ")}) e externo (${externalLocs.join(", ")}) no mesmo dia (${dayLabel})${!isSaturday && !hasSameShiftConflict ? ' — turnos diferentes, permitido' : ''}`,
-          dates: [dateStr],
-          locations: [...internalLocs, ...externalLocs]
-        });
+        // Seg-Sex: interno + externo no mesmo dia é PERMITIDO (turnos diferentes)
+        // Só gera violação no SÁBADO
+        if (isSaturday) {
+          const dayLabel = format(date, "EEEE dd/MM", { locale: ptBR });
+          const internalLocs = dayAssignments.filter(a => a.location_type === "internal").map(a => a.location_name);
+          const externalLocs = dayAssignments.filter(a => a.location_type === "external").map(a => a.location_name);
+          
+          brokerViolations.push({
+            rule: "INTERNO_EXTERNO_MESMO_DIA",
+            severity: "error",
+            brokerName,
+            brokerId,
+            details: `${brokerName} com interno (${internalLocs.join(", ")}) e externo (${externalLocs.join(", ")}) no sábado (${dayLabel}) — proibido`,
+            dates: [dateStr],
+            locations: [...internalLocs, ...externalLocs]
+          });
+        }
       }
     }
 

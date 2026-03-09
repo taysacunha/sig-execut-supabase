@@ -1,32 +1,57 @@
 
-Objetivo: remover totalmente o `INTERNO_EXTERNO_MESMO_DIA` em dias úteis (sem erro e sem warning), mantendo essa regra apenas para sábado.
 
-Plano de implementação:
+## Plano - 4 Correções
 
-1) Ajustar validação pós-geração (`src/lib/schedulePostValidation.ts`)
-- No bloco da regra `INTERNO_EXTERNO_MESMO_DIA`, alterar a condição para:
-  - Só criar violação quando `isSaturday === true`.
-  - Não avaliar mais “same shift” para dias úteis.
-- Resultado esperado:
-  - Seg–sex: nunca gera `INTERNO_EXTERNO_MESMO_DIA`.
-  - Sábado: continua gerando como `severity: "error"`.
+### 1. Dialog de corretores quebrado (sem scroll)
 
-2) Ajustar texto explicativo da regra (`src/components/ValidationReportPanel.tsx`)
-- Atualizar `ruleExplanations["INTERNO_EXTERNO_MESMO_DIA"]` para refletir a regra real:
-  - Ex.: “Interno e externo no mesmo dia só é proibido no sábado.”
-- Isso evita interpretação errada na interface.
+**Problema:** O `DialogContent` em `SalesBrokers.tsx` (linha 473) não tem limite de altura. Com os novos campos CRECI e Nome de Exibição, o conteúdo ultrapassa a viewport e os botões Cancelar/Salvar ficam inacessíveis.
 
-3) Alinhar bloqueio no gerador para consistência (`src/lib/scheduleGenerator.ts`)
-- Nos dois pontos de checagem da regra (fluxo normal e fluxo com relaxamento), remover o bloqueio de “mesmo turno” em dias úteis para essa regra.
-- Manter apenas o bloqueio de sábado com `rule: "INTERNO_EXTERNO_MESMO_DIA"`.
-- Observação: conflitos físicos de mesmo turno continuam protegidos pela regra física já existente.
+**Solução:** Adicionar `className="max-w-lg max-h-[90vh] overflow-y-auto"` ao `DialogContent` (linha 473). O `DialogFooter` (linha 638) receberá `className="sticky bottom-0 bg-background pt-4 border-t"` para ficar sempre visível.
 
-4) Validação funcional após ajuste
-- Gerar uma escala com casos de interno+externo em seg–sex: não deve aparecer erro/warning dessa regra.
-- Gerar caso com interno+externo no sábado: deve aparecer erro `INTERNO_EXTERNO_MESMO_DIA`.
-- Confirmar no painel de validação que contadores de warning/error não sobem indevidamente por casos de dias úteis.
+**Arquivo:** `src/pages/vendas/SalesBrokers.tsx` (linhas 473, 638)
 
-Arquivos impactados:
-- `src/lib/schedulePostValidation.ts`
-- `src/components/ValidationReportPanel.tsx`
-- `src/lib/scheduleGenerator.ts`
+---
+
+### 2. Relatório Corretores Vendas - dados de meses sem cadastro
+
+**Problema:** No modo mensal, o `months` (linha 200-224) inclui o mês anterior para "contexto de evolução". Os totais (linhas 400-409) e queries de `saleDetails`, `proposalsData`, `leadsData`, `evaluationsData` usam esse array completo, então dados do mês anterior "vazam" para o mês selecionado.
+
+**Solução:** Criar um `reportMonths` separado que contém apenas o mês selecionado (sem o anterior). Usar `reportMonths` para calcular totais e buscar `saleDetails`. Manter `months` completo apenas para os gráficos de evolução (`salesData`, `proposalsData`, `leadsData`, `evaluationsData` nos charts).
+
+Concretamente:
+- Adicionar `const reportMonths = periodType === "month" ? [months[months.length - 1]] : months;`
+- Alterar `totalVGV`, `totalSales` para somar apenas entries cujo `month` esteja em `reportMonths`
+- Alterar `totalProposals`, `totalConverted`, `totalLeads`, `totalLeadsActive`, `totalVisits`, `avgScore` idem
+- Alterar query de `saleDetails` para usar `reportMonths` no `.in("year_month", ...)`
+
+**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas ~200, 384-409)
+
+---
+
+### 3. Divs de vendas/avaliação não aparecem no PDF
+
+**Problema:** `hidden print:block` (linhas 713, 753) funciona com `window.print()` mas **não** com `html2canvas`, que captura o estado visual atual do DOM. Os elementos ficam `display:none` durante a captura.
+
+**Solução:** Usar o estado `isExporting` (já existe, linha 192) para controlar visibilidade:
+- Trocar `className="hidden print:block"` por renderização condicional: `{isExporting && saleDetails.length > 0 && (<Card>...</Card>)}`
+- No `handleExportPDF` (linha 428), o `setIsExporting(true)` já é chamado antes do `html2canvas`. Adicionar um `await new Promise(r => setTimeout(r, 100))` entre o `setIsExporting(true)` e o `html2canvas` para dar tempo ao React de renderizar os blocos.
+
+**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas 711-755, 434-436)
+
+---
+
+### 4. Ajuste de qualidade - acessibilidade do dialog
+
+**Identificado:** O `DialogContent` de corretores já tem `DialogDescription`, então está ok. Verificar se outros dialogs do mesmo arquivo têm `DialogDescription` para evitar warnings no console.
+
+**Arquivo:** `src/pages/vendas/SalesBrokers.tsx`
+
+---
+
+### Resumo
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `SalesBrokers.tsx` | Scroll + footer sticky no dialog |
+| `BrokerIndividualReport.tsx` | `reportMonths` para totais, renderização condicional por `isExporting` |
+
