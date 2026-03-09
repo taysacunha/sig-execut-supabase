@@ -459,6 +459,38 @@ function FailureSection({ violations }: { violations: PostValidationViolation[] 
 }
 
 // ═══════════════════════════════════════════════════════════
+// GLOBAL VIOLATIONS SECTION
+// ═══════════════════════════════════════════════════════════
+function GlobalViolationsSection({ violations }: { violations: PostValidationViolation[] }) {
+  return (
+    <div className="mb-3 p-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20">
+      <h4 className="font-semibold text-sm text-blue-800 dark:text-blue-300 mb-2 flex items-center gap-2">
+        <Layers className="h-4 w-4" />
+        Violações Gerais ({violations.length})
+      </h4>
+      <ul className="space-y-1.5">
+        {violations.map((v, i) => (
+          <li key={i} className="flex items-start gap-2 p-2 bg-background rounded border text-xs">
+            <span className="mt-0.5 shrink-0">
+              {v.severity === "error" ? (
+                <XCircle className="h-3.5 w-3.5 text-destructive" />
+              ) : (
+                <AlertTriangle className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-400" />
+              )}
+            </span>
+            <div>
+              <div className="font-medium">{v.rule}</div>
+              <div className="text-muted-foreground">{v.details}</div>
+              <RuleExplanationBadge rule={v.rule} />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
 // UNALLOCATED SECTION
 // ═══════════════════════════════════════════════════════════
 function UnallocatedSection({ demands }: { demands: { locationName: string; date: string; shift: string }[] }) {
