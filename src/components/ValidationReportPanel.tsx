@@ -44,7 +44,7 @@ const ruleExplanations: Record<string, string> = {
   "SEM_SABADO_DOMINGO_EXTERNOS": "Corretor não pode ter externos no sábado E domingo da mesma semana.",
   "RODIZIO_EXTERNOS_NAO_ALTERNADO": "Corretores Seg-Dom devem alternar entre 1 e 2 externos por semana.",
   "TURNO_NAO_ALOCADO": "Um turno ficou sem corretor designado.",
-  "DISTRIBUICAO_2_ANTES_3": "Nenhum corretor pode ter 3+ plantões enquanto outro tiver menos de 2.",
+  "DISTRIBUICAO_2_ANTES_3": "A distribuição de plantões externos deve ser equilibrada: todos os corretores devem ter pelo menos 2 externos antes que qualquer um receba um 3º. Se alguém tem 3+ enquanto outro tem menos de 2, a distribuição está desbalanceada.",
   "CONCENTRACAO_DOMINGOS": "Um corretor recebe muitos domingos no mesmo local.",
   "FORA_DISPONIBILIDADE": "Corretor alocado em dia fora da sua disponibilidade.",
   "INTERNO_EXTERNO_MESMO_DIA": "Interno e externo no mesmo dia é proibido apenas aos sábados. De segunda a sexta é permitido em turnos diferentes.",

@@ -514,7 +514,7 @@ export function validateGeneratedSchedule(
       severity: "error",
       brokerName: "Distribuição Geral",
       brokerId: "",
-      details: `Violação da regra 2-antes-de-3: Corretor(es) com 3+ externos [${brokersWith3OrMore.join(", ")}] enquanto outros têm menos de 2 [${brokersWithLessThan2.join(", ")}]`,
+      details: `Distribuição desbalanceada de externos: Os corretores ${brokersWith3OrMore.join(", ")} já têm 3 ou mais plantões externos, mas ${brokersWithLessThan2.join(", ")} ainda não atingiram 2. Todos devem ter pelo menos 2 antes que alguém receba o 3º.`,
       dates: [],
       locations: []
     });
