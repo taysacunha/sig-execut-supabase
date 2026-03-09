@@ -77,12 +77,11 @@ export function ValidationReportPanel({ result, onClose }: ValidationReportPanel
   const [searchBroker, setSearchBroker] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("broker");
 
-  if (!result) return null;
-
-  const isFailureResult = result.brokerReports.length === 0 && result.violations.length > 0;
+  const isFailureResult = result ? result.brokerReports.length === 0 && result.violations.length > 0 : false;
 
   // ─── Derived data ────────────────────────────────────────
   const allViolations = useMemo(() => {
+    if (!result) return [];
     const violations: PostValidationViolation[] = [...result.violations];
     result.brokerReports.forEach(r => {
       r.violations.forEach(v => {
