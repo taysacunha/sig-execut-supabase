@@ -78,12 +78,13 @@ export function ScheduleCalendarView({ assignments, scheduleWeekStart, scheduleW
 
   const handleObservationChange = useCallback((value: string) => {
     setObservationText(value);
-    if (saveTimeout) clearTimeout(saveTimeout);
-    const timeout = setTimeout(() => {
-      saveMutation.mutate(value);
-    }, 1000);
-    setSaveTimeout(timeout);
-  }, [saveTimeout, saveMutation]);
+    setObservationDirty(true);
+  }, []);
+
+  const handleSaveObservation = useCallback(() => {
+    saveMutation.mutate(observationText);
+    setObservationDirty(false);
+  }, [observationText, saveMutation]);
   // Buscar todos os corretores ativos do banco
   const { data: activeBrokers } = useQuery({
     queryKey: ["active-brokers-for-calendar"],
