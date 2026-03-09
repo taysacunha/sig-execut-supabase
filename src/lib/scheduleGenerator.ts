@@ -715,7 +715,7 @@ function checkTrulyInviolableRulesWithRelaxation(
       return { 
         allowed: false, 
         reason: "Já tem plantão interno no mesmo turno - conflito de horário",
-        rule: "INTERNO_EXTERNO_MESMO_DIA"
+        rule: "FÍSICO"
       };
     }
   }
