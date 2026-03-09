@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { PostValidationResult, BrokerValidationReport, PostValidationViolation } from "@/lib/schedulePostValidation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   CheckCircle2, 
   XCircle, 
@@ -12,7 +14,11 @@ import {
   ChevronRight,
   User,
   Calendar,
-  MapPin
+  MapPin,
+  Search,
+  Filter,
+  LayoutList,
+  Layers
 } from "lucide-react";
 
 interface ValidationReportPanelProps {
@@ -20,48 +26,183 @@ interface ValidationReportPanelProps {
   onClose: () => void;
 }
 
+type SeverityFilter = "all" | "error" | "warning";
+type ViewMode = "broker" | "rule";
+
+// ═══════════════════════════════════════════════════════════
+// RULE EXPLANATIONS MAP
+// ═══════════════════════════════════════════════════════════
+const ruleExplanations: Record<string, string> = {
+  "REGRA 4": "Um corretor não pode estar em dois locais externos diferentes no mesmo dia.",
+  "REGRA 6": "Corretores não podem atender construtoras concorrentes no mesmo dia.",
+  "REGRA 8": "Corretores não podem trabalhar em locais externos em dias consecutivos.",
+  "REGRA 9": "Corretor não pode ter externos no sábado E domingo da mesma semana.",
+  "REGRA 10": "Corretor não deve repetir no mesmo local externo em semanas consecutivas.",
+  "MAX_2_EXTERNOS_SEMANA": "Limite de 2 dias externos por semana.",
+  "SEM_EXTERNOS_CONSECUTIVOS": "Corretores não podem trabalhar em locais externos em dias seguidos.",
+  "SEM_REPETICAO_LOCAL_SEMANAS_SEGUIDAS": "Corretor não deve ir ao mesmo local externo em semanas consecutivas.",
+  "SEM_SABADO_DOMINGO_EXTERNOS": "Corretor não pode ter externos no sábado E domingo da mesma semana.",
+  "RODIZIO_EXTERNOS_NAO_ALTERNADO": "Corretores Seg-Dom devem alternar entre 1 e 2 externos por semana.",
+  "TURNO_NAO_ALOCADO": "Um turno ficou sem corretor designado.",
+  "DISTRIBUICAO_2_ANTES_3": "Nenhum corretor pode ter 3+ plantões enquanto outro tiver menos de 2.",
+  "CONCENTRACAO_DOMINGOS": "Um corretor recebe muitos domingos no mesmo local.",
+  "FORA_DISPONIBILIDADE": "Corretor alocado em dia fora da sua disponibilidade.",
+  "INTERNO_EXTERNO_MESMO_DIA": "Interno e externo no mesmo dia: proibido aos sábados ou no mesmo turno.",
+  "TURNO_NAO_CONFIGURADO": "Turno gerado para horário não configurado no local.",
+};
+
+function getRuleExplanation(rule: string): string {
+  for (const [key, value] of Object.entries(ruleExplanations)) {
+    if (rule.includes(key) || key.includes(rule.split(":")[0])) {
+      return value;
+    }
+  }
+  return "";
+}
+
+function getRuleShortName(rule: string): string {
+  // Extract the main rule identifier
+  const parts = rule.split(":");
+  return parts[0].trim();
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════
 export function ValidationReportPanel({ result, onClose }: ValidationReportPanelProps) {
   const [expandedBrokers, setExpandedBrokers] = useState<Set<string>>(new Set());
+  const [expandedRules, setExpandedRules] = useState<Set<string>>(new Set());
+  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
+  const [ruleFilter, setRuleFilter] = useState<string>("all");
+  const [searchBroker, setSearchBroker] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>("broker");
 
-  if (!result) return null;
+  const isFailureResult = result ? result.brokerReports.length === 0 && result.violations.length > 0 : false;
 
-  const toggleBroker = (brokerId: string) => {
-    const newExpanded = new Set(expandedBrokers);
-    if (newExpanded.has(brokerId)) {
-      newExpanded.delete(brokerId);
-    } else {
-      newExpanded.add(brokerId);
+  // ─── Derived data ────────────────────────────────────────
+  const allViolations = useMemo(() => {
+    if (!result) return [];
+    const violations: PostValidationViolation[] = [...result.violations];
+    result.brokerReports.forEach(r => {
+      r.violations.forEach(v => {
+        if (!violations.some(existing => 
+          existing.rule === v.rule && existing.brokerId === v.brokerId && existing.details === v.details
+        )) {
+          violations.push(v);
+        }
+      });
+    });
+    return violations;
+  }, [result]);
+
+  // Group violations by rule
+  const violationsByRule = useMemo(() => {
+    const map = new Map<string, PostValidationViolation[]>();
+    allViolations.forEach(v => {
+      const key = getRuleShortName(v.rule);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(v);
+    });
+    return map;
+  }, [allViolations]);
+
+  // Unique rule names for filter dropdown
+  const uniqueRules = useMemo(() => Array.from(violationsByRule.keys()).sort(), [violationsByRule]);
+
+  // ─── Filtering logic ────────────────────────────────────
+  const filteredViolations = useMemo(() => {
+    return allViolations.filter(v => {
+      if (severityFilter !== "all" && v.severity !== severityFilter) return false;
+      if (ruleFilter !== "all" && !v.rule.includes(ruleFilter)) return false;
+      if (searchBroker && !v.brokerName.toLowerCase().includes(searchBroker.toLowerCase())) return false;
+      return true;
+    });
+  }, [allViolations, severityFilter, ruleFilter, searchBroker]);
+
+  const filteredBrokerReports = useMemo(() => {
+    if (!result) return [];
+    let reports = [...result.brokerReports];
+    
+    if (searchBroker) {
+      reports = reports.filter(r => r.brokerName.toLowerCase().includes(searchBroker.toLowerCase()));
     }
-    setExpandedBrokers(newExpanded);
+
+    // When filtering by severity or rule, only show brokers with matching violations
+    if (severityFilter !== "all" || ruleFilter !== "all") {
+      reports = reports.filter(r => {
+        const matchingViolations = r.violations.filter(v => {
+          if (severityFilter !== "all" && v.severity !== severityFilter) return false;
+          if (ruleFilter !== "all" && !v.rule.includes(ruleFilter)) return false;
+          return true;
+        });
+        return matchingViolations.length > 0;
+      });
+    }
+
+    // Sort: errors first
+    reports.sort((a, b) => {
+      const aErrors = a.violations.filter(v => severityFilter === "all" || v.severity === severityFilter).some(v => v.severity === "error");
+      const bErrors = b.violations.filter(v => severityFilter === "all" || v.severity === severityFilter).some(v => v.severity === "error");
+      if (aErrors && !bErrors) return -1;
+      if (!aErrors && bErrors) return 1;
+      return a.brokerName.localeCompare(b.brokerName);
+    });
+
+    return reports;
+  }, [result, severityFilter, ruleFilter, searchBroker]);
+
+  const filteredViolationsByRule = useMemo(() => {
+    const map = new Map<string, PostValidationViolation[]>();
+    filteredViolations.forEach(v => {
+      const key = getRuleShortName(v.rule);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(v);
+    });
+    return map;
+  }, [filteredViolations]);
+
+  // ─── Actions ─────────────────────────────────────────────
+  const toggleBroker = (id: string) => {
+    const s = new Set(expandedBrokers);
+    s.has(id) ? s.delete(id) : s.add(id);
+    setExpandedBrokers(s);
+  };
+
+  const toggleRule = (rule: string) => {
+    const s = new Set(expandedRules);
+    s.has(rule) ? s.delete(rule) : s.add(rule);
+    setExpandedRules(s);
   };
 
   const expandAll = () => {
-    setExpandedBrokers(new Set(result.brokerReports.map(r => r.brokerId)));
+    if (viewMode === "broker") {
+      setExpandedBrokers(new Set(filteredBrokerReports.map(r => r.brokerId)));
+    } else {
+      setExpandedRules(new Set(filteredViolationsByRule.keys()));
+    }
   };
 
   const collapseAll = () => {
     setExpandedBrokers(new Set());
+    setExpandedRules(new Set());
   };
 
-  // Ordenar: brokers com erros primeiro
-  const sortedReports = [...result.brokerReports].sort((a, b) => {
-    const aHasErrors = a.violations.some(v => v.severity === "error");
-    const bHasErrors = b.violations.some(v => v.severity === "error");
-    if (aHasErrors && !bHasErrors) return -1;
-    if (!aHasErrors && bHasErrors) return 1;
-    return a.brokerName.localeCompare(b.brokerName);
-  });
+  const clearFilters = () => {
+    setSeverityFilter("all");
+    setRuleFilter("all");
+    setSearchBroker("");
+  };
 
-  const brokersWithErrors = result.brokerReports.filter(r => 
-    r.violations.some(v => v.severity === "error")
-  );
+  const hasActiveFilters = severityFilter !== "all" || ruleFilter !== "all" || searchBroker !== "";
 
-  // Verificar se é um resultado de falha (sem brokerReports mas com violations)
-  const isFailureResult = result.brokerReports.length === 0 && result.violations.length > 0;
+  const errorCount = allViolations.filter(v => v.severity === "error").length;
+  const warningCount = allViolations.filter(v => v.severity === "warning").length;
+
+  if (!result) return null;
 
   return (
     <div className="space-y-4">
-      {/* Summary badges */}
+      {/* ─── Summary Badges ──────────────────────────────── */}
       <div className="flex flex-wrap gap-2">
         <Badge variant="outline" className="gap-1">
           <User className="h-3 w-3" />
@@ -77,313 +218,452 @@ export function ValidationReportPanel({ result, onClose }: ValidationReportPanel
             {result.summary.unallocatedCount} turno(s) sem corretor
           </Badge>
         )}
-        {(result.summary.errorCount - result.summary.unallocatedCount) > 0 && (
+        {errorCount > 0 && (
           <Badge variant="destructive" className="gap-1">
             <XCircle className="h-3 w-3" />
-            {result.summary.errorCount - result.summary.unallocatedCount} erros de regras
+            {errorCount} erros
           </Badge>
         )}
-        {result.summary.warningCount > 0 && (
-          <Badge variant="secondary" className="gap-1 bg-yellow-100 text-yellow-800">
+        {warningCount > 0 && (
+          <Badge variant="secondary" className="gap-1 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
             <AlertTriangle className="h-3 w-3" />
-            {result.summary.warningCount} avisos
+            {warningCount} avisos
           </Badge>
         )}
         {result.isValid && (
-          <Badge className="gap-1 bg-green-100 text-green-800">
+          <Badge className="gap-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
             <CheckCircle2 className="h-3 w-3" />
             Todas regras OK
           </Badge>
         )}
       </div>
 
-      {/* Failure explanation when no broker reports */}
+      {/* ─── Failure State ───────────────────────────────── */}
       {isFailureResult && (
-        <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20">
-          <h4 className="font-semibold text-destructive mb-2 flex items-center gap-2">
-            <XCircle className="h-5 w-5" />
-            Geração Falhou - Motivos:
-          </h4>
-          <p className="text-sm text-muted-foreground mb-3">
-            A escala não pôde ser gerada porque as regras abaixo não podem ser satisfeitas com os corretores configurados.
-          </p>
-          <ul className="space-y-2 text-sm">
-            {result.violations.map((v, i) => (
-              <li key={i} className="flex items-start gap-2 p-2 bg-background rounded border">
-                <span className="text-destructive mt-0.5">
-                  {v.severity === "error" ? <XCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-                </span>
-                <div>
-                  <div className="font-medium">{v.rule}</div>
-                  <div className="text-muted-foreground">
-                    <strong>{v.brokerName}</strong>: {v.details}
-                  </div>
-                  {/* Explicação da regra */}
-                  <RuleExplanation rule={v.rule} />
-                </div>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm">
-            <strong className="text-yellow-800">💡 Sugestões para resolver:</strong>
-            <ul className="text-yellow-700 mt-1 list-disc list-inside space-y-1">
-              <li>Verificar se há corretores suficientes configurados nos locais afetados</li>
-              <li>Verificar se a disponibilidade dos corretores está correta</li>
-              <li>Considerar adicionar mais corretores aos locais com poucos elegíveis</li>
-            </ul>
-          </div>
-        </div>
+        <FailureSection violations={result.violations} />
       )}
 
-      {/* Unallocated demands section */}
+      {/* ─── Unallocated Demands ─────────────────────────── */}
       {result.unallocatedDemands && result.unallocatedDemands.length > 0 && !isFailureResult && (
-        <div className="p-4 rounded-lg bg-orange-50 border border-orange-200">
-          <h4 className="font-semibold text-orange-800 mb-2 flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            Turnos Não Alocados ({result.unallocatedDemands.length})
-          </h4>
-          <p className="text-sm text-orange-700 mb-3">
-            Os seguintes turnos não receberam corretor. Isso pode indicar falta de corretores configurados ou conflitos de regras.
-          </p>
-          <ul className="space-y-1 text-sm">
-            {result.unallocatedDemands.map((d, i) => (
-              <li key={i} className="flex items-center gap-2 p-2 bg-background rounded border">
-                <span className="text-orange-600">⚠️</span>
-                <span>
-                  <strong>{d.locationName}</strong> - {d.date} ({d.shift === "morning" ? "Manhã" : "Tarde"})
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <UnallocatedSection demands={result.unallocatedDemands} />
       )}
 
-      {/* Quick actions - only show if there are broker reports */}
-      {result.brokerReports.length > 0 && (
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={expandAll}>
-            Expandir Todos
-          </Button>
-          <Button variant="outline" size="sm" onClick={collapseAll}>
-            Recolher Todos
-          </Button>
-        </div>
-      )}
-
-      {/* Violations summary - only show if not failure result */}
-      {!isFailureResult && result.violations.length > 0 && (
-        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-          <h4 className="font-semibold text-destructive mb-2 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4" />
-            Violações Encontradas ({result.violations.length})
-          </h4>
-          <ul className="space-y-1 text-sm">
-            {result.violations.slice(0, 10).map((v, i) => (
-              <li key={i} className="flex items-start gap-2">
-                <span className={v.severity === "error" ? "text-destructive" : "text-yellow-600"}>
-                  {v.severity === "error" ? "❌" : "⚠️"}
-                </span>
-                <span>
-                  <strong>{v.brokerName}</strong>: {v.details}
-                </span>
-              </li>
-            ))}
-            {result.violations.length > 10 && (
-              <li className="text-muted-foreground italic">
-                ... e mais {result.violations.length - 10} violações
-              </li>
-            )}
-          </ul>
-        </div>
-      )}
-
-      {/* Broker reports */}
-      {result.brokerReports.length > 0 && (
-        <ScrollArea className="h-[400px] pr-4">
-          <div className="space-y-2">
-            {sortedReports.map((report) => (
-              <BrokerReportCard
-                key={report.brokerId}
-                report={report}
-                isExpanded={expandedBrokers.has(report.brokerId)}
-                onToggle={() => toggleBroker(report.brokerId)}
-              />
-            ))}
+      {/* ─── Rule Summary Cards ──────────────────────────── */}
+      {!isFailureResult && violationsByRule.size > 0 && (
+        <div>
+          <h4 className="text-sm font-medium text-muted-foreground mb-2">Resumo por Regra</h4>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {Array.from(violationsByRule.entries()).map(([rule, violations]) => {
+              const hasErrors = violations.some(v => v.severity === "error");
+              const isActive = ruleFilter === rule;
+              return (
+                <button
+                  key={rule}
+                  onClick={() => setRuleFilter(isActive ? "all" : rule)}
+                  className={`
+                    p-3 rounded-lg border text-left transition-all text-xs
+                    ${isActive
+                      ? "ring-2 ring-primary border-primary bg-primary/5"
+                      : hasErrors
+                        ? "border-destructive/30 bg-destructive/5 hover:bg-destructive/10"
+                        : "border-yellow-200 bg-yellow-50 hover:bg-yellow-100 dark:border-yellow-800 dark:bg-yellow-900/20 dark:hover:bg-yellow-900/30"
+                    }
+                  `}
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    {hasErrors ? (
+                      <XCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
+                    ) : (
+                      <AlertTriangle className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-400 shrink-0" />
+                    )}
+                    <span className="font-semibold truncate">{rule}</span>
+                  </div>
+                  <span className="text-muted-foreground">
+                    {violations.length} ocorrência{violations.length !== 1 ? "s" : ""}
+                  </span>
+                </button>
+              );
+            })}
           </div>
+        </div>
+      )}
+
+      {/* ─── Filters Bar ─────────────────────────────────── */}
+      {!isFailureResult && result.brokerReports.length > 0 && (
+        <div className="space-y-2 p-3 rounded-lg border bg-muted/30">
+          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <Filter className="h-4 w-4" />
+            Filtros
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar corretor..."
+                value={searchBroker}
+                onChange={e => setSearchBroker(e.target.value)}
+                className="pl-8 h-9 text-sm"
+              />
+            </div>
+
+            {/* Severity */}
+            <Select value={severityFilter} onValueChange={(v) => setSeverityFilter(v as SeverityFilter)}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder="Severidade" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas severidades</SelectItem>
+                <SelectItem value="error">❌ Apenas Erros</SelectItem>
+                <SelectItem value="warning">⚠️ Apenas Avisos</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Rule filter */}
+            <Select value={ruleFilter} onValueChange={setRuleFilter}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder="Regra" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as regras</SelectItem>
+                {uniqueRules.map(rule => (
+                  <SelectItem key={rule} value={rule}>{rule}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* View mode toggle + actions */}
+          <div className="flex items-center justify-between pt-1">
+            <div className="flex gap-1">
+              <Button
+                variant={viewMode === "broker" ? "default" : "outline"}
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => setViewMode("broker")}
+              >
+                <LayoutList className="h-3 w-3" />
+                Por Corretor
+              </Button>
+              <Button
+                variant={viewMode === "rule" ? "default" : "outline"}
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => setViewMode("rule")}
+              >
+                <Layers className="h-3 w-3" />
+                Por Regra
+              </Button>
+            </div>
+            <div className="flex gap-1">
+              {hasActiveFilters && (
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearFilters}>
+                  Limpar filtros
+                </Button>
+              )}
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={expandAll}>
+                Expandir
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={collapseAll}>
+                Recolher
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Content Area ────────────────────────────────── */}
+      {!isFailureResult && result.brokerReports.length > 0 && (
+        <ScrollArea className="h-[400px] pr-4">
+          {viewMode === "broker" ? (
+            <BrokerView
+              reports={filteredBrokerReports}
+              expandedBrokers={expandedBrokers}
+              toggleBroker={toggleBroker}
+              severityFilter={severityFilter}
+              ruleFilter={ruleFilter}
+            />
+          ) : (
+            <RuleView
+              violationsByRule={filteredViolationsByRule}
+              expandedRules={expandedRules}
+              toggleRule={toggleRule}
+            />
+          )}
+          {filteredBrokerReports.length === 0 && filteredViolationsByRule.size === 0 && hasActiveFilters && (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              Nenhum resultado para os filtros aplicados.
+            </div>
+          )}
         </ScrollArea>
       )}
     </div>
   );
 }
 
-interface BrokerReportCardProps {
-  report: BrokerValidationReport;
-  isExpanded: boolean;
-  onToggle: () => void;
-}
-
-function BrokerReportCard({ report, isExpanded, onToggle }: BrokerReportCardProps) {
-  const hasErrors = report.violations.some(v => v.severity === "error");
-  const hasWarnings = report.violations.some(v => v.severity === "warning");
-
+// ═══════════════════════════════════════════════════════════
+// FAILURE SECTION
+// ═══════════════════════════════════════════════════════════
+function FailureSection({ violations }: { violations: PostValidationViolation[] }) {
   return (
-    <Collapsible open={isExpanded} onOpenChange={onToggle}>
-      <CollapsibleTrigger asChild>
-        <div 
-          className={`
-            flex items-center justify-between p-3 rounded-lg cursor-pointer
-            hover:bg-muted/50 transition-colors
-            ${hasErrors ? 'bg-destructive/5 border border-destructive/20' : 
-              hasWarnings ? 'bg-yellow-50 border border-yellow-200' : 
-              'bg-muted/30 border border-transparent'}
-          `}
-        >
-          <div className="flex items-center gap-3">
-            {isExpanded ? (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            )}
-            
-            {hasErrors ? (
-              <XCircle className="h-5 w-5 text-destructive" />
-            ) : hasWarnings ? (
-              <AlertTriangle className="h-5 w-5 text-yellow-600" />
-            ) : (
-              <CheckCircle2 className="h-5 w-5 text-green-500" />
-            )}
-            
-            <span className="font-medium">{report.brokerName}</span>
-          </div>
-          
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Badge variant="outline" className="text-xs">
-              {report.externalCount} ext
-            </Badge>
-            <Badge variant="outline" className="text-xs">
-              {report.internalCount} int
-            </Badge>
-            <Badge variant="outline" className="text-xs">
-              {report.saturdayCount} sáb
-            </Badge>
-            {report.violations.length > 0 && (
-              <Badge variant={hasErrors ? "destructive" : "secondary"} className="text-xs">
-                {report.violations.length} violação(ões)
-              </Badge>
-            )}
-          </div>
-        </div>
-      </CollapsibleTrigger>
-      
-      <CollapsibleContent>
-        <div className="ml-8 mt-2 space-y-3 pb-3">
-          {/* Weekly breakdown */}
-          <div className="text-sm">
-            <h5 className="font-medium mb-2 text-muted-foreground">Distribuição Semanal:</h5>
-            <div className="grid gap-2">
-              {report.weeklyBreakdown.map((week, i) => (
-                <div 
-                  key={i} 
-                  className="flex items-center justify-between p-2 bg-muted/30 rounded text-xs"
-                >
-                  <span className="font-medium">{week.weekLabel}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1">
-                      <MapPin className="h-3 w-3" />
-                      {week.externalCount} ext / {week.internalCount} int
-                    </span>
-                    <span className="text-muted-foreground">
-                      {week.locations.slice(0, 3).join(", ")}
-                      {week.locations.length > 3 && `... +${week.locations.length - 3}`}
-                    </span>
-                  </div>
-                </div>
-              ))}
+    <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+      <h4 className="font-semibold text-destructive mb-2 flex items-center gap-2">
+        <XCircle className="h-5 w-5" />
+        Geração Falhou - Motivos:
+      </h4>
+      <p className="text-sm text-muted-foreground mb-3">
+        A escala não pôde ser gerada porque as regras abaixo não podem ser satisfeitas.
+      </p>
+      <ul className="space-y-2 text-sm">
+        {violations.map((v, i) => (
+          <li key={i} className="flex items-start gap-2 p-2 bg-background rounded border">
+            <span className="text-destructive mt-0.5">
+              {v.severity === "error" ? <XCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+            </span>
+            <div>
+              <div className="font-medium">{v.rule}</div>
+              <div className="text-muted-foreground">
+                <strong>{v.brokerName}</strong>: {v.details}
+              </div>
+              <RuleExplanationBadge rule={v.rule} />
             </div>
-          </div>
-
-          {/* Violations for this broker */}
-          {report.violations.length > 0 && (
-            <div className="text-sm">
-              <h5 className="font-medium mb-2 text-destructive">Violações:</h5>
-              <ul className="space-y-1">
-                {report.violations.map((v, i) => (
-                  <li 
-                    key={i} 
-                    className={`
-                      p-2 rounded text-xs
-                      ${v.severity === "error" ? 'bg-destructive/10 text-destructive' : 'bg-yellow-50 text-yellow-800'}
-                    `}
-                  >
-                    <div className="font-medium">{v.rule}</div>
-                    <div>{v.details}</div>
-                    {v.dates && v.dates.length > 0 && (
-                      <div className="text-muted-foreground mt-1">
-                        Datas: {v.dates.join(", ")}
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* No violations */}
-          {report.violations.length === 0 && (
-            <div className="text-sm text-green-600 flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" />
-              Todas as regras foram respeitadas
-            </div>
-          )}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded text-sm">
+        <strong className="text-yellow-800 dark:text-yellow-300">💡 Sugestões para resolver:</strong>
+        <ul className="text-yellow-700 dark:text-yellow-400 mt-1 list-disc list-inside space-y-1">
+          <li>Verificar se há corretores suficientes nos locais afetados</li>
+          <li>Verificar a disponibilidade dos corretores</li>
+          <li>Considerar adicionar mais corretores</li>
+        </ul>
+      </div>
+    </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════
-// COMPONENTE DE EXPLICAÇÃO DE REGRAS
-// Exibe uma explicação clara e didática do que cada regra significa
+// UNALLOCATED SECTION
 // ═══════════════════════════════════════════════════════════
-function RuleExplanation({ rule }: { rule: string }) {
-  const ruleExplanations: Record<string, string> = {
-    "REGRA 4": "Um corretor não pode estar em dois locais externos diferentes no mesmo dia. É fisicamente impossível.",
-    "REGRA 4: Múltiplos locais externos no mesmo dia": "Um corretor não pode estar em dois locais externos diferentes no mesmo dia. É fisicamente impossível.",
-    "REGRA 4: Externo em múltiplos locais no mesmo dia": "Um corretor não pode estar em dois locais externos diferentes no mesmo dia. É fisicamente impossível.",
-    "REGRA 6": "Corretores não podem atender construtoras concorrentes no mesmo dia (acordo comercial).",
-    "REGRA 6: Conflito de construtora": "Corretores não podem atender construtoras concorrentes no mesmo dia (acordo comercial).",
-    "REGRA 8": "Corretores não podem trabalhar em locais externos em dias consecutivos (evita sobrecarga).",
-    "REGRA 8: Dias consecutivos": "Corretores não podem trabalhar em locais externos em dias consecutivos (evita sobrecarga).",
-    "REGRA 9": "Corretor não pode ter externos no sábado E domingo da mesma semana (folga garantida).",
-    "REGRA 9: Sábado E Domingo": "Corretor não pode ter externos no sábado E domingo da mesma semana (folga garantida).",
-    "REGRA 10": "Corretor não deve repetir no mesmo local externo em semanas consecutivas (rotação justa).",
-    "REGRA 10: Rotação entre semanas": "Corretor não deve repetir no mesmo local externo em semanas consecutivas (rotação justa).",
-    "MAX_2_EXTERNOS_SEMANA": "Limite de 2 dias externos por semana. Pode ser excedido quando a demanda exige e todos já têm 2.",
-    "SEM_EXTERNOS_CONSECUTIVOS": "Corretores não podem trabalhar em locais externos em dias seguidos (evita sobrecarga).",
-    "SEM_REPETICAO_LOCAL_SEMANAS_SEGUIDAS": "Corretor não deve ir ao mesmo local externo em semanas consecutivas.",
-    "SEM_SABADO_DOMINGO_EXTERNOS": "Corretor não pode ter externos no sábado E domingo da mesma semana.",
-    "RODIZIO_EXTERNOS_NAO_ALTERNADO": "Corretores Seg-Dom devem alternar entre 1 e 2 externos por semana para equidade.",
-    "TURNO_NAO_ALOCADO": "Um turno ficou sem corretor designado. Verifique se há corretores elegíveis suficientes.",
-    "DISTRIBUICAO_2_ANTES_3": "Nenhum corretor pode ter 3+ plantões externos enquanto outro corretor elegível tiver menos de 2. Distribuição deve ser equilibrada.",
-    "CONCENTRACAO_DOMINGOS": "Um corretor está recebendo muitos domingos no mesmo local. A rotação FIFO deve garantir distribuição equitativa.",
-    "FORA_DISPONIBILIDADE": "Corretor foi alocado em um dia que não está na sua disponibilidade global. Verifique o cadastro do corretor em Corretores > Disponibilidade.",
-    "INTERNO_EXTERNO_MESMO_DIA": "Interno e externo no mesmo dia: permitido seg-sex em turnos diferentes (manhã/tarde), mas proibido aos sábados ou no mesmo turno.",
-    "TURNO_NAO_CONFIGURADO": "Um turno foi gerado para um horário que não está configurado no local. Verifique a configuração de períodos do local em Locais > Períodos.",
-  };
+function UnallocatedSection({ demands }: { demands: { locationName: string; date: string; shift: string }[] }) {
+  return (
+    <div className="p-4 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
+      <h4 className="font-semibold text-orange-800 dark:text-orange-300 mb-2 flex items-center gap-2">
+        <MapPin className="h-5 w-5" />
+        Turnos Não Alocados ({demands.length})
+      </h4>
+      <ul className="space-y-1 text-sm">
+        {demands.map((d, i) => (
+          <li key={i} className="flex items-center gap-2 p-2 bg-background rounded border">
+            <span className="text-orange-600">⚠️</span>
+            <span>
+              <strong>{d.locationName}</strong> - {d.date} ({d.shift === "morning" ? "Manhã" : "Tarde"})
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
-  // Procurar explicação que contenha a regra
-  let explanation = "";
-  for (const [key, value] of Object.entries(ruleExplanations)) {
-    if (rule.includes(key) || key.includes(rule.split(":")[0])) {
-      explanation = value;
-      break;
-    }
-  }
+// ═══════════════════════════════════════════════════════════
+// BROKER VIEW (improved)
+// ═══════════════════════════════════════════════════════════
+function BrokerView({
+  reports,
+  expandedBrokers,
+  toggleBroker,
+  severityFilter,
+  ruleFilter,
+}: {
+  reports: BrokerValidationReport[];
+  expandedBrokers: Set<string>;
+  toggleBroker: (id: string) => void;
+  severityFilter: SeverityFilter;
+  ruleFilter: string;
+}) {
+  return (
+    <div className="space-y-2">
+      {reports.map(report => {
+        const filteredViolations = report.violations.filter(v => {
+          if (severityFilter !== "all" && v.severity !== severityFilter) return false;
+          if (ruleFilter !== "all" && !v.rule.includes(ruleFilter)) return false;
+          return true;
+        });
+        const hasErrors = filteredViolations.some(v => v.severity === "error");
+        const hasWarnings = filteredViolations.some(v => v.severity === "warning");
+        const isExpanded = expandedBrokers.has(report.brokerId);
 
+        return (
+          <Collapsible key={report.brokerId} open={isExpanded} onOpenChange={() => toggleBroker(report.brokerId)}>
+            <CollapsibleTrigger asChild>
+              <div
+                className={`
+                  flex items-center justify-between p-3 rounded-lg cursor-pointer
+                  hover:bg-muted/50 transition-colors
+                  ${hasErrors ? "bg-destructive/5 border border-destructive/20" :
+                    hasWarnings ? "bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800" :
+                    "bg-muted/30 border border-transparent"}
+                `}
+              >
+                <div className="flex items-center gap-3">
+                  {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                  {hasErrors ? <XCircle className="h-5 w-5 text-destructive" /> :
+                    hasWarnings ? <AlertTriangle className="h-5 w-5 text-yellow-600" /> :
+                    <CheckCircle2 className="h-5 w-5 text-green-500" />}
+                  <span className="font-medium">{report.brokerName}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Badge variant="outline" className="text-xs">{report.externalCount} ext</Badge>
+                  <Badge variant="outline" className="text-xs">{report.internalCount} int</Badge>
+                  <Badge variant="outline" className="text-xs">{report.saturdayCount} sáb</Badge>
+                  {filteredViolations.length > 0 && (
+                    <Badge variant={hasErrors ? "destructive" : "secondary"} className="text-xs">
+                      {filteredViolations.length} violação(ões)
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="ml-8 mt-2 space-y-3 pb-3">
+                {/* Weekly breakdown */}
+                <div className="text-sm">
+                  <h5 className="font-medium mb-2 text-muted-foreground">Distribuição Semanal:</h5>
+                  <div className="grid gap-2">
+                    {report.weeklyBreakdown.map((week, i) => (
+                      <div key={i} className="flex items-center justify-between p-2 bg-muted/30 rounded text-xs">
+                        <span className="font-medium">{week.weekLabel}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {week.externalCount} ext / {week.internalCount} int
+                          </span>
+                          <span className="text-muted-foreground">
+                            {week.locations.slice(0, 3).join(", ")}
+                            {week.locations.length > 3 && `... +${week.locations.length - 3}`}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Violations */}
+                {filteredViolations.length > 0 && (
+                  <div className="text-sm">
+                    <h5 className="font-medium mb-2 text-destructive">Violações:</h5>
+                    <ul className="space-y-1">
+                      {filteredViolations.map((v, i) => (
+                        <li key={i} className={`p-2 rounded text-xs ${v.severity === "error" ? "bg-destructive/10 text-destructive" : "bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300"}`}>
+                          <div className="font-medium">{v.rule}</div>
+                          <div>{v.details}</div>
+                          {v.dates && v.dates.length > 0 && (
+                            <div className="text-muted-foreground mt-1">Datas: {v.dates.join(", ")}</div>
+                          )}
+                          <RuleExplanationBadge rule={v.rule} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {filteredViolations.length === 0 && (
+                  <div className="text-sm text-green-600 flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Todas as regras foram respeitadas
+                  </div>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        );
+      })}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// RULE VIEW (new)
+// ═══════════════════════════════════════════════════════════
+function RuleView({
+  violationsByRule,
+  expandedRules,
+  toggleRule,
+}: {
+  violationsByRule: Map<string, PostValidationViolation[]>;
+  expandedRules: Set<string>;
+  toggleRule: (rule: string) => void;
+}) {
+  const entries = Array.from(violationsByRule.entries()).sort((a, b) => {
+    const aHasErrors = a[1].some(v => v.severity === "error");
+    const bHasErrors = b[1].some(v => v.severity === "error");
+    if (aHasErrors && !bHasErrors) return -1;
+    if (!aHasErrors && bHasErrors) return 1;
+    return b[1].length - a[1].length;
+  });
+
+  return (
+    <div className="space-y-2">
+      {entries.map(([rule, violations]) => {
+        const isExpanded = expandedRules.has(rule);
+        const hasErrors = violations.some(v => v.severity === "error");
+        const explanation = getRuleExplanation(rule);
+
+        return (
+          <Collapsible key={rule} open={isExpanded} onOpenChange={() => toggleRule(rule)}>
+            <CollapsibleTrigger asChild>
+              <div
+                className={`
+                  flex items-center justify-between p-3 rounded-lg cursor-pointer
+                  hover:bg-muted/50 transition-colors
+                  ${hasErrors ? "bg-destructive/5 border border-destructive/20" : "bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800"}
+                `}
+              >
+                <div className="flex items-center gap-3">
+                  {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                  {hasErrors ? <XCircle className="h-5 w-5 text-destructive" /> : <AlertTriangle className="h-5 w-5 text-yellow-600" />}
+                  <div>
+                    <span className="font-medium">{rule}</span>
+                    {explanation && (
+                      <p className="text-xs text-muted-foreground mt-0.5">{explanation}</p>
+                    )}
+                  </div>
+                </div>
+                <Badge variant={hasErrors ? "destructive" : "secondary"} className="text-xs">
+                  {violations.length} ocorrência{violations.length !== 1 ? "s" : ""}
+                </Badge>
+              </div>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="ml-8 mt-2 space-y-1 pb-3">
+                {violations.map((v, i) => (
+                  <div key={i} className={`p-2 rounded text-xs ${v.severity === "error" ? "bg-destructive/10 text-destructive" : "bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300"}`}>
+                    <div className="font-medium">{v.brokerName}</div>
+                    <div>{v.details}</div>
+                    {v.dates && v.dates.length > 0 && (
+                      <div className="text-muted-foreground mt-1">Datas: {v.dates.join(", ")}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        );
+      })}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// RULE EXPLANATION BADGE
+// ═══════════════════════════════════════════════════════════
+function RuleExplanationBadge({ rule }: { rule: string }) {
+  const explanation = getRuleExplanation(rule);
   if (!explanation) return null;
 
   return (
-    <div className="mt-1 text-xs text-blue-600 bg-blue-50 p-1.5 rounded border border-blue-100">
+    <div className="mt-1 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 p-1.5 rounded border border-blue-100 dark:border-blue-800">
       💡 {explanation}
     </div>
   );
