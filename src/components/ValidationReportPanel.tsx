@@ -119,6 +119,17 @@ export function ValidationReportPanel({ result, onClose }: ValidationReportPanel
     });
   }, [allViolations, severityFilter, ruleFilter, searchBroker]);
 
+  // ─── Global violations (brokerId vazio) ──────────────────
+  const filteredGlobalViolations = useMemo(() => {
+    if (!result) return [];
+    return result.violations.filter(v => {
+      if (v.brokerId && v.brokerId !== "") return false;
+      if (severityFilter !== "all" && v.severity !== severityFilter) return false;
+      if (ruleFilter !== "all" && !v.rule.includes(ruleFilter)) return false;
+      return true;
+    });
+  }, [result, severityFilter, ruleFilter]);
+
   const filteredBrokerReports = useMemo(() => {
     if (!result) return [];
     let reports = [...result.brokerReports];
@@ -376,13 +387,18 @@ export function ValidationReportPanel({ result, onClose }: ValidationReportPanel
       {!isFailureResult && result.brokerReports.length > 0 && (
         <ScrollArea className="h-[400px] pr-4">
           {viewMode === "broker" ? (
-            <BrokerView
-              reports={filteredBrokerReports}
-              expandedBrokers={expandedBrokers}
-              toggleBroker={toggleBroker}
-              severityFilter={severityFilter}
-              ruleFilter={ruleFilter}
-            />
+            <>
+              {filteredGlobalViolations.length > 0 && (
+                <GlobalViolationsSection violations={filteredGlobalViolations} />
+              )}
+              <BrokerView
+                reports={filteredBrokerReports}
+                expandedBrokers={expandedBrokers}
+                toggleBroker={toggleBroker}
+                severityFilter={severityFilter}
+                ruleFilter={ruleFilter}
+              />
+            </>
           ) : (
             <RuleView
               violationsByRule={filteredViolationsByRule}
@@ -390,7 +406,7 @@ export function ValidationReportPanel({ result, onClose }: ValidationReportPanel
               toggleRule={toggleRule}
             />
           )}
-          {filteredBrokerReports.length === 0 && filteredViolationsByRule.size === 0 && hasActiveFilters && (
+          {filteredBrokerReports.length === 0 && filteredGlobalViolations.length === 0 && filteredViolationsByRule.size === 0 && hasActiveFilters && (
             <div className="text-center py-8 text-muted-foreground text-sm">
               Nenhum resultado para os filtros aplicados.
             </div>
@@ -438,6 +454,38 @@ function FailureSection({ violations }: { violations: PostValidationViolation[] 
           <li>Considerar adicionar mais corretores</li>
         </ul>
       </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// GLOBAL VIOLATIONS SECTION
+// ═══════════════════════════════════════════════════════════
+function GlobalViolationsSection({ violations }: { violations: PostValidationViolation[] }) {
+  return (
+    <div className="mb-3 p-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20">
+      <h4 className="font-semibold text-sm text-blue-800 dark:text-blue-300 mb-2 flex items-center gap-2">
+        <Layers className="h-4 w-4" />
+        Violações Gerais ({violations.length})
+      </h4>
+      <ul className="space-y-1.5">
+        {violations.map((v, i) => (
+          <li key={i} className="flex items-start gap-2 p-2 bg-background rounded border text-xs">
+            <span className="mt-0.5 shrink-0">
+              {v.severity === "error" ? (
+                <XCircle className="h-3.5 w-3.5 text-destructive" />
+              ) : (
+                <AlertTriangle className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-400" />
+              )}
+            </span>
+            <div>
+              <div className="font-medium">{v.rule}</div>
+              <div className="text-muted-foreground">{v.details}</div>
+              <RuleExplanationBadge rule={v.rule} />
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
