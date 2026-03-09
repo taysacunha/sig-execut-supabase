@@ -36,7 +36,7 @@ const weekdaysMap: Record<string, string> = {
 export function ScheduleCalendarView({ assignments, scheduleWeekStart, scheduleWeekEnd, scheduleId }: ScheduleCalendarViewProps) {
   const queryClient = useQueryClient();
   const [observationText, setObservationText] = useState("");
-  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [observationDirty, setObservationDirty] = useState(false);
 
   // Load existing observation
   const { data: savedObservation } = useQuery({
