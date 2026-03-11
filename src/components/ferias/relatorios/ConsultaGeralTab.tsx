@@ -213,6 +213,8 @@ export function ConsultaGeralTab() {
                 <SelectItem value="_all_">Todos</SelectItem>
                 <SelectItem value="normal">Normal</SelectItem>
                 <SelectItem value="excecao">Exceção</SelectItem>
+                <SelectItem value="1_periodo">1 Período</SelectItem>
+                <SelectItem value="2_periodos">2 Períodos</SelectItem>
               </SelectContent>
             </Select>
           </div>
