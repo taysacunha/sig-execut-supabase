@@ -151,7 +151,7 @@ export function ConsultaGeralTab() {
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Total</CardTitle></CardHeader>
           <CardContent><div className="text-2xl font-bold">{stats.total}</div></CardContent>
@@ -176,12 +176,6 @@ export function ConsultaGeralTab() {
           <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-destructive">Faltantes</CardTitle></CardHeader>
           <CardContent><div className="text-2xl font-bold text-destructive">{stats.faltantes}</div></CardContent>
         </Card>
-        {stats.umPeriodo > 0 && (
-          <Card className="border-yellow-500/20">
-            <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-yellow-600">1 Período</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold text-yellow-600">{stats.umPeriodo}</div></CardContent>
-          </Card>
-        )}
       </div>
 
       {/* Filters */}
