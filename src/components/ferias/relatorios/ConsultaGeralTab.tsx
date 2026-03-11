@@ -138,7 +138,7 @@ export function ConsultaGeralTab() {
 
   // Stats
   const stats = useMemo(() => {
-    if (!ferias) return { total: 0, emGozo: 0, concluidas: 0, pendentesAprovadas: 0, excecoes: 0, faltantes: 0 };
+    if (!ferias) return { total: 0, emGozo: 0, concluidas: 0, pendentesAprovadas: 0, excecoes: 0, faltantes: 0, umPeriodo: 0 };
     const colabComFerias = new Set(ferias.map(f => f.colaborador_id).filter(Boolean));
     return {
       total: ferias.length,
@@ -147,6 +147,7 @@ export function ConsultaGeralTab() {
       pendentesAprovadas: ferias.filter(f => f.status === "pendente" || f.status === "aprovada").length,
       excecoes: ferias.filter(f => f.is_excecao).length,
       faltantes: Math.max(0, (totalColaboradores || 0) - colabComFerias.size),
+      umPeriodo: ferias.filter(f => !f.quinzena2_inicio).length,
     };
   }, [ferias, totalColaboradores]);
 
