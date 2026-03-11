@@ -269,7 +269,7 @@ export function ConsultaGeralTab() {
                         <TableCell className="text-sm text-muted-foreground">{f.colaborador?.cpf || "—"}</TableCell>
                         <TableCell className="text-sm">{f.colaborador?.setor?.nome || "—"}</TableCell>
                         <TableCell className="text-sm">{formatDate(f.quinzena1_inicio)} - {formatDate(f.quinzena1_fim)}</TableCell>
-                        <TableCell className="text-sm">{formatDate(f.quinzena2_inicio)} - {formatDate(f.quinzena2_fim)}</TableCell>
+                        <TableCell className="text-sm">{f.quinzena2_inicio ? `${formatDate(f.quinzena2_inicio)} - ${formatDate(f.quinzena2_fim)}` : <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20 text-xs">1 período</Badge>}</TableCell>
                         <TableCell className="text-sm">
                           {f.gozo_diferente ? (
                             <div className="space-y-1">

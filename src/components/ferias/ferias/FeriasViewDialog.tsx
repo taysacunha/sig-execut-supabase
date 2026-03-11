@@ -132,16 +132,27 @@ export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialo
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">2º Período (Direito)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm">
-                  {formatDate(ferias.quinzena2_inicio)} a {formatDate(ferias.quinzena2_fim)}
-                </p>
-              </CardContent>
-            </Card>
+            {ferias.quinzena2_inicio ? (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">2º Período (Direito)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm">
+                    {formatDate(ferias.quinzena2_inicio)} a {formatDate(ferias.quinzena2_fim)}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="border-yellow-500/20 bg-yellow-500/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-yellow-600">Período Único</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">Apenas 1 período cadastrado</p>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Gozo diferente */}

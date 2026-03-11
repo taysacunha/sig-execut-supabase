@@ -461,7 +461,7 @@ export default function FeriasFerias() {
                           <TableCell className="font-medium">{f.colaborador?.nome || "—"}</TableCell>
                           <TableCell>{f.colaborador?.setor_titular?.nome || "—"}</TableCell>
                           <TableCell className="text-sm">{f.gozo_diferente && f.gozo_quinzena1_inicio ? formatPeriodo(f.gozo_quinzena1_inicio, f.gozo_quinzena1_fim!) : formatPeriodo(f.quinzena1_inicio, f.quinzena1_fim)}</TableCell>
-                          <TableCell className="text-sm">{f.gozo_diferente && f.gozo_quinzena2_inicio ? formatPeriodo(f.gozo_quinzena2_inicio, f.gozo_quinzena2_fim!) : formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim)}</TableCell>
+                          <TableCell className="text-sm">{!f.quinzena2_inicio ? <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20 text-xs">1 período</Badge> : (f.gozo_diferente && f.gozo_quinzena2_inicio ? formatPeriodo(f.gozo_quinzena2_inicio, f.gozo_quinzena2_fim!) : formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim!))}</TableCell>
                           <TableCell>{f.vender_dias && f.dias_vendidos ? <Badge variant="outline" className="text-xs">{f.dias_vendidos} dias</Badge> : <span className="text-muted-foreground text-xs">—</span>}</TableCell>
                           <TableCell><Badge variant="outline" className={statusColors[f.status]}>{statusLabels[f.status] || f.status}</Badge></TableCell>
                           <TableCell>{f.origem === "formulario_anual" ? <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 gap-1"><Sparkles className="h-3 w-3" />Gerada</Badge> : <span className="text-muted-foreground text-xs">Manual</span>}</TableCell>

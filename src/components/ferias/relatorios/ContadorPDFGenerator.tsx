@@ -287,7 +287,7 @@ export function ContadorPDFGenerator() {
                         {formatDate(f.quinzena1_inicio)} - {formatDate(f.quinzena1_fim)}
                       </TableCell>
                       <TableCell>
-                        {formatDate(f.quinzena2_inicio)} - {formatDate(f.quinzena2_fim)}
+                        {f.quinzena2_inicio ? `${formatDate(f.quinzena2_inicio)} - ${formatDate(f.quinzena2_fim)}` : "-"}
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant={f.dias_vendidos && f.dias_vendidos > 10 ? "destructive" : "secondary"}>
