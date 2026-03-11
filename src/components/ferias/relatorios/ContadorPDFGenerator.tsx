@@ -149,7 +149,7 @@ export function ContadorPDFGenerator() {
           f.colaborador?.cpf || "-",
           formatDate(f.quinzena1_inicio),
           formatDate(f.quinzena1_fim),
-          formatDate(f.quinzena2_inicio),
+          f.quinzena2_inicio ? formatDate(f.quinzena2_inicio) : "-",
           formatDate(f.quinzena2_fim),
           diasVendidosContador.toString(),
           `${diasGozo1 + diasGozo2}`,
