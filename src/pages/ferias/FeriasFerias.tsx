@@ -269,7 +269,6 @@ export default function FeriasFerias() {
     emGozo: filteredFerias.filter(f => f.status === "em_gozo").length,
     excecoes: filteredFerias.filter(f => f.is_excecao).length,
     geradas: filteredFerias.filter(f => f.origem === "formulario_anual").length,
-    umPeriodo: filteredFerias.filter(f => !f.quinzena2_inicio).length,
   }), [filteredFerias]);
 
   const [contadorSortField, setContadorSortField] = useState<"nome" | "setor">("nome");
