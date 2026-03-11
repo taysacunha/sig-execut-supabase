@@ -409,14 +409,11 @@ export default function FeriasFerias() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{feriasStats.total}</div></CardContent></Card>
             <Card className="border-green-500/20"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-green-600">Em Gozo</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-green-600">{feriasStats.emGozo}</div></CardContent></Card>
             <Card className="border-orange-500/20"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-orange-600">Exceções</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-orange-600">{feriasStats.excecoes}</div></CardContent></Card>
             <Card className="border-primary/20"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-primary flex items-center gap-1"><Sparkles className="h-3 w-3" />Geradas</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-primary">{feriasStats.geradas}</div></CardContent></Card>
-            {feriasStats.umPeriodo > 0 && (
-              <Card className="border-yellow-500/20"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-yellow-600">1 Período</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-yellow-600">{feriasStats.umPeriodo}</div></CardContent></Card>
-            )}
           </div>
 
           <Card>
