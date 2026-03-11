@@ -42,7 +42,7 @@ export default function Proposals() {
   const [selectedTeam, setSelectedTeam] = useState("all");
   const [brokerRows, setBrokerRows] = useState<BrokerProposalRow[]>([]);
   const [savingBrokerId, setSavingBrokerId] = useState<string | null>(null);
-  const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
+  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const { data: brokers = [] } = useQuery({
     queryKey: ["sales-brokers-active"],
