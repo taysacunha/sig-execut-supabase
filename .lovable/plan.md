@@ -1,47 +1,57 @@
 
 
-## Diagnóstico do problema
+## Plano - 4 Correções
 
-O fluxo de redefinição de senha tem um bug de race condition:
+### 1. Dialog de corretores quebrado (sem scroll)
 
-1. Usuário clica no link de recovery no email → abre `sigest.lovable.app/auth?flow=recovery&code=...`
-2. O componente Auth monta e, após 50ms, executa `verifyAndDecide`
-3. `verifyAndDecide` encontra o usuário (sessão restaurada pelo code exchange) com `password_set: true`
-4. **Redireciona imediatamente para `/`** sem mostrar o formulário de redefinição
-5. O evento `PASSWORD_RECOVERY` chega tarde demais — o componente já desmontou
+**Problema:** O `DialogContent` em `SalesBrokers.tsx` (linha 473) não tem limite de altura. Com os novos campos CRECI e Nome de Exibição, o conteúdo ultrapassa a viewport e os botões Cancelar/Salvar ficam inacessíveis.
 
-O `verifyAndDecide` não verifica se a URL contém indicadores de recovery antes de redirecionar.
+**Solução:** Adicionar `className="max-w-lg max-h-[90vh] overflow-y-auto"` ao `DialogContent` (linha 473). O `DialogFooter` (linha 638) receberá `className="sticky bottom-0 bg-background pt-4 border-t"` para ficar sempre visível.
 
-## Correção em `Auth.tsx`
+**Arquivo:** `src/pages/vendas/SalesBrokers.tsx` (linhas 473, 638)
 
-Na função `verifyAndDecide` (linha ~96-106), antes de redirecionar para home, verificar se a URL contém `flow=recovery` ou `type=recovery`. Se sim, mostrar o formulário de redefinição em vez de redirecionar.
+---
 
-```
-// Antes (bug):
-if (isInvited && !passwordSet) {
-  setIsSettingPassword(true);
-} else {
-  navigate("/"); // ← redireciona mesmo em recovery!
-}
+### 2. Relatório Corretores Vendas - dados de meses sem cadastro
 
-// Depois (corrigido):
-if (isInvited && !passwordSet) {
-  setIsSettingPassword(true);
-} else if (isRecoveryUrl()) {
-  // Recovery flow — mostrar form de redefinição
-  setIsRecovery(true);
-  setIsSettingPassword(true);
-  window.history.replaceState(null, '', '/auth');
-} else {
-  navigate("/");
-}
-```
+**Problema:** No modo mensal, o `months` (linha 200-224) inclui o mês anterior para "contexto de evolução". Os totais (linhas 400-409) e queries de `saleDetails`, `proposalsData`, `leadsData`, `evaluationsData` usam esse array completo, então dados do mês anterior "vazam" para o mês selecionado.
 
-Isso garante que em **qualquer caminho** (seja via `onAuthStateChange`, seja via `verifyAndDecide`), a presença de recovery na URL impede o redirect automático.
+**Solução:** Criar um `reportMonths` separado que contém apenas o mês selecionado (sem o anterior). Usar `reportMonths` para calcular totais e buscar `saleDetails`. Manter `months` completo apenas para os gráficos de evolução (`salesData`, `proposalsData`, `leadsData`, `evaluationsData` nos charts).
 
-### Arquivo impactado
+Concretamente:
+- Adicionar `const reportMonths = periodType === "month" ? [months[months.length - 1]] : months;`
+- Alterar `totalVGV`, `totalSales` para somar apenas entries cujo `month` esteja em `reportMonths`
+- Alterar `totalProposals`, `totalConverted`, `totalLeads`, `totalLeadsActive`, `totalVisits`, `avgScore` idem
+- Alterar query de `saleDetails` para usar `reportMonths` no `.in("year_month", ...)`
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/pages/Auth.tsx` | Adicionar check de `isRecoveryUrl()` em `verifyAndDecide` antes de redirecionar |
+**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas ~200, 384-409)
+
+---
+
+### 3. Divs de vendas/avaliação não aparecem no PDF
+
+**Problema:** `hidden print:block` (linhas 713, 753) funciona com `window.print()` mas **não** com `html2canvas`, que captura o estado visual atual do DOM. Os elementos ficam `display:none` durante a captura.
+
+**Solução:** Usar o estado `isExporting` (já existe, linha 192) para controlar visibilidade:
+- Trocar `className="hidden print:block"` por renderização condicional: `{isExporting && saleDetails.length > 0 && (<Card>...</Card>)}`
+- No `handleExportPDF` (linha 428), o `setIsExporting(true)` já é chamado antes do `html2canvas`. Adicionar um `await new Promise(r => setTimeout(r, 100))` entre o `setIsExporting(true)` e o `html2canvas` para dar tempo ao React de renderizar os blocos.
+
+**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas 711-755, 434-436)
+
+---
+
+### 4. Ajuste de qualidade - acessibilidade do dialog
+
+**Identificado:** O `DialogContent` de corretores já tem `DialogDescription`, então está ok. Verificar se outros dialogs do mesmo arquivo têm `DialogDescription` para evitar warnings no console.
+
+**Arquivo:** `src/pages/vendas/SalesBrokers.tsx`
+
+---
+
+### Resumo
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `SalesBrokers.tsx` | Scroll + footer sticky no dialog |
+| `BrokerIndividualReport.tsx` | `reportMonths` para totais, renderização condicional por `isExporting` |
 

@@ -98,6 +98,12 @@ export default function Auth() {
       console.log("[Auth] DECISION: Show password form (invited user without password)");
       setIsSettingPassword(true);
       setCheckingAuth(false);
+    } else if (isRecoveryUrl()) {
+      console.log("[Auth] DECISION: Recovery flow detected in URL - showing password reset form");
+      setIsRecovery(true);
+      setIsSettingPassword(true);
+      setCheckingAuth(false);
+      window.history.replaceState(null, '', '/auth');
     } else {
       console.log("[Auth] DECISION: Redirect to home (user ready)");
       isNavigating.current = true;
