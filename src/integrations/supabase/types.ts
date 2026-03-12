@@ -1174,8 +1174,8 @@ export type Database = {
           quinzena_venda: number | null
           quinzena1_fim: string
           quinzena1_inicio: string
-          quinzena2_fim: string | null
-          quinzena2_inicio: string | null
+          quinzena2_fim: string
+          quinzena2_inicio: string
           status: string | null
           updated_at: string | null
           vender_dias: boolean | null
@@ -1200,8 +1200,8 @@ export type Database = {
           quinzena_venda?: number | null
           quinzena1_fim: string
           quinzena1_inicio: string
-          quinzena2_fim?: string | null
-          quinzena2_inicio?: string | null
+          quinzena2_fim: string
+          quinzena2_inicio: string
           status?: string | null
           updated_at?: string | null
           vender_dias?: boolean | null
@@ -1226,8 +1226,8 @@ export type Database = {
           quinzena_venda?: number | null
           quinzena1_fim?: string
           quinzena1_inicio?: string
-          quinzena2_fim?: string | null
-          quinzena2_inicio?: string | null
+          quinzena2_fim?: string
+          quinzena2_inicio?: string
           status?: string | null
           updated_at?: string | null
           vender_dias?: boolean | null

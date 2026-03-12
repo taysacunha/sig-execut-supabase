@@ -1,50 +1,57 @@
 
 
-## Plano: Corrigir fluxo de venda de dias no cadastro Padrão
+## Plano - 4 Correções
 
-### Problemas identificados
+### 1. Dialog de corretores quebrado (sem scroll)
 
-1. **Label "Opções adicionais"** — nome confuso, deve voltar a ser "Vender dias de férias"
-2. **Lógica de venda no Padrão errada** — Hoje divide gozo em "1 ou 2 períodos" e pede datas separadas. O correto: o usuário escolhe em qual período oficial (1º ou 2º) está a venda. O outro período é gozado inteiro (15 dias, sem campo extra). Só precisa de data de início do gozo no período da venda.
-3. **Sem validação de datas do gozo** — A data de início do gozo deve estar dentro do período oficial correspondente, e a data final calculada não pode ultrapassar o fim do período oficial.
+**Problema:** O `DialogContent` em `SalesBrokers.tsx` (linha 473) não tem limite de altura. Com os novos campos CRECI e Nome de Exibição, o conteúdo ultrapassa a viewport e os botões Cancelar/Salvar ficam inacessíveis.
 
-### Como deve funcionar (Padrão)
+**Solução:** Adicionar `className="max-w-lg max-h-[90vh] overflow-y-auto"` ao `DialogContent` (linha 473). O `DialogFooter` (linha 638) receberá `className="sticky bottom-0 bg-background pt-4 border-t"` para ficar sempre visível.
 
-Exemplo: Vende 10 dias, período de venda = 2º (16/11 a 30/11).
-- 1º período: gozado completo (15 dias) — nenhum campo extra.
-- 2º período: gozo de 5 dias (15 - 10). Usuário digita data de início do gozo.
-  - Validação: início >= 16/11 E fim (início + 4) <= 30/11.
-  - Se violar, erro impedindo salvar.
+**Arquivo:** `src/pages/vendas/SalesBrokers.tsx` (linhas 473, 638)
 
-### Mudanças em `FeriasDialog.tsx`
+---
 
-1. **Renomear** "Opções adicionais" → "Vender dias de férias" no RadioGroup. Manter as 3 opções: "Nenhum" / "Vender dias de férias" / "Gozo em datas diferentes" (exceção).
+### 2. Relatório Corretores Vendas - dados de meses sem cadastro
 
-2. **Seção de venda (Padrão, diasVendidos <= 10)**:
-   - Campo: dias a vender (1-10)
-   - Select: "Período da venda" (1º ou 2º)
-   - Texto informativo: "O [outro] período será gozado integralmente (15 dias)"
-   - 1 card de gozo com data de início + fim automático para o período da venda
-   - Dias de gozo = 15 - diasVendidos
+**Problema:** No modo mensal, o `months` (linha 200-224) inclui o mês anterior para "contexto de evolução". Os totais (linhas 400-409) e queries de `saleDetails`, `proposalsData`, `leadsData`, `evaluationsData` usam esse array completo, então dados do mês anterior "vazam" para o mês selecionado.
 
-3. **Remover** a lógica de "1 ou 2 períodos de gozo" e os campos `gozo_venda_q2` para o fluxo Padrão. Esses campos só fazem sentido na Exceção (>10 dias vendidos).
+**Solução:** Criar um `reportMonths` separado que contém apenas o mês selecionado (sem o anterior). Usar `reportMonths` para calcular totais e buscar `saleDetails`. Manter `months` completo apenas para os gráficos de evolução (`salesData`, `proposalsData`, `leadsData`, `evaluationsData` nos charts).
 
-4. **Validação de datas do gozo**:
-   - Se `quinzena_venda === 1`: gozo início >= q1Inicio E gozo fim <= q1Fim
-   - Se `quinzena_venda === 2`: gozo início >= q2Inicio E gozo fim <= q2Fim
-   - Mostrar erro inline se violado. Bloquear submit.
+Concretamente:
+- Adicionar `const reportMonths = periodType === "month" ? [months[months.length - 1]] : months;`
+- Alterar `totalVGV`, `totalSales` para somar apenas entries cujo `month` esteja em `reportMonths`
+- Alterar `totalProposals`, `totalConverted`, `totalLeads`, `totalLeadsActive`, `totalVisits`, `avgScore` idem
+- Alterar query de `saleDetails` para usar `reportMonths` no `.in("year_month", ...)`
 
-5. **Auto-cálculo**: gozo fim = gozo início + (15 - diasVendidos - 1) dias.
+**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas ~200, 384-409)
 
-6. **Payload (save)**: salvar gozo nos campos `gozo_quinzena1_inicio/fim` ou `gozo_quinzena2_inicio/fim` conforme o período da venda. O outro período não tem campos de gozo (é o período oficial inteiro).
+---
 
-### Exceção (>10 dias)
+### 3. Divs de vendas/avaliação não aparecem no PDF
 
-Manter a lógica atual de distribuição em 1 ou 2 períodos de gozo, mas com a mesma validação de datas dentro dos períodos oficiais.
+**Problema:** `hidden print:block` (linhas 713, 753) funciona com `window.print()` mas **não** com `html2canvas`, que captura o estado visual atual do DOM. Os elementos ficam `display:none` durante a captura.
 
-### Arquivos impactados
+**Solução:** Usar o estado `isExporting` (já existe, linha 192) para controlar visibilidade:
+- Trocar `className="hidden print:block"` por renderização condicional: `{isExporting && saleDetails.length > 0 && (<Card>...</Card>)}`
+- No `handleExportPDF` (linha 428), o `setIsExporting(true)` já é chamado antes do `html2canvas`. Adicionar um `await new Promise(r => setTimeout(r, 100))` entre o `setIsExporting(true)` e o `html2canvas` para dar tempo ao React de renderizar os blocos.
 
-| Arquivo | Mudança |
-|---------|---------|
-| `FeriasDialog.tsx` | Renomear label, simplificar venda padrão (1 campo de gozo no período da venda), validação de datas dentro do período oficial |
+**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas 711-755, 434-436)
+
+---
+
+### 4. Ajuste de qualidade - acessibilidade do dialog
+
+**Identificado:** O `DialogContent` de corretores já tem `DialogDescription`, então está ok. Verificar se outros dialogs do mesmo arquivo têm `DialogDescription` para evitar warnings no console.
+
+**Arquivo:** `src/pages/vendas/SalesBrokers.tsx`
+
+---
+
+### Resumo
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `SalesBrokers.tsx` | Scroll + footer sticky no dialog |
+| `BrokerIndividualReport.tsx` | `reportMonths` para totais, renderização condicional por `isExporting` |
 
