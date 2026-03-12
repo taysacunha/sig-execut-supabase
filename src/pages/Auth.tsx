@@ -282,15 +282,36 @@ export default function Auth() {
     setLoading(false);
   };
 
+  // Cooldown timer effect
+  useEffect(() => {
+    if (resetCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResetCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resetCooldown]);
+
+  const startCooldown = () => {
+    setResetCooldown(60);
+  };
+
   const handlePasswordReset = async () => {
     if (!resetEmail) {
       toast.error("Por favor, insira seu email");
       return;
     }
+    if (resetCooldown > 0) {
+      toast.error(`Aguarde ${resetCooldown} segundos antes de tentar novamente.`);
+      return;
+    }
     setLoading(true);
     
-    // SEMPRE usar domínio publicado para links de recovery (nunca preview)
-    // Isso evita que usuários caiam no auth-bridge do lovable.dev
     const isPreview = window.location.hostname.includes('lovableproject.com') || 
                       window.location.hostname.includes('lovable.app') && window.location.hostname.includes('-preview');
     const canonicalUrl = isPreview 
@@ -303,9 +324,18 @@ export default function Auth() {
       redirectTo: canonicalUrl
     });
     if (error) {
-      toast.error("Erro ao enviar email de recuperação");
+      const msg = error.message?.toLowerCase() || '';
+      if (msg.includes('rate') || msg.includes('limit') || msg.includes('429') || msg.includes('over_email_send_rate_limit')) {
+        toast.error("Você já solicitou recuperação há pouco. Aguarde 60 segundos e tente novamente.");
+        startCooldown();
+      } else if (msg.includes('user not found') || msg.includes('unable to validate')) {
+        toast.error("Email não encontrado. Verifique se digitou o email correto.");
+      } else {
+        toast.error("Erro ao enviar email de recuperação. Tente novamente.");
+      }
     } else {
-      toast.success("Email de recuperação enviado! Verifique sua caixa de entrada.");
+      toast.success("Email de recuperação enviado! Verifique sua caixa de entrada e spam.");
+      startCooldown();
       setResetDialogOpen(false);
       setResetEmail("");
     }
