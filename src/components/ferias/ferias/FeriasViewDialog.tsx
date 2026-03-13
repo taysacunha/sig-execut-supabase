@@ -7,9 +7,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Calendar, User, Building2, AlertTriangle, DollarSign } from "lucide-react";
+import { Calendar, User, Building2, AlertTriangle, DollarSign, Layers } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 interface FeriasViewDialogProps {
   open: boolean;
@@ -45,7 +47,29 @@ const excecaoMotivoLabels: Record<string, string> = {
   outro: "Outro",
 };
 
+const distribuicaoLabels: Record<string, string> = {
+  "1": "1º Período",
+  "2": "2º Período",
+  ambos: "Ambos os Períodos",
+  livre: "Distribuição Livre",
+};
+
 export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialogProps) {
+  // Fetch flexible gozo periods when dialog is open and ferias has gozo_flexivel
+  const { data: gozoPeriodos = [] } = useQuery({
+    queryKey: ["ferias-gozo-periodos", ferias?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ferias_gozo_periodos" as any)
+        .select("*")
+        .eq("ferias_id", ferias.id)
+        .order("numero");
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: open && !!ferias?.id && !!ferias?.gozo_flexivel,
+  });
+
   if (!ferias) return null;
 
   const formatDate = (dateStr: string | null) => {
@@ -59,6 +83,15 @@ export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialo
 
   const diasVendidos = ferias.dias_vendidos || 0;
   const hasVenda = ferias.vender_dias && diasVendidos > 0;
+  const isFlexivel = !!ferias.gozo_flexivel;
+
+  // Group flexible periods by referencia_periodo
+  const periodosByRef = gozoPeriodos.reduce((acc: Record<string, any[]>, p: any) => {
+    const key = p.referencia_periodo ? String(p.referencia_periodo) : "livre";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(p);
+    return acc;
+  }, {});
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -115,8 +148,55 @@ export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialo
             </Card>
           </div>
 
-          {/* Gozo diferente */}
-          {ferias.gozo_diferente && (
+          {/* Flexible gozo periods */}
+          {isFlexivel && gozoPeriodos.length > 0 && (
+            <>
+              <Separator />
+              <div className="space-y-3">
+                <h4 className="font-medium text-sm flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-primary" />
+                  Períodos de Gozo
+                  {ferias.distribuicao_tipo && (
+                    <Badge variant="secondary" className="text-xs">
+                      {distribuicaoLabels[ferias.distribuicao_tipo] || ferias.distribuicao_tipo}
+                    </Badge>
+                  )}
+                </h4>
+
+                {Object.entries(periodosByRef).map(([refKey, periodos]) => (
+                  <div key={refKey} className="space-y-2">
+                    {refKey !== "livre" && (
+                      <p className="text-xs text-muted-foreground font-medium">
+                        Ref. {refKey}º Período
+                      </p>
+                    )}
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {(periodos as any[]).map((p: any, idx: number) => (
+                        <Card key={p.id || idx} className="border-primary/20 bg-primary/5">
+                          <CardContent className="p-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-medium text-primary">
+                                Sub-período {p.numero || idx + 1}
+                              </span>
+                              <Badge variant="outline" className="text-xs">
+                                {p.dias} dias
+                              </Badge>
+                            </div>
+                            <p className="text-sm">
+                              {formatDate(p.data_inicio)} a {formatDate(p.data_fim)}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Legacy gozo diferente (non-flexible) */}
+          {!isFlexivel && ferias.gozo_diferente && (
             <>
               <Separator />
               <div className="space-y-2">
@@ -172,8 +252,8 @@ export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialo
                   </div>
                 </div>
 
-                {/* Gozo dates from sale */}
-                {ferias.gozo_quinzena1_inicio && (
+                {/* Legacy gozo dates from sale (non-flexible) */}
+                {!isFlexivel && ferias.gozo_quinzena1_inicio && (
                   <div className="grid gap-4 md:grid-cols-2 mt-2">
                     <Card className="border-primary/20 bg-primary/5">
                       <CardHeader className="pb-2">

@@ -9,8 +9,19 @@ import { Calendar } from "@/components/ui/calendar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Calendar as CalendarIcon, AlertCircle, Users, Palmtree } from "lucide-react";
-import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getMonth } from "date-fns";
+import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
+
+interface GozoPeriodo {
+  id: string;
+  ferias_id: string;
+  tipo: string;
+  referencia_periodo: number | null;
+  numero: number;
+  dias: number;
+  data_inicio: string;
+  data_fim: string;
+}
 
 interface Ferias {
   id: string;
@@ -24,6 +35,7 @@ interface Ferias {
   gozo_quinzena1_fim: string | null;
   gozo_quinzena2_inicio: string | null;
   gozo_quinzena2_fim: string | null;
+  gozo_flexivel?: boolean;
   status: string;
   is_excecao: boolean;
   dias_vendidos: number | null;
@@ -34,6 +46,8 @@ interface Ferias {
     setor?: { id: string; nome: string } | null;
     unidade?: { nome: string } | null;
   } | null;
+  // Attached flexible periods
+  _gozoPeriodos?: GozoPeriodo[];
 }
 
 interface Setor {
@@ -86,7 +100,36 @@ export function CalendarioFeriasTab() {
         .order("quinzena1_inicio");
 
       if (error) throw error;
-      return data as Ferias[];
+
+      // Try to fetch gozo_flexivel column - may not exist yet
+      let feriasWithFlexivel = (data || []) as any[];
+      try {
+        const ids = feriasWithFlexivel.map((f: any) => f.id);
+        if (ids.length > 0) {
+          const { data: gozoPeriodos } = await supabase
+            .from("ferias_gozo_periodos" as any)
+            .select("*")
+            .in("ferias_id", ids)
+            .order("numero");
+
+          if (gozoPeriodos && gozoPeriodos.length > 0) {
+            const periodosByFerias: Record<string, GozoPeriodo[]> = {};
+            for (const p of gozoPeriodos as any[]) {
+              if (!periodosByFerias[p.ferias_id]) periodosByFerias[p.ferias_id] = [];
+              periodosByFerias[p.ferias_id].push(p);
+            }
+            feriasWithFlexivel = feriasWithFlexivel.map((f: any) => ({
+              ...f,
+              gozo_flexivel: !!periodosByFerias[f.id],
+              _gozoPeriodos: periodosByFerias[f.id] || [],
+            }));
+          }
+        }
+      } catch {
+        // Table doesn't exist yet, ignore
+      }
+
+      return feriasWithFlexivel as Ferias[];
     },
   });
 
@@ -125,14 +168,42 @@ export function CalendarioFeriasTab() {
         return false;
       }
       if (selectedUnidade !== "all") {
-        // Não temos unidade_id diretamente, seria necessário ajustar a query
         return true;
       }
       return true;
     });
   }, [ferias, selectedSetor, selectedUnidade]);
 
-  // Calcular datas efetivas de gozo
+  // Get all gozo intervals for a given ferias
+  const getGozoIntervals = (f: Ferias): Array<{ start: Date; end: Date }> => {
+    // Flexible periods take priority
+    if (f.gozo_flexivel && f._gozoPeriodos && f._gozoPeriodos.length > 0) {
+      return f._gozoPeriodos.map((p) => ({
+        start: parseISO(p.data_inicio),
+        end: parseISO(p.data_fim),
+      }));
+    }
+
+    // Legacy: gozo_diferente
+    if (f.gozo_diferente) {
+      const intervals: Array<{ start: Date; end: Date }> = [];
+      if (f.gozo_quinzena1_inicio && f.gozo_quinzena1_fim) {
+        intervals.push({ start: parseISO(f.gozo_quinzena1_inicio), end: parseISO(f.gozo_quinzena1_fim) });
+      }
+      if (f.gozo_quinzena2_inicio && f.gozo_quinzena2_fim) {
+        intervals.push({ start: parseISO(f.gozo_quinzena2_inicio), end: parseISO(f.gozo_quinzena2_fim) });
+      }
+      return intervals;
+    }
+
+    // Default: official periods
+    return [
+      { start: parseISO(f.quinzena1_inicio), end: parseISO(f.quinzena1_fim) },
+      { start: parseISO(f.quinzena2_inicio), end: parseISO(f.quinzena2_fim) },
+    ];
+  };
+
+  // Legacy helper for dialog display
   const getGozoDates = (f: Ferias) => {
     if (f.gozo_diferente) {
       return {
@@ -158,20 +229,10 @@ export function CalendarioFeriasTab() {
 
     return allDays.filter((day) => {
       return feriasFiltradas.some((f) => {
-        const dates = getGozoDates(f);
-        // Verificar quinzena 1
-        if (dates.q1Start && dates.q1End) {
-          if (isWithinInterval(day, { start: dates.q1Start, end: dates.q1End })) {
-            return true;
-          }
-        }
-        // Verificar quinzena 2
-        if (dates.q2Start && dates.q2End) {
-          if (isWithinInterval(day, { start: dates.q2Start, end: dates.q2End })) {
-            return true;
-          }
-        }
-        return false;
+        const intervals = getGozoIntervals(f);
+        return intervals.some((interval) =>
+          isWithinInterval(day, { start: interval.start, end: interval.end })
+        );
       });
     });
   }, [feriasFiltradas, calendarMonth]);
@@ -182,45 +243,21 @@ export function CalendarioFeriasTab() {
     const monthEnd = endOfMonth(calendarMonth);
 
     return feriasFiltradas.filter((f) => {
-      const dates = getGozoDates(f);
-      // Verificar se alguma quinzena está no mês
-      if (dates.q1Start && dates.q1End) {
-        if (
-          isWithinInterval(monthStart, { start: dates.q1Start, end: dates.q1End }) ||
-          isWithinInterval(monthEnd, { start: dates.q1Start, end: dates.q1End }) ||
-          isWithinInterval(dates.q1Start, { start: monthStart, end: monthEnd })
-        ) {
-          return true;
-        }
-      }
-      if (dates.q2Start && dates.q2End) {
-        if (
-          isWithinInterval(monthStart, { start: dates.q2Start, end: dates.q2End }) ||
-          isWithinInterval(monthEnd, { start: dates.q2Start, end: dates.q2End }) ||
-          isWithinInterval(dates.q2Start, { start: monthStart, end: monthEnd })
-        ) {
-          return true;
-        }
-      }
-      return false;
+      const intervals = getGozoIntervals(f);
+      return intervals.some((interval) =>
+        isWithinInterval(monthStart, { start: interval.start, end: interval.end }) ||
+        isWithinInterval(monthEnd, { start: interval.start, end: interval.end }) ||
+        isWithinInterval(interval.start, { start: monthStart, end: monthEnd })
+      );
     });
   }, [feriasFiltradas, calendarMonth]);
 
   const handleDayClick = (day: Date) => {
-    // Encontrar férias neste dia
     const feriasNoDia = feriasFiltradas.filter((f) => {
-      const dates = getGozoDates(f);
-      if (dates.q1Start && dates.q1End) {
-        if (isWithinInterval(day, { start: dates.q1Start, end: dates.q1End })) {
-          return true;
-        }
-      }
-      if (dates.q2Start && dates.q2End) {
-        if (isWithinInterval(day, { start: dates.q2Start, end: dates.q2End })) {
-          return true;
-        }
-      }
-      return false;
+      const intervals = getGozoIntervals(f);
+      return intervals.some((interval) =>
+        isWithinInterval(day, { start: interval.start, end: interval.end })
+      );
     });
 
     if (feriasNoDia.length > 0) {
@@ -231,12 +268,9 @@ export function CalendarioFeriasTab() {
 
   // Stats
   const totalFeriasAno = ferias.filter((f) => {
-    const dates = getGozoDates(f);
+    const intervals = getGozoIntervals(f);
     const currentYear = new Date().getFullYear();
-    return (
-      (dates.q1Start && dates.q1Start.getFullYear() === currentYear) ||
-      (dates.q2Start && dates.q2Start.getFullYear() === currentYear)
-    );
+    return intervals.some((i) => i.start.getFullYear() === currentYear);
   }).length;
 
   const feriasEmGozo = ferias.filter((f) => f.status === "em_gozo").length;
@@ -394,7 +428,7 @@ export function CalendarioFeriasTab() {
             ) : (
               <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
                 {feriasDoMes.map((f) => {
-                  const dates = getGozoDates(f);
+                  const intervals = getGozoIntervals(f);
                   return (
                     <div
                       key={f.id}
@@ -422,19 +456,12 @@ export function CalendarioFeriasTab() {
                             )}
                           </p>
                           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                            {dates.q1Start && dates.q1End && (
-                              <span>
-                                1ª: {format(dates.q1Start, "dd/MM")} - {format(dates.q1End, "dd/MM")}
+                            {intervals.map((interval, idx) => (
+                              <span key={idx}>
+                                {idx > 0 && "• "}
+                                {idx + 1}ª: {format(interval.start, "dd/MM")} - {format(interval.end, "dd/MM")}
                               </span>
-                            )}
-                            {dates.q2Start && dates.q2End && (
-                              <>
-                                <span>•</span>
-                                <span>
-                                  2ª: {format(dates.q2Start, "dd/MM")} - {format(dates.q2End, "dd/MM")}
-                                </span>
-                              </>
-                            )}
+                            ))}
                             {f.vender_dias && f.dias_vendidos && (
                               <>
                                 <span>•</span>
@@ -502,39 +529,48 @@ export function CalendarioFeriasTab() {
                 </div>
               </div>
 
-              <div>
-                <Label className="text-muted-foreground">1ª Quinzena (Gozo)</Label>
-                <p className="font-medium">
-                  {(() => {
-                    const dates = getGozoDates(selectedFerias);
-                    if (dates.q1Start && dates.q1End) {
-                      return `${format(dates.q1Start, "dd/MM/yyyy")} a ${format(
-                        dates.q1End,
-                        "dd/MM/yyyy"
-                      )}`;
-                    }
-                    return "-";
-                  })()}
-                </p>
-              </div>
+              {/* Flexible periods */}
+              {selectedFerias.gozo_flexivel && selectedFerias._gozoPeriodos && selectedFerias._gozoPeriodos.length > 0 ? (
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Períodos de Gozo</Label>
+                  {selectedFerias._gozoPeriodos.map((p, idx) => (
+                    <div key={p.id || idx} className="flex items-center justify-between text-sm p-2 rounded bg-primary/5 border border-primary/10">
+                      <span>{p.dias} dias</span>
+                      <span>{format(parseISO(p.data_inicio), "dd/MM/yyyy")} a {format(parseISO(p.data_fim), "dd/MM/yyyy")}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <Label className="text-muted-foreground">1ª Quinzena (Gozo)</Label>
+                    <p className="font-medium">
+                      {(() => {
+                        const dates = getGozoDates(selectedFerias);
+                        if (dates.q1Start && dates.q1End) {
+                          return `${format(dates.q1Start, "dd/MM/yyyy")} a ${format(dates.q1End, "dd/MM/yyyy")}`;
+                        }
+                        return "-";
+                      })()}
+                    </p>
+                  </div>
 
-              <div>
-                <Label className="text-muted-foreground">2ª Quinzena (Gozo)</Label>
-                <p className="font-medium">
-                  {(() => {
-                    const dates = getGozoDates(selectedFerias);
-                    if (dates.q2Start && dates.q2End) {
-                      return `${format(dates.q2Start, "dd/MM/yyyy")} a ${format(
-                        dates.q2End,
-                        "dd/MM/yyyy"
-                      )}`;
-                    }
-                    return "-";
-                  })()}
-                </p>
-              </div>
+                  <div>
+                    <Label className="text-muted-foreground">2ª Quinzena (Gozo)</Label>
+                    <p className="font-medium">
+                      {(() => {
+                        const dates = getGozoDates(selectedFerias);
+                        if (dates.q2Start && dates.q2End) {
+                          return `${format(dates.q2Start, "dd/MM/yyyy")} a ${format(dates.q2End, "dd/MM/yyyy")}`;
+                        }
+                        return "-";
+                      })()}
+                    </p>
+                  </div>
+                </>
+              )}
 
-              {selectedFerias.gozo_diferente && (
+              {selectedFerias.gozo_diferente && !selectedFerias.gozo_flexivel && (
                 <div>
                   <Label className="text-muted-foreground">Período Contador</Label>
                   <p className="text-sm text-muted-foreground">
