@@ -184,8 +184,13 @@ function checkWindowConflicts(
     if (!allocSetorId || !allSectorIds.includes(allocSetorId)) continue;
 
     const aQ1S = parseISO(alloc.quinzena1_inicio), aQ1E = parseISO(alloc.quinzena1_fim);
-    const aQ2S = parseISO(alloc.quinzena2_inicio), aQ2E = parseISO(alloc.quinzena2_fim);
+    const aQ2S = alloc.quinzena2_inicio ? parseISO(alloc.quinzena2_inicio) : null;
+    const aQ2E = alloc.quinzena2_fim ? parseISO(alloc.quinzena2_fim) : null;
 
+    let hasOverlap = datesOverlap(wStart, wEnd, aQ1S, aQ1E);
+    if (aQ2S && aQ2E) {
+      hasOverlap = hasOverlap || datesOverlap(wStart, wEnd, aQ2S, aQ2E);
+    }
     if (datesOverlap(wStart, wEnd, aQ1S, aQ1E) || datesOverlap(wStart, wEnd, aQ2S, aQ2E)) {
       conflicts.push({
         tipo: allocSetorId !== setorId ? "substituto" : "setor",
