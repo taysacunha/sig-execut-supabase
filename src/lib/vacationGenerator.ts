@@ -191,7 +191,7 @@ function checkWindowConflicts(
     if (aQ2S && aQ2E) {
       hasOverlap = hasOverlap || datesOverlap(wStart, wEnd, aQ2S, aQ2E);
     }
-    if (datesOverlap(wStart, wEnd, aQ1S, aQ1E) || datesOverlap(wStart, wEnd, aQ2S, aQ2E)) {
+    if (hasOverlap) {
       conflicts.push({
         tipo: allocSetorId !== setorId ? "substituto" : "setor",
         descricao: `Conflito com ${alloc.colaborador_nome}`,
