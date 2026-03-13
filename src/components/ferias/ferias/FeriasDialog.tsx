@@ -766,12 +766,14 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       errors.push("Férias em janeiro ou dezembro requerem exceção");
     }
 
-    const q2Start = parseISO(data.quinzena2_inicio);
-    const q2Month = q2Start.getMonth() + 1;
-    if (q2Month === 1 || q2Month === 12) {
-      requiresException = true;
-      exceptionReason = "mes_bloqueado";
-      errors.push("Férias em janeiro ou dezembro requerem exceção");
+    if (data.quinzena2_inicio) {
+      const q2Start = parseISO(data.quinzena2_inicio);
+      const q2Month = q2Start.getMonth() + 1;
+      if (q2Month === 1 || q2Month === 12) {
+        requiresException = true;
+        exceptionReason = "mes_bloqueado";
+        errors.push("Férias em janeiro ou dezembro requerem exceção");
+      }
     }
 
     if (data.opcao_adicional === "vender" && data.dias_vendidos && data.dias_vendidos > 10) {
