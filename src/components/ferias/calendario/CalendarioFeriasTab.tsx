@@ -197,10 +197,13 @@ export function CalendarioFeriasTab() {
     }
 
     // Default: official periods
-    return [
+    const intervals = [
       { start: parseISO(f.quinzena1_inicio), end: parseISO(f.quinzena1_fim) },
-      { start: parseISO(f.quinzena2_inicio), end: parseISO(f.quinzena2_fim) },
     ];
+    if (f.quinzena2_inicio && f.quinzena2_fim) {
+      intervals.push({ start: parseISO(f.quinzena2_inicio), end: parseISO(f.quinzena2_fim) });
+    }
+    return intervals;
   };
 
   // Legacy helper for dialog display
