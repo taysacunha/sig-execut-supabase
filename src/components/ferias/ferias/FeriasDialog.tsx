@@ -798,10 +798,6 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       toast.error("Preencha o motivo e justificativa da exceção");
       return;
     }
-    if (!data.quinzena2_inicio) {
-      toast.error("Preencha a data de início do 2º período");
-      return;
-    }
     if (gozoDateError) {
       toast.error(gozoDateError);
       return;

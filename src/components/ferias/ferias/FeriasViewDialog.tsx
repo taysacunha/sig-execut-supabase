@@ -141,9 +141,13 @@ export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialo
                 <CardTitle className="text-sm font-medium">2º Período (Direito)</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm">
-                  {formatDate(ferias.quinzena2_inicio)} a {formatDate(ferias.quinzena2_fim)}
-                </p>
+                {ferias.quinzena2_inicio ? (
+                  <p className="text-sm">
+                    {formatDate(ferias.quinzena2_inicio)} a {formatDate(ferias.quinzena2_fim)}
+                  </p>
+                ) : (
+                  <p className="text-sm text-amber-600 italic">Ainda não definido</p>
+                )}
               </CardContent>
             </Card>
           </div>
