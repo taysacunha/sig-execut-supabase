@@ -497,8 +497,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         if (existingFerias) {
           const q1Start = parseISO(data.quinzena1_inicio);
           const q1End = parseISO(data.quinzena1_fim);
-          const q2Start = parseISO(data.quinzena2_inicio);
-          const q2End = parseISO(data.quinzena2_fim);
+          const q2Start = data.quinzena2_inicio ? parseISO(data.quinzena2_inicio) : null;
+          const q2End = data.quinzena2_fim ? parseISO(data.quinzena2_fim) : null;
 
           for (const ef of existingFerias) {
             if (ferias && ef.id === ferias.id) continue;
@@ -512,9 +512,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             if (efQ2Start && efQ2End) {
               overlap = overlap || (q1Start <= efQ2End && q1End >= efQ2Start);
             }
-            overlap = overlap || (q2Start <= efQ1End && q2End >= efQ1Start);
-            if (efQ2Start && efQ2End) {
-              overlap = overlap || (q2Start <= efQ2End && q2End >= efQ2Start);
+            if (q2Start && q2End) {
+              overlap = overlap || (q2Start <= efQ1End && q2End >= efQ1Start);
+              if (efQ2Start && efQ2End) {
+                overlap = overlap || (q2Start <= efQ2End && q2End >= efQ2Start);
+              }
             }
 
             if (overlap) {
