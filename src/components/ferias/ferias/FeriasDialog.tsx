@@ -1233,16 +1233,6 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
 
 
 
-                      <Select onValueChange={(v) => field.onChange(parseInt(v))} value={String(field.value || 1)}>
-                        <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                        <SelectContent>
-                          <SelectItem value="1">1º Período</SelectItem>
-                          <SelectItem value="2">2º Período</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
 
                   {diasVendidos >= 1 && diasVendidos <= 29 && (
                     <>
