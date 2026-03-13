@@ -266,9 +266,15 @@ export async function generateVacations(
     }
 
     // Check if already has vacation
-    const hasExisting = existingVacations.some(v => v.colaborador_id === form.colaborador_id);
-    if (hasExisting) {
-      result.unprocessed.push({ colaborador_nome: form.colaborador.nome, motivo: "Já possui férias cadastradas para este ano" });
+    const existingForColab = existingVacations.filter(v => v.colaborador_id === form.colaborador_id);
+    const hasComplete = existingForColab.some(v => v.quinzena2_inicio != null);
+    const hasPendingQ2 = existingForColab.some(v => v.quinzena2_inicio == null);
+    if (hasComplete) {
+      result.unprocessed.push({ colaborador_nome: form.colaborador.nome, motivo: "Já possui férias completas cadastradas para este ano" });
+      continue;
+    }
+    if (hasPendingQ2) {
+      result.unprocessed.push({ colaborador_nome: form.colaborador.nome, motivo: "Possui férias com 2º período pendente — defina antes de gerar novas" });
       continue;
     }
 
