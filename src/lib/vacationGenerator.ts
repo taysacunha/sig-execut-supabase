@@ -207,9 +207,15 @@ function checkWindowConflicts(
     if (!existSetorId || !allSectorIds.includes(existSetorId)) continue;
 
     const eQ1S = parseISO(existing.quinzena1_inicio), eQ1E = parseISO(existing.quinzena1_fim);
-    const eQ2S = parseISO(existing.quinzena2_inicio), eQ2E = parseISO(existing.quinzena2_fim);
+    const eQ2S = existing.quinzena2_inicio ? parseISO(existing.quinzena2_inicio) : null;
+    const eQ2E = existing.quinzena2_fim ? parseISO(existing.quinzena2_fim) : null;
 
-    if (datesOverlap(wStart, wEnd, eQ1S, eQ1E) || datesOverlap(wStart, wEnd, eQ2S, eQ2E)) {
+    let hasOverlap = datesOverlap(wStart, wEnd, eQ1S, eQ1E);
+    if (eQ2S && eQ2E) {
+      hasOverlap = hasOverlap || datesOverlap(wStart, wEnd, eQ2S, eQ2E);
+    }
+
+    if (hasOverlap) {
       conflicts.push({
         tipo: existSetorId !== setorId ? "substituto" : "setor",
         descricao: `Conflito com ${existing.colaborador?.nome || 'colaborador'} (já cadastrado)`,
