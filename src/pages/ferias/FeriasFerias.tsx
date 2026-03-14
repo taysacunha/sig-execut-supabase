@@ -162,10 +162,14 @@ export default function FeriasFerias() {
 
   // ========== Queries ==========
 
-  const { data: ferias = [], isLoading: feriasLoading } = useQuery({
+  const { data: ferias = [], isLoading: feriasLoading, error: feriasError } = useQuery({
     queryKey: ["ferias-ferias", anoFilter],
     queryFn: async () => {
-      await supabase.rpc("atualizar_status_ferias");
+      const { error: statusError } = await supabase.rpc("atualizar_status_ferias");
+      if (statusError) {
+        console.error("Erro ao atualizar status de férias:", statusError);
+        throw new Error(`Falha ao atualizar status: ${statusError.message}`);
+      }
       const { data, error } = await supabase
         .from("ferias_ferias")
         .select(`*, colaborador:ferias_colaboradores!colaborador_id (id, nome, cpf, setor_titular:ferias_setores!setor_titular_id (id, nome))`)
@@ -440,6 +444,13 @@ export default function FeriasFerias() {
               <Button onClick={() => setGeradorDialogOpen(true)} className="gap-2"><Wand2 className="h-4 w-4" />Gerar Férias</Button>
               <Button onClick={() => { setSelectedFerias(null); setDialogOpen(true); }} variant="outline" className="gap-2"><Plus className="h-4 w-4" />Cadastro Manual</Button>
               <Button onClick={() => { setSelectedFormulario(null); setFormDialogOpen(true); }} variant="outline" className="gap-2"><FileText className="h-4 w-4" />Novo Formulário</Button>
+            </div>
+          )}
+
+          {feriasError && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive text-sm flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>Erro ao atualizar status das férias: {feriasError.message}. Os dados exibidos podem estar desatualizados.</span>
             </div>
           )}
 
