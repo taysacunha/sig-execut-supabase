@@ -502,30 +502,41 @@ function formatDateBR(dateStr: string): string {
 }
 
 function UnallocatedSection({ demands }: { demands: UnallocatedDemand[] }) {
+  const [isOpen, setIsOpen] = useState(true);
+
   return (
-    <div className="p-4 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
-      <h4 className="font-semibold text-orange-800 dark:text-orange-300 mb-2 flex items-center gap-2">
-        <MapPin className="h-5 w-5" />
-        Turnos Não Alocados ({demands.length})
-      </h4>
-      <ul className="space-y-2 text-sm">
-        {demands.map((d, i) => (
-          <li key={i} className="p-2 bg-background rounded border">
-            <div className="flex items-center gap-2">
-              <span className="text-orange-600">⚠️</span>
-              <span>
-                <strong>{d.locationName}</strong> - {formatDateBR(d.date)} ({d.shift === "morning" ? "Manhã" : "Tarde"})
-              </span>
-            </div>
-            {d.reason && (
-              <div className="mt-1 ml-7 text-xs text-muted-foreground italic">
-                {d.reason}
-              </div>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <div className="p-4 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
+        <CollapsibleTrigger asChild>
+          <button className="w-full flex items-center justify-between cursor-pointer group">
+            <h4 className="font-semibold text-orange-800 dark:text-orange-300 flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              Turnos Não Alocados ({demands.length})
+            </h4>
+            <ChevronDown className={`h-5 w-5 text-orange-600 transition-transform duration-200 ${isOpen ? "" : "-rotate-90"}`} />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <ul className="space-y-2 text-sm mt-2">
+            {demands.map((d, i) => (
+              <li key={i} className="p-2 bg-background rounded border">
+                <div className="flex items-center gap-2">
+                  <span className="text-orange-600">⚠️</span>
+                  <span>
+                    <strong>{d.locationName}</strong> - {formatDateBR(d.date)} ({d.shift === "morning" ? "Manhã" : "Tarde"})
+                  </span>
+                </div>
+                {d.reason && (
+                  <div className="mt-1 ml-7 text-xs text-muted-foreground italic">
+                    {d.reason}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
   );
 }
 
