@@ -162,10 +162,14 @@ export default function FeriasFerias() {
 
   // ========== Queries ==========
 
-  const { data: ferias = [], isLoading: feriasLoading } = useQuery({
+  const { data: ferias = [], isLoading: feriasLoading, error: feriasError } = useQuery({
     queryKey: ["ferias-ferias", anoFilter],
     queryFn: async () => {
-      await supabase.rpc("atualizar_status_ferias");
+      const { error: statusError } = await supabase.rpc("atualizar_status_ferias");
+      if (statusError) {
+        console.error("Erro ao atualizar status de férias:", statusError);
+        throw new Error(`Falha ao atualizar status: ${statusError.message}`);
+      }
       const { data, error } = await supabase
         .from("ferias_ferias")
         .select(`*, colaborador:ferias_colaboradores!colaborador_id (id, nome, cpf, setor_titular:ferias_setores!setor_titular_id (id, nome))`)
