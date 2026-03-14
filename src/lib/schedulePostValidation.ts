@@ -687,7 +687,7 @@ export function logValidationResult(result: PostValidationResult): void {
 // Funciona tanto na geração quanto na re-validação
 // ═══════════════════════════════════════════════════════════
 export async function detectUnallocatedDemands(
-  assignments: { location_id: string; assignment_date: string; shift_type: string }[],
+  assignments: { location_id: string; assignment_date: string; shift_type: string; broker_id?: string }[],
   weekStartDate: string,
   weekEndDate: string
 ): Promise<UnallocatedDemand[]> {

@@ -1285,7 +1285,8 @@ const Schedules = () => {
         allMonthAssignments.map(a => ({
           location_id: a.location_id,
           assignment_date: a.assignment_date,
-          shift_type: a.shift_type
+          shift_type: a.shift_type,
+          broker_id: a.broker_id
         })),
         genMonthStart,
         genMonthEnd
