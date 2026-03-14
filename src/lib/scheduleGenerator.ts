@@ -3289,6 +3289,10 @@ async function generateWeeklyScheduleWithAccumulator(
   let allocatedPass1 = 0, allocatedPass2 = 0, allocatedPass3 = 0, allocatedPass4 = 0, allocatedPass5 = 0;
   const relaxedAllocations: { demand: string; pass: number; reason: string }[] = [];
 
+  // Preencher referências para Sunday lookahead ANTES dos passes
+  context.sundayDemandsForLookahead = possibleDemands.filter(d => d.dayOfWeek === "sunday");
+  context.allocatedDemandsRef = allocatedDemands;
+
   // Pass 1-5: Alocação normal
   for (let pass = 1; pass <= 5; pass++) {
     for (const demand of possibleDemands) {
