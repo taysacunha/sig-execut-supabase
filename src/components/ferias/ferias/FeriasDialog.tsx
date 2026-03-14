@@ -546,7 +546,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             .from("ferias_ferias")
             .select("*")
             .eq("colaborador_id", relatedId)
-            .in("status", ["pendente", "aprovada", "em_gozo"]);
+            .in("status", ["pendente", "aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo"]);
 
           if (relatedFerias) {
             const q1Start = parseISO(data.quinzena1_inicio);

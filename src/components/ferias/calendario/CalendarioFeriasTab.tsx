@@ -529,7 +529,13 @@ export function CalendarioFeriasTab() {
                 <div>
                   <Label className="text-muted-foreground">Status</Label>
                   <Badge className="mt-1">
-                    {selectedFerias.status === "em_gozo"
+                    {selectedFerias.status === "em_gozo_q1"
+                      ? "Em Gozo - 1º Período"
+                      : selectedFerias.status === "em_gozo_q2"
+                      ? "Em Gozo - 2º Período"
+                      : selectedFerias.status === "q1_concluida"
+                      ? "1º Período Concluído"
+                      : selectedFerias.status === "em_gozo"
                       ? "Em Gozo"
                       : selectedFerias.status === "aprovada"
                       ? "Aprovada"

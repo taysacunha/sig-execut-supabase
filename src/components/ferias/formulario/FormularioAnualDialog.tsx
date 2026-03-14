@@ -186,7 +186,7 @@ export function FormularioAnualDialog({
         .from("ferias_ferias")
         .select("quinzena1_inicio, quinzena1_fim, quinzena2_inicio, quinzena2_fim, gozo_diferente, gozo_quinzena1_inicio, gozo_quinzena1_fim, gozo_quinzena2_inicio, gozo_quinzena2_fim, status")
         .eq("colaborador_id", familiarId!)
-        .in("status", ["aprovada", "em_gozo", "pendente"]);
+        .in("status", ["aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "pendente", "em_gozo"]);
       if (error) throw error;
       return data;
     },
