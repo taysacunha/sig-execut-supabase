@@ -541,12 +541,18 @@ export function validateGeneratedSchedule(
   
   // Adicionar demandas não alocadas como violações
   for (const demand of unallocatedDemands) {
+    const formattedDate = formatDateBR(demand.date);
+    const shiftLabel = demand.shift === "morning" ? "Manhã" : "Tarde";
+    let detailsText = `Turno não alocado: ${demand.locationName} - ${formattedDate} (${shiftLabel})`;
+    if (demand.reason) {
+      detailsText += `. Motivo: ${demand.reason}`;
+    }
     violations.push({
       rule: "TURNO_NAO_ALOCADO",
       severity: "error",
       brokerName: "—",
       brokerId: "",
-      details: `Turno não alocado: ${demand.locationName} - ${demand.date} (${demand.shift === "morning" ? "Manhã" : "Tarde"})`,
+      details: detailsText,
       dates: [demand.date],
       locations: [demand.locationName]
     });
