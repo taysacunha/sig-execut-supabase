@@ -4479,6 +4479,8 @@ async function generateWeeklyScheduleWithAccumulator(
   console.log(`📋 Total de demandas externas: ${possibleDemands.length}`);
   console.log(`✅ Pass 1-5: ${allocatedPass1 + allocatedPass2 + allocatedPass3 + allocatedPass4 + allocatedPass5}`);
   console.log(`🔄 De-consecutivização: ${deConsecutiveResult.swapsSuccessful} swaps`);
+  console.log(`🔗 Chain swaps: ${chainSwapResult.swapsSuccessful}/${chainSwapResult.swapsAttempted}`);
+  console.log(`⚖️ Rebalanceamento: ${rebalanceResult.swapsSuccessful}/${rebalanceResult.swapsAttempted}`);
   console.log(`⚠️ Regras relaxadas: ${relaxedAllocations.length}`);
   console.log(`❌ Não alocadas: ${finalUnallocated.length}`);
 
