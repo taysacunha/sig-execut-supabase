@@ -1,57 +1,77 @@
 
 
-## Plano - 4 Correções
+## Plano: Status granular automático + anos dinâmicos
 
-### 1. Dialog de corretores quebrado (sem scroll)
+### 1. Novos status de férias
 
-**Problema:** O `DialogContent` em `SalesBrokers.tsx` (linha 473) não tem limite de altura. Com os novos campos CRECI e Nome de Exibição, o conteúdo ultrapassa a viewport e os botões Cancelar/Salvar ficam inacessíveis.
+Substituir o status binário `em_gozo`/`concluida` por status granulares que reflitam cada período:
 
-**Solução:** Adicionar `className="max-w-lg max-h-[90vh] overflow-y-auto"` ao `DialogContent` (linha 473). O `DialogFooter` (linha 638) receberá `className="sticky bottom-0 bg-background pt-4 border-t"` para ficar sempre visível.
+| Status DB | Label na UI | Cor |
+|-----------|------------|-----|
+| `aprovada` | Aprovada | azul |
+| `em_gozo_q1` | Em Gozo - 1º Período | verde |
+| `q1_concluida` | 1º Período Concluído | verde claro |
+| `em_gozo_q2` | Em Gozo - 2º Período | verde |
+| `concluida` | Concluída | cinza |
+| `pendente` | Pendente | amarelo |
+| `cancelada` | Cancelada | vermelho |
 
-**Arquivo:** `src/pages/vendas/SalesBrokers.tsx` (linhas 473, 638)
+Quando não há Q2 (pendente ou inexistente), após o fim do Q1 a férias vai direto para `concluida`.
 
----
+### 2. Função SQL `atualizar_status_ferias` (reescrever)
 
-### 2. Relatório Corretores Vendas - dados de meses sem cadastro
+Transições automáticas considerando gozo_flexivel, gozo_diferente, e padrão:
 
-**Problema:** No modo mensal, o `months` (linha 200-224) inclui o mês anterior para "contexto de evolução". Os totais (linhas 400-409) e queries de `saleDetails`, `proposalsData`, `leadsData`, `evaluationsData` usam esse array completo, então dados do mês anterior "vazam" para o mês selecionado.
+```
+aprovada → em_gozo_q1   (quando hoje >= início do 1º período de gozo)
+em_gozo_q1 → q1_concluida   (quando hoje > fim do 1º período de gozo)
+q1_concluida → em_gozo_q2   (quando hoje >= início do 2º período de gozo)
+em_gozo_q2 → concluida   (quando hoje > fim do 2º período de gozo)
+```
 
-**Solução:** Criar um `reportMonths` separado que contém apenas o mês selecionado (sem o anterior). Usar `reportMonths` para calcular totais e buscar `saleDetails`. Manter `months` completo apenas para os gráficos de evolução (`salesData`, `proposalsData`, `leadsData`, `evaluationsData` nos charts).
+Caso especial: se Q2 é NULL → `q1_concluida` é o estado final (ou `concluida` direto se não há Q2 definido). Para simplificar: se Q2 é NULL e Q1 já passou, vai direto para `concluida`.
 
-Concretamente:
-- Adicionar `const reportMonths = periodType === "month" ? [months[months.length - 1]] : months;`
-- Alterar `totalVGV`, `totalSales` para somar apenas entries cujo `month` esteja em `reportMonths`
-- Alterar `totalProposals`, `totalConverted`, `totalLeads`, `totalLeadsActive`, `totalVisits`, `avgScore` idem
-- Alterar query de `saleDetails` para usar `reportMonths` no `.in("year_month", ...)`
+Para cada transição, a lógica de datas depende do tipo:
+- **gozo_flexivel**: consulta `ferias_gozo_periodos` (MIN/MAX por referencia_periodo)
+- **gozo_diferente**: usa `gozo_quinzena1_*` e `gozo_quinzena2_*`
+- **padrão**: usa `quinzena1_*` e `quinzena2_*`
 
-**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas ~200, 384-409)
+### 3. Utilitário de anos dinâmicos
 
----
+Criar `src/lib/dateUtils.ts` com `getYearOptions(past, future)` e substituir em 8 arquivos:
 
-### 3. Divs de vendas/avaliação não aparecem no PDF
+| Arquivo | Range atual | Novo |
+|---------|------------|------|
+| `FeriasFerias.tsx` | currentYear-3..+1 | `getYearOptions(3, 3)` |
+| `FeriasFormularioAnual.tsx` | +1..-1 | `getYearOptions(1, 3)` |
+| `QuinzenasTab.tsx` | 0..+4 | `getYearOptions(0, 5)` |
+| `ConsultaGeralTab.tsx` | -2..+2 | `getYearOptions(3, 3)` |
+| `ContadorPDFGenerator.tsx` | -2..+2 | `getYearOptions(3, 3)` |
+| `ExcecoesPDFGenerator.tsx` | -2..+2 | `getYearOptions(3, 3)` |
+| `CalendarioAniversariantesTab.tsx` | -2..+7 | `getYearOptions(2, 8)` |
 
-**Problema:** `hidden print:block` (linhas 713, 753) funciona com `window.print()` mas **não** com `html2canvas`, que captura o estado visual atual do DOM. Os elementos ficam `display:none` durante a captura.
+### 4. Arquivos impactados pelos novos status
 
-**Solução:** Usar o estado `isExporting` (já existe, linha 192) para controlar visibilidade:
-- Trocar `className="hidden print:block"` por renderização condicional: `{isExporting && saleDetails.length > 0 && (<Card>...</Card>)}`
-- No `handleExportPDF` (linha 428), o `setIsExporting(true)` já é chamado antes do `html2canvas`. Adicionar um `await new Promise(r => setTimeout(r, 100))` entre o `setIsExporting(true)` e o `html2canvas` para dar tempo ao React de renderizar os blocos.
+Todos que referenciam `statusLabels`, `statusColors`, ou comparam com `em_gozo`/`concluida`:
 
-**Arquivo:** `src/components/vendas/BrokerIndividualReport.tsx` (linhas 711-755, 434-436)
+| Arquivo | Mudança |
+|---------|---------|
+| `FeriasFerias.tsx` | statusLabels/Colors + stats + condições de ação |
+| `FeriasViewDialog.tsx` | statusLabels/Colors |
+| `ConsultaGeralTab.tsx` | statusLabels/Colors + stats |
+| `CalendarioFeriasTab.tsx` | comparações inline de status |
+| `ContadorPDFGenerator.tsx` | labels de status |
+| `FeriasDialog.tsx` | queries `.in("status", [...])` |
+| `FormularioAnualDialog.tsx` | queries `.in("status", [...])` |
+| `FeriasDashboard.tsx` | query de status + contagens |
+| `GeradorFolgasDialog.tsx` | query de status |
+| Migration SQL | Reescrever `atualizar_status_ferias` |
 
----
+### 5. Proteção contra conflitos cross-ano
 
-### 4. Ajuste de qualidade - acessibilidade do dialog
+A query de conflitos no `FeriasDialog.tsx` já verifica por `colaborador_id` e status ativo. Os novos status (`em_gozo_q1`, `q1_concluida`, `em_gozo_q2`) devem ser incluídos nessas queries para que o sistema detecte corretamente quando um colaborador já tem férias ativas em qualquer ano.
 
-**Identificado:** O `DialogContent` de corretores já tem `DialogDescription`, então está ok. Verificar se outros dialogs do mesmo arquivo têm `DialogDescription` para evitar warnings no console.
+### Detalhes técnicos
 
-**Arquivo:** `src/pages/vendas/SalesBrokers.tsx`
-
----
-
-### Resumo
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `SalesBrokers.tsx` | Scroll + footer sticky no dialog |
-| `BrokerIndividualReport.tsx` | `reportMonths` para totais, renderização condicional por `isExporting` |
+A mudança de status é feita via ALTER de valores possíveis no campo `status` (que é `text`, não enum), então não precisa de migration de schema -- apenas atualizar a função SQL e o código frontend.
 
