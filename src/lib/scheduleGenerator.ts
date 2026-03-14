@@ -3339,7 +3339,226 @@ async function generateWeeklyScheduleWithAccumulator(
   // ETAPA 8.8: DESCONSECUTIVAR (antes do último recurso)
   // ═══════════════════════════════════════════════════════════
   const deConsecutiveResult = deConsecutivizeExternals(context, possibleDemands, internalLocIds);
+
+  // ═══════════════════════════════════════════════════════════
+  // ETAPA 8.85: WEEKEND RESCUE SWAP
+  // Se alguma demanda de domingo ficou sem corretor porque o único
+  // elegível foi consumido no sábado externo, tenta trocar o plantão
+  // de sábado para outro corretor e liberar o original para o domingo.
+  // ═══════════════════════════════════════════════════════════
+  console.log("\n🔄 ETAPA 8.85: WEEKEND RESCUE SWAP (domingo sem corretor por sábado)...");
   
+  const sundayUnallocatedForRescue = possibleDemands.filter(d => 
+    d.dayOfWeek === "sunday" && !allocatedDemands.has(`${d.locationId}-${d.dateStr}-${d.shift}`)
+  );
+  
+  let weekendRescueCount = 0;
+  
+  if (sundayUnallocatedForRescue.length > 0) {
+    console.log(`   📊 ${sundayUnallocatedForRescue.length} demanda(s) de domingo sem corretor`);
+    
+    for (const sundayDemand of sundayUnallocatedForRescue) {
+      const sundayKey = `${sundayDemand.locationId}-${sundayDemand.dateStr}-${sundayDemand.shift}`;
+      if (allocatedDemands.has(sundayKey)) continue;
+      
+      const saturdayDateStr = format(subDays(sundayDemand.date, 1), "yyyy-MM-dd");
+      
+      console.log(`\n   🔍 Analisando domingo: ${sundayDemand.locationName} ${sundayDemand.dateStr} ${sundayDemand.shift}`);
+      
+      let rescued = false;
+      
+      // Para cada corretor elegível para este domingo
+      for (const brokerId of sundayDemand.eligibleBrokerIds) {
+        if (rescued) break;
+        
+        const broker = context.brokerQueue.find(b => b.brokerId === brokerId);
+        if (!broker) continue;
+        if (!broker.availableWeekdays.includes(sundayDemand.dayOfWeek)) continue;
+        
+        // Verificar se este corretor tem plantão no sábado (o bloqueio)
+        const saturdayAssignments = context.assignments.filter(a => 
+          a.broker_id === brokerId && a.assignment_date === saturdayDateStr
+        );
+        if (saturdayAssignments.length === 0) continue; // Não bloqueado por sábado
+        
+        // Pular se está comprometido com sábado interno (sistema de fila)
+        if (context.saturdayInternalWorkers?.has(brokerId)) continue;
+        
+        // Pular se tem plantão interno no sábado (não pode trocar)
+        const hasInternalSaturday = saturdayAssignments.some(a => internalLocIds.has(a.location_id));
+        if (hasInternalSaturday) continue;
+        
+        // Verificar se passaria nas regras para domingo (exceto Regra 9 que vamos resolver)
+        const hasPhysicalConflict = context.assignments.some(a =>
+          a.broker_id === brokerId &&
+          a.assignment_date === sundayDemand.dateStr &&
+          a.shift_type === sundayDemand.shift &&
+          a.location_id !== sundayDemand.locationId
+        );
+        if (hasPhysicalConflict) continue;
+        if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_HARD_CAP) continue;
+        if (hasThreeConsecutiveExternals(brokerId, sundayDemand.dateStr, context)) continue;
+        
+        // Verificar Regra 4 (múltiplos externos no mesmo dia)
+        const hasOtherExternalSunday = context.assignments.some(a =>
+          a.broker_id === brokerId &&
+          a.assignment_date === sundayDemand.dateStr &&
+          a.location_id !== sundayDemand.locationId &&
+          context.externalLocations?.some(l => l.id === a.location_id)
+        );
+        if (hasOtherExternalSunday) continue;
+        
+        // Verificar construtora no domingo
+        if (sundayDemand.builderCompany) {
+          const hasOtherBuilder = context.assignments.some(a => {
+            if (a.broker_id !== brokerId) return false;
+            if (a.assignment_date !== sundayDemand.dateStr) return false;
+            const otherLoc = context.externalLocations?.find(l => l.id === a.location_id);
+            return otherLoc?.builder_company && otherLoc.builder_company !== sundayDemand.builderCompany;
+          });
+          if (hasOtherBuilder) continue;
+        }
+        
+        console.log(`      🎯 ${broker.brokerName} elegível para domingo mas bloqueado por sábado - tentando swap`);
+        
+        // Obter plantões EXTERNOS de sábado para trocar
+        const satExternalAssignments = saturdayAssignments.filter(a => !internalLocIds.has(a.location_id));
+        if (satExternalAssignments.length === 0) continue;
+        
+        // Tentar encontrar substituto para CADA plantão de sábado
+        let allSwapped = true;
+        const swapPlan: Array<{ assignment: ScheduleAssignment; newBroker: BrokerQueueItem; satDemand: ExternalDemand }> = [];
+        
+        for (const satAssignment of satExternalAssignments) {
+          const satDemand = possibleDemands.find(d =>
+            d.locationId === satAssignment.location_id &&
+            d.dateStr === satAssignment.assignment_date &&
+            d.shift === satAssignment.shift_type
+          );
+          if (!satDemand) { allSwapped = false; break; }
+          
+          // Buscar corretor alternativo para este sábado
+          // Ordenar por menos externos para distribuição justa
+          const alternativeBrokers = context.brokerQueue
+            .filter(altBroker => {
+              if (altBroker.brokerId === brokerId) return false;
+              if (!satDemand.eligibleBrokerIds.includes(altBroker.brokerId)) return false;
+              if (!altBroker.availableWeekdays.includes(satDemand.dayOfWeek)) return false;
+              
+              // Verificar regras invioláveis
+              const check = checkTrulyInviolableRules(altBroker, satDemand, context);
+              if (!check.allowed) return false;
+              
+              // Verificar regras absolutas (contagem, etc.)
+              const absCheck = checkAbsoluteRules(altBroker, satDemand, context);
+              if (!absCheck.allowed) return false;
+              
+              return true;
+            })
+            .sort((a, b) => a.externalShiftCount - b.externalShiftCount);
+          
+          if (alternativeBrokers.length === 0) {
+            console.log(`      ❌ Sem substituto para ${satDemand.locationName} sábado ${satDemand.shift}`);
+            allSwapped = false;
+            break;
+          }
+          
+          swapPlan.push({ assignment: satAssignment, newBroker: alternativeBrokers[0], satDemand });
+        }
+        
+        if (!allSwapped || swapPlan.length === 0) continue;
+        
+        // Executar plano de swap
+        for (const swap of swapPlan) {
+          const oldBroker = context.brokerQueue.find(b => b.brokerId === brokerId)!;
+          
+          // Atualizar assignment
+          swap.assignment.broker_id = swap.newBroker.brokerId;
+          
+          // Atualizar contadores
+          oldBroker.externalShiftCount--;
+          oldBroker.externalCredit++;
+          swap.newBroker.externalShiftCount++;
+          swap.newBroker.externalCredit--;
+          
+          // Atualizar dailyExternalAssignments
+          context.dailyExternalAssignments.get(swap.assignment.assignment_date)?.delete(brokerId);
+          if (!context.dailyExternalAssignments.has(swap.assignment.assignment_date)) {
+            context.dailyExternalAssignments.set(swap.assignment.assignment_date, new Set());
+          }
+          context.dailyExternalAssignments.get(swap.assignment.assignment_date)!.add(swap.newBroker.brokerId);
+          
+          // Atualizar tracking de sábado externo
+          context.saturdayExternalWorkers.delete(brokerId);
+          context.saturdayExternalWorkers.add(swap.newBroker.brokerId);
+          context.weekendExternalAssignments.delete(brokerId);
+          context.weekendExternalAssignments.set(swap.newBroker.brokerId, "saturday");
+          
+          // Atualizar contadores Bessa se aplicável
+          if (swap.newBroker.internalLocation === "bessa") {
+            const currentCount = context.saturdayBessaExternalCount.get(swap.assignment.assignment_date) || 0;
+            context.saturdayBessaExternalCount.set(swap.assignment.assignment_date, currentCount + 1);
+          }
+          if (oldBroker.internalLocation === "bessa") {
+            const currentCount = context.saturdayBessaExternalCount.get(swap.assignment.assignment_date) || 0;
+            context.saturdayBessaExternalCount.set(swap.assignment.assignment_date, Math.max(0, currentCount - 1));
+          }
+          
+          // Atualizar fila de rotação em memória
+          const locationQueue = context.locationRotationQueues.get(swap.satDemand.locationId);
+          if (locationQueue) {
+            // Reverter posição do broker antigo
+            const oldQueueIdx = locationQueue.findIndex(q => q.broker_id === brokerId);
+            if (oldQueueIdx !== -1) {
+              locationQueue[oldQueueIdx].times_assigned = Math.max(0, (locationQueue[oldQueueIdx].times_assigned || 1) - 1);
+            }
+            // Avançar posição do novo broker
+            const newQueueIdx = locationQueue.findIndex(q => q.broker_id === swap.newBroker.brokerId);
+            if (newQueueIdx !== -1) {
+              locationQueue[newQueueIdx].times_assigned = (locationQueue[newQueueIdx].times_assigned || 0) + 1;
+              locationQueue[newQueueIdx].last_assignment_date = swap.assignment.assignment_date;
+              // Mover para final da fila
+              const item = locationQueue.splice(newQueueIdx, 1)[0];
+              locationQueue.push(item);
+              locationQueue.forEach((q, idx) => { q.queue_position = idx + 1; });
+            }
+          }
+          
+          console.log(`      🔄 SWAP SÁBADO: ${swap.satDemand.locationName} ${swap.satDemand.shift}`);
+          console.log(`         ${oldBroker.brokerName} → ${swap.newBroker.brokerName}`);
+          
+          relaxedAllocations.push({
+            demand: `${swap.satDemand.locationName} ${swap.satDemand.dateStr} ${swap.satDemand.shift}`,
+            pass: 8,
+            reason: `WEEKEND RESCUE: ${oldBroker.brokerName} → ${swap.newBroker.brokerName} para liberar domingo`
+          });
+        }
+        
+        // Agora alocar o domingo para o corretor liberado
+        allocateDemand(sundayDemand, broker, context);
+        allocatedDemands.add(sundayKey);
+        weekendRescueCount++;
+        rescued = true;
+        
+        console.log(`      ✅ DOMINGO RESGATADO: ${sundayDemand.locationName} ${sundayDemand.dateStr} ${sundayDemand.shift} → ${broker.brokerName}`);
+        
+        relaxedAllocations.push({
+          demand: `${sundayDemand.locationName} ${sundayDemand.dateStr} ${sundayDemand.shift}`,
+          pass: 8,
+          reason: `WEEKEND RESCUE: Domingo alocado após swap de sábado`
+        });
+      }
+      
+      if (!rescued) {
+        console.log(`      ❌ ${sundayDemand.locationName} ${sundayDemand.dateStr} ${sundayDemand.shift}: SWAP impossível - nenhum substituto encontrado para sábado`);
+      }
+    }
+    
+    console.log(`\n   📊 RESULTADO RESCUE: ${weekendRescueCount} domingo(s) resgatado(s)`);
+  } else {
+    console.log("   ✅ Todos os domingos já alocados");
+  }
+
   // ═══════════════════════════════════════════════════════════
   // ETAPA 8.9: ALOCAÇÃO DE PLANTÕES INTERNOS (SÁBADO)
   // Corretores pré-identificados em saturdayInternalWorkers
