@@ -476,14 +476,20 @@ export function CalendarioFeriasTab() {
                       </div>
                       <Badge
                         variant={
-                          f.status === "em_gozo"
+                          ["em_gozo_q1", "em_gozo_q2", "em_gozo"].includes(f.status)
                             ? "default"
                             : f.status === "aprovada"
                             ? "secondary"
                             : "outline"
                         }
                       >
-                        {f.status === "em_gozo"
+                        {f.status === "em_gozo_q1"
+                          ? "Em Gozo - 1º"
+                          : f.status === "em_gozo_q2"
+                          ? "Em Gozo - 2º"
+                          : f.status === "q1_concluida"
+                          ? "1º Concluído"
+                          : f.status === "em_gozo"
                           ? "Em Gozo"
                           : f.status === "aprovada"
                           ? "Aprovada"
