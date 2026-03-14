@@ -579,6 +579,15 @@ export function validateGeneratedSchedule(
 // FUNÇÕES AUXILIARES
 // ═══════════════════════════════════════════════════════════
 
+// Formata data ISO para DD/MM/AAAA
+function formatDateBR(dateStr: string): string {
+  const parts = dateStr.split("-");
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dateStr;
+}
+
 // Usa semana ISO (segunda-feira como início da semana)
 function getWeekNumber(dateStr: string): number {
   const date = new Date(dateStr + "T00:00:00");
