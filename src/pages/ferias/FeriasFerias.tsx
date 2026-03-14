@@ -277,8 +277,12 @@ export default function FeriasFerias() {
     });
   }, [formularios, formSearchTerm]);
 
-  const feriasPagination = usePagination(filteredFerias, 15);
-  const formPagination = usePagination(filteredFormularios, 15);
+  const [feriasPerPage, setFeriasPerPage] = useState(25);
+  const [formPerPage, setFormPerPage] = useState(25);
+  const [contadorPerPage, setContadorPerPage] = useState(25);
+
+  const feriasPagination = usePagination(filteredFerias, feriasPerPage);
+  const formPagination = usePagination(filteredFormularios, formPerPage);
 
   const handleFeriasSort = useCallback((field: "nome" | "setor" | "status") => {
     if (feriasSortField === field) setFeriasSortDir(prev => prev === "asc" ? "desc" : "asc");
