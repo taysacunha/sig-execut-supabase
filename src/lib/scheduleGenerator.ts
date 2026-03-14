@@ -1532,9 +1532,422 @@ function allocateDemand(
 }
 
 // ═══════════════════════════════════════════════════════════
-// ETAPA 8.8: DESCONSECUTIVAR EXTERNOS (OTIMIZAÇÃO)
-// Tenta quebrar pares de dias consecutivos trocando corretores
+// CHAIN SWAP: Tenta preencher demandas não alocadas via cadeia de trocas
+// Ex: Domingo Setai sem corretor → Leonardo elegível mas bloqueado por sábado
+// → Mover sábado de Leonardo para Daniela → Leonardo livre para domingo
 // ═══════════════════════════════════════════════════════════
+function chainSwapForUnallocated(
+  context: AllocationContext,
+  possibleDemands: ExternalDemand[],
+  allocatedDemands: Set<string>,
+  internalLocIds: Set<string>,
+  relaxedAllocations: { demand: string; pass: number; reason: string }[]
+): { swapsAttempted: number; swapsSuccessful: number } {
+  console.log("\n🔗 ETAPA 8.8b: CHAIN SWAP PARA DEMANDAS NÃO ALOCADAS");
+  console.log("─────────────────────────────────────────────────────────────");
+
+  let swapsAttempted = 0;
+  let swapsSuccessful = 0;
+
+  const unallocated = possibleDemands.filter(d =>
+    !allocatedDemands.has(`${d.locationId}-${d.dateStr}-${d.shift}`)
+  );
+
+  if (unallocated.length === 0) {
+    console.log("   ✅ Nenhuma demanda não alocada — chain swap não necessário");
+    return { swapsAttempted: 0, swapsSuccessful: 0 };
+  }
+
+  console.log(`   📊 ${unallocated.length} demandas não alocadas para tentar chain swap`);
+
+  for (const demand of unallocated) {
+    const demandKey = `${demand.locationId}-${demand.dateStr}-${demand.shift}`;
+    if (allocatedDemands.has(demandKey)) continue;
+
+    console.log(`\n   🔍 Tentando chain swap para: ${demand.locationName} ${demand.dateStr} ${demand.shift}`);
+
+    // 1. Listar corretores elegíveis e o motivo do bloqueio
+    for (const eligibleId of demand.eligibleBrokerIds) {
+      const broker = context.brokerQueue.find(b => b.brokerId === eligibleId);
+      if (!broker) continue;
+
+      // Verificar se este corretor passaria nas regras invioláveis EXCETO Regra 9 (sáb/dom)
+      const check = checkTrulyInviolableRules(broker, demand, context);
+      if (check.allowed) {
+        // Corretor pode ser alocado diretamente — alocar!
+        allocateDemand(demand, broker, context);
+        allocatedDemands.add(demandKey);
+        console.log(`   ✅ Alocado diretamente: ${broker.brokerName} para ${demand.locationName}`);
+        swapsSuccessful++;
+        break;
+      }
+
+      // Verificar se o bloqueio é por Regra 9 (sábado/domingo)
+      if (check.rule === "REGRA9_SAB_DOM") {
+        swapsAttempted++;
+        console.log(`   🔗 ${broker.brokerName} bloqueado por Regra 9 — tentando chain swap...`);
+
+        // Encontrar a alocação de sábado que bloqueia este corretor
+        const isSunday = demand.dayOfWeek === "sunday";
+        const isSaturday = demand.dayOfWeek === "saturday";
+        const conflictDateStr = isSunday
+          ? format(subDays(demand.date, 1), "yyyy-MM-dd")
+          : isSaturday
+            ? format(addDays(demand.date, 1), "yyyy-MM-dd")
+            : null;
+
+        if (!conflictDateStr) continue;
+
+        // Encontrar as alocações do corretor no dia conflitante
+        const conflictingAssignments = context.assignments.filter(a =>
+          a.broker_id === broker.brokerId &&
+          a.assignment_date === conflictDateStr
+        );
+
+        if (conflictingAssignments.length === 0) {
+          // O bloqueio pode ser por saturdayInternalWorkers
+          if (context.saturdayInternalWorkers?.has(broker.brokerId)) {
+            console.log(`   ⚠️ ${broker.brokerName} reservado para sábado interno — tentando desreservar`);
+            
+            // Tentar encontrar substituto para sábado interno
+            const satInternalSub = findSaturdayInternalSubstitute(broker.brokerId, context, conflictDateStr);
+            if (satInternalSub) {
+              // Trocar: remover broker da reserva de sábado interno, substituir por outro
+              context.saturdayInternalWorkers.delete(broker.brokerId);
+              context.saturdayInternalWorkers.add(satInternalSub.brokerId);
+              
+              // Alocar a demanda original
+              allocateDemand(demand, broker, context);
+              allocatedDemands.add(demandKey);
+              swapsSuccessful++;
+              
+              relaxedAllocations.push({
+                demand: `${demand.locationName} ${demand.dateStr} ${demand.shift}`,
+                pass: 8,
+                reason: `CHAIN SWAP: ${broker.brokerName} liberado de sáb interno (substituído por ${satInternalSub.brokerName})`
+              });
+              console.log(`   ✅ CHAIN SWAP: ${broker.brokerName} liberado para ${demand.locationName} domingo`);
+              console.log(`      ${satInternalSub.brokerName} assume sábado interno`);
+              break;
+            }
+          }
+          continue;
+        }
+
+        // Tentar trocar CADA alocação conflitante para outro corretor
+        let chainSwapDone = false;
+        for (const conflictAssignment of conflictingAssignments) {
+          // Só tentar chain swap para alocações externas
+          if (internalLocIds.has(conflictAssignment.location_id)) continue;
+
+          // Encontrar a demanda original da alocação conflitante
+          const conflictDemand = possibleDemands.find(d =>
+            d.locationId === conflictAssignment.location_id &&
+            d.dateStr === conflictAssignment.assignment_date &&
+            d.shift === conflictAssignment.shift_type
+          );
+          if (!conflictDemand) continue;
+
+          console.log(`   🔄 Tentando mover ${conflictDemand.locationName} ${conflictDemand.dateStr} ${conflictDemand.shift} de ${broker.brokerName}...`);
+
+          // Encontrar corretor alternativo para a alocação conflitante
+          const alternativeBrokers = context.brokerQueue.filter(alt => {
+            if (alt.brokerId === broker.brokerId) return false;
+            if (!conflictDemand.eligibleBrokerIds.includes(alt.brokerId)) return false;
+
+            // Verificar regras invioláveis para o alternativo na demanda conflitante
+            const altCheck = checkTrulyInviolableRules(alt, conflictDemand, context);
+            if (!altCheck.allowed) return false;
+
+            // Verificar que o alternativo não ficaria com mais de 3 externos
+            if (alt.externalShiftCount >= MAX_EXTERNAL_SHIFTS_HARD_CAP) return false;
+
+            // Verificar que o alternativo não criaria novo conflito de fim de semana
+            // (se estiver trocando para sábado, o alternativo não deve ter domingo)
+            const altWeekendCheck = hasWeekendConflict(
+              alt.brokerId,
+              conflictDemand.date,
+              conflictDemand.dayOfWeek,
+              context.assignments,
+              context.saturdayInternalWorkers
+            );
+            if (altWeekendCheck.hasConflict) return false;
+
+            return true;
+          });
+
+          // Ordenar alternativos: menos externos primeiro, depois sem consecutivos
+          alternativeBrokers.sort((a, b) => {
+            if (a.externalShiftCount !== b.externalShiftCount) {
+              return a.externalShiftCount - b.externalShiftCount;
+            }
+            const pairsA = countConsecutivePairsIfAllocated(a.brokerId, conflictDemand.dateStr, context);
+            const pairsB = countConsecutivePairsIfAllocated(b.brokerId, conflictDemand.dateStr, context);
+            return pairsA - pairsB;
+          });
+
+          if (alternativeBrokers.length > 0) {
+            const altBroker = alternativeBrokers[0];
+            const oldBroker = broker;
+
+            // EXECUTAR SWAP da alocação conflitante
+            conflictAssignment.broker_id = altBroker.brokerId;
+
+            // Atualizar contadores
+            oldBroker.externalShiftCount--;
+            altBroker.externalShiftCount++;
+
+            // Atualizar dailyExternalAssignments
+            context.dailyExternalAssignments.get(conflictDemand.dateStr)?.delete(oldBroker.brokerId);
+            if (!context.dailyExternalAssignments.has(conflictDemand.dateStr)) {
+              context.dailyExternalAssignments.set(conflictDemand.dateStr, new Set());
+            }
+            context.dailyExternalAssignments.get(conflictDemand.dateStr)!.add(altBroker.brokerId);
+
+            // Atualizar weekendExternalAssignments
+            if (conflictDemand.dayOfWeek === "saturday") {
+              context.saturdayExternalWorkers.delete(oldBroker.brokerId);
+              context.saturdayExternalWorkers.add(altBroker.brokerId);
+            }
+
+            // Agora alocar a demanda original para o broker liberado
+            // Re-verificar regras (agora sem o conflito de sábado)
+            const recheckDemand = checkTrulyInviolableRules(oldBroker, demand, context);
+            if (recheckDemand.allowed) {
+              allocateDemand(demand, oldBroker, context);
+              allocatedDemands.add(demandKey);
+              swapsSuccessful++;
+
+              relaxedAllocations.push({
+                demand: `${demand.locationName} ${demand.dateStr} ${demand.shift}`,
+                pass: 8,
+                reason: `CHAIN SWAP: ${oldBroker.brokerName} liberado (${conflictDemand.locationName} sáb → ${altBroker.brokerName})`
+              });
+              console.log(`   ✅ CHAIN SWAP SUCESSO:`);
+              console.log(`      ${conflictDemand.locationName} ${conflictDemand.dateStr} ${conflictDemand.shift}: ${oldBroker.brokerName} → ${altBroker.brokerName}`);
+              console.log(`      ${demand.locationName} ${demand.dateStr} ${demand.shift}: → ${oldBroker.brokerName}`);
+              chainSwapDone = true;
+              break;
+            } else {
+              // Reverter swap
+              conflictAssignment.broker_id = oldBroker.brokerId;
+              oldBroker.externalShiftCount++;
+              altBroker.externalShiftCount--;
+              context.dailyExternalAssignments.get(conflictDemand.dateStr)?.delete(altBroker.brokerId);
+              context.dailyExternalAssignments.get(conflictDemand.dateStr)?.add(oldBroker.brokerId);
+              if (conflictDemand.dayOfWeek === "saturday") {
+                context.saturdayExternalWorkers.add(oldBroker.brokerId);
+                context.saturdayExternalWorkers.delete(altBroker.brokerId);
+              }
+              console.log(`   ⚠️ Chain swap revertido — ${oldBroker.brokerName} ainda bloqueado após swap`);
+            }
+          } else {
+            console.log(`   ❌ Nenhum alternativo encontrado para ${conflictDemand.locationName} ${conflictDemand.dateStr}`);
+          }
+        }
+
+        if (chainSwapDone) break;
+      }
+
+      // Bloqueio por consecutivos (Regra 8) — tentar mover o externo do dia adjacente
+      if (check.rule === "REGRA8_CONSECUTIVO" || check.rule === "REGRA_3_DIAS_SEGUIDOS") {
+        // Similar logic but for consecutive day blocking
+        // For now, skip — consecutive blocking is less critical than weekend blocking
+        console.log(`   ⏭️ ${broker.brokerName} bloqueado por consecutivos — chain swap para consecutivos não implementado nesta etapa`);
+      }
+    }
+
+    if (!allocatedDemands.has(demandKey)) {
+      console.log(`   ❌ Chain swap falhou para ${demand.locationName} ${demand.dateStr} ${demand.shift}`);
+    }
+  }
+
+  console.log(`\n📊 CHAIN SWAP RESULTADO: ${swapsSuccessful}/${swapsAttempted} bem-sucedidos`);
+  return { swapsAttempted, swapsSuccessful };
+}
+
+// Helper: encontra substituto para sábado interno quando queremos liberar um corretor
+function findSaturdayInternalSubstitute(
+  brokerToFreeId: string,
+  context: AllocationContext,
+  saturdayDateStr: string
+): BrokerQueueItem | null {
+  // Buscar corretores que:
+  // 1. Têm sábado disponível
+  // 2. Não estão na lista de saturdayInternalWorkers (ainda)
+  // 3. Não têm conflito no domingo
+  // 4. Não têm externo no sábado
+  const sundayStr = format(addDays(new Date(saturdayDateStr + "T00:00:00"), 1), "yyyy-MM-dd");
+
+  for (const candidate of context.brokerQueue) {
+    if (candidate.brokerId === brokerToFreeId) continue;
+    if (!candidate.availableWeekdays.includes("saturday")) continue;
+    if (context.saturdayInternalWorkers?.has(candidate.brokerId)) continue;
+
+    // Não deve ter externo no sábado
+    const hasExternalSat = context.assignments.some(a =>
+      a.broker_id === candidate.brokerId &&
+      a.assignment_date === saturdayDateStr &&
+      !context.internalLocationIds?.has(a.location_id)
+    );
+    if (hasExternalSat) continue;
+
+    // Não deve ter nada no domingo (Regra 9)
+    const hasSunday = context.assignments.some(a =>
+      a.broker_id === candidate.brokerId &&
+      a.assignment_date === sundayStr
+    );
+    if (hasSunday) continue;
+
+    // Boa opção!
+    console.log(`   🔄 Substituto para sábado interno: ${candidate.brokerName}`);
+    return candidate;
+  }
+
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════
+// REBALANCEAMENTO OBRIGATÓRIO VIA TROCAS
+// Move alocações de corretores com 3+ externos para corretores com 0-1
+// Garante equilíbrio obrigatório de distribuição
+// ═══════════════════════════════════════════════════════════
+function rebalanceDistributionViaSwaps(
+  context: AllocationContext,
+  possibleDemands: ExternalDemand[],
+  allocatedDemands: Set<string>,
+  internalLocIds: Set<string>,
+  relaxedAllocations: { demand: string; pass: number; reason: string }[]
+): { swapsAttempted: number; swapsSuccessful: number } {
+  console.log("\n⚖️ REBALANCEAMENTO OBRIGATÓRIO VIA TROCAS");
+  console.log("─────────────────────────────────────────────────────────────");
+
+  let swapsAttempted = 0;
+  let swapsSuccessful = 0;
+  const MAX_REBALANCE_SWAPS = 20;
+
+  for (let iteration = 0; iteration < MAX_REBALANCE_SWAPS; iteration++) {
+    // Identificar corretores "over" (3+) e "under" (0-1)
+    // Ignorar corretores sem locais externos configurados
+    const overBrokers = context.brokerQueue
+      .filter(b => b.externalShiftCount >= 3 && b.externalLocationCount > 0)
+      .sort((a, b) => b.externalShiftCount - a.externalShiftCount);
+
+    const underBrokers = context.brokerQueue
+      .filter(b => b.externalShiftCount <= 1 && b.externalLocationCount > 0)
+      .sort((a, b) => a.externalShiftCount - b.externalShiftCount);
+
+    if (overBrokers.length === 0 || underBrokers.length === 0) {
+      console.log(`   ✅ Equilíbrio atingido (iter ${iteration}): nenhum over(3+) ou under(0-1) restante`);
+      break;
+    }
+
+    console.log(`   📊 Iteração ${iteration + 1}: ${overBrokers.length} over(3+), ${underBrokers.length} under(0-1)`);
+
+    let swappedThisIteration = false;
+
+    for (const overBroker of overBrokers) {
+      if (swappedThisIteration) break;
+
+      // Encontrar alocações externas deste broker
+      const overAllocations = context.assignments.filter(a =>
+        a.broker_id === overBroker.brokerId &&
+        !internalLocIds.has(a.location_id)
+      );
+
+      for (const allocation of overAllocations) {
+        if (swappedThisIteration) break;
+
+        // Encontrar a demanda correspondente
+        const demandForAlloc = possibleDemands.find(d =>
+          d.locationId === allocation.location_id &&
+          d.dateStr === allocation.assignment_date &&
+          d.shift === allocation.shift_type
+        );
+        if (!demandForAlloc) continue;
+
+        for (const underBroker of underBrokers) {
+          if (underBroker.externalShiftCount >= 2) continue; // Já saiu do "under"
+
+          // Verificar elegibilidade
+          if (!demandForAlloc.eligibleBrokerIds.includes(underBroker.brokerId)) continue;
+
+          // Verificar regras invioláveis
+          // Temporariamente remover a alocação do over para verificar regras do under
+          const allocIndex = context.assignments.indexOf(allocation);
+          context.assignments.splice(allocIndex, 1);
+          context.dailyExternalAssignments.get(allocation.assignment_date)?.delete(overBroker.brokerId);
+          overBroker.externalShiftCount--;
+
+          const check = checkTrulyInviolableRules(underBroker, demandForAlloc, context);
+
+          if (check.allowed) {
+            swapsAttempted++;
+            // EXECUTAR SWAP
+            allocation.broker_id = underBroker.brokerId;
+            context.assignments.push(allocation);
+
+            underBroker.externalShiftCount++;
+
+            // Atualizar dailyExternalAssignments
+            if (!context.dailyExternalAssignments.has(allocation.assignment_date)) {
+              context.dailyExternalAssignments.set(allocation.assignment_date, new Set());
+            }
+            context.dailyExternalAssignments.get(allocation.assignment_date)!.add(underBroker.brokerId);
+
+            // Atualizar weekend trackers
+            const dayOfWeek = getDay(new Date(allocation.assignment_date + "T00:00:00"));
+            if (dayOfWeek === 6) {
+              context.saturdayExternalWorkers.delete(overBroker.brokerId);
+              context.saturdayExternalWorkers.add(underBroker.brokerId);
+            }
+
+            swapsSuccessful++;
+            swappedThisIteration = true;
+
+            relaxedAllocations.push({
+              demand: `${demandForAlloc.locationName} ${demandForAlloc.dateStr} ${demandForAlloc.shift}`,
+              pass: 9,
+              reason: `REBALANCEAMENTO: ${overBroker.brokerName}(${overBroker.externalShiftCount + 1}→${overBroker.externalShiftCount}) → ${underBroker.brokerName}(${underBroker.externalShiftCount - 1}→${underBroker.externalShiftCount})`
+            });
+
+            console.log(`   ✅ SWAP: ${demandForAlloc.locationName} ${demandForAlloc.dateStr} ${demandForAlloc.shift}`);
+            console.log(`      ${overBroker.brokerName} (${overBroker.externalShiftCount + 1}→${overBroker.externalShiftCount}) → ${underBroker.brokerName} (${underBroker.externalShiftCount - 1}→${underBroker.externalShiftCount})`);
+            break;
+          } else {
+            // Reverter: colocar de volta
+            context.assignments.push(allocation);
+            overBroker.externalShiftCount++;
+            if (!context.dailyExternalAssignments.has(allocation.assignment_date)) {
+              context.dailyExternalAssignments.set(allocation.assignment_date, new Set());
+            }
+            context.dailyExternalAssignments.get(allocation.assignment_date)!.add(overBroker.brokerId);
+          }
+        }
+      }
+    }
+
+    if (!swappedThisIteration) {
+      console.log(`   ⚠️ Nenhum swap possível nesta iteração — parando`);
+      break;
+    }
+  }
+
+  // Log final de distribuição
+  const dist = {
+    with0: context.brokerQueue.filter(b => b.externalShiftCount === 0 && b.externalLocationCount > 0).length,
+    with1: context.brokerQueue.filter(b => b.externalShiftCount === 1 && b.externalLocationCount > 0).length,
+    with2: context.brokerQueue.filter(b => b.externalShiftCount === 2 && b.externalLocationCount > 0).length,
+    with3plus: context.brokerQueue.filter(b => b.externalShiftCount >= 3 && b.externalLocationCount > 0).length,
+  };
+  console.log(`\n   📊 DISTRIBUIÇÃO APÓS REBALANCEAMENTO OBRIGATÓRIO:`);
+  console.log(`      0 externos: ${dist.with0} | 1 externo: ${dist.with1} | 2 externos: ${dist.with2} | 3+: ${dist.with3plus}`);
+  console.log(`   📊 Resultado: ${swapsSuccessful}/${swapsAttempted} swaps`);
+
+  return { swapsAttempted, swapsSuccessful };
+}
+
+
 function deConsecutivizeExternals(
   context: AllocationContext,
   possibleDemands: ExternalDemand[],
