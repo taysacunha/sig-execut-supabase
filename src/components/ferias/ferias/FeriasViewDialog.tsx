@@ -139,51 +139,70 @@ export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialo
           </div>
 
           {/* Flexible gozo periods */}
-          {isFlexivel && gozoPeriodos.length > 0 && (
-            <>
-              <Separator />
-              <div className="space-y-3">
-                <h4 className="font-medium text-sm flex items-center gap-2">
-                  <Layers className="h-4 w-4 text-primary" />
-                  Períodos de Gozo
-                  {ferias.distribuicao_tipo && (
-                    <Badge variant="secondary" className="text-xs">
-                      {distribuicaoLabels[ferias.distribuicao_tipo] || ferias.distribuicao_tipo}
-                    </Badge>
-                  )}
-                </h4>
-
-                {Object.entries(periodosByRef).map(([refKey, periodos]) => (
-                  <div key={refKey} className="space-y-2">
-                    {refKey !== "livre" && (
-                      <p className="text-xs text-muted-foreground font-medium">
-                        Ref. {refKey}º Período
-                      </p>
+          {isFlexivel && gozoPeriodos.length > 0 && (() => {
+            const hasQ2Flex = gozoPeriodos.some((p: any) => p.referencia_periodo === 2);
+            return (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm flex items-center gap-2">
+                    <Layers className="h-4 w-4 text-primary" />
+                    Períodos de Gozo
+                    {ferias.distribuicao_tipo && (
+                      <Badge variant="secondary" className="text-xs">
+                        {distribuicaoLabels[ferias.distribuicao_tipo] || ferias.distribuicao_tipo}
+                      </Badge>
                     )}
-                    <div className="grid gap-2 md:grid-cols-2">
-                      {(periodos as any[]).map((p: any, idx: number) => (
-                        <Card key={p.id || idx} className="border-primary/20 bg-primary/5">
+                  </h4>
+
+                  {Object.entries(periodosByRef).map(([refKey, periodos]) => (
+                    <div key={refKey} className="space-y-2">
+                      {refKey !== "livre" && (
+                        <p className="text-xs text-muted-foreground font-medium">
+                          Ref. {refKey}º Período
+                        </p>
+                      )}
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {(periodos as any[]).map((p: any, idx: number) => (
+                          <Card key={p.id || idx} className="border-primary/20 bg-primary/5">
+                            <CardContent className="p-3">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-medium text-primary">
+                                  Sub-período {p.numero || idx + 1}
+                                </span>
+                                <Badge variant="outline" className="text-xs">
+                                  {p.dias} dias
+                                </Badge>
+                              </div>
+                              <p className="text-sm">
+                                {formatDate(p.data_inicio)} a {formatDate(p.data_fim)}
+                              </p>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Show official Q2 if no flexible sub-periods cover it */}
+                  {!hasQ2Flex && ferias.quinzena2_inicio && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground font-medium">2º Período (Oficial)</p>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <Card>
                           <CardContent className="p-3">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-medium text-primary">
-                                Sub-período {p.numero || idx + 1}
-                              </span>
-                              <Badge variant="outline" className="text-xs">
-                                {p.dias} dias
-                              </Badge>
-                            </div>
                             <p className="text-sm">
-                              {formatDate(p.data_inicio)} a {formatDate(p.data_fim)}
+                              {formatDate(ferias.quinzena2_inicio)} a {formatDate(ferias.quinzena2_fim)}
                             </p>
                           </CardContent>
                         </Card>
-                      ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
+                  )}
+                </div>
+              </>
+            );
+          })()}
 
           {/* Legacy gozo diferente (non-flexible) */}
           {!isFlexivel && ferias.gozo_diferente && (

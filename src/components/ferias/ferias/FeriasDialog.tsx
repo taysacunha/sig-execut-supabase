@@ -838,7 +838,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           .map((p, idx) => ({
             ferias_id: feriasId,
             tipo: excecaoTipo,
-            referencia_periodo: p.referencia_periodo || null,
+            referencia_periodo: p.referencia_periodo ?? 1,
             numero: idx + 1,
             dias: p.dias,
             data_inicio: p.data_inicio,
