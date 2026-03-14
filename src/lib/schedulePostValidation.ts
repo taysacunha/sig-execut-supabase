@@ -712,6 +712,22 @@ export async function detectUnallocatedDemands(
     specificConfigsMap.set(`${config.period_id}-${config.specific_date}`, config);
   });
 
+  // Buscar corretores configurados por local para justificativa
+  const { data: locationBrokersData } = await supabase
+    .from("location_brokers")
+    .select("location_id, broker_id, brokers(name)");
+
+  const locationBrokersMap = new Map<string, { brokerId: string; brokerName: string }[]>();
+  locationBrokersData?.forEach((lb: any) => {
+    if (!locationBrokersMap.has(lb.location_id)) {
+      locationBrokersMap.set(lb.location_id, []);
+    }
+    locationBrokersMap.get(lb.location_id)!.push({
+      brokerId: lb.broker_id,
+      brokerName: lb.brokers?.name || "Desconhecido"
+    });
+  });
+
   // Iterar cada dia do range
   const start = new Date(weekStartDate + "T00:00:00");
   const end = new Date(weekEndDate + "T00:00:00");
@@ -737,10 +753,8 @@ export async function detectUnallocatedDemands(
         expectedMorning = specificConfig.has_morning;
         expectedAfternoon = specificConfig.has_afternoon;
       } else if ((location as any).shift_config_mode === 'specific_date') {
-        // Modo de data específica mas sem config para este dia = sem demanda
         continue;
       } else {
-        // Fallback: config por dia da semana
         const dayConfig = period.period_day_configs?.find((dc: any) => dc.weekday === dayOfWeek);
         if (dayConfig) {
           expectedMorning = dayConfig.has_morning;
@@ -756,23 +770,67 @@ export async function detectUnallocatedDemands(
         a => a.location_id === location.id && a.assignment_date === dateStr && a.shift_type === "afternoon"
       );
 
-      if (expectedMorning && !hasMorningAssignment) {
-        console.error(`❌ FALTANDO: ${location.name} - ${dateStr} - Manhã`);
-        results.push({
-          locationId: location.id,
-          locationName: location.name,
-          date: dateStr,
-          shift: "morning"
-        });
-      }
+      const missingShifts: ("morning" | "afternoon")[] = [];
+      if (expectedMorning && !hasMorningAssignment) missingShifts.push("morning");
+      if (expectedAfternoon && !hasAfternoonAssignment) missingShifts.push("afternoon");
 
-      if (expectedAfternoon && !hasAfternoonAssignment) {
-        console.error(`❌ FALTANDO: ${location.name} - ${dateStr} - Tarde`);
+      for (const shift of missingShifts) {
+        const shiftLabel = shift === "morning" ? "Manhã" : "Tarde";
+        console.error(`❌ FALTANDO: ${location.name} - ${dateStr} - ${shiftLabel}`);
+
+        // Gerar justificativa
+        const configuredBrokers = locationBrokersMap.get(location.id) || [];
+        let reason: string;
+
+        if (configuredBrokers.length === 0) {
+          reason = "Nenhum corretor está configurado para este local.";
+        } else {
+          // Verificar onde cada corretor configurado está alocado neste dia/turno
+          const brokerReasons: string[] = [];
+          for (const cb of configuredBrokers) {
+            const brokerAssignment = assignments.find(
+              a => a.location_id !== location.id && 
+                   a.assignment_date === dateStr && 
+                   a.shift_type === shift &&
+                   (a as any).broker_id === cb.brokerId
+            );
+            // Also check if broker has ANY assignment on this date/shift (even same location different context)
+            const anyAssignment = assignments.find(
+              a => a.assignment_date === dateStr && 
+                   a.shift_type === shift &&
+                   (a as any).broker_id === cb.brokerId
+            );
+
+            if (anyAssignment) {
+              // Find the location name for where the broker is
+              const allocatedLocation = locations?.find(l => l.id === anyAssignment.location_id);
+              const locName = allocatedLocation?.name || "outro local";
+              brokerReasons.push(`${cb.brokerName} (já alocado no ${locName})`);
+            } else {
+              // Broker not allocated on this shift — could be unavailable, blocked by rules, etc.
+              const otherShiftAssignment = assignments.find(
+                a => a.assignment_date === dateStr && 
+                     a.shift_type !== shift &&
+                     (a as any).broker_id === cb.brokerId
+              );
+              if (otherShiftAssignment) {
+                const allocatedLocation = locations?.find(l => l.id === otherShiftAssignment.location_id);
+                const locName = allocatedLocation?.name || "outro local";
+                brokerReasons.push(`${cb.brokerName} (alocado no turno da ${otherShiftAssignment.shift_type === "morning" ? "manhã" : "tarde"} no ${locName})`);
+              } else {
+                brokerReasons.push(`${cb.brokerName} (não alocado — possível bloqueio por regras de escala)`);
+              }
+            }
+          }
+          reason = `Corretores configurados: ${brokerReasons.join("; ")}. Nenhum pôde ser alocado.`;
+        }
+
         results.push({
           locationId: location.id,
           locationName: location.name,
           date: dateStr,
-          shift: "afternoon"
+          shift,
+          reason
         });
       }
     }
