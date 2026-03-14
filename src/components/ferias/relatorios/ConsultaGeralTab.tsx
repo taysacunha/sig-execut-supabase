@@ -126,7 +126,7 @@ export function ConsultaGeralTab() {
     const colabComFerias = new Set(ferias.map(f => f.colaborador_id).filter(Boolean));
     return {
       total: ferias.length,
-      emGozo: ferias.filter(f => f.status === "em_gozo").length,
+      emGozo: ferias.filter(f => isFeriasEmGozo(f.status)).length,
       concluidas: ferias.filter(f => f.status === "concluida").length,
       pendentesAprovadas: ferias.filter(f => f.status === "pendente" || f.status === "aprovada").length,
       excecoes: ferias.filter(f => f.is_excecao).length,
