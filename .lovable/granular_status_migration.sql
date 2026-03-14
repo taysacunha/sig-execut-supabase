@@ -1,7 +1,11 @@
 -- Migration: Granular vacation status transitions
 -- Replaces binary em_gozo/concluida with per-period tracking
 -- New statuses: em_gozo_q1, q1_concluida, em_gozo_q2 (concluida stays)
--- Status field is TEXT so no schema change needed, only function rewrite.
+
+-- Step 0: Remove the CHECK constraint that blocks new status values
+ALTER TABLE ferias_ferias DROP CONSTRAINT IF EXISTS ferias_ferias_status_check;
+
+-- Status field is TEXT so no further schema change needed, only function rewrite.
 
 -- Step 1: Migrate existing em_gozo records to appropriate granular status
 -- Records with em_gozo where Q1 has ended → q1_concluida or em_gozo_q2
