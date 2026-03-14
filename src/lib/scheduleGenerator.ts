@@ -4224,6 +4224,12 @@ async function generateWeeklyScheduleWithAccumulator(
   }
 
   // ═══════════════════════════════════════════════════════════
+  // ETAPA 9b: REBALANCEAMENTO OBRIGATÓRIO VIA TROCAS
+  // Move alocações de corretores com 3+ para corretores com 0-1
+  // ═══════════════════════════════════════════════════════════
+  const rebalanceResult = rebalanceDistributionViaSwaps(context, possibleDemands, allocatedDemands, internalLocIds, relaxedAllocations);
+
+  // ═══════════════════════════════════════════════════════════
   // ETAPA 8.10: ALOCAÇÃO DE PLANTÕES INTERNOS (SEGUNDA A SEXTA)
   // EXECUTADA APÓS finalizar todos os externos para não interferir
   // Regra: interno pode coexistir com externo no MESMO dia se em TURNOS diferentes
