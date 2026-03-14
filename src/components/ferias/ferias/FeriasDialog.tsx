@@ -157,7 +157,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         .select("colaborador_id")
         .gte("quinzena1_inicio", `${anoReferencia}-01-01`)
         .lte("quinzena1_inicio", `${anoReferencia}-12-31`)
-        .in("status", ["aprovada", "em_gozo", "pendente"]);
+        .in("status", ["aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "pendente", "em_gozo"]);
       if (error) throw error;
       return (data || []).map(f => f.colaborador_id).filter(Boolean) as string[];
     },
