@@ -15,21 +15,7 @@ import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { usePagination } from "@/hooks/usePagination";
 
-const statusLabels: Record<string, string> = {
-  pendente: "Pendente",
-  aprovada: "Aprovada",
-  em_gozo: "Em Gozo",
-  concluida: "Concluída",
-  cancelada: "Cancelada",
-};
-
-const statusColors: Record<string, string> = {
-  pendente: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
-  aprovada: "bg-blue-500/10 text-blue-600 border-blue-500/20",
-  em_gozo: "bg-green-500/10 text-green-600 border-green-500/20",
-  concluida: "bg-muted text-muted-foreground border-muted",
-  cancelada: "bg-destructive/10 text-destructive border-destructive/20",
-};
+import { getYearOptions, FERIAS_STATUS_LABELS as statusLabels, FERIAS_STATUS_COLORS as statusColors, isFeriasEmGozo } from "@/lib/dateUtils";
 
 const excecaoMotivoLabels: Record<string, string> = {
   mes_bloqueado: "Mês bloqueado",
