@@ -22,6 +22,7 @@ export interface UnallocatedDemand {
   locationName: string;
   date: string;
   shift: "morning" | "afternoon";
+  reason?: string;
 }
 
 export interface PostValidationResult {
