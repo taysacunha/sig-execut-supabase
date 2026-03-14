@@ -323,7 +323,7 @@ export default function FeriasFerias() {
       });
   }, [filteredFerias, contadorSortField, contadorSortDir]);
 
-  const contadorPagination = usePagination(contadorData, 15);
+  const contadorPagination = usePagination(contadorData, contadorPerPage);
 
   const calcAdjustedPeriodo = (inicio: string, fim: string, diasVendidos: number) => {
     if (diasVendidos <= 0) return formatPeriodo(inicio, fim);
