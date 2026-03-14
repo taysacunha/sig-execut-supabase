@@ -495,37 +495,86 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           .in("colaborador_id", colabIds)
           .in("status", ["pendente", "aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo"]);
 
-        if (existingFerias) {
-          const q1Start = parseISO(data.quinzena1_inicio);
-          const q1End = parseISO(data.quinzena1_fim);
-          const q2Start = data.quinzena2_inicio ? parseISO(data.quinzena2_inicio) : null;
-          const q2End = data.quinzena2_fim ? parseISO(data.quinzena2_fim) : null;
+        if (existingFerias && existingFerias.length > 0) {
+          // Build new vacation's real absence intervals
+          const newIntervals: { start: Date; end: Date }[] = [];
+          if (excecaoTipo && excPeriodos.length > 0) {
+            // Flexible gozo: use the sub-periods from the form
+            for (const p of excPeriodos) {
+              if (p.data_inicio && p.data_fim) {
+                newIntervals.push({ start: parseISO(p.data_inicio), end: parseISO(p.data_fim) });
+              }
+            }
+          }
+          if (newIntervals.length === 0) {
+            // Default: use official periods
+            newIntervals.push({ start: parseISO(data.quinzena1_inicio), end: parseISO(data.quinzena1_fim) });
+            if (data.quinzena2_inicio && data.quinzena2_fim) {
+              newIntervals.push({ start: parseISO(data.quinzena2_inicio), end: parseISO(data.quinzena2_fim) });
+            }
+          }
+
+          // Batch-fetch gozo_periodos for existing ferias with gozo_flexivel
+          const flexivelIds = existingFerias
+            .filter(ef => ef.gozo_flexivel && !(ferias && ef.id === ferias.id))
+            .map(ef => ef.id);
+          
+          let gozoPeriodosMap: Record<string, { data_inicio: string; data_fim: string }[]> = {};
+          if (flexivelIds.length > 0) {
+            const { data: gozoPeriodos } = await supabase
+              .from("ferias_gozo_periodos" as any)
+              .select("ferias_id, data_inicio, data_fim")
+              .in("ferias_id", flexivelIds);
+            if (gozoPeriodos) {
+              for (const gp of gozoPeriodos as any[]) {
+                if (!gozoPeriodosMap[gp.ferias_id]) gozoPeriodosMap[gp.ferias_id] = [];
+                gozoPeriodosMap[gp.ferias_id].push(gp);
+              }
+            }
+          }
 
           for (const ef of existingFerias) {
             if (ferias && ef.id === ferias.id) continue;
-            const efQ1Start = parseISO(ef.quinzena1_inicio);
-            const efQ1End = parseISO(ef.quinzena1_fim);
-            const efQ2Start = ef.quinzena2_inicio ? parseISO(ef.quinzena2_inicio) : null;
-            const efQ2End = ef.quinzena2_fim ? parseISO(ef.quinzena2_fim) : null;
 
-            let overlap = false;
-            overlap = (q1Start <= efQ1End && q1End >= efQ1Start);
-            if (efQ2Start && efQ2End) {
-              overlap = overlap || (q1Start <= efQ2End && q1End >= efQ2Start);
-            }
-            if (q2Start && q2End) {
-              overlap = overlap || (q2Start <= efQ1End && q2End >= efQ1Start);
-              if (efQ2Start && efQ2End) {
-                overlap = overlap || (q2Start <= efQ2End && q2End >= efQ2Start);
+            // Extract real absence intervals for existing vacation
+            const efIntervals: { start: Date; end: Date }[] = [];
+            if (ef.gozo_flexivel && gozoPeriodosMap[ef.id]?.length > 0) {
+              for (const gp of gozoPeriodosMap[ef.id]) {
+                efIntervals.push({ start: parseISO(gp.data_inicio), end: parseISO(gp.data_fim) });
               }
+            } else if (ef.gozo_diferente && ef.gozo_quinzena1_inicio) {
+              efIntervals.push({ start: parseISO(ef.gozo_quinzena1_inicio), end: parseISO(ef.gozo_quinzena1_fim) });
+              if (ef.gozo_quinzena2_inicio) {
+                efIntervals.push({ start: parseISO(ef.gozo_quinzena2_inicio), end: parseISO(ef.gozo_quinzena2_fim) });
+              }
+            } else {
+              efIntervals.push({ start: parseISO(ef.quinzena1_inicio), end: parseISO(ef.quinzena1_fim) });
+              if (ef.quinzena2_inicio) {
+                efIntervals.push({ start: parseISO(ef.quinzena2_inicio), end: parseISO(ef.quinzena2_fim) });
+              }
+            }
+
+            // Check overlap between new and existing intervals
+            let overlap = false;
+            for (const ni of newIntervals) {
+              for (const ei of efIntervals) {
+                if (ni.start <= ei.end && ni.end >= ei.start) {
+                  overlap = true;
+                  break;
+                }
+              }
+              if (overlap) break;
             }
 
             if (overlap) {
               const isSubstitute = (ef.colaborador as any)?.setor_titular_id !== selectedColab.setor_titular_id;
+              const periodoStr = efIntervals
+                .map(i => `${format(i.start, "dd/MM")} - ${format(i.end, "dd/MM")}`)
+                .join(" / ");
               foundConflicts.push({
                 colaborador_nome: (ef.colaborador as any)?.nome || "Desconhecido",
                 tipo: isSubstitute ? "Setor substituto" : "Mesmo setor",
-                periodo: `${format(efQ1Start, "dd/MM")} - ${format(efQ1End, "dd/MM")}${efQ2Start && efQ2End ? ` / ${format(efQ2Start, "dd/MM")} - ${format(efQ2End, "dd/MM")}` : ""}`,
+                periodo: periodoStr,
               });
             }
           }
