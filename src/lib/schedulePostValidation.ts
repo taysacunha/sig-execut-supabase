@@ -3,8 +3,9 @@
 // Verifica TODAS as regras críticas para cada corretor
 // ═══════════════════════════════════════════════════════════
 
-import { format, getDay, differenceInDays, getISOWeek } from "date-fns";
+import { format, getDay, differenceInDays, getISOWeek, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface PostValidationViolation {
   rule: string;
