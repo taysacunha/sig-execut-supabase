@@ -96,7 +96,7 @@ export function CalendarioFeriasTab() {
             unidade:ferias_unidades(nome)
           )
         `)
-        .in("status", ["aprovada", "em_gozo", "concluida"])
+        .in("status", ["aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "concluida", "em_gozo"])
         .order("quinzena1_inicio");
 
       if (error) throw error;
