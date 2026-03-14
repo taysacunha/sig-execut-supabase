@@ -694,7 +694,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       const debounce = setTimeout(() => checkConflicts(values), 500);
       return () => clearTimeout(debounce);
     }
-  }, [watchedFields]);
+  }, [watchedFields, excecaoTipo, excPeriodos]);
 
   const periodoAquisitivo = (() => {
     if (!selectedColab?.data_admissao || !q1Inicio) return null;
