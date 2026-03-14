@@ -276,7 +276,7 @@ export function CalendarioFeriasTab() {
     return intervals.some((i) => i.start.getFullYear() === currentYear);
   }).length;
 
-  const feriasEmGozo = ferias.filter((f) => f.status === "em_gozo").length;
+  const feriasEmGozo = ferias.filter((f) => ["em_gozo_q1", "em_gozo_q2", "em_gozo"].includes(f.status)).length;
   const feriasComExcecao = ferias.filter((f) => f.is_excecao).length;
 
   const loading = loadingFerias;
