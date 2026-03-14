@@ -268,6 +268,9 @@ interface AllocationContext {
   // ═══════════════════════════════════════════════════════════
   monthSundayCount?: { [brokerId: string]: number };
   monthSundayAtLocation?: { [locationId: string]: { [brokerId: string]: number } };
+  // SUNDAY LOOKAHEAD: referências para proteger corretores críticos de domingo
+  sundayDemandsForLookahead?: ExternalDemand[];
+  allocatedDemandsRef?: Set<string>;
 }
 
 const MAX_EXTERNAL_SHIFTS_PER_WEEK = 2;
