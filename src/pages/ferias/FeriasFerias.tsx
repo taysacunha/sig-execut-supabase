@@ -82,6 +82,7 @@ interface GozoPeriodo {
   dias: number;
   data_inicio: string;
   data_fim: string;
+  referencia_periodo: number | null;
 }
 
 interface FormularioAnual {
