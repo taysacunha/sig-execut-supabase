@@ -811,7 +811,7 @@ export async function detectUnallocatedDemands(
               const otherShiftAssignment = assignments.find(
                 a => a.assignment_date === dateStr && 
                      a.shift_type !== shift &&
-                     (a as any).broker_id === cb.brokerId
+                     a.broker_id === cb.brokerId
               );
               if (otherShiftAssignment) {
                 const allocatedLocation = locations?.find(l => l.id === otherShiftAssignment.location_id);
