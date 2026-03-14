@@ -4018,6 +4018,35 @@ async function generateWeeklyScheduleWithAccumulator(
     !allocatedDemands.has(`${d.locationId}-${d.dateStr}-${d.shift}`)
   );
 
+  // Coletar justificativas para demandas não alocadas
+  for (const demand of finalUnallocated) {
+    const result = findBrokerForDemand(demand, context, 10, 0, true, 1);
+    const blockedBrokers = result.blockedBrokers || [];
+    
+    if (demand.eligibleBrokerIds.length === 0) {
+      (demand as any)._unallocatedReason = "Nenhum corretor está configurado para este local neste turno.";
+    } else if (blockedBrokers.length > 0) {
+      const brokerReasons = blockedBrokers.map(bb => `${bb.brokerName} (${bb.reason})`);
+      (demand as any)._unallocatedReason = `Corretores disponíveis: ${brokerReasons.join("; ")}. Nenhum pôde ser alocado.`;
+    } else {
+      // Check where eligible brokers are allocated
+      const brokerReasons: string[] = [];
+      for (const bId of demand.eligibleBrokerIds) {
+        const broker = context.brokerQueue.find(b => b.brokerId === bId);
+        const existingAssignment = context.assignments.find(a => 
+          a.broker_id === bId && a.assignment_date === demand.dateStr && a.shift_type === demand.shift
+        );
+        if (existingAssignment) {
+          const locName = context.externalLocations?.find(l => l.id === existingAssignment.location_id)?.name || "outro local";
+          brokerReasons.push(`${broker?.brokerName || bId} (já alocado no ${locName})`);
+        } else {
+          brokerReasons.push(`${broker?.brokerName || bId} (bloqueado por regras)`);
+        }
+      }
+      (demand as any)._unallocatedReason = `Corretores configurados: ${brokerReasons.join("; ")}. Nenhum pôde ser alocado.`;
+    }
+  }
+
   console.log("\n═══════════════════════════════════════════════════════════");
   console.log("📊 RELATÓRIO DE QUALIDADE DA GERAÇÃO");
   console.log("═══════════════════════════════════════════════════════════");

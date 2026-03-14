@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { PostValidationResult, BrokerValidationReport, PostValidationViolation } from "@/lib/schedulePostValidation";
+import { PostValidationResult, BrokerValidationReport, PostValidationViolation, UnallocatedDemand } from "@/lib/schedulePostValidation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -493,20 +493,35 @@ function GlobalViolationsSection({ violations }: { violations: PostValidationVio
 // ═══════════════════════════════════════════════════════════
 // UNALLOCATED SECTION
 // ═══════════════════════════════════════════════════════════
-function UnallocatedSection({ demands }: { demands: { locationName: string; date: string; shift: string }[] }) {
+function formatDateBR(dateStr: string): string {
+  const parts = dateStr.split("-");
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dateStr;
+}
+
+function UnallocatedSection({ demands }: { demands: UnallocatedDemand[] }) {
   return (
     <div className="p-4 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
       <h4 className="font-semibold text-orange-800 dark:text-orange-300 mb-2 flex items-center gap-2">
         <MapPin className="h-5 w-5" />
         Turnos Não Alocados ({demands.length})
       </h4>
-      <ul className="space-y-1 text-sm">
+      <ul className="space-y-2 text-sm">
         {demands.map((d, i) => (
-          <li key={i} className="flex items-center gap-2 p-2 bg-background rounded border">
-            <span className="text-orange-600">⚠️</span>
-            <span>
-              <strong>{d.locationName}</strong> - {d.date} ({d.shift === "morning" ? "Manhã" : "Tarde"})
-            </span>
+          <li key={i} className="p-2 bg-background rounded border">
+            <div className="flex items-center gap-2">
+              <span className="text-orange-600">⚠️</span>
+              <span>
+                <strong>{d.locationName}</strong> - {formatDateBR(d.date)} ({d.shift === "morning" ? "Manhã" : "Tarde"})
+              </span>
+            </div>
+            {d.reason && (
+              <div className="mt-1 ml-7 text-xs text-muted-foreground italic">
+                {d.reason}
+              </div>
+            )}
           </li>
         ))}
       </ul>
@@ -607,7 +622,7 @@ function BrokerView({
                           <div className="font-medium">{v.rule}</div>
                           <div>{v.details}</div>
                           {v.dates && v.dates.length > 0 && (
-                            <div className="text-muted-foreground mt-1">Datas: {v.dates.join(", ")}</div>
+                            <div className="text-muted-foreground mt-1">Datas: {v.dates.map(formatDateBR).join(", ")}</div>
                           )}
                           <RuleExplanationBadge rule={v.rule} />
                         </li>
@@ -690,7 +705,7 @@ function RuleView({
                     <div className="font-medium">{v.brokerName}</div>
                     <div>{v.details}</div>
                     {v.dates && v.dates.length > 0 && (
-                      <div className="text-muted-foreground mt-1">Datas: {v.dates.join(", ")}</div>
+                      <div className="text-muted-foreground mt-1">Datas: {v.dates.map(formatDateBR).join(", ")}</div>
                     )}
                   </div>
                 ))}

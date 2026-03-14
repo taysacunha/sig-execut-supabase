@@ -910,7 +910,8 @@ const Schedules = () => {
         allMonthAssignments.map(a => ({
           location_id: a.location_id,
           assignment_date: a.assignment_date,
-          shift_type: a.shift_type
+          shift_type: a.shift_type,
+          broker_id: a.broker_id
         })),
         monthStart,
         monthEnd
@@ -1277,14 +1278,19 @@ const Schedules = () => {
       }));
       
       // Converter validationResults (missing shifts) para UnallocatedDemand[]
-      const unallocatedDemands = allValidationResults
-        .filter(r => r.status === "missing")
-        .map(r => ({
-          locationId: r.locationId,
-          locationName: r.locationName,
-          date: r.date,
-          shift: r.shift
-        }));
+      // Detectar demandas não alocadas INDEPENDENTEMENTE (com justificativa)
+      const genMonthStart = format(weeklySchedules[0].weekStart, "yyyy-MM-dd");
+      const genMonthEnd = format(weeklySchedules[weeklySchedules.length - 1].weekEnd, "yyyy-MM-dd");
+      const unallocatedDemands = await detectUnallocatedDemands(
+        allMonthAssignments.map(a => ({
+          location_id: a.location_id,
+          assignment_date: a.assignment_date,
+          shift_type: a.shift_type,
+          broker_id: a.broker_id
+        })),
+        genMonthStart,
+        genMonthEnd
+      );
 
       // Buscar configuração de turnos por local/data para validação TURNO_NAO_CONFIGURADO
       const locationShiftConfigs = await buildLocationShiftConfigs(
