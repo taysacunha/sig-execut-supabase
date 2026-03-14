@@ -19,7 +19,7 @@ export function ContadorPDFGenerator() {
   const [selectedSetor, setSelectedSetor] = useState<string>("_all_");
   const [generating, setGenerating] = useState(false);
 
-  const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
+  const years = getYearOptions(3, 3);
 
   const { data: setores } = useQuery({
     queryKey: ["ferias-setores-relatorio"],

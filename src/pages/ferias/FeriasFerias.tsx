@@ -518,7 +518,7 @@ export default function FeriasFerias() {
                               {canEditFerias && (
                                 <>
                                   <Button variant="ghost" size="sm" onClick={() => { setSelectedFerias(f); setDialogOpen(true); }}><Edit className="h-4 w-4" /></Button>
-                                  {(f.status === "aprovada" || f.status === "em_gozo") && (
+                                  {(f.status === "aprovada" || isFeriasEmGozo(f.status)) && (
                                     <Button variant="ghost" size="sm" title="Reduzir dias" onClick={() => { setReducaoFerias(f); setReducaoDialogOpen(true); }}><CalendarMinus className="h-4 w-4 text-warning" /></Button>
                                   )}
                                   <AlertDialog>

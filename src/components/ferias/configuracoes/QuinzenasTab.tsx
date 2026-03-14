@@ -51,7 +51,7 @@ export function QuinzenasTab() {
   const queryClient = useQueryClient();
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
-  const years = Array.from({ length: 5 }, (_, i) => currentYear + i);
+  const years = getYearOptions(0, 5);
 
   const { data: quinzenas = [], isLoading } = useQuery({
     queryKey: ["ferias-quinzenas", selectedYear],

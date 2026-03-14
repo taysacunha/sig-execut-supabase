@@ -38,7 +38,7 @@ export function ConsultaGeralTab() {
   const [sortField, setSortField] = useState<"nome" | "setor" | "status">("nome");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
-  const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
+  const years = getYearOptions(3, 3);
 
   const { data: setores } = useQuery({
     queryKey: ["ferias-setores-consulta"],

@@ -208,7 +208,7 @@ export default function FeriasFormularioAnual() {
   }), [filteredFormularios]);
 
   // Year options
-  const years = Array.from({ length: 3 }, (_, i) => (currentYear + 1 - i).toString());
+  const years = getYearOptions(1, 3).map(String);
 
   return (
     <div className="space-y-6">

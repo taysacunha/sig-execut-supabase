@@ -21,7 +21,7 @@ export function ExcecoesPDFGenerator() {
   const [selectedTipo, setSelectedTipo] = useState<ExcecaoTipo>("_all_");
   const [generating, setGenerating] = useState(false);
 
-  const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
+  const years = getYearOptions(3, 3);
 
   const { data: excecoes, isLoading } = useQuery({
     queryKey: ["excecoes-relatorio", selectedYear, selectedTipo],

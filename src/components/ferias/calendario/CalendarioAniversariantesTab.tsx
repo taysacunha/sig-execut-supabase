@@ -221,7 +221,7 @@ export function CalendarioAniversariantesTab({ colaboradores: externalColaborado
     );
   };
 
-  const yearOptions = Array.from({ length: 10 }, (_, i) => currentYear - 2 + i);
+  const yearOptions = getYearOptions(2, 8);
 
   const calendarMonth = viewMode === "all" 
     ? new Date(selectedYear, 0, 1)
