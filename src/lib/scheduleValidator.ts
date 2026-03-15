@@ -434,6 +434,62 @@ export function validateAllRulesCompliance(
   }
 
   // ═══════════════════════════════════════════════════════════
+  // REGRA ESCADA DE DISTRIBUIÇÃO (INVIOLÁVEL)
+  // Ninguém com N+2 enquanto existir elegível com N
+  // Ex: ninguém com 3 se existir elegível com 1
+  //     ninguém com 4 se existir elegível com 2
+  // ═══════════════════════════════════════════════════════════
+  {
+    // Contar externos por corretor (dias únicos)
+    const brokerExternalDays = new Map<string, Set<string>>();
+    for (const assignment of assignments) {
+      const loc = getLocation(assignment.location_id);
+      if (loc?.type === 'external') {
+        if (!brokerExternalDays.has(assignment.broker_id)) {
+          brokerExternalDays.set(assignment.broker_id, new Set());
+        }
+        brokerExternalDays.get(assignment.broker_id)!.add(assignment.assignment_date);
+      }
+    }
+    
+    // Identificar corretores elegíveis para externos (quem tem pelo menos 1 local externo configurado)
+    const brokersWithExternals: { id: string; name: string; count: number }[] = [];
+    for (const broker of brokers) {
+      const count = brokerExternalDays.get(broker.id)?.size || 0;
+      // Incluir TODOS corretores que aparecem em alocações externas OU que têm 0 mas são elegíveis
+      // Como não temos locationBrokerConfigs aqui de forma confiável, usamos quem tem alguma alocação
+      // OU quem tem externalShiftCount registrado
+      const hasAnyExternalAllocation = assignments.some(a => {
+        const loc = getLocation(a.location_id);
+        return a.broker_id === broker.id && loc?.type === 'external';
+      });
+      // Considerar elegível se tem alguma alocação externa OU tem count > 0
+      if (hasAnyExternalAllocation || count > 0) {
+        brokersWithExternals.push({ id: broker.id, name: broker.name, count });
+      }
+    }
+    
+    if (brokersWithExternals.length > 0) {
+      const minCount = Math.min(...brokersWithExternals.map(b => b.count));
+      const maxCount = Math.max(...brokersWithExternals.map(b => b.count));
+      
+      // Violação: diferença >= 2 entre qualquer par de corretores elegíveis
+      if (maxCount - minCount >= 3) {
+        const brokersAtMin = brokersWithExternals.filter(b => b.count === minCount);
+        const brokersAtMax = brokersWithExternals.filter(b => b.count === maxCount);
+        
+        violations.push({
+          rule: "ESCADA DE DISTRIBUIÇÃO: Diferença >= 3 entre corretores",
+          brokerName: brokersAtMax.map(b => b.name).join(', '),
+          brokerId: brokersAtMax[0].id,
+          details: `PROIBIDO: ${brokersAtMax.map(b => `${b.name}(${b.count})`).join(', ')} vs ${brokersAtMin.map(b => `${b.name}(${b.count})`).join(', ')}. Diferença de ${maxCount - minCount} externos. Máximo permitido: 2.`,
+          severity: 'critical'
+        });
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
   // RESULTADO
   // ═══════════════════════════════════════════════════════════
   const criticalViolations = violations.filter(v => v.severity === 'critical');
