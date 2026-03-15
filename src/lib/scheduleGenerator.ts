@@ -19,6 +19,18 @@ import {
 import { validateAllRulesCompliance, logViolations, RuleViolation } from "./scheduleValidator";
 
 // ═══════════════════════════════════════════════════════════
+// MÓDULO: Último trace de geração (acessível externamente)
+// ═══════════════════════════════════════════════════════════
+let lastGenerationTrace: {
+  decisionTrace: DecisionTraceEntry[];
+  brokerDiagnostics: BrokerAllocationDiagnostic[];
+} | null = null;
+
+export function getLastGenerationTrace() {
+  return lastGenerationTrace;
+}
+
+// ═══════════════════════════════════════════════════════════
 // INTERFACES PARA RETRY SYSTEM
 // ═══════════════════════════════════════════════════════════
 export interface RetryResult {
@@ -105,6 +117,44 @@ interface ExternalDemand {
   locationBrokerMap: Map<string, { available_morning: boolean; available_afternoon: boolean }>;
 }
 
+// ═══════════════════════════════════════════════════════════
+// DECISION TRACE: Captura motivos reais de rejeição no momento da alocação
+// ═══════════════════════════════════════════════════════════
+export interface DecisionTraceEntry {
+  demandKey: string;
+  locationName: string;
+  dateStr: string;
+  shift: "morning" | "afternoon";
+  pass: number;
+  eligibleCount: number;
+  rejections: {
+    brokerId: string;
+    brokerName: string;
+    rule: string;
+    reason: string;
+    externalShiftCount: number;
+    rule8Relaxed: boolean;
+  }[];
+  allocated: boolean;
+  allocatedBrokerName?: string;
+}
+
+export interface BrokerAllocationDiagnostic {
+  brokerId: string;
+  brokerName: string;
+  finalExternalCount: number;
+  targetExternals: number;
+  totalOpportunities: number;
+  rejectionsByRule: Record<string, number>;
+  opportunities: {
+    locationName: string;
+    dateStr: string;
+    shift: string;
+    rule: string;
+    reason: string;
+  }[];
+}
+
 export interface GenerationQualityReport {
   totalExternalDemands: number;
   allocatedPass1: number;
@@ -116,6 +166,8 @@ export interface GenerationQualityReport {
   impossibleDemands: ExternalDemand[];
   brokerDistribution: { brokerId: string; brokerName: string; count: number }[];
   relaxedAllocations: { demand: string; pass: number; reason: string }[];
+  decisionTrace: DecisionTraceEntry[];
+  brokerDiagnostics: BrokerAllocationDiagnostic[];
 }
 
 interface WeeklyAccumulator {
@@ -806,7 +858,8 @@ function canExceedLimit(
     
     // Se algum corretor elegível tem menos de 2 externos E pode receber esta demanda
     if (broker.externalShiftCount < MAX_EXTERNAL_SHIFTS_PER_WEEK) {
-      const check = checkTrulyInviolableRules(broker, demand, context);
+      // Usar helper unificado COM relaxamento de Regra 8 (corretor com <2 pode ter consecutivo)
+      const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
       if (check.allowed) {
         // Ainda há corretor com menos de 2 que pode receber
         return false;
@@ -879,75 +932,9 @@ function canAnyoneStillReachTwo(
   };
 }
 
-function checkInviolableRules(
-  broker: BrokerQueueItem,
-  demand: ExternalDemand,
-  context: AllocationContext
-): InviolableRulesCheck {
-  // REGRA 1: Máximo 2 externos por semana (INVIOLÁVEL em condições normais)
-  if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_PER_WEEK) {
-    return { 
-      allowed: false, 
-      reason: `Já tem ${broker.externalShiftCount} externos (máx ${MAX_EXTERNAL_SHIFTS_PER_WEEK})`,
-      rule: "REGRA 1: Máx 2 externos/semana"
-    };
-  }
-  
-  // REGRA 5: Dois turnos no mesmo local externo - ABSOLUTA SEM EXCEÇÕES
-  const hasOtherShiftSameLocalAbs = context.assignments.some(a =>
-    a.broker_id === broker.brokerId &&
-    a.assignment_date === demand.dateStr &&
-    a.location_id === demand.locationId &&
-    a.shift_type !== demand.shift
-  );
-  if (hasOtherShiftSameLocalAbs) {
-    const otherShift = demand.shift === "morning" ? "tarde" : "manhã";
-    console.log(`   ⛔ REGRA 5: ${broker.brokerName} já tem ${otherShift} em ${demand.locationName} - PROIBIDO`);
-    return { 
-      allowed: false, 
-      reason: `PROIBIDO: Já tem outro turno em ${demand.locationName}`,
-      rule: "REGRA 5: Dois turnos mesmo local"
-    };
-  }
-  
-  // REGRA 8: Dias consecutivos externos (INVIOLÁVEL)
-  const prevDay = format(subDays(demand.date, 1), "yyyy-MM-dd");
-  const nextDay = format(addDays(demand.date, 1), "yyyy-MM-dd");
-  
-  if (context.dailyExternalAssignments.get(prevDay)?.has(broker.brokerId)) {
-    return { 
-      allowed: false, 
-      reason: "Já tem externo no dia anterior",
-      rule: "REGRA 8: Dias consecutivos"
-    };
-  }
-  
-  if (context.dailyExternalAssignments.get(nextDay)?.has(broker.brokerId)) {
-    return { 
-      allowed: false, 
-      reason: "Já tem externo no dia seguinte",
-      rule: "REGRA 8: Dias consecutivos"
-    };
-  }
-  
-  // REGRA: Conflito físico - mesmo turno em outro local externo
-  const hasPhysicalConflict = context.assignments.some(a =>
-    a.broker_id === broker.brokerId &&
-    a.assignment_date === demand.dateStr &&
-    a.shift_type === demand.shift &&
-    a.location_id !== demand.locationId
-  );
-  
-  if (hasPhysicalConflict) {
-    return { 
-      allowed: false, 
-      reason: "Conflito físico: mesmo turno em outro local",
-      rule: "Conflito físico"
-    };
-  }
-  
-  return { allowed: true, reason: "OK" };
-}
+// checkInviolableRules REMOVIDO — era dead code e mantinha Regra 8 como absoluta.
+// Toda verificação agora passa por checkTrulyInviolableRulesWithRelaxation()
+// que tem modo estrito (allowRelaxRule8=false) e relaxado (allowRelaxRule8=true).
 
 // ═══════════════════════════════════════════════════════════
 // REGRAS ABSOLUTAS (Verificadas ANTES dos passes)
@@ -1638,8 +1625,8 @@ function deConsecutivizeExternals(
         if (b.brokerId === pair.brokerId) return false;
         if (!demand.eligibleBrokerIds.includes(b.brokerId)) return false;
         
-        // Verificar regras invioláveis
-        const check = checkTrulyInviolableRules(b, demand, context);
+        // Verificar regras invioláveis (modo estrito — swap não deve criar consecutivos)
+        const check = checkTrulyInviolableRulesWithRelaxation(b, demand, context, false);
         if (!check.allowed) return false;
         
         // Verificar se NÃO criaria novo par consecutivo para este corretor
@@ -3294,6 +3281,11 @@ async function generateWeeklyScheduleWithAccumulator(
   const allocatedDemands = new Set<string>();
   let allocatedPass1 = 0, allocatedPass2 = 0, allocatedPass3 = 0, allocatedPass4 = 0, allocatedPass5 = 0;
   const relaxedAllocations: { demand: string; pass: number; reason: string }[] = [];
+  
+  // ═══════════════════════════════════════════════════════════
+  // DECISION TRACE: Captura em tempo real de cada decisão de alocação
+  // ═══════════════════════════════════════════════════════════
+  const decisionTrace: DecisionTraceEntry[] = [];
 
   // Pass 1-5: Alocação normal
   for (let pass = 1; pass <= 5; pass++) {
@@ -3301,7 +3293,33 @@ async function generateWeeklyScheduleWithAccumulator(
       const demandKey = `${demand.locationId}-${demand.dateStr}-${demand.shift}`;
       if (allocatedDemands.has(demandKey)) continue;
 
-      const result = findBrokerForDemand(demand, context, pass, bessaBrokersAvailableSaturday, false, attemptSeed);
+      // Coletar blockedBrokers em TODOS os passes para trace real
+      const result = findBrokerForDemand(demand, context, pass, bessaBrokersAvailableSaturday, true, attemptSeed);
+      
+      // Registrar trace da decisão
+      const traceEntry: DecisionTraceEntry = {
+        demandKey,
+        locationName: demand.locationName,
+        dateStr: demand.dateStr,
+        shift: demand.shift,
+        pass,
+        eligibleCount: demand.eligibleBrokerIds.length,
+        rejections: (result.blockedBrokers || []).map(bb => ({
+          brokerId: bb.brokerId,
+          brokerName: bb.brokerName,
+          rule: bb.rule,
+          reason: bb.reason,
+          externalShiftCount: context.brokerQueue.find(b => b.brokerId === bb.brokerId)?.externalShiftCount || 0,
+          rule8Relaxed: false
+        })),
+        allocated: !!result.broker,
+        allocatedBrokerName: result.broker?.brokerName
+      };
+      
+      // Só guardar trace da última tentativa (pass mais alto sem alocação, ou o pass que alocou)
+      if (result.broker || pass === 5) {
+        decisionTrace.push(traceEntry);
+      }
       
       if (result.broker) {
         allocateDemand(demand, result.broker, context);
@@ -4491,6 +4509,69 @@ async function generateWeeklyScheduleWithAccumulator(
       console.log(`   - ${ra.demand}: ${ra.reason}`);
     }
   }
+
+  // ═══════════════════════════════════════════════════════════
+  // GERAR DIAGNÓSTICO POR CORRETOR SUBALOCADO
+  // ═══════════════════════════════════════════════════════════
+  const brokerDiagnostics: BrokerAllocationDiagnostic[] = [];
+  
+  for (const broker of context.brokerQueue) {
+    if (broker.externalShiftCount >= 2) continue; // Só diagnosticar subalocados
+    
+    const opportunities: BrokerAllocationDiagnostic["opportunities"] = [];
+    const rejectionsByRule: Record<string, number> = {};
+    
+    // Contar rejeições no trace real
+    for (const trace of decisionTrace) {
+      for (const rej of trace.rejections) {
+        if (rej.brokerId === broker.brokerId) {
+          const ruleKey = rej.rule || "DESCONHECIDO";
+          rejectionsByRule[ruleKey] = (rejectionsByRule[ruleKey] || 0) + 1;
+          opportunities.push({
+            locationName: trace.locationName,
+            dateStr: trace.dateStr,
+            shift: trace.shift,
+            rule: rej.rule,
+            reason: rej.reason
+          });
+        }
+      }
+    }
+    
+    brokerDiagnostics.push({
+      brokerId: broker.brokerId,
+      brokerName: broker.brokerName,
+      finalExternalCount: broker.externalShiftCount,
+      targetExternals: broker.targetExternals,
+      totalOpportunities: opportunities.length,
+      rejectionsByRule,
+      opportunities
+    });
+  }
+  
+  // Log diagnóstico para corretores subalocados
+  if (brokerDiagnostics.length > 0) {
+    console.log(`\n═══════════════════════════════════════════════════════════`);
+    console.log(`🔬 DIAGNÓSTICO FORENSE: ${brokerDiagnostics.length} corretores com <2 externos`);
+    console.log(`═══════════════════════════════════════════════════════════`);
+    
+    for (const diag of brokerDiagnostics) {
+      console.log(`\n   📋 ${diag.brokerName}: ${diag.finalExternalCount}/${diag.targetExternals} externos`);
+      console.log(`      Oportunidades analisadas: ${diag.totalOpportunities}`);
+      if (Object.keys(diag.rejectionsByRule).length > 0) {
+        console.log(`      Rejeições por regra:`);
+        for (const [rule, count] of Object.entries(diag.rejectionsByRule).sort((a, b) => b[1] - a[1])) {
+          console.log(`         ${rule}: ${count}x`);
+        }
+      }
+    }
+  }
+  
+  // Salvar trace no módulo para acesso externo
+  lastGenerationTrace = {
+    decisionTrace,
+    brokerDiagnostics
+  };
 
   console.log(`\n🎉 TOTAL DE ALOCAÇÕES: ${assignments.length}`);
 
