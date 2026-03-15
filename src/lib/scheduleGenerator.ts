@@ -2097,7 +2097,8 @@ function findBrokerForDemand(
   pass: number,
   bessaBrokersAvailableSaturday: number = 0,
   collectBlockedBrokers: boolean = false,
-  attemptSeed: number = 1
+  attemptSeed: number = 1,
+  maxAllowedExternals: number = MAX_EXTERNAL_SHIFTS_HARD_CAP
 ): { broker: BrokerQueueItem | null; reason: string; blockedBrokers?: BlockedBrokerInfo[] } {
   
   // ═══════════════════════════════════════════════════════════════════════════
