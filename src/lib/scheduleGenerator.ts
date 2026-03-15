@@ -19,6 +19,18 @@ import {
 import { validateAllRulesCompliance, logViolations, RuleViolation } from "./scheduleValidator";
 
 // ═══════════════════════════════════════════════════════════
+// MÓDULO: Último trace de geração (acessível externamente)
+// ═══════════════════════════════════════════════════════════
+let lastGenerationTrace: {
+  decisionTrace: DecisionTraceEntry[];
+  brokerDiagnostics: BrokerAllocationDiagnostic[];
+} | null = null;
+
+export function getLastGenerationTrace() {
+  return lastGenerationTrace;
+}
+
+// ═══════════════════════════════════════════════════════════
 // INTERFACES PARA RETRY SYSTEM
 // ═══════════════════════════════════════════════════════════
 export interface RetryResult {
