@@ -4498,6 +4498,69 @@ async function generateWeeklyScheduleWithAccumulator(
     }
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // GERAR DIAGNÓSTICO POR CORRETOR SUBALOCADO
+  // ═══════════════════════════════════════════════════════════
+  const brokerDiagnostics: BrokerAllocationDiagnostic[] = [];
+  
+  for (const broker of context.brokerQueue) {
+    if (broker.externalShiftCount >= 2) continue; // Só diagnosticar subalocados
+    
+    const opportunities: BrokerAllocationDiagnostic["opportunities"] = [];
+    const rejectionsByRule: Record<string, number> = {};
+    
+    // Contar rejeições no trace real
+    for (const trace of decisionTrace) {
+      for (const rej of trace.rejections) {
+        if (rej.brokerId === broker.brokerId) {
+          const ruleKey = rej.rule || "DESCONHECIDO";
+          rejectionsByRule[ruleKey] = (rejectionsByRule[ruleKey] || 0) + 1;
+          opportunities.push({
+            locationName: trace.locationName,
+            dateStr: trace.dateStr,
+            shift: trace.shift,
+            rule: rej.rule,
+            reason: rej.reason
+          });
+        }
+      }
+    }
+    
+    brokerDiagnostics.push({
+      brokerId: broker.brokerId,
+      brokerName: broker.brokerName,
+      finalExternalCount: broker.externalShiftCount,
+      targetExternals: broker.targetExternals,
+      totalOpportunities: opportunities.length,
+      rejectionsByRule,
+      opportunities
+    });
+  }
+  
+  // Log diagnóstico para corretores subalocados
+  if (brokerDiagnostics.length > 0) {
+    console.log(`\n═══════════════════════════════════════════════════════════`);
+    console.log(`🔬 DIAGNÓSTICO FORENSE: ${brokerDiagnostics.length} corretores com <2 externos`);
+    console.log(`═══════════════════════════════════════════════════════════`);
+    
+    for (const diag of brokerDiagnostics) {
+      console.log(`\n   📋 ${diag.brokerName}: ${diag.finalExternalCount}/${diag.targetExternals} externos`);
+      console.log(`      Oportunidades analisadas: ${diag.totalOpportunities}`);
+      if (Object.keys(diag.rejectionsByRule).length > 0) {
+        console.log(`      Rejeições por regra:`);
+        for (const [rule, count] of Object.entries(diag.rejectionsByRule).sort((a, b) => b[1] - a[1])) {
+          console.log(`         ${rule}: ${count}x`);
+        }
+      }
+    }
+  }
+  
+  // Salvar trace no módulo para acesso externo
+  lastGenerationTrace = {
+    decisionTrace,
+    brokerDiagnostics
+  };
+
   console.log(`\n🎉 TOTAL DE ALOCAÇÕES: ${assignments.length}`);
 
   // Atualizar filas de rotação
