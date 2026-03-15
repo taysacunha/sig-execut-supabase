@@ -80,13 +80,14 @@ interface BrokerQueueItem {
   recentSaturdayTotalCount: number;
   previousWeekExternals?: number;
   // Número de locais externos configurados para este corretor
-  // Corretores com MENOS locais devem ser priorizados (preservar os versáteis)
   externalLocationCount: number;
   // SISTEMA DE CRÉDITO: Quantos externos este corretor DEVE receber esta semana
-  // Baseado na alternância 1↔2 e se trabalha sábado interno
   externalCredit: number;
   // Target original calculado para esta semana
   targetExternals: number;
+  // Flag: trabalhou sábado interno na SEMANA ANTERIOR
+  // Quem trabalhou sábado na semana passada recebe compensação dinâmica esta semana
+  workedSaturdayLastWeek: boolean;
 }
 
 interface ExternalDemand {
