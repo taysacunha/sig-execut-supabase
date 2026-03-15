@@ -1060,16 +1060,17 @@ function checkAbsoluteRules(
     };
   }
 
-  // REGRA 10: Se trabalha sábado (interno OU externo), máximo 2 externos na semana
-  const worksSaturdayInternal = context.saturdayInternalWorkers?.has(broker.brokerId);
+  // REGRA 10: Se trabalha sábado EXTERNO, máximo 2 externos na semana
+  // Sábado INTERNO NÃO limita — pelo contrário, quem pega sábado interno
+  // deve receber MAIS externos durante a semana para compensar
   const worksSaturdayExternal = context.saturdayExternalWorkers?.has(broker.brokerId);
   
-  if (worksSaturdayInternal || worksSaturdayExternal) {
+  if (worksSaturdayExternal) {
     if (broker.externalShiftCount >= 2) {
       return { 
         allowed: false, 
-        reason: `Trabalha sábado ${worksSaturdayInternal ? 'interno' : 'externo'}, já tem ${broker.externalShiftCount} externos (máx 2)`, 
-        rule: "REGRA 10: Sábado + máx 2 externos" 
+        reason: `Trabalha sábado externo, já tem ${broker.externalShiftCount} externos (máx 2)`, 
+        rule: "REGRA 10: Sábado externo + máx 2 externos" 
       };
     }
   }
