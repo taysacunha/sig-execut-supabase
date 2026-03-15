@@ -744,14 +744,13 @@ function checkTrulyInviolableRulesWithRelaxation(
   
   // ═══════════════════════════════════════════════════════════
   // REGRA 9 CORRIGIDA: Sábado OU Domingo (QUALQUER plantão)
-  // INCLUI verificação de saturdayInternalWorkers pré-identificados
+  // SEM bloqueio fantasma — só verifica alocações REAIS
   // ═══════════════════════════════════════════════════════════
   const weekendCheck = hasWeekendConflict(
     broker.brokerId, 
     demand.date, 
     demand.dayOfWeek, 
-    context.assignments,
-    context.saturdayInternalWorkers
+    context.assignments
   );
   
   if (weekendCheck.hasConflict) {
