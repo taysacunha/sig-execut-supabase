@@ -3354,7 +3354,7 @@ async function generateWeeklyScheduleWithAccumulator(
         if (!demand.eligibleBrokerIds.includes(underBroker.brokerId)) continue;
         
         // Verificar se pode receber esta demanda
-        const check = checkTrulyInviolableRules(underBroker, demand, context);
+        const check = checkTrulyInviolableRulesWithRelaxation(underBroker, demand, context, true);
         if (!check.allowed) continue;
         
         // ALOCAR!
