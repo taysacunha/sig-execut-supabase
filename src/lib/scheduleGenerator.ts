@@ -860,14 +860,8 @@ function checkInviolableRules(
   demand: ExternalDemand,
   context: AllocationContext
 ): InviolableRulesCheck {
-  // REGRA 1: Máximo 2 externos por semana (INVIOLÁVEL em condições normais)
-  if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_PER_WEEK) {
-    return { 
-      allowed: false, 
-      reason: `Já tem ${broker.externalShiftCount} externos (máx ${MAX_EXTERNAL_SHIFTS_PER_WEEK})`,
-      rule: "REGRA 1: Máx 2 externos/semana"
-    };
-  }
+  // REGRA 1 REMOVIDA DAQUI: O limite de externos é controlado pelo GATE DE NÍVEL.
+  // Hard cap verificado externamente.
   
   // REGRA 5: Dois turnos no mesmo local externo - ABSOLUTA SEM EXCEÇÕES
   const hasOtherShiftSameLocalAbs = context.assignments.some(a =>
