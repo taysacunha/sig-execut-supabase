@@ -861,7 +861,7 @@ function canAnyoneStillReachTwo(
       // Sábado externo com 1+ externos
       if (demand.dayOfWeek === "saturday" && broker.externalShiftCount >= 1) continue;
       
-      const check = checkTrulyInviolableRules(broker, demand, context);
+      const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
       if (check.allowed) {
         canReceiveAny = true;
         break;
@@ -3354,7 +3354,7 @@ async function generateWeeklyScheduleWithAccumulator(
         if (!demand.eligibleBrokerIds.includes(underBroker.brokerId)) continue;
         
         // Verificar se pode receber esta demanda
-        const check = checkTrulyInviolableRules(underBroker, demand, context);
+        const check = checkTrulyInviolableRulesWithRelaxation(underBroker, demand, context, true);
         if (!check.allowed) continue;
         
         // ALOCAR!
@@ -3439,7 +3439,7 @@ async function generateWeeklyScheduleWithAccumulator(
           if (!demandForCheck.eligibleBrokerIds.includes(underBroker.brokerId)) continue;
           
           // Check inviolable rules for the underloaded broker
-          const check = checkTrulyInviolableRules(underBroker, demandForCheck, context);
+          const check = checkTrulyInviolableRulesWithRelaxation(underBroker, demandForCheck, context, true);
           if (!check.allowed) continue;
           
           // Check the underloaded broker doesn't already have an external on this day
