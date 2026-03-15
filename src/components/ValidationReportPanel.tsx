@@ -380,7 +380,6 @@ export function ValidationReportPanel({ result, onClose, brokerDiagnostics }: Va
                   Por que não alocou
                 </Button>
               )}
-              </Button>
             </div>
             <div className="flex gap-1">
               {hasActiveFilters && (
