@@ -3439,7 +3439,7 @@ async function generateWeeklyScheduleWithAccumulator(
           if (!demandForCheck.eligibleBrokerIds.includes(underBroker.brokerId)) continue;
           
           // Check inviolable rules for the underloaded broker
-          const check = checkTrulyInviolableRules(underBroker, demandForCheck, context);
+          const check = checkTrulyInviolableRulesWithRelaxation(underBroker, demandForCheck, context, true);
           if (!check.allowed) continue;
           
           // Check the underloaded broker doesn't already have an external on this day
