@@ -72,9 +72,10 @@ function getRuleShortName(rule: string): string {
 // ═══════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════
-export function ValidationReportPanel({ result, onClose }: ValidationReportPanelProps) {
+export function ValidationReportPanel({ result, onClose, brokerDiagnostics }: ValidationReportPanelProps) {
   const [expandedBrokers, setExpandedBrokers] = useState<Set<string>>(new Set());
   const [expandedRules, setExpandedRules] = useState<Set<string>>(new Set());
+  const [expandedDiagnostics, setExpandedDiagnostics] = useState<Set<string>>(new Set());
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [ruleFilter, setRuleFilter] = useState<string>("all");
   const [searchBroker, setSearchBroker] = useState("");
