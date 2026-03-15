@@ -1060,16 +1060,16 @@ function checkAbsoluteRules(
     };
   }
 
-  // REGRA ABSOLUTA 10: Se trabalha sábado (interno OU externo), máximo 1 externo na semana
+  // REGRA 10: Se trabalha sábado (interno OU externo), máximo 2 externos na semana
   const worksSaturdayInternal = context.saturdayInternalWorkers?.has(broker.brokerId);
   const worksSaturdayExternal = context.saturdayExternalWorkers?.has(broker.brokerId);
   
   if (worksSaturdayInternal || worksSaturdayExternal) {
-    if (broker.externalShiftCount >= 1) {
+    if (broker.externalShiftCount >= 2) {
       return { 
         allowed: false, 
-        reason: `Trabalha sábado ${worksSaturdayInternal ? 'interno' : 'externo'}, já tem ${broker.externalShiftCount} externo`, 
-        rule: "REGRA 10: Sábado + máx 1 externo" 
+        reason: `Trabalha sábado ${worksSaturdayInternal ? 'interno' : 'externo'}, já tem ${broker.externalShiftCount} externos (máx 2)`, 
+        rule: "REGRA 10: Sábado + máx 2 externos" 
       };
     }
   }
@@ -1982,36 +1982,36 @@ function findBrokerForDemand(
     }
 
     // ═══════════════════════════════════════════════════════════
-    // NOVA REGRA: CORRETORES COM SÁBADO = MÁXIMO 1 EXTERNO NA SEMANA
+    // REGRA: CORRETORES COM SÁBADO = MÁXIMO 2 EXTERNOS NA SEMANA
     // Aplica-se a quem trabalha sábado interno OU sábado externo
     // ═══════════════════════════════════════════════════════════
     const worksSaturdayInternal = context.saturdayInternalWorkers?.has(broker.brokerId);
     const worksSaturdayExternal = context.saturdayExternalWorkers?.has(broker.brokerId);
     const worksSaturday = worksSaturdayInternal || worksSaturdayExternal;
     
-    if (worksSaturday && broker.externalShiftCount >= 1 && !isSaturday) {
+    if (worksSaturday && broker.externalShiftCount >= 2 && !isSaturday) {
       if (collectBlockedBrokers) {
         blockedBrokers.push({
           brokerId: broker.brokerId,
           brokerName: broker.brokerName,
-          rule: "REGRA: Sábado + 1 externo máx",
-          reason: `Trabalha sábado - limite de 1 externo atingido (tem ${broker.externalShiftCount})`
+          rule: "REGRA: Sábado + 2 externos máx",
+          reason: `Trabalha sábado - limite de 2 externos atingido (tem ${broker.externalShiftCount})`
         });
       }
       continue;
     }
     
     // ═══════════════════════════════════════════════════════════
-    // NOVA REGRA: EVITAR SEXTA PARA QUEM TRABALHA SÁBADO
-    // Evita dias consecutivos (sexta + sábado)
+    // PREFERÊNCIA: EVITAR SEXTA PARA QUEM TRABALHA SÁBADO
+    // Só bloqueia se já tem 1+ externo (preserva chance de quem tem 0)
     // ═══════════════════════════════════════════════════════════
-    if (worksSaturday && demand.dayOfWeek === "friday") {
+    if (worksSaturday && demand.dayOfWeek === "friday" && broker.externalShiftCount >= 1) {
       if (collectBlockedBrokers) {
         blockedBrokers.push({
           brokerId: broker.brokerId,
           brokerName: broker.brokerName,
           rule: "REGRA: Evitar sexta com sábado",
-          reason: `Trabalha sábado - evitar consecutivo (sexta)`
+          reason: `Trabalha sábado e já tem ${broker.externalShiftCount} externo(s) - evitar consecutivo (sexta)`
         });
       }
       continue;
@@ -2880,9 +2880,8 @@ async function generateWeeklyScheduleWithAccumulator(
       target = 1;
     }
     
-    if (saturdayInternalWorkers.has(broker.id)) {
-      target = 1;
-    }
+    // Corretores de sábado agora podem ter até 2 externos (mesmo target dos demais)
+    // Não reduzir target por trabalhar sábado
     
     externalShiftTargets.set(broker.id, target);
   }
@@ -3244,7 +3243,7 @@ async function generateWeeklyScheduleWithAccumulator(
         // ═══════════════════════════════════════════════════════════
         if (demand.dayOfWeek === "saturday") {
           context.saturdayExternalWorkers.add(result.broker.brokerId);
-          console.log(`   📌 ${result.broker.brokerName} marcado para sábado externo → limite 1 externo`);
+          console.log(`   📌 ${result.broker.brokerName} marcado para sábado externo → limite 2 externos`);
           
           if (result.broker.internalLocation === "bessa") {
             context.saturdayBessaExternalCount.set(demand.dateStr, 
@@ -3339,6 +3338,102 @@ async function generateWeeklyScheduleWithAccumulator(
   // ETAPA 8.8: DESCONSECUTIVAR (antes do último recurso)
   // ═══════════════════════════════════════════════════════════
   const deConsecutiveResult = deConsecutivizeExternals(context, possibleDemands, internalLocIds);
+
+  // ═══════════════════════════════════════════════════════════
+  // ETAPA 8.8.1: REBALANCEAMENTO ATIVO POR SWAP (Chain Swap)
+  // Identifica corretores com 3+ externos e tenta trocar com quem tem <2
+  // ═══════════════════════════════════════════════════════════
+  console.log("\n🔄 ETAPA 8.8.1: REBALANCEAMENTO ATIVO POR SWAP...");
+  
+  const overloadedBrokers = context.brokerQueue.filter(b => b.externalShiftCount >= 3);
+  const underloadedBrokers = context.brokerQueue.filter(b => b.externalShiftCount < 2);
+  
+  console.log(`   📊 Corretores sobrecarregados (3+): ${overloadedBrokers.length}`);
+  console.log(`   📊 Corretores sub-alocados (<2): ${underloadedBrokers.length}`);
+  
+  let swapCount = 0;
+  
+  if (overloadedBrokers.length > 0 && underloadedBrokers.length > 0) {
+    for (const overBroker of overloadedBrokers) {
+      if (overBroker.externalShiftCount <= 2) continue; // Already balanced
+      
+      // Find assignments belonging to this overloaded broker
+      const overBrokerAssignments = context.assignments.filter(a => 
+        a.broker_id === overBroker.brokerId && 
+        !context.internalLocationIds.has(a.location_id)
+      );
+      
+      for (const assignment of overBrokerAssignments) {
+        if (overBroker.externalShiftCount <= 2) break; // Balanced now
+        
+        // Find an underloaded broker who can take this assignment
+        for (const underBroker of underloadedBrokers) {
+          if (underBroker.externalShiftCount >= 2) continue; // Already reached 2
+          
+          // Build a pseudo-demand to check eligibility
+          const demandForCheck = possibleDemands.find(d => 
+            d.locationId === assignment.location_id && 
+            d.dateStr === assignment.assignment_date && 
+            d.shift === assignment.shift_type
+          );
+          
+          if (!demandForCheck) continue;
+          if (!demandForCheck.eligibleBrokerIds.includes(underBroker.brokerId)) continue;
+          
+          // Check inviolable rules for the underloaded broker
+          const check = checkTrulyInviolableRules(underBroker, demandForCheck, context);
+          if (!check.allowed) continue;
+          
+          // Check the underloaded broker doesn't already have an external on this day
+          const underBrokerHasExternalOnDay = context.assignments.some(a => 
+            a.broker_id === underBroker.brokerId && 
+            a.assignment_date === assignment.assignment_date &&
+            !context.internalLocationIds.has(a.location_id)
+          );
+          if (underBrokerHasExternalOnDay) continue;
+          
+          // ═══ EXECUTE SWAP ═══
+          // Remove assignment from overloaded broker
+          const assignmentIdx = context.assignments.indexOf(assignment);
+          if (assignmentIdx === -1) continue;
+          
+          context.assignments.splice(assignmentIdx, 1);
+          overBroker.externalShiftCount--;
+          overBroker.externalCredit++;
+          
+          // Remove from dailyExternalAssignments
+          const daySet = context.dailyExternalAssignments.get(assignment.assignment_date);
+          if (daySet) daySet.delete(overBroker.brokerId);
+          
+          // Allocate to underloaded broker
+          allocateDemand(demandForCheck, underBroker, context);
+          
+          swapCount++;
+          console.log(`   ✅ SWAP: ${demandForCheck.locationName} ${demandForCheck.dateStr} ${demandForCheck.shift}: ${overBroker.brokerName} (${overBroker.externalShiftCount + 1}→${overBroker.externalShiftCount}) → ${underBroker.brokerName} (${underBroker.externalShiftCount - 1}→${underBroker.externalShiftCount})`);
+          break; // Move to next assignment of overloaded broker
+        }
+      }
+    }
+  }
+  
+  console.log(`   📊 Chain Swap: ${swapCount} trocas realizadas`);
+  
+  // Log final distribution after swap
+  const postSwapDist = {
+    with0: context.brokerQueue.filter(b => b.externalShiftCount === 0).length,
+    with1: context.brokerQueue.filter(b => b.externalShiftCount === 1).length,
+    with2: context.brokerQueue.filter(b => b.externalShiftCount === 2).length,
+    with3: context.brokerQueue.filter(b => b.externalShiftCount >= 3).length,
+  };
+  console.log(`\n   📊 DISTRIBUIÇÃO APÓS CHAIN SWAP:`);
+  console.log(`      0 externos: ${postSwapDist.with0} corretores`);
+  console.log(`      1 externo:  ${postSwapDist.with1} corretores`);
+  console.log(`      2 externos: ${postSwapDist.with2} corretores`);
+  console.log(`      3+ externos: ${postSwapDist.with3} corretores`);
+  
+  if (postSwapDist.with0 + postSwapDist.with1 > 0 && postSwapDist.with3 > 0) {
+    console.log(`\n   ⚠️ ALERTA: Desequilíbrio residual - ${postSwapDist.with3} corretor(es) com 3+ enquanto ${postSwapDist.with0 + postSwapDist.with1} têm <2`);
+  }
   
   // ═══════════════════════════════════════════════════════════
   // ETAPA 8.9: ALOCAÇÃO DE PLANTÕES INTERNOS (SÁBADO)
