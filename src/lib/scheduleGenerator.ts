@@ -341,11 +341,8 @@ function hasWeekendConflict(
   if (demandDayOfWeek === "sunday") {
     const saturdayStr = format(subDays(demandDate, 1), "yyyy-MM-dd");
     
-    // CORREÇÃO CRÍTICA: Verificar primeiro os pré-identificados para sábado interno
-    // Isso captura corretores reservados para sábado interno ANTES de serem alocados
-    if (saturdayInternalWorkers?.has(brokerId)) {
-      return { hasConflict: true, conflictDay: "sábado (reservado para interno)" };
-    }
+    // REMOVIDO: Bloqueio fantasma por pré-reserva de sábado interno
+    // O bloqueio real ocorre naturalmente após ETAPA 8.9 quando a alocação real existe
     
     // Verificar alocações já realizadas
     const hasSaturday = assignments.some(a => 
