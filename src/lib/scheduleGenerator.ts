@@ -3853,7 +3853,7 @@ async function generateWeeklyScheduleWithAccumulator(
         if (!broker) continue;
         
         // Só aceitar corretor com menos de 2 neste passo
-        if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_PER_WEEK) continue;
+        if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_HARD_CAP) continue;
         
         const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, false);
         if (!check.allowed) continue;
