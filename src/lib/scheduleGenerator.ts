@@ -3269,6 +3269,11 @@ async function generateWeeklyScheduleWithAccumulator(
   const allocatedDemands = new Set<string>();
   let allocatedPass1 = 0, allocatedPass2 = 0, allocatedPass3 = 0, allocatedPass4 = 0, allocatedPass5 = 0;
   const relaxedAllocations: { demand: string; pass: number; reason: string }[] = [];
+  
+  // ═══════════════════════════════════════════════════════════
+  // DECISION TRACE: Captura em tempo real de cada decisão de alocação
+  // ═══════════════════════════════════════════════════════════
+  const decisionTrace: DecisionTraceEntry[] = [];
 
   // Pass 1-5: Alocação normal
   for (let pass = 1; pass <= 5; pass++) {
@@ -3276,7 +3281,33 @@ async function generateWeeklyScheduleWithAccumulator(
       const demandKey = `${demand.locationId}-${demand.dateStr}-${demand.shift}`;
       if (allocatedDemands.has(demandKey)) continue;
 
-      const result = findBrokerForDemand(demand, context, pass, bessaBrokersAvailableSaturday, false, attemptSeed);
+      // Coletar blockedBrokers em TODOS os passes para trace real
+      const result = findBrokerForDemand(demand, context, pass, bessaBrokersAvailableSaturday, true, attemptSeed);
+      
+      // Registrar trace da decisão
+      const traceEntry: DecisionTraceEntry = {
+        demandKey,
+        locationName: demand.locationName,
+        dateStr: demand.dateStr,
+        shift: demand.shift,
+        pass,
+        eligibleCount: demand.eligibleBrokerIds.length,
+        rejections: (result.blockedBrokers || []).map(bb => ({
+          brokerId: bb.brokerId,
+          brokerName: bb.brokerName,
+          rule: bb.rule,
+          reason: bb.reason,
+          externalShiftCount: context.brokerQueue.find(b => b.brokerId === bb.brokerId)?.externalShiftCount || 0,
+          rule8Relaxed: false
+        })),
+        allocated: !!result.broker,
+        allocatedBrokerName: result.broker?.brokerName
+      };
+      
+      // Só guardar trace da última tentativa (pass mais alto sem alocação, ou o pass que alocou)
+      if (result.broker || pass === 5) {
+        decisionTrace.push(traceEntry);
+      }
       
       if (result.broker) {
         allocateDemand(demand, result.broker, context);
