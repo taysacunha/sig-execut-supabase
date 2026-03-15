@@ -1827,22 +1827,27 @@ function rebalanceDistributionViaSwaps(
   const MAX_REBALANCE_SWAPS = 20;
 
   for (let iteration = 0; iteration < MAX_REBALANCE_SWAPS; iteration++) {
-    // Identificar corretores "over" (3+) e "under" (0-1)
-    // Ignorar corretores sem locais externos configurados
-    const overBrokers = context.brokerQueue
-      .filter(b => b.externalShiftCount >= 3 && b.externalLocationCount > 0)
-      .sort((a, b) => b.externalShiftCount - a.externalShiftCount);
+    // Cálculo dinâmico de max/min entre corretores com locais externos
+    const externalEligible = context.brokerQueue.filter(b => b.externalLocationCount > 0);
+    if (externalEligible.length === 0) break;
 
-    const underBrokers = context.brokerQueue
-      .filter(b => b.externalShiftCount <= 1 && b.externalLocationCount > 0)
-      .sort((a, b) => a.externalShiftCount - b.externalShiftCount);
+    const maxCount = Math.max(...externalEligible.map(b => b.externalShiftCount));
+    const minCount = Math.min(...externalEligible.map(b => b.externalShiftCount));
 
-    if (overBrokers.length === 0 || underBrokers.length === 0) {
-      console.log(`   ✅ Equilíbrio atingido (iter ${iteration}): nenhum over(3+) ou under(0-1) restante`);
+    if (maxCount - minCount < 2) {
+      console.log(`   ✅ Equilíbrio atingido (iter ${iteration}): max=${maxCount}, min=${minCount}, diff=${maxCount - minCount}`);
       break;
     }
 
-    console.log(`   📊 Iteração ${iteration + 1}: ${overBrokers.length} over(3+), ${underBrokers.length} under(0-1)`);
+    const overBrokers = externalEligible
+      .filter(b => b.externalShiftCount === maxCount)
+      .sort((a, b) => b.externalShiftCount - a.externalShiftCount);
+
+    const underBrokers = externalEligible
+      .filter(b => b.externalShiftCount === minCount)
+      .sort((a, b) => a.externalShiftCount - b.externalShiftCount);
+
+    console.log(`   📊 Iteração ${iteration + 1}: ${overBrokers.length} over(${maxCount}), ${underBrokers.length} under(${minCount}), diff=${maxCount - minCount}`);
 
     let swappedThisIteration = false;
 
