@@ -1743,13 +1743,12 @@ function findBrokerForDemand(
       );
       
       // VERIFICAR REGRA 9: Sábado OU Domingo (QUALQUER plantão)
-      // INCLUI verificação de saturdayInternalWorkers pré-identificados
+      // SEM bloqueio fantasma — só verifica alocações REAIS
       const weekendCheck = hasWeekendConflict(
         onlyBrokerId,
         demand.date,
         demand.dayOfWeek,
-        context.assignments,
-        context.saturdayInternalWorkers
+        context.assignments
       );
       
       if (!hasPhysicalConflict && !weekendCheck.hasConflict) {
