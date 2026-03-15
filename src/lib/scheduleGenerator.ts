@@ -806,7 +806,8 @@ function canExceedLimit(
     
     // Se algum corretor elegível tem menos de 2 externos E pode receber esta demanda
     if (broker.externalShiftCount < MAX_EXTERNAL_SHIFTS_PER_WEEK) {
-      const check = checkTrulyInviolableRules(broker, demand, context);
+      // Usar helper unificado COM relaxamento de Regra 8 (corretor com <2 pode ter consecutivo)
+      const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
       if (check.allowed) {
         // Ainda há corretor com menos de 2 que pode receber
         return false;
