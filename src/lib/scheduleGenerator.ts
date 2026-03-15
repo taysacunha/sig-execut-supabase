@@ -2924,10 +2924,6 @@ async function generateWeeklyScheduleWithAccumulator(
     
     let target = 2;
     
-    if (prevWeekStats && prevWeekStats.external_count >= 2) {
-      target = 1;
-    }
-    
     // COMPENSAÇÃO DINÂMICA: Corretores que trabalharam sábado na semana passada
     // Eles não puderam pegar sáb/dom externo → compensar com mais externos seg-sex
     // Target base = 2 (ou o calculado), será elevado a 3 SOMENTE se houver demanda pendente
