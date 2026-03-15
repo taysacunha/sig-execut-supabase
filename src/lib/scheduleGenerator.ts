@@ -861,7 +861,7 @@ function canAnyoneStillReachTwo(
       // Sábado externo com 1+ externos
       if (demand.dayOfWeek === "saturday" && broker.externalShiftCount >= 1) continue;
       
-      const check = checkTrulyInviolableRules(broker, demand, context);
+      const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
       if (check.allowed) {
         canReceiveAny = true;
         break;
