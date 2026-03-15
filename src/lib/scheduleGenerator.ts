@@ -1057,16 +1057,9 @@ function checkAbsoluteRules(
     }
   }
 
-  // REGRA ABSOLUTA 8: Dias consecutivos
-  const prevDay = format(subDays(demand.date, 1), "yyyy-MM-dd");
-  const nextDay = format(addDays(demand.date, 1), "yyyy-MM-dd");
-
-  if (context.dailyExternalAssignments.get(prevDay)?.has(broker.brokerId)) {
-    return { allowed: false, reason: "Externo ontem", rule: "REGRA 8: Dias consecutivos" };
-  }
-  if (context.dailyExternalAssignments.get(nextDay)?.has(broker.brokerId)) {
-    return { allowed: false, reason: "Externo amanhã", rule: "REGRA 8: Dias consecutivos" };
-  }
+  // REGRA 8 (Dias consecutivos) REMOVIDA daqui — agora tratada via 
+  // checkTrulyInviolableRulesWithRelaxation no findBrokerForDemand,
+  // permitindo relaxamento para corretores com <2 externos.
 
   // ═══════════════════════════════════════════════════════════
   // REGRA ABSOLUTA 9 CORRIGIDA: Sábado OU Domingo (QUALQUER plantão)
@@ -2075,6 +2068,25 @@ function findBrokerForDemand(
     }
 
     // ═══════════════════════════════════════════════════════════
+    // REGRA 8: Dias consecutivos — via helper relaxável
+    // Relaxa para corretores com <2 externos (equidade)
+    // Mantém bloqueio estrito para quem já tem 2+
+    // ═══════════════════════════════════════════════════════════
+    const allowRelaxRule8ForThisBroker = broker.externalShiftCount < 2;
+    const rule8Check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, allowRelaxRule8ForThisBroker);
+    if (!rule8Check.allowed) {
+      if (collectBlockedBrokers) {
+        blockedBrokers.push({
+          brokerId: broker.brokerId,
+          brokerName: broker.brokerName,
+          rule: rule8Check.rule || "REGRA 8",
+          reason: rule8Check.reason
+        });
+      }
+      continue;
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // NOVA REGRA: PROTEÇÃO DO BESSA EM DIAS DE SEMANA
     // Com apenas 3 corretores no Bessa, no máximo 2 podem ter externos
     // O terceiro DEVE permanecer no Bessa para garantir cobertura
@@ -2871,7 +2883,7 @@ async function generateWeeklyScheduleWithAccumulator(
           if (countIdentified >= maxBrokers) break;
           
           saturdayInternalWorkers.add(candidate.broker_id);
-          console.log(`   🏢 ${candidate.broker_name}: reservado para Tambaú sábado (${candidate.times_worked || 0} sábados, pos ${candidate.queue_position}) → target externo = 1`);
+          console.log(`   🏢 ${candidate.broker_name}: reservado para Tambaú sábado (${candidate.times_worked || 0} sábados, pos ${candidate.queue_position})`);
           countIdentified++;
         }
         
@@ -3339,7 +3351,7 @@ async function generateWeeklyScheduleWithAccumulator(
   console.log(`   📊 Corretores com <2 externos: ${brokersUnderTwo.length}`);
   console.log(`   📊 Corretores com 3 externos: ${brokersWithThree.length}`);
   
-  if (brokersUnderTwo.length > 0 && brokersWithThree.length > 0) {
+  if (brokersUnderTwo.length > 0 && (brokersWithThree.length > 0 || unallocatedAfterPasses.length > 0)) {
     console.log(`\n   🔄 Tentando rebalancear...`);
     
     let rebalanceCount = 0;
