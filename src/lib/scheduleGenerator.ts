@@ -880,75 +880,9 @@ function canAnyoneStillReachTwo(
   };
 }
 
-function checkInviolableRules(
-  broker: BrokerQueueItem,
-  demand: ExternalDemand,
-  context: AllocationContext
-): InviolableRulesCheck {
-  // REGRA 1: Máximo 2 externos por semana (INVIOLÁVEL em condições normais)
-  if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_PER_WEEK) {
-    return { 
-      allowed: false, 
-      reason: `Já tem ${broker.externalShiftCount} externos (máx ${MAX_EXTERNAL_SHIFTS_PER_WEEK})`,
-      rule: "REGRA 1: Máx 2 externos/semana"
-    };
-  }
-  
-  // REGRA 5: Dois turnos no mesmo local externo - ABSOLUTA SEM EXCEÇÕES
-  const hasOtherShiftSameLocalAbs = context.assignments.some(a =>
-    a.broker_id === broker.brokerId &&
-    a.assignment_date === demand.dateStr &&
-    a.location_id === demand.locationId &&
-    a.shift_type !== demand.shift
-  );
-  if (hasOtherShiftSameLocalAbs) {
-    const otherShift = demand.shift === "morning" ? "tarde" : "manhã";
-    console.log(`   ⛔ REGRA 5: ${broker.brokerName} já tem ${otherShift} em ${demand.locationName} - PROIBIDO`);
-    return { 
-      allowed: false, 
-      reason: `PROIBIDO: Já tem outro turno em ${demand.locationName}`,
-      rule: "REGRA 5: Dois turnos mesmo local"
-    };
-  }
-  
-  // REGRA 8: Dias consecutivos externos (INVIOLÁVEL)
-  const prevDay = format(subDays(demand.date, 1), "yyyy-MM-dd");
-  const nextDay = format(addDays(demand.date, 1), "yyyy-MM-dd");
-  
-  if (context.dailyExternalAssignments.get(prevDay)?.has(broker.brokerId)) {
-    return { 
-      allowed: false, 
-      reason: "Já tem externo no dia anterior",
-      rule: "REGRA 8: Dias consecutivos"
-    };
-  }
-  
-  if (context.dailyExternalAssignments.get(nextDay)?.has(broker.brokerId)) {
-    return { 
-      allowed: false, 
-      reason: "Já tem externo no dia seguinte",
-      rule: "REGRA 8: Dias consecutivos"
-    };
-  }
-  
-  // REGRA: Conflito físico - mesmo turno em outro local externo
-  const hasPhysicalConflict = context.assignments.some(a =>
-    a.broker_id === broker.brokerId &&
-    a.assignment_date === demand.dateStr &&
-    a.shift_type === demand.shift &&
-    a.location_id !== demand.locationId
-  );
-  
-  if (hasPhysicalConflict) {
-    return { 
-      allowed: false, 
-      reason: "Conflito físico: mesmo turno em outro local",
-      rule: "Conflito físico"
-    };
-  }
-  
-  return { allowed: true, reason: "OK" };
-}
+// checkInviolableRules REMOVIDO — era dead code e mantinha Regra 8 como absoluta.
+// Toda verificação agora passa por checkTrulyInviolableRulesWithRelaxation()
+// que tem modo estrito (allowRelaxRule8=false) e relaxado (allowRelaxRule8=true).
 
 // ═══════════════════════════════════════════════════════════
 // REGRAS ABSOLUTAS (Verificadas ANTES dos passes)
