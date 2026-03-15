@@ -3659,22 +3659,55 @@ async function generateWeeklyScheduleWithAccumulator(
   let allocatedPass1 = 0, allocatedPass2 = 0, allocatedPass3 = 0, allocatedPass4 = 0, allocatedPass5 = 0;
   const relaxedAllocations: { demand: string; pass: number; reason: string }[] = [];
 
-  // Pass 1-5: Alocação normal
-  for (let pass = 1; pass <= 5; pass++) {
+  // ═══════════════════════════════════════════════════════════
+  // ETAPA 5: ALOCAÇÃO POR NÍVEIS COM GATE OBRIGATÓRIO
+  // Nível 1: todos com 0→1 | Nível 2: todos com 1→2
+  // Nível 3: GATE (todos ≥2?) → 2→3 | Nível 4: GATE (todos ≥3?) → 3→4
+  // ═══════════════════════════════════════════════════════════
+  const levelCounts = [0, 0, 0, 0];
+  
+  for (let level = 1; level <= 4; level++) {
+    console.log(`\n   🎯 NÍVEL ${level}: Alocando para brokers com < ${level} externos`);
+    
+    // GATE para níveis 3+: verificar se todos elegíveis já atingiram level-1
+    if (level >= 3) {
+      const externalEligible = context.brokerQueue.filter(b => b.externalLocationCount > 0);
+      if (externalEligible.length > 0) {
+        let globalMin = Math.min(...externalEligible.map(b => b.externalShiftCount));
+        
+        if (globalMin < level - 1) {
+          console.log(`   🚫 GATE NÍVEL ${level}: globalMin=${globalMin} < ${level - 1} — tentando chain swaps extras`);
+          
+          // Rodar chain swaps extras para tentar levantar o globalMin
+          const extraChainResult = chainSwapForUnallocated(context, possibleDemands, allocatedDemands, internalLocIds, relaxedAllocations);
+          console.log(`   🔗 Chain swaps extras: ${extraChainResult.swapsSuccessful} realizados`);
+          
+          // Re-verificar
+          globalMin = Math.min(...externalEligible.map(b => b.externalShiftCount));
+          if (globalMin < level - 1) {
+            console.log(`   ⚠️ GATE NÍVEL ${level} AINDA BLOQUEADO: globalMin=${globalMin} — pulando nível ${level}`);
+            continue;
+          }
+          console.log(`   ✅ GATE NÍVEL ${level} LIBERADO após chain swaps: globalMin=${globalMin}`);
+        } else {
+          console.log(`   ✅ GATE NÍVEL ${level} OK: globalMin=${globalMin} >= ${level - 1}`);
+        }
+      }
+    }
+    
+    // Alocar demandas para este nível
     for (const demand of possibleDemands) {
       const demandKey = `${demand.locationId}-${demand.dateStr}-${demand.shift}`;
       if (allocatedDemands.has(demandKey)) continue;
 
-      const result = findBrokerForDemand(demand, context, pass, bessaBrokersAvailableSaturday, false, attemptSeed);
+      const result = findBrokerForDemand(demand, context, level, bessaBrokersAvailableSaturday, false, attemptSeed, level);
       
       if (result.broker) {
         allocateDemand(demand, result.broker, context);
         allocatedDemands.add(demandKey);
+        levelCounts[level - 1]++;
         
-        // ═══════════════════════════════════════════════════════════
-        // ATUALIZAR saturdayExternalWorkers IMEDIATAMENTE ao alocar sábado
-        // Isso permite que a regra de 1 externo seja aplicada corretamente
-        // ═══════════════════════════════════════════════════════════
+        // Atualizar saturdayExternalWorkers IMEDIATAMENTE ao alocar sábado
         if (demand.dayOfWeek === "saturday") {
           context.saturdayExternalWorkers.add(result.broker.brokerId);
           console.log(`   📌 ${result.broker.brokerName} marcado para sábado externo → limite 1 externo`);
@@ -3685,17 +3718,23 @@ async function generateWeeklyScheduleWithAccumulator(
             );
           }
         }
-        
-        switch (pass) {
-          case 1: allocatedPass1++; break;
-          case 2: allocatedPass2++; break;
-          case 3: allocatedPass3++; break;
-          case 4: allocatedPass4++; break;
-          case 5: allocatedPass5++; break;
-        }
+      }
+    }
+    
+    console.log(`   📊 Nível ${level}: ${levelCounts[level - 1]} alocações`);
+    
+    // Chain swaps entre níveis para cobrir gaps
+    if (level < 4) {
+      const interLevelChain = chainSwapForUnallocated(context, possibleDemands, allocatedDemands, internalLocIds, relaxedAllocations);
+      if (interLevelChain.swapsSuccessful > 0) {
+        console.log(`   🔗 Chain swaps inter-nível ${level}→${level + 1}: ${interLevelChain.swapsSuccessful} realizados`);
       }
     }
   }
+
+  // Log de distribuição por nível
+  const allocatedPass1 = levelCounts[0], allocatedPass2 = levelCounts[1], allocatedPass3 = levelCounts[2], allocatedPass4 = levelCounts[3];
+  const allocatedPass5 = 0; // Não há mais pass 5 separado
 
   // ═══════════════════════════════════════════════════════════
   // ETAPA 8.6: REBALANCEAMENTO "2 ANTES DO 3" - GATE GLOBAL
