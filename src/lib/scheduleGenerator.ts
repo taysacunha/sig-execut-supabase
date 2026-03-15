@@ -3909,71 +3909,141 @@ async function generateWeeklyScheduleWithAccumulator(
       if (stillPendingFinal.length > 0) {
         const finalGateCheck = canAnyoneStillReachTwo(stillPendingFinal, context);
         
-        if (!finalGateCheck.canReach) {
-          console.log(`\n   ✅ GATE GLOBAL LIBERADO: permitindo 3º externo para demandas restantes`);
-          
-          // PASSO 3: Permitir 3º externo
+        // ═══════════════════════════════════════════════════════════
+        // COMPENSAÇÃO DINÂMICA: Se ainda há demandas pendentes,
+        // permitir 3º externo para quem trabalhou sábado (compensação)
+        // ANTES de liberar gate geral
+        // ═══════════════════════════════════════════════════════════
+        if (finalGateCheck.canReach) {
+          console.log(`\n   🔄 COMPENSAÇÃO DINÂMICA: Tentando alocar pendentes via corretores com compensação...`);
           for (const demand of stillPendingFinal) {
             const demandKey = `${demand.locationId}-${demand.dateStr}-${demand.shift}`;
             if (allocatedDemands.has(demandKey)) continue;
             
-            // Obter fila FIFO do local para ordenação de terceiros plantões
-            const locationQueue = context.locationRotationQueues?.get(demand.locationId);
+            // Priorizar corretores com workedSaturdayLastWeek que ainda precisam de mais
+            const compensationBrokers = context.brokerQueue
+              .filter(b => {
+                if (!demand.eligibleBrokerIds.includes(b.brokerId)) return false;
+                if (b.externalShiftCount >= MAX_EXTERNAL_SHIFTS_PER_WEEK) return false;
+                if (!b.workedSaturdayLastWeek && !context.saturdayInternalWorkers?.has(b.brokerId)) return false;
+                return true;
+              })
+              .sort((a, b) => a.externalShiftCount - b.externalShiftCount);
             
-            const eligibleSorted = [...demand.eligibleBrokerIds].sort((a, b) => {
-              const brokerA = context.brokerQueue.find(br => br.brokerId === a);
-              const brokerB = context.brokerQueue.find(br => br.brokerId === b);
-              const extCountA = brokerA?.externalShiftCount || 0;
-              const extCountB = brokerB?.externalShiftCount || 0;
-              
-              // PRIORIDADE 1: Menos externos (todos terão 2 neste ponto, então empata)
-              if (extCountA !== extCountB) return extCountA - extCountB;
-              
-              // PRIORIDADE 2: Posição na fila FIFO do local (distribuição rotativa)
-              if (locationQueue && locationQueue.length > 0) {
-                const posA = locationQueue.find(q => q.broker_id === a)?.queue_position ?? 999;
-                const posB = locationQueue.find(q => q.broker_id === b)?.queue_position ?? 999;
-                if (posA !== posB) return posA - posB;
-              }
-              
-              // PRIORIDADE 3: Menos pares consecutivos
-              const pairsA = countConsecutivePairsIfAllocated(a, demand.dateStr, context);
-              const pairsB = countConsecutivePairsIfAllocated(b, demand.dateStr, context);
-              return pairsA - pairsB;
-            });
-            
-            for (const brokerId of eligibleSorted) {
-              const broker = context.brokerQueue.find(b => b.brokerId === brokerId);
-              if (!broker) continue;
-              
-              // HARD CAP: NUNCA permitir mais de 3 externos
-              if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_HARD_CAP) {
-                console.log(`   ⛔ ${broker.brokerName}: HARD CAP (${broker.externalShiftCount} externos) - BLOQUEADO`);
-                continue;
-              }
-              
+            for (const broker of compensationBrokers) {
               const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
               if (!check.allowed) continue;
               
-              const wasOverLimit = broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_PER_WEEK;
               allocateDemand(demand, broker, context);
               allocatedDemands.add(demandKey);
-              
-              if (wasOverLimit) {
-                relaxedAllocations.push({ 
-                  demand: `${demand.locationName} ${demand.dateStr} ${demand.shift}`, 
-                  pass: 9, 
-                  reason: `3º EXTERNO: ${broker.brokerName} (gate global liberado)` 
-                });
-                console.log(`   🚨 ${demand.locationName} ${demand.dateStr} ${demand.shift} → ${broker.brokerName} (3º externo, gate liberado)`);
-              }
+              relaxedAllocations.push({ 
+                demand: `${demand.locationName} ${demand.dateStr} ${demand.shift}`, 
+                pass: 9, 
+                reason: `COMPENSAÇÃO DINÂMICA: ${broker.brokerName} (trabalhou sábado, Regra 8 relaxada)` 
+              });
+              console.log(`   ⚠️ COMPENSAÇÃO: ${demand.locationName} ${demand.dateStr} ${demand.shift} → ${broker.brokerName} (agora tem ${broker.externalShiftCount})`);
               break;
             }
           }
-        } else {
-          console.log(`\n   ⚠️ ${stillPendingFinal.length} demandas ainda pendentes - gate global impede 3º externo`);
-          console.log(`      Corretores que ainda podem receber: ${finalGateCheck.brokersUnderTwo.join(', ')}`);
-          console.log(`      → Isso indica problema de configuração ou elegibilidade`);
+        }
+        
+        // Recalcular pendentes após compensação dinâmica
+        const stillPendingAfterCompensation = stillPendingFinal.filter(d => 
+          !allocatedDemands.has(`${d.locationId}-${d.dateStr}-${d.shift}`)
+        );
+        
+        if (stillPendingAfterCompensation.length > 0) {
+          const gateAfterCompensation = canAnyoneStillReachTwo(stillPendingAfterCompensation, context);
+          
+          if (!gateAfterCompensation.canReach) {
+            console.log(`\n   ✅ GATE GLOBAL LIBERADO: permitindo 3º externo para demandas restantes`);
+            
+            // PASSO 3: Permitir 3º externo
+            for (const demand of stillPendingAfterCompensation) {
+              const demandKey = `${demand.locationId}-${demand.dateStr}-${demand.shift}`;
+              if (allocatedDemands.has(demandKey)) continue;
+              
+              const locationQueue = context.locationRotationQueues?.get(demand.locationId);
+              
+              const eligibleSorted = [...demand.eligibleBrokerIds].sort((a, b) => {
+                const brokerA = context.brokerQueue.find(br => br.brokerId === a);
+                const brokerB = context.brokerQueue.find(br => br.brokerId === b);
+                const extCountA = brokerA?.externalShiftCount || 0;
+                const extCountB = brokerB?.externalShiftCount || 0;
+                
+                if (extCountA !== extCountB) return extCountA - extCountB;
+                
+                // Priorizar quem tem compensação pendente
+                const aHasCompensation = brokerA?.workedSaturdayLastWeek ? 1 : 0;
+                const bHasCompensation = brokerB?.workedSaturdayLastWeek ? 1 : 0;
+                if (aHasCompensation !== bHasCompensation) return bHasCompensation - aHasCompensation;
+                
+                if (locationQueue && locationQueue.length > 0) {
+                  const posA = locationQueue.find(q => q.broker_id === a)?.queue_position ?? 999;
+                  const posB = locationQueue.find(q => q.broker_id === b)?.queue_position ?? 999;
+                  if (posA !== posB) return posA - posB;
+                }
+                
+                const pairsA = countConsecutivePairsIfAllocated(a, demand.dateStr, context);
+                const pairsB = countConsecutivePairsIfAllocated(b, demand.dateStr, context);
+                return pairsA - pairsB;
+              });
+              
+              for (const brokerId of eligibleSorted) {
+                const broker = context.brokerQueue.find(b => b.brokerId === brokerId);
+                if (!broker) continue;
+                
+                if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_HARD_CAP) {
+                  console.log(`   ⛔ ${broker.brokerName}: HARD CAP (${broker.externalShiftCount} externos) - BLOQUEADO`);
+                  continue;
+                }
+                
+                const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
+                if (!check.allowed) continue;
+                
+                const wasOverLimit = broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_PER_WEEK;
+                allocateDemand(demand, broker, context);
+                allocatedDemands.add(demandKey);
+                
+                if (wasOverLimit) {
+                  relaxedAllocations.push({ 
+                    demand: `${demand.locationName} ${demand.dateStr} ${demand.shift}`, 
+                    pass: 9, 
+                    reason: `3º EXTERNO: ${broker.brokerName} (gate global liberado${broker.workedSaturdayLastWeek ? ', compensação sábado' : ''})` 
+                  });
+                  console.log(`   🚨 ${demand.locationName} ${demand.dateStr} ${demand.shift} → ${broker.brokerName} (3º externo, gate liberado)`);
+                }
+                break;
+              }
+            }
+          } else {
+            console.log(`\n   ⚠️ ${stillPendingAfterCompensation.length} demandas ainda pendentes - gate global impede 3º externo`);
+            console.log(`      Corretores que ainda podem receber: ${gateAfterCompensation.brokersUnderTwo.join(', ')}`);
+            
+            // DIAGNÓSTICO: Explicar POR QUE cada demanda pendente não foi alocada
+            for (const demand of stillPendingAfterCompensation) {
+              const demandKey = `${demand.locationId}-${demand.dateStr}-${demand.shift}`;
+              if (allocatedDemands.has(demandKey)) continue;
+              console.log(`\n   🔍 DIAGNÓSTICO: ${demand.locationName} ${demand.dateStr} ${demand.shift}`);
+              for (const bId of demand.eligibleBrokerIds) {
+                const broker = context.brokerQueue.find(b => b.brokerId === bId);
+                if (!broker) { console.log(`      - ${bId}: não encontrado na fila`); continue; }
+                
+                const reasons: string[] = [];
+                if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_PER_WEEK) reasons.push(`já tem ${broker.externalShiftCount} externos`);
+                if (context.saturdayInternalWorkers?.has(bId) && (demand.dayOfWeek === 'saturday' || demand.dayOfWeek === 'sunday')) reasons.push('sábado interno bloqueia fim de semana');
+                if (!broker.availableWeekdays.includes(demand.dayOfWeek)) reasons.push(`sem ${demand.dayOfWeek} na disponibilidade`);
+                
+                const invCheck = checkTrulyInviolableRules(broker, demand, context);
+                if (!invCheck.allowed) reasons.push(invCheck.reason);
+                
+                const absCheck = checkAbsoluteRules(broker, demand, context);
+                if (!absCheck.allowed) reasons.push(absCheck.reason);
+                
+                console.log(`      - ${broker.brokerName} (${broker.externalShiftCount} ext): ${reasons.length > 0 ? reasons.join('; ') : 'elegível mas bloqueado por gate'}`);
+              }
+            }
+          }
         }
       }
     }
