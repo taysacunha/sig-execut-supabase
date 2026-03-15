@@ -2960,7 +2960,7 @@ async function generateWeeklyScheduleWithAccumulator(
   }
 
   const brokerQueue: BrokerQueueItem[] = allBrokers.map((broker) => {
-    const prevWeekStats = accumulator.previousWeekStats.find(s => s.broker_id => broker.id);
+    const prevWeekStats = accumulator.previousWeekStats.find(s => s.broker_id === broker.id);
     const target = externalShiftTargets.get(broker.id) || 2;
     
     return {
