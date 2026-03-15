@@ -414,11 +414,22 @@ export function ValidationReportPanel({ result, onClose, brokerDiagnostics }: Va
                 ruleFilter={ruleFilter}
               />
             </>
-          ) : (
+          ) : viewMode === "rule" ? (
             <RuleView
               violationsByRule={filteredViolationsByRule}
               expandedRules={expandedRules}
               toggleRule={toggleRule}
+            />
+          ) : (
+            <DiagnosticView
+              diagnostics={brokerDiagnostics || []}
+              expanded={expandedDiagnostics}
+              toggleExpanded={(id) => {
+                const next = new Set(expandedDiagnostics);
+                if (next.has(id)) next.delete(id); else next.add(id);
+                setExpandedDiagnostics(next);
+              }}
+              searchBroker={searchBroker}
             />
           )}
           {filteredBrokerReports.length === 0 && filteredGlobalViolations.length === 0 && filteredViolationsByRule.size === 0 && hasActiveFilters && (
