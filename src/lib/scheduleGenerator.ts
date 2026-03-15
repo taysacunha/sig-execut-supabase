@@ -3351,7 +3351,7 @@ async function generateWeeklyScheduleWithAccumulator(
   console.log(`   📊 Corretores com <2 externos: ${brokersUnderTwo.length}`);
   console.log(`   📊 Corretores com 3 externos: ${brokersWithThree.length}`);
   
-  if (brokersUnderTwo.length > 0 && brokersWithThree.length > 0) {
+  if (brokersUnderTwo.length > 0 && (brokersWithThree.length > 0 || unallocatedAfterPasses.length > 0)) {
     console.log(`\n   🔄 Tentando rebalancear...`);
     
     let rebalanceCount = 0;
