@@ -4390,7 +4390,7 @@ async function generateWeeklyScheduleWithAccumulator(
               const broker = context.brokerQueue.find(b => b.brokerId === brokerId);
               if (!broker) continue;
               
-              // HARD CAP: NUNCA permitir mais de 3 externos
+              // HARD CAP: NUNCA permitir mais de MAX_EXTERNAL_SHIFTS_HARD_CAP externos
               if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_HARD_CAP) {
                 console.log(`   ⛔ ${broker.brokerName}: HARD CAP (${broker.externalShiftCount} externos) - BLOQUEADO`);
                 continue;
