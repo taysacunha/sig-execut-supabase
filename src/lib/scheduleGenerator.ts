@@ -271,7 +271,7 @@ interface AllocationContext {
 }
 
 const MAX_EXTERNAL_SHIFTS_PER_WEEK = 2;
-const MAX_EXTERNAL_SHIFTS_HARD_CAP = 3; // NUNCA pode exceder 3 - hard limit absoluto
+const MAX_EXTERNAL_SHIFTS_HARD_CAP = 4; // Hard limit absoluto - só acessível via gate nível 4
 
 // ═══════════════════════════════════════════════════════════
 // FUNÇÃO AUXILIAR: VERIFICAR 3 DIAS EXTERNOS CONSECUTIVOS
