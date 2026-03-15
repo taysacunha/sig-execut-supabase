@@ -3885,7 +3885,7 @@ async function generateWeeklyScheduleWithAccumulator(
           
           for (const brokerName of gateCheckAfterPass1.brokersUnderTwo) {
             const broker = context.brokerQueue.find(b => b.brokerName === brokerName);
-            if (!broker || broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_PER_WEEK) continue;
+            if (!broker || broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_HARD_CAP) continue;
             if (!demand.eligibleBrokerIds.includes(broker.brokerId)) continue;
             
             // Tentar com Regra 8 relaxada
