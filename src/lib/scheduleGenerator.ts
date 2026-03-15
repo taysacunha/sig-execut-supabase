@@ -3337,7 +3337,8 @@ async function generateWeeklyScheduleWithAccumulator(
   // ═══════════════════════════════════════════════════════════
   // ETAPA 8.8: DESCONSECUTIVAR (antes do último recurso)
   // ═══════════════════════════════════════════════════════════
-  
+  const deConsecutiveResult = deConsecutivizeExternals(context, possibleDemands, internalLocIds);
+
   // ═══════════════════════════════════════════════════════════
   // ETAPA 8.8.1: REBALANCEAMENTO ATIVO POR SWAP (Chain Swap)
   // Identifica corretores com 3+ externos e tenta trocar com quem tem <2
