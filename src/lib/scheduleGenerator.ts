@@ -2880,9 +2880,8 @@ async function generateWeeklyScheduleWithAccumulator(
       target = 1;
     }
     
-    if (saturdayInternalWorkers.has(broker.id)) {
-      target = 1;
-    }
+    // Corretores de sábado agora podem ter até 2 externos (mesmo target dos demais)
+    // Não reduzir target por trabalhar sábado
     
     externalShiftTargets.set(broker.id, target);
   }
