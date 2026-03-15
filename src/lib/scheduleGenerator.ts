@@ -3243,7 +3243,7 @@ async function generateWeeklyScheduleWithAccumulator(
         // ═══════════════════════════════════════════════════════════
         if (demand.dayOfWeek === "saturday") {
           context.saturdayExternalWorkers.add(result.broker.brokerId);
-          console.log(`   📌 ${result.broker.brokerName} marcado para sábado externo → limite 1 externo`);
+          console.log(`   📌 ${result.broker.brokerName} marcado para sábado externo → limite 2 externos`);
           
           if (result.broker.internalLocation === "bessa") {
             context.saturdayBessaExternalCount.set(demand.dateStr, 
