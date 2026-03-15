@@ -341,11 +341,8 @@ function hasWeekendConflict(
   if (demandDayOfWeek === "sunday") {
     const saturdayStr = format(subDays(demandDate, 1), "yyyy-MM-dd");
     
-    // CORREÇÃO CRÍTICA: Verificar primeiro os pré-identificados para sábado interno
-    // Isso captura corretores reservados para sábado interno ANTES de serem alocados
-    if (saturdayInternalWorkers?.has(brokerId)) {
-      return { hasConflict: true, conflictDay: "sábado (reservado para interno)" };
-    }
+    // REMOVIDO: Bloqueio fantasma por pré-reserva de sábado interno
+    // O bloqueio real ocorre naturalmente após ETAPA 8.9 quando a alocação real existe
     
     // Verificar alocações já realizadas
     const hasSaturday = assignments.some(a => 
@@ -747,14 +744,13 @@ function checkTrulyInviolableRulesWithRelaxation(
   
   // ═══════════════════════════════════════════════════════════
   // REGRA 9 CORRIGIDA: Sábado OU Domingo (QUALQUER plantão)
-  // INCLUI verificação de saturdayInternalWorkers pré-identificados
+  // SEM bloqueio fantasma — só verifica alocações REAIS
   // ═══════════════════════════════════════════════════════════
   const weekendCheck = hasWeekendConflict(
     broker.brokerId, 
     demand.date, 
     demand.dayOfWeek, 
-    context.assignments,
-    context.saturdayInternalWorkers
+    context.assignments
   );
   
   if (weekendCheck.hasConflict) {
@@ -856,16 +852,14 @@ function canAnyoneStillReachTwo(
       // Verificar dia da semana disponível
       if (!broker.availableWeekdays.includes(demand.dayOfWeek)) continue;
       
-      // Sábado interno → bloqueia sábado e domingo externo
-      const isSaturday = demand.dayOfWeek === "saturday";
-      const isSunday = demand.dayOfWeek === "sunday";
-      if (isSaturdayInternalWorker && (isSaturday || isSunday)) continue;
+      // REMOVIDO: Bloqueio fantasma de sáb/dom para saturdayInternalWorkers
+      // O bloqueio real ocorre após ETAPA 8.9 via alocações reais
       
       // Sexta com sábado externo
       if (isSaturdayExternalWorker && demand.dayOfWeek === "friday" && broker.externalShiftCount >= 1) continue;
       
       // Sábado externo com 1+ externos
-      if (isSaturday && broker.externalShiftCount >= 1) continue;
+      if (demand.dayOfWeek === "saturday" && broker.externalShiftCount >= 1) continue;
       
       const check = checkTrulyInviolableRules(broker, demand, context);
       if (check.allowed) {
@@ -976,7 +970,7 @@ function checkAbsoluteRules(
   // REGRA ABSOLUTA 1: Máximo de externos por semana
   // RELAXAMENTO: Em passes 4-5, corretores com compensação pendente (sábado) podem ir até HARD_CAP
   const hasCompensation = broker.workedSaturdayLastWeek || context.saturdayInternalWorkers?.has(broker.brokerId);
-  const effectiveLimit = (pass >= 4 && hasCompensation) ? MAX_EXTERNAL_SHIFTS_HARD_CAP : MAX_EXTERNAL_SHIFTS_PER_WEEK;
+  const effectiveLimit = (pass >= 3 && hasCompensation) ? MAX_EXTERNAL_SHIFTS_HARD_CAP : MAX_EXTERNAL_SHIFTS_PER_WEEK;
   if (broker.externalShiftCount >= effectiveLimit) {
     return { allowed: false, reason: `Já tem ${broker.externalShiftCount} externos (máx ${effectiveLimit}, pass ${pass})`, rule: "REGRA 1: Máx externos/semana" };
   }
@@ -1749,13 +1743,12 @@ function findBrokerForDemand(
       );
       
       // VERIFICAR REGRA 9: Sábado OU Domingo (QUALQUER plantão)
-      // INCLUI verificação de saturdayInternalWorkers pré-identificados
+      // SEM bloqueio fantasma — só verifica alocações REAIS
       const weekendCheck = hasWeekendConflict(
         onlyBrokerId,
         demand.date,
         demand.dayOfWeek,
-        context.assignments,
-        context.saturdayInternalWorkers
+        context.assignments
       );
       
       if (!hasPhysicalConflict && !weekendCheck.hasConflict) {
@@ -2003,31 +1996,22 @@ function findBrokerForDemand(
       continue;
     }
 
-    // Proteção de sábado interno (para sábados externos)
-    if (isSaturday && context.saturdayInternalWorkers?.has(broker.brokerId)) {
+    // Proteção de sábado interno (para sábados externos) — APENAS passes 1-3
+    // A partir do pass 4, permite sábado externo para garantir cobertura (externos acima de tudo)
+    if (isSaturday && context.saturdayInternalWorkers?.has(broker.brokerId) && pass <= 3) {
       if (collectBlockedBrokers) {
         blockedBrokers.push({
           brokerId: broker.brokerId,
           brokerName: broker.brokerName,
           rule: "REGRA: Reservado Tambaú",
-          reason: `Reservado para Tambaú sábado interno`
+          reason: `Reservado para Tambaú sábado interno (pass ${pass} <= 3)`
         });
       }
       continue;
     }
     
-    // NOVA PROTEÇÃO: Bloquear corretores de sábado interno em demandas de DOMINGO
-    if (isSunday && context.saturdayInternalWorkers?.has(broker.brokerId)) {
-      if (collectBlockedBrokers) {
-        blockedBrokers.push({
-          brokerId: broker.brokerId,
-          brokerName: broker.brokerName,
-          rule: "REGRA 9: Sáb/Dom",
-          reason: `Reservado para sábado interno - não pode trabalhar domingo`
-        });
-      }
-      continue;
-    }
+    // REMOVIDO: Bloqueio fantasma de domingo por pré-reserva de sábado interno
+    // O bloqueio real ocorre naturalmente via hasWeekendConflict após ETAPA 8.9
 
     // ═══════════════════════════════════════════════════════════
     // REGRA: CORRETORES COM SÁBADO EXTERNO = MÁXIMO 2 EXTERNOS NA SEMANA
@@ -4196,6 +4180,106 @@ async function generateWeeklyScheduleWithAccumulator(
       
       if (!allocated) {
         console.log(`   ❌ ${demand.locationName} ${demand.dateStr} ${demand.shift}: IMPOSSÍVEL alocar mesmo com relaxamento`);
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // ETAPA 8.11b: SACRIFICAR SÁBADO INTERNO PARA COBRIR EXTERNO
+  // "Externos acima de tudo" — remove alocação de sábado interno
+  // para liberar corretor para demanda externa pendente
+  // Mínimo de 1 corretor por local interno no sábado é preservado
+  // ═══════════════════════════════════════════════════════════
+  const postFinalUnallocated = possibleDemands.filter(d => 
+    !allocatedDemands.has(`${d.locationId}-${d.dateStr}-${d.shift}`)
+  );
+
+  if (postFinalUnallocated.length > 0 && saturdayDate) {
+    console.log(`\n🔥 ETAPA 8.11b: SACRIFÍCIO DE SÁBADO INTERNO — ${postFinalUnallocated.length} demandas externas pendentes`);
+    const saturdayDateStr = format(saturdayDate, "yyyy-MM-dd");
+    
+    for (const demand of postFinalUnallocated) {
+      const demandKey = `${demand.locationId}-${demand.dateStr}-${demand.shift}`;
+      if (allocatedDemands.has(demandKey)) continue;
+      
+      // Buscar corretores elegíveis que estão alocados no sábado interno
+      for (const brokerId of demand.eligibleBrokerIds) {
+        const broker = context.brokerQueue.find(b => b.brokerId === brokerId);
+        if (!broker) continue;
+        if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_HARD_CAP) continue;
+        if (!broker.availableWeekdays.includes(demand.dayOfWeek)) continue;
+        
+        // Encontrar alocação de sábado interno deste corretor
+        const saturdayInternalAssignment = context.assignments.find(a =>
+          a.broker_id === brokerId &&
+          a.assignment_date === saturdayDateStr &&
+          context.internalLocationIds.has(a.location_id)
+        );
+        
+        if (!saturdayInternalAssignment) continue;
+        
+        // Verificar mínimo de 1 no local interno
+        const otherBrokersAtSameInternal = context.assignments.filter(a =>
+          a.location_id === saturdayInternalAssignment.location_id &&
+          a.assignment_date === saturdayDateStr &&
+          a.shift_type === saturdayInternalAssignment.shift_type &&
+          a.broker_id !== brokerId
+        );
+        
+        if (otherBrokersAtSameInternal.length < 1) {
+          console.log(`   ⚠️ ${broker.brokerName}: não pode sacrificar — seria o último no sábado interno`);
+          continue;
+        }
+        
+        // Verificar regras invioláveis (exceto weekend que será resolvida pela remoção)
+        const checkResult = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
+        if (!checkResult.allowed) continue;
+        
+        // ═══ EXECUTAR SACRIFÍCIO ═══
+        const internalIdx = context.assignments.indexOf(saturdayInternalAssignment);
+        if (internalIdx === -1) continue;
+        
+        const sacrificedLocation = saturdayInternalAssignment.location_id;
+        context.assignments.splice(internalIdx, 1);
+        
+        // Remover do saturdayInternalWorkers
+        context.saturdayInternalWorkers?.delete(brokerId);
+        
+        // Alocar na demanda externa
+        allocateDemand(demand, broker, context);
+        allocatedDemands.add(demandKey);
+        
+        relaxedAllocations.push({
+          demand: `${demand.locationName} ${demand.dateStr} ${demand.shift}`,
+          pass: 11,
+          reason: `SACRIFÍCIO INTERNO: ${broker.brokerName} removido do sábado interno para cobrir externo`
+        });
+        
+        console.log(`   🔥 SACRIFÍCIO: ${broker.brokerName} removido do sábado interno → ${demand.locationName} ${demand.dateStr} ${demand.shift}`);
+        console.log(`   ⚠️ WARNING: INTERNO_COBERTURA_REDUZIDA no sábado para local ${sacrificedLocation}`);
+        break;
+      }
+    }
+    
+    // Diagnóstico final
+    const trulyFinal = postFinalUnallocated.filter(d => 
+      !allocatedDemands.has(`${d.locationId}-${d.dateStr}-${d.shift}`)
+    );
+    if (trulyFinal.length > 0) {
+      console.log(`\n   ❌ DIAGNÓSTICO FINAL: ${trulyFinal.length} demandas IMPOSSÍVEIS após todos os esforços:`);
+      for (const demand of trulyFinal) {
+        console.log(`      🔍 ${demand.locationName} ${demand.dateStr} ${demand.shift}`);
+        const top3 = demand.eligibleBrokerIds.slice(0, 3);
+        for (const bId of top3) {
+          const broker = context.brokerQueue.find(b => b.brokerId === bId);
+          if (!broker) continue;
+          const reasons: string[] = [];
+          if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_HARD_CAP) reasons.push(`HARD CAP (${broker.externalShiftCount})`);
+          if (!broker.availableWeekdays.includes(demand.dayOfWeek)) reasons.push(`Dia indisponível`);
+          const invCheck = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
+          if (!invCheck.allowed) reasons.push(invCheck.reason);
+          console.log(`         - ${broker.brokerName} (${broker.externalShiftCount} ext): ${reasons.join('; ') || 'desconhecido'}`);
+        }
       }
     }
   }
