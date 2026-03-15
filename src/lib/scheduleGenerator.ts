@@ -2077,7 +2077,7 @@ function findBrokerForDemand(
       continue;
     }
 
-    const absoluteCheck = checkAbsoluteRules(broker, demand, context);
+    const absoluteCheck = checkAbsoluteRules(broker, demand, context, pass);
     if (!absoluteCheck.allowed) {
       if (collectBlockedBrokers) {
         blockedBrokers.push({
