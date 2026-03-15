@@ -2360,6 +2360,20 @@ function findBrokerForDemand(
 
   // Fluxo normal de alocação
   for (const broker of sortedQueue) {
+    // ═══════════════════════════════════════════════════════════
+    // GATE DE NÍVEL: Bloquear brokers que já atingiram o nível atual
+    // ═══════════════════════════════════════════════════════════
+    if (broker.externalShiftCount >= maxAllowedExternals) {
+      if (collectBlockedBrokers) {
+        blockedBrokers.push({
+          brokerId: broker.brokerId,
+          brokerName: broker.brokerName,
+          rule: "GATE DE NÍVEL",
+          reason: `Já tem ${broker.externalShiftCount} externos (máximo neste nível: ${maxAllowedExternals})`
+        });
+      }
+      continue;
+    }
     // Proteção de reserva
     if (demandIsReservedFor && demandIsReservedFor !== broker.brokerId && pass < 5) {
       if (collectBlockedBrokers) {
