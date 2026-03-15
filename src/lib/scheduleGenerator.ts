@@ -970,11 +970,15 @@ interface BlockedBrokerInfo {
 function checkAbsoluteRules(
   broker: BrokerQueueItem,
   demand: ExternalDemand,
-  context: AllocationContext
+  context: AllocationContext,
+  pass: number = 1
 ): { allowed: boolean; reason: string; rule: string } {
-  // REGRA ABSOLUTA 1: Máximo de 2 externos por semana
-  if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_PER_WEEK) {
-    return { allowed: false, reason: `Já tem ${broker.externalShiftCount} externos`, rule: "REGRA 1: Máx 2 externos/semana" };
+  // REGRA ABSOLUTA 1: Máximo de externos por semana
+  // RELAXAMENTO: Em passes 4-5, corretores com compensação pendente (sábado) podem ir até HARD_CAP
+  const hasCompensation = broker.workedSaturdayLastWeek || context.saturdayInternalWorkers?.has(broker.brokerId);
+  const effectiveLimit = (pass >= 4 && hasCompensation) ? MAX_EXTERNAL_SHIFTS_HARD_CAP : MAX_EXTERNAL_SHIFTS_PER_WEEK;
+  if (broker.externalShiftCount >= effectiveLimit) {
+    return { allowed: false, reason: `Já tem ${broker.externalShiftCount} externos (máx ${effectiveLimit}, pass ${pass})`, rule: "REGRA 1: Máx externos/semana" };
   }
 
   // REGRA ABSOLUTA 2: Deve estar na lista de elegíveis
