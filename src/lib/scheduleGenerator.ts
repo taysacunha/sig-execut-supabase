@@ -1060,16 +1060,17 @@ function checkAbsoluteRules(
     };
   }
 
-  // REGRA 10: Se trabalha sábado (interno OU externo), máximo 2 externos na semana
-  const worksSaturdayInternal = context.saturdayInternalWorkers?.has(broker.brokerId);
+  // REGRA 10: Se trabalha sábado EXTERNO, máximo 2 externos na semana
+  // Sábado INTERNO NÃO limita — pelo contrário, quem pega sábado interno
+  // deve receber MAIS externos durante a semana para compensar
   const worksSaturdayExternal = context.saturdayExternalWorkers?.has(broker.brokerId);
   
-  if (worksSaturdayInternal || worksSaturdayExternal) {
+  if (worksSaturdayExternal) {
     if (broker.externalShiftCount >= 2) {
       return { 
         allowed: false, 
-        reason: `Trabalha sábado ${worksSaturdayInternal ? 'interno' : 'externo'}, já tem ${broker.externalShiftCount} externos (máx 2)`, 
-        rule: "REGRA 10: Sábado + máx 2 externos" 
+        reason: `Trabalha sábado externo, já tem ${broker.externalShiftCount} externos (máx 2)`, 
+        rule: "REGRA 10: Sábado externo + máx 2 externos" 
       };
     }
   }
@@ -1838,7 +1839,21 @@ function findBrokerForDemand(
         return a.externalShiftCount - b.externalShiftCount;
       }
       
-      // Para NÃO-DOMINGOS: lógica original
+      // Para NÃO-DOMINGOS: lógica original com boost para sábado interno
+      // PRIORIDADE 0.5: Se é dia de semana, Saturday internal workers têm prioridade
+      // (compensam a impossibilidade de pegar sáb/dom externo)
+      if (!isSaturday && !isSunday) {
+        const aIsSatInt = context.saturdayInternalWorkers?.has(a.brokerId) ? 1 : 0;
+        const bIsSatInt = context.saturdayInternalWorkers?.has(b.brokerId) ? 1 : 0;
+        // Quem é Saturday internal worker E ainda tem crédito pendente recebe boost
+        if (aIsSatInt !== bIsSatInt) {
+          const aNeedsMore = a.externalShiftCount < a.targetExternals;
+          const bNeedsMore = b.externalShiftCount < b.targetExternals;
+          if (aIsSatInt && aNeedsMore && !bIsSatInt) return -1;
+          if (bIsSatInt && bNeedsMore && !aIsSatInt) return 1;
+        }
+      }
+      
       // PRIORIDADE 1: Quem tem MENOS externos (distribuição balanceada)
       if (a.externalShiftCount !== b.externalShiftCount) {
         return a.externalShiftCount - b.externalShiftCount;
@@ -1982,36 +1997,35 @@ function findBrokerForDemand(
     }
 
     // ═══════════════════════════════════════════════════════════
-    // REGRA: CORRETORES COM SÁBADO = MÁXIMO 2 EXTERNOS NA SEMANA
-    // Aplica-se a quem trabalha sábado interno OU sábado externo
+    // REGRA: CORRETORES COM SÁBADO EXTERNO = MÁXIMO 2 EXTERNOS NA SEMANA
+    // Sábado INTERNO não limita — quem pega sábado interno recebe
+    // mais externos durante a semana para compensar
     // ═══════════════════════════════════════════════════════════
-    const worksSaturdayInternal = context.saturdayInternalWorkers?.has(broker.brokerId);
     const worksSaturdayExternal = context.saturdayExternalWorkers?.has(broker.brokerId);
-    const worksSaturday = worksSaturdayInternal || worksSaturdayExternal;
     
-    if (worksSaturday && broker.externalShiftCount >= 2 && !isSaturday) {
+    if (worksSaturdayExternal && broker.externalShiftCount >= 2 && !isSaturday) {
       if (collectBlockedBrokers) {
         blockedBrokers.push({
           brokerId: broker.brokerId,
           brokerName: broker.brokerName,
-          rule: "REGRA: Sábado + 2 externos máx",
-          reason: `Trabalha sábado - limite de 2 externos atingido (tem ${broker.externalShiftCount})`
+          rule: "REGRA: Sábado externo + 2 externos máx",
+          reason: `Trabalha sábado externo - limite de 2 externos atingido (tem ${broker.externalShiftCount})`
         });
       }
       continue;
     }
     
     // ═══════════════════════════════════════════════════════════
-    // PREFERÊNCIA: EVITAR SEXTA PARA QUEM TRABALHA SÁBADO
-    // Só bloqueia se já tem 1+ externo (preserva chance de quem tem 0)
+    // PREFERÊNCIA: EVITAR SEXTA PARA QUEM TRABALHA SÁBADO EXTERNO
+    // Sábado INTERNO na sexta é OK — não é consecutivo externo
     // ═══════════════════════════════════════════════════════════
-    if (worksSaturday && demand.dayOfWeek === "friday" && broker.externalShiftCount >= 1) {
+    if (worksSaturdayExternal && demand.dayOfWeek === "friday" && broker.externalShiftCount >= 1) {
       if (collectBlockedBrokers) {
         blockedBrokers.push({
           brokerId: broker.brokerId,
           brokerName: broker.brokerName,
-          rule: "REGRA: Evitar sexta com sábado",
-          reason: `Trabalha sábado e já tem ${broker.externalShiftCount} externo(s) - evitar consecutivo (sexta)`
+          rule: "REGRA: Evitar sexta com sábado externo",
+          reason: `Trabalha sábado externo e já tem ${broker.externalShiftCount} externo(s) - evitar consecutivo (sexta)`
         });
       }
       continue;
@@ -2880,8 +2894,14 @@ async function generateWeeklyScheduleWithAccumulator(
       target = 1;
     }
     
-    // Corretores de sábado agora podem ter até 2 externos (mesmo target dos demais)
-    // Não reduzir target por trabalhar sábado
+    // Corretores de sábado INTERNO recebem target MAIOR para compensar
+    // a indisponibilidade no sáb/dom externo
+    if (saturdayInternalWorkers.has(broker.id)) {
+      // Se target normal seria 2, dar 3 para compensar
+      // Se target normal seria 1 (alternância), dar 2
+      target = Math.max(target + 1, 2);
+      console.log(`   🎯 TARGET COMPENSATÓRIO: ${broker.name} → target ${target} (sábado interno, compensa sem sáb/dom externo)`);
+    }
     
     externalShiftTargets.set(broker.id, target);
   }
@@ -3433,6 +3453,13 @@ async function generateWeeklyScheduleWithAccumulator(
   
   if (postSwapDist.with0 + postSwapDist.with1 > 0 && postSwapDist.with3 > 0) {
     console.log(`\n   ⚠️ ALERTA: Desequilíbrio residual - ${postSwapDist.with3} corretor(es) com 3+ enquanto ${postSwapDist.with0 + postSwapDist.with1} têm <2`);
+  }
+  
+  // WARNING: Listar Saturday internal workers com 3+ externos (compensação ativada)
+  for (const broker of context.brokerQueue) {
+    if (context.saturdayInternalWorkers?.has(broker.brokerId) && broker.externalShiftCount >= 3) {
+      console.log(`   ⚠️ WARNING: ${broker.brokerName} recebeu ${broker.externalShiftCount} externos (compensação por sábado interno)`);
+    }
   }
   
   // ═══════════════════════════════════════════════════════════
