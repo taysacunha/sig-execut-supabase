@@ -369,6 +369,18 @@ export function ValidationReportPanel({ result, onClose, brokerDiagnostics }: Va
                 <Layers className="h-3 w-3" />
                 Por Regra
               </Button>
+              {brokerDiagnostics && brokerDiagnostics.length > 0 && (
+                <Button
+                  variant={viewMode === "diagnostic" ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => setViewMode("diagnostic")}
+                >
+                  <HelpCircle className="h-3 w-3" />
+                  Por que não alocou
+                </Button>
+              )}
+              </Button>
             </div>
             <div className="flex gap-1">
               {hasActiveFilters && (
