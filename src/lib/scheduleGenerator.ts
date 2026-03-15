@@ -105,6 +105,44 @@ interface ExternalDemand {
   locationBrokerMap: Map<string, { available_morning: boolean; available_afternoon: boolean }>;
 }
 
+// ═══════════════════════════════════════════════════════════
+// DECISION TRACE: Captura motivos reais de rejeição no momento da alocação
+// ═══════════════════════════════════════════════════════════
+export interface DecisionTraceEntry {
+  demandKey: string;
+  locationName: string;
+  dateStr: string;
+  shift: "morning" | "afternoon";
+  pass: number;
+  eligibleCount: number;
+  rejections: {
+    brokerId: string;
+    brokerName: string;
+    rule: string;
+    reason: string;
+    externalShiftCount: number;
+    rule8Relaxed: boolean;
+  }[];
+  allocated: boolean;
+  allocatedBrokerName?: string;
+}
+
+export interface BrokerAllocationDiagnostic {
+  brokerId: string;
+  brokerName: string;
+  finalExternalCount: number;
+  targetExternals: number;
+  totalOpportunities: number;
+  rejectionsByRule: Record<string, number>;
+  opportunities: {
+    locationName: string;
+    dateStr: string;
+    shift: string;
+    rule: string;
+    reason: string;
+  }[];
+}
+
 export interface GenerationQualityReport {
   totalExternalDemands: number;
   allocatedPass1: number;
@@ -116,6 +154,8 @@ export interface GenerationQualityReport {
   impossibleDemands: ExternalDemand[];
   brokerDistribution: { brokerId: string; brokerName: string; count: number }[];
   relaxedAllocations: { demand: string; pass: number; reason: string }[];
+  decisionTrace: DecisionTraceEntry[];
+  brokerDiagnostics: BrokerAllocationDiagnostic[];
 }
 
 interface WeeklyAccumulator {
