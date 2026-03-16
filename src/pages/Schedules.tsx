@@ -2269,6 +2269,7 @@ const Schedules = () => {
                 result={postValidationResult} 
                 onClose={() => setPostValidationResult(null)}
                 brokerDiagnostics={getLastGenerationTrace()?.brokerDiagnostics}
+                eligibilityExclusions={getLastGenerationTrace()?.eligibilityExclusions}
               />
             </div>
           ) : (

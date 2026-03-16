@@ -38,9 +38,25 @@ export interface BrokerAllocationDiagnostic {
   }[];
 }
 
+export interface EligibilityExclusion {
+  brokerId: string;
+  brokerName: string;
+  totalDemandsInLinkedLocations: number;
+  eligibleCount: number;
+  excludedCount: number;
+  exclusionsByReason: Record<string, number>;
+  exclusionDetails: {
+    locationName: string;
+    dateStr: string;
+    shift: string;
+    reason: string;
+  }[];
+}
+
 let lastGenerationTrace: {
   decisionTrace: DecisionTraceEntry[];
   brokerDiagnostics: BrokerAllocationDiagnostic[];
+  eligibilityExclusions: EligibilityExclusion[];
 } | null = null;
 
 export function getLastGenerationTrace() {
@@ -50,6 +66,7 @@ export function getLastGenerationTrace() {
 export function setLastGenerationTrace(trace: {
   decisionTrace: DecisionTraceEntry[];
   brokerDiagnostics: BrokerAllocationDiagnostic[];
+  eligibilityExclusions: EligibilityExclusion[];
 }) {
   lastGenerationTrace = trace;
 }

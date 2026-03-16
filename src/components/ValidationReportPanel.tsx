@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { PostValidationResult, BrokerValidationReport, PostValidationViolation, UnallocatedDemand } from "@/lib/schedulePostValidation";
-import { BrokerAllocationDiagnostic } from "@/lib/generationTrace";
+import { BrokerAllocationDiagnostic, EligibilityExclusion } from "@/lib/generationTrace";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ interface ValidationReportPanelProps {
   result: PostValidationResult | null;
   onClose: () => void;
   brokerDiagnostics?: BrokerAllocationDiagnostic[];
+  eligibilityExclusions?: EligibilityExclusion[];
 }
 
 type SeverityFilter = "all" | "error" | "warning";
@@ -72,7 +73,7 @@ function getRuleShortName(rule: string): string {
 // ═══════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════
-export function ValidationReportPanel({ result, onClose, brokerDiagnostics }: ValidationReportPanelProps) {
+export function ValidationReportPanel({ result, onClose, brokerDiagnostics, eligibilityExclusions }: ValidationReportPanelProps) {
   const [expandedBrokers, setExpandedBrokers] = useState<Set<string>>(new Set());
   const [expandedRules, setExpandedRules] = useState<Set<string>>(new Set());
   const [expandedDiagnostics, setExpandedDiagnostics] = useState<Set<string>>(new Set());
@@ -420,9 +421,10 @@ export function ValidationReportPanel({ result, onClose, brokerDiagnostics }: Va
               expandedRules={expandedRules}
               toggleRule={toggleRule}
             />
-          ) : (
+          ) : viewMode === "diagnostic" ? (
             <DiagnosticView
               diagnostics={brokerDiagnostics || []}
+              eligibilityExclusions={eligibilityExclusions || []}
               expanded={expandedDiagnostics}
               toggleExpanded={(id) => {
                 const next = new Set(expandedDiagnostics);
@@ -431,7 +433,7 @@ export function ValidationReportPanel({ result, onClose, brokerDiagnostics }: Va
               }}
               searchBroker={searchBroker}
             />
-          )}
+          ) : null}
           {filteredBrokerReports.length === 0 && filteredGlobalViolations.length === 0 && filteredViolationsByRule.size === 0 && hasActiveFilters && (
             <div className="text-center py-8 text-muted-foreground text-sm">
               Nenhum resultado para os filtros aplicados.
@@ -760,11 +762,13 @@ function RuleView({
 // ═══════════════════════════════════════════════════════════
 function DiagnosticView({
   diagnostics,
+  eligibilityExclusions,
   expanded,
   toggleExpanded,
   searchBroker
 }: {
   diagnostics: BrokerAllocationDiagnostic[];
+  eligibilityExclusions: EligibilityExclusion[];
   expanded: Set<string>;
   toggleExpanded: (id: string) => void;
   searchBroker: string;
@@ -773,10 +777,14 @@ function DiagnosticView({
     !searchBroker || d.brokerName.toLowerCase().includes(searchBroker.toLowerCase())
   );
 
-  if (filtered.length === 0) {
+  const filteredExclusions = eligibilityExclusions.filter(e =>
+    !searchBroker || e.brokerName.toLowerCase().includes(searchBroker.toLowerCase())
+  );
+
+  if (filtered.length === 0 && filteredExclusions.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground text-sm">
-        {diagnostics.length === 0 
+        {diagnostics.length === 0 && eligibilityExclusions.length === 0
           ? "Todos os corretores atingiram o target de 2 externos." 
           : "Nenhum corretor corresponde ao filtro."}
       </div>
@@ -784,83 +792,166 @@ function DiagnosticView({
   }
 
   return (
-    <div className="space-y-2">
-      <div className="p-3 rounded-lg bg-accent/50 border border-accent text-sm">
-        <div className="font-medium flex items-center gap-2">
-          <HelpCircle className="h-4 w-4" />
-          Diagnóstico Forense: {filtered.length} corretor{filtered.length !== 1 ? "es" : ""} com menos de 2 externos
-        </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          Dados capturados em tempo real durante a geração. Cada rejeição mostra a regra exata que bloqueou no momento da decisão.
-        </p>
-      </div>
+    <div className="space-y-4">
+      {/* Seção de Exclusões de Elegibilidade */}
+      {filteredExclusions.length > 0 && (
+        <div className="space-y-2">
+          <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-sm">
+            <div className="font-medium flex items-center gap-2 text-orange-800 dark:text-orange-300">
+              <AlertTriangle className="h-4 w-4" />
+              Exclusões de Elegibilidade: {filteredExclusions.length} corretor{filteredExclusions.length !== 1 ? "es" : ""} com demandas bloqueadas
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Corretores que foram excluídos de demandas ANTES da alocação. Isso indica problemas de configuração de disponibilidade (global, local ou dias da semana).
+            </p>
+          </div>
 
-      {filtered.map(diag => {
-        const isExpanded = expanded.has(diag.brokerId);
-        const ruleEntries = Object.entries(diag.rejectionsByRule).sort((a, b) => b[1] - a[1]);
-        
-        return (
-          <Collapsible key={diag.brokerId} open={isExpanded} onOpenChange={() => toggleExpanded(diag.brokerId)}>
-            <CollapsibleTrigger className="w-full">
-              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                <div className="flex items-center gap-2">
-                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium text-sm">{diag.brokerName}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="destructive" className="text-xs">
-                    {diag.finalExternalCount}/{diag.targetExternals} externos
-                  </Badge>
-                  <Badge variant="secondary" className="text-xs">
-                    {diag.totalOpportunities} rejeições
-                  </Badge>
-                </div>
-              </div>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="ml-6 mt-2 space-y-3 pb-3">
-                {/* Resumo por regra */}
-                {ruleEntries.length > 0 && (
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium text-muted-foreground">Rejeições por regra:</div>
-                    {ruleEntries.map(([rule, count]) => (
-                      <div key={rule} className="flex items-center justify-between p-2 rounded bg-background border text-xs">
-                        <span>{rule}</span>
-                        <Badge variant="outline" className="text-xs">{count}x</Badge>
-                      </div>
-                    ))}
+          {filteredExclusions.map(excl => {
+            const isExpanded = expanded.has(`elig-${excl.brokerId}`);
+            const reasonEntries = Object.entries(excl.exclusionsByReason).sort((a, b) => b[1] - a[1]);
+            
+            return (
+              <Collapsible key={`elig-${excl.brokerId}`} open={isExpanded} onOpenChange={() => toggleExpanded(`elig-${excl.brokerId}`)}>
+                <CollapsibleTrigger className="w-full">
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-orange-50/50 dark:bg-orange-900/10 hover:bg-orange-100/50 dark:hover:bg-orange-900/20 transition-colors border border-orange-200/50 dark:border-orange-800/50">
+                    <div className="flex items-center gap-2">
+                      {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-sm">{excl.brokerName}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="text-xs">
+                        {excl.eligibleCount}/{excl.totalDemandsInLinkedLocations} elegível
+                      </Badge>
+                      <Badge variant="destructive" className="text-xs">
+                        {excl.excludedCount} excluído{excl.excludedCount !== 1 ? "s" : ""}
+                      </Badge>
+                    </div>
                   </div>
-                )}
-
-                {/* Detalhes das oportunidades */}
-                {diag.opportunities.length > 0 && (
-                  <div className="space-y-1">
-                    <div className="text-xs font-medium text-muted-foreground">Detalhes ({diag.opportunities.length} oportunidades):</div>
-                    {diag.opportunities.slice(0, 20).map((opp, i) => (
-                      <div key={i} className="p-2 rounded bg-background border text-xs">
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-3 w-3 text-muted-foreground" />
-                          <span className="font-medium">{opp.locationName}</span>
-                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                          <span>{formatDateBR(opp.dateStr)}</span>
-                          <Badge variant="outline" className="text-[10px]">{opp.shift === "morning" ? "Manhã" : "Tarde"}</Badge>
-                        </div>
-                        <div className="mt-1 text-muted-foreground">{opp.reason}</div>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="ml-6 mt-2 space-y-3 pb-3">
+                    {reasonEntries.length > 0 && (
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium text-muted-foreground">Exclusões por motivo:</div>
+                        {reasonEntries.map(([reason, count]) => (
+                          <div key={reason} className="flex items-center justify-between p-2 rounded bg-background border text-xs">
+                            <span className="text-orange-700 dark:text-orange-400">{reason}</span>
+                            <Badge variant="outline" className="text-xs">{count}x</Badge>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                    {diag.opportunities.length > 20 && (
-                      <div className="text-xs text-muted-foreground text-center">
-                        ... e mais {diag.opportunities.length - 20} oportunidades
+                    )}
+
+                    {excl.exclusionDetails.length > 0 && (
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium text-muted-foreground">Detalhes ({excl.exclusionDetails.length} exclusões):</div>
+                        {excl.exclusionDetails.slice(0, 20).map((det, i) => (
+                          <div key={i} className="p-2 rounded bg-background border text-xs">
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-3 w-3 text-muted-foreground" />
+                              <span className="font-medium">{det.locationName}</span>
+                              <Calendar className="h-3 w-3 text-muted-foreground" />
+                              <span>{formatDateBR(det.dateStr)}</span>
+                              <Badge variant="outline" className="text-[10px]">{det.shift === "morning" ? "Manhã" : "Tarde"}</Badge>
+                            </div>
+                            <div className="mt-1 text-orange-600 dark:text-orange-400">{det.reason}</div>
+                          </div>
+                        ))}
+                        {excl.exclusionDetails.length > 20 && (
+                          <div className="text-xs text-muted-foreground text-center">
+                            ... e mais {excl.exclusionDetails.length - 20} exclusões
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-        );
-      })}
+                </CollapsibleContent>
+              </Collapsible>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Seção de Diagnóstico de Alocação (existente) */}
+      {filtered.length > 0 && (
+        <div className="space-y-2">
+          <div className="p-3 rounded-lg bg-accent/50 border border-accent text-sm">
+            <div className="font-medium flex items-center gap-2">
+              <HelpCircle className="h-4 w-4" />
+              Diagnóstico Forense: {filtered.length} corretor{filtered.length !== 1 ? "es" : ""} com menos de 2 externos
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Dados capturados em tempo real durante a geração. Cada rejeição mostra a regra exata que bloqueou no momento da decisão.
+            </p>
+          </div>
+
+          {filtered.map(diag => {
+            const isExpanded = expanded.has(diag.brokerId);
+            const ruleEntries = Object.entries(diag.rejectionsByRule).sort((a, b) => b[1] - a[1]);
+            
+            return (
+              <Collapsible key={diag.brokerId} open={isExpanded} onOpenChange={() => toggleExpanded(diag.brokerId)}>
+                <CollapsibleTrigger className="w-full">
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+                    <div className="flex items-center gap-2">
+                      {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-sm">{diag.brokerName}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="destructive" className="text-xs">
+                        {diag.finalExternalCount}/{diag.targetExternals} externos
+                      </Badge>
+                      <Badge variant="secondary" className="text-xs">
+                        {diag.totalOpportunities} rejeições
+                      </Badge>
+                    </div>
+                  </div>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="ml-6 mt-2 space-y-3 pb-3">
+                    {ruleEntries.length > 0 && (
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium text-muted-foreground">Rejeições por regra:</div>
+                        {ruleEntries.map(([rule, count]) => (
+                          <div key={rule} className="flex items-center justify-between p-2 rounded bg-background border text-xs">
+                            <span>{rule}</span>
+                            <Badge variant="outline" className="text-xs">{count}x</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {diag.opportunities.length > 0 && (
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium text-muted-foreground">Detalhes ({diag.opportunities.length} oportunidades):</div>
+                        {diag.opportunities.slice(0, 20).map((opp, i) => (
+                          <div key={i} className="p-2 rounded bg-background border text-xs">
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-3 w-3 text-muted-foreground" />
+                              <span className="font-medium">{opp.locationName}</span>
+                              <Calendar className="h-3 w-3 text-muted-foreground" />
+                              <span>{formatDateBR(opp.dateStr)}</span>
+                              <Badge variant="outline" className="text-[10px]">{opp.shift === "morning" ? "Manhã" : "Tarde"}</Badge>
+                            </div>
+                            <div className="mt-1 text-muted-foreground">{opp.reason}</div>
+                          </div>
+                        ))}
+                        {diag.opportunities.length > 20 && (
+                          <div className="text-xs text-muted-foreground text-center">
+                            ... e mais {diag.opportunities.length - 20} oportunidades
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

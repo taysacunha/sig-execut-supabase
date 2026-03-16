@@ -17,8 +17,8 @@ import {
   LocationRotationQueueItem,
 } from "@/hooks/useLocationRotationQueue";
 import { validateAllRulesCompliance, logViolations, RuleViolation } from "./scheduleValidator";
-import { DecisionTraceEntry, BrokerAllocationDiagnostic, setLastGenerationTrace } from "./generationTrace";
-export type { DecisionTraceEntry, BrokerAllocationDiagnostic };
+import { DecisionTraceEntry, BrokerAllocationDiagnostic, EligibilityExclusion, setLastGenerationTrace } from "./generationTrace";
+export type { DecisionTraceEntry, BrokerAllocationDiagnostic, EligibilityExclusion };
 export { getLastGenerationTrace } from "./generationTrace";
 
 // ═══════════════════════════════════════════════════════════
@@ -3011,6 +3011,17 @@ async function generateWeeklyScheduleWithAccumulator(
   // Mapear demandas externas
   console.log("\n📍 ETAPA 1: MAPEANDO DEMANDAS EXTERNAS...");
 
+  // Mapa de exclusões de elegibilidade por corretor
+  const eligibilityExclusionMap = new Map<string, {
+    brokerId: string;
+    brokerName: string;
+    totalDemands: number;
+    eligible: number;
+    excluded: number;
+    byReason: Record<string, number>;
+    details: { locationName: string; dateStr: string; shift: string; reason: string }[];
+  }>();
+
   const allExternalDemands: ExternalDemand[] = [];
 
   // ═══════════════════════════════════════════════════════════
@@ -3019,33 +3030,55 @@ async function generateWeeklyScheduleWithAccumulator(
   // O vínculo local pode ser mais restritivo, mas NUNCA mais permissivo
   // ═══════════════════════════════════════════════════════════
   const isBrokerAvailableForShift = (lb: any, shift: "morning" | "afternoon", dayOfWeek: string): boolean => {
+    return isBrokerAvailableForShiftWithReason(lb, shift, dayOfWeek).available;
+  };
+
+  // Versão que retorna o motivo da exclusão para diagnóstico
+  const isBrokerAvailableForShiftWithReason = (lb: any, shift: "morning" | "afternoon", dayOfWeek: string): { available: boolean; reason?: string } => {
     const broker = lb.brokers;
     
     // REGRA ABSOLUTA #1: Corretor deve estar disponível para este dia da semana
     if (!broker?.available_weekdays?.includes(dayOfWeek)) {
-      return false;
+      return { available: false, reason: `DIA: ${dayOfWeek} não está em available_weekdays` };
     }
     
     // REGRA ABSOLUTA #2: Verificar disponibilidade GLOBAL do corretor para este turno
-    // Esta verificação NUNCA pode ser ultrapassada pelo vínculo local
     const globalAvail = broker.weekday_shift_availability as Record<string, string[]> | null;
     if (globalAvail && globalAvail[dayOfWeek]) {
       if (!globalAvail[dayOfWeek].includes(shift)) {
-        console.log(`❌ BLOQUEADO REGRA ABSOLUTA: ${broker.name} não tem disponibilidade GLOBAL para ${shift} em ${dayOfWeek}`);
-        return false; // NUNCA ultrapassar a disponibilidade global
+        return { available: false, reason: `GLOBAL: sem disponibilidade para ${shift} em ${dayOfWeek}` };
       }
     }
     
-    // Agora verificar disponibilidade no vínculo local (pode ser mais restritivo)
+    // Verificar disponibilidade no vínculo local (pode ser mais restritivo)
     const localAvail = lb.weekday_shift_availability as Record<string, string[]> | null;
     if (localAvail && localAvail[dayOfWeek]) {
-      return localAvail[dayOfWeek].includes(shift);
+      // CORREÇÃO: Se array vazio, tratar como "sem restrição local" e usar fallback legacy
+      const localShifts = localAvail[dayOfWeek];
+      if (localShifts.length === 0) {
+        // Fallback para campos legacy quando array local está vazio
+        if (shift === "morning" && lb.available_morning === false) {
+          return { available: false, reason: `LEGACY: available_morning = false (local vazio)` };
+        }
+        if (shift === "afternoon" && lb.available_afternoon === false) {
+          return { available: false, reason: `LEGACY: available_afternoon = false (local vazio)` };
+        }
+        return { available: true };
+      }
+      if (!localShifts.includes(shift)) {
+        return { available: false, reason: `LOCAL: weekday_shift_availability não inclui ${shift} em ${dayOfWeek}` };
+      }
+      return { available: true };
     }
     
     // Fallback para campos legacy
-    if (shift === "morning") return lb.available_morning !== false;
-    if (shift === "afternoon") return lb.available_afternoon !== false;
-    return false;
+    if (shift === "morning" && lb.available_morning === false) {
+      return { available: false, reason: `LEGACY: available_morning = false` };
+    }
+    if (shift === "afternoon" && lb.available_afternoon === false) {
+      return { available: false, reason: `LEGACY: available_afternoon = false` };
+    }
+    return { available: true };
   };
 
   for (const location of externalLocations || []) {
@@ -3109,8 +3142,30 @@ async function generateWeeklyScheduleWithAccumulator(
       if (hasMorning) {
         const eligibleIds: string[] = [];
         for (const lb of location.location_brokers || []) {
-          if (!isBrokerAvailableForShift(lb, "morning", dayOfWeek)) continue;
+          const result = isBrokerAvailableForShiftWithReason(lb, "morning", dayOfWeek);
+          if (!result.available) {
+            // Registrar exclusão de elegibilidade
+            const brokerId = lb.broker_id;
+            const brokerName = lb.brokers?.name || brokerId;
+            if (!eligibilityExclusionMap.has(brokerId)) {
+              eligibilityExclusionMap.set(brokerId, { brokerId, brokerName, totalDemands: 0, eligible: 0, excluded: 0, byReason: {}, details: [] });
+            }
+            const entry = eligibilityExclusionMap.get(brokerId)!;
+            entry.totalDemands++;
+            entry.excluded++;
+            const reason = result.reason || "DESCONHECIDO";
+            entry.byReason[reason] = (entry.byReason[reason] || 0) + 1;
+            entry.details.push({ locationName: location.name, dateStr, shift: "morning", reason });
+            continue;
+          }
           eligibleIds.push(lb.broker_id);
+          // Contar como demanda elegível
+          const brokerId2 = lb.broker_id;
+          if (!eligibilityExclusionMap.has(brokerId2)) {
+            eligibilityExclusionMap.set(brokerId2, { brokerId: brokerId2, brokerName: lb.brokers?.name || brokerId2, totalDemands: 0, eligible: 0, excluded: 0, byReason: {}, details: [] });
+          }
+          eligibilityExclusionMap.get(brokerId2)!.totalDemands++;
+          eligibilityExclusionMap.get(brokerId2)!.eligible++;
         }
         allExternalDemands.push({
           locationId: location.id, locationName: location.name, date: new Date(date), dateStr, dayOfWeek,
@@ -3122,8 +3177,28 @@ async function generateWeeklyScheduleWithAccumulator(
       if (hasAfternoon) {
         const eligibleIds: string[] = [];
         for (const lb of location.location_brokers || []) {
-          if (!isBrokerAvailableForShift(lb, "afternoon", dayOfWeek)) continue;
+          const result = isBrokerAvailableForShiftWithReason(lb, "afternoon", dayOfWeek);
+          if (!result.available) {
+            const brokerId = lb.broker_id;
+            const brokerName = lb.brokers?.name || brokerId;
+            if (!eligibilityExclusionMap.has(brokerId)) {
+              eligibilityExclusionMap.set(brokerId, { brokerId, brokerName, totalDemands: 0, eligible: 0, excluded: 0, byReason: {}, details: [] });
+            }
+            const entry = eligibilityExclusionMap.get(brokerId)!;
+            entry.totalDemands++;
+            entry.excluded++;
+            const reason = result.reason || "DESCONHECIDO";
+            entry.byReason[reason] = (entry.byReason[reason] || 0) + 1;
+            entry.details.push({ locationName: location.name, dateStr, shift: "afternoon", reason });
+            continue;
+          }
           eligibleIds.push(lb.broker_id);
+          const brokerId2 = lb.broker_id;
+          if (!eligibilityExclusionMap.has(brokerId2)) {
+            eligibilityExclusionMap.set(brokerId2, { brokerId: brokerId2, brokerName: lb.brokers?.name || brokerId2, totalDemands: 0, eligible: 0, excluded: 0, byReason: {}, details: [] });
+          }
+          eligibilityExclusionMap.get(brokerId2)!.totalDemands++;
+          eligibilityExclusionMap.get(brokerId2)!.eligible++;
         }
         allExternalDemands.push({
           locationId: location.id, locationName: location.name, date: new Date(date), dateStr, dayOfWeek,
@@ -3135,6 +3210,18 @@ async function generateWeeklyScheduleWithAccumulator(
   }
 
   console.log(`📋 Total: ${allExternalDemands.length} demandas externas`);
+
+  // Log de exclusões de elegibilidade
+  const brokersWithExclusions = Array.from(eligibilityExclusionMap.values()).filter(e => e.excluded > 0);
+  if (brokersWithExclusions.length > 0) {
+    console.log(`\n🔍 ELEGIBILIDADE: ${brokersWithExclusions.length} corretores com exclusões`);
+    for (const entry of brokersWithExclusions.sort((a, b) => b.excluded - a.excluded).slice(0, 10)) {
+      console.log(`   ${entry.brokerName}: ${entry.eligible}/${entry.totalDemands} elegível, ${entry.excluded} excluído`);
+      for (const [reason, count] of Object.entries(entry.byReason).sort((a, b) => b[1] - a[1])) {
+        console.log(`      → ${reason}: ${count}x`);
+      }
+    }
+  }
 
   // Validação pré-geração
   const impossibleDemands = allExternalDemands.filter(d => d.eligibleBrokerIds.length === 0);
@@ -4522,10 +4609,25 @@ async function generateWeeklyScheduleWithAccumulator(
     }
   }
   
+  // Converter mapa de exclusões para array final
+  const eligibilityExclusions: EligibilityExclusion[] = Array.from(eligibilityExclusionMap.values())
+    .filter(e => e.excluded > 0)
+    .map(e => ({
+      brokerId: e.brokerId,
+      brokerName: e.brokerName,
+      totalDemandsInLinkedLocations: e.totalDemands,
+      eligibleCount: e.eligible,
+      excludedCount: e.excluded,
+      exclusionsByReason: e.byReason,
+      exclusionDetails: e.details
+    }))
+    .sort((a, b) => b.excludedCount - a.excludedCount);
+
   // Salvar trace no módulo para acesso externo
   setLastGenerationTrace({
     decisionTrace,
-    brokerDiagnostics
+    brokerDiagnostics,
+    eligibilityExclusions
   });
 
   console.log(`\n🎉 TOTAL DE ALOCAÇÕES: ${assignments.length}`);
