@@ -4308,7 +4308,9 @@ async function generateWeeklyScheduleWithAccumulator(
       
       let allocated = false;
       for (const broker of eligibleBrokers) {
-        // Verificar apenas regras invioláveis (construtora, etc.) mas relaxar consecutivos e gate
+        // CORREÇÃO: Usar helper UNIFICADO + checkAbsoluteRules para emergência final
+        const absCheck = checkAbsoluteRules(broker, demand, context, 5);
+        if (!absCheck.allowed) continue;
         const checkResult = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
         if (checkResult.allowed) {
           allocateDemand(demand, broker, context);
