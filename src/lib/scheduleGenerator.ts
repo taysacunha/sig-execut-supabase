@@ -17,18 +17,9 @@ import {
   LocationRotationQueueItem,
 } from "@/hooks/useLocationRotationQueue";
 import { validateAllRulesCompliance, logViolations, RuleViolation } from "./scheduleValidator";
-
-// ═══════════════════════════════════════════════════════════
-// MÓDULO: Último trace de geração (acessível externamente)
-// ═══════════════════════════════════════════════════════════
-let lastGenerationTrace: {
-  decisionTrace: DecisionTraceEntry[];
-  brokerDiagnostics: BrokerAllocationDiagnostic[];
-} | null = null;
-
-export function getLastGenerationTrace() {
-  return lastGenerationTrace;
-}
+import { DecisionTraceEntry, BrokerAllocationDiagnostic, setLastGenerationTrace } from "./generationTrace";
+export type { DecisionTraceEntry, BrokerAllocationDiagnostic };
+export { getLastGenerationTrace } from "./generationTrace";
 
 // ═══════════════════════════════════════════════════════════
 // INTERFACES PARA RETRY SYSTEM
