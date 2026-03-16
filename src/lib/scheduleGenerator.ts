@@ -813,16 +813,62 @@ function isBrokerTrulyEligibleForDemand(
   context: AllocationContext,
   pass: number = 5
 ): { allowed: boolean; reason: string; rule: string } {
-  // 1. Verificar regras absolutas (Regra 4: conflito local, Regra 5: dois turnos, etc.)
+  const isSaturday = demand.dayOfWeek === "saturday";
+  const isSunday = demand.dayOfWeek === "sunday";
+  
+  // ═══════════════════════════════════════════════════════════
+  // REGRAS OPERACIONAIS DO findBrokerForDemand (antes de checkAbsoluteRules)
+  // Estas regras DEVEM ser verificadas para evitar "possibilidade fantasma"
+  // ═══════════════════════════════════════════════════════════
+  
+  // 1. Proteção de sábado interno (para demandas de sábado) — passes 1-3
+  if (isSaturday && context.saturdayInternalWorkers?.has(broker.brokerId) && pass <= 3) {
+    return { allowed: false, reason: `Reservado para sábado interno (pass ${pass} <= 3)`, rule: "RESERVA_SABADO_INTERNO" };
+  }
+  
+  // 2. Corretor com sábado EXTERNO = máximo 2 externos na semana
+  const worksSaturdayExternal = context.saturdayExternalWorkers?.has(broker.brokerId);
+  if (worksSaturdayExternal && broker.externalShiftCount >= 2 && !isSaturday) {
+    return { allowed: false, reason: `Trabalha sábado externo, já tem ${broker.externalShiftCount} externos (máx 2)`, rule: "SABADO_EXTERNO_LIMITE" };
+  }
+  
+  // 3. Evitar sexta para quem trabalha sábado externo (com 1+ externos)
+  if (worksSaturdayExternal && demand.dayOfWeek === "friday" && broker.externalShiftCount >= 1) {
+    return { allowed: false, reason: `Trabalha sábado externo e já tem ${broker.externalShiftCount} externo(s) - evitar sexta`, rule: "SEXTA_SABADO_EXTERNO" };
+  }
+  
+  // 4. Sábado externo: não pode quem já tem 1+ externo
+  if (isSaturday && broker.externalShiftCount >= 1) {
+    return { allowed: false, reason: `Já tem ${broker.externalShiftCount} externo(s), não pode ir para sábado`, rule: "SABADO_COM_EXTERNOS" };
+  }
+  
+  // 5. Verificar regras absolutas (Regra 1 limite, Regra 4, 5, 6, 7, 9, 10)
   const absCheck = checkAbsoluteRules(broker, demand, context, pass);
   if (!absCheck.allowed) {
     return absCheck;
   }
   
-  // 2. Verificar regras invioláveis com relaxamento de Regra 8
+  // 6. Regra 8 (consecutivos) com relaxamento + demais regras invioláveis
   const relaxCheck = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
   if (!relaxCheck.allowed) {
     return { allowed: false, reason: relaxCheck.reason, rule: relaxCheck.rule || "REGRA_RELAXADA" };
+  }
+  
+  // 7. Proteção do Bessa em dias de semana
+  if (!isSaturday && !isSunday && broker.internalLocation === "bessa") {
+    const bessaDailyExternalCount = context.dailyBessaExternalCount.get(demand.dateStr) || 0;
+    if (bessaDailyExternalCount >= 2) {
+      return { allowed: false, reason: `Já tem ${bessaDailyExternalCount} do Bessa com externos hoje (limite: 2)`, rule: "BESSA_COBERTURA_SEMANA" };
+    }
+  }
+  
+  // 8. Proteção do Bessa para sábados
+  if (isSaturday && broker.internalLocation === "bessa") {
+    const bessaExternalCount = context.saturdayBessaExternalCount.get(demand.dateStr) || 0;
+    // Usar limite conservador: máximo 1 do Bessa no sábado
+    if (bessaExternalCount >= 1) {
+      return { allowed: false, reason: `Já tem ${bessaExternalCount} do Bessa no sábado externo`, rule: "BESSA_COBERTURA_SABADO" };
+    }
   }
   
   return { allowed: true, reason: "", rule: "" };
