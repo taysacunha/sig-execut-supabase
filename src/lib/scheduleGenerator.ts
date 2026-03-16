@@ -3429,6 +3429,13 @@ async function generateWeeklyScheduleWithAccumulator(
         const check = checkTrulyInviolableRulesWithRelaxation(underBroker, demand, context, true);
         if (!check.allowed) continue;
         
+        // Verificar regras absolutas (Regra 4: conflito local externo, Regra 5: mesmo local, etc.)
+        const absCheck = checkAbsoluteRules(underBroker, demand, context, 5);
+        if (!absCheck.allowed) {
+          console.log(`   ⛔ REBALANCEAMENTO: ${underBroker.brokerName} bloqueado: ${absCheck.reason}`);
+          continue;
+        }
+        
         // ALOCAR!
         allocateDemand(demand, underBroker, context);
         allocatedDemands.add(demandKey);
