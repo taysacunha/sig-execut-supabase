@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { PostValidationResult, BrokerValidationReport, PostValidationViolation, UnallocatedDemand } from "@/lib/schedulePostValidation";
-import { BrokerAllocationDiagnostic, EligibilityExclusion } from "@/lib/generationTrace";
+import { BrokerAllocationDiagnostic, EligibilityExclusion, SubAllocatedForensic } from "@/lib/generationTrace";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,10 +28,11 @@ interface ValidationReportPanelProps {
   onClose: () => void;
   brokerDiagnostics?: BrokerAllocationDiagnostic[];
   eligibilityExclusions?: EligibilityExclusion[];
+  subAllocatedForensics?: SubAllocatedForensic[];
 }
 
 type SeverityFilter = "all" | "error" | "warning";
-type ViewMode = "broker" | "rule" | "diagnostic";
+type ViewMode = "broker" | "rule" | "diagnostic" | "forensic";
 
 // ═══════════════════════════════════════════════════════════
 // RULE EXPLANATIONS MAP
@@ -73,7 +74,7 @@ function getRuleShortName(rule: string): string {
 // ═══════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════
-export function ValidationReportPanel({ result, onClose, brokerDiagnostics, eligibilityExclusions }: ValidationReportPanelProps) {
+export function ValidationReportPanel({ result, onClose, brokerDiagnostics, eligibilityExclusions, subAllocatedForensics }: ValidationReportPanelProps) {
   const [expandedBrokers, setExpandedBrokers] = useState<Set<string>>(new Set());
   const [expandedRules, setExpandedRules] = useState<Set<string>>(new Set());
   const [expandedDiagnostics, setExpandedDiagnostics] = useState<Set<string>>(new Set());
@@ -381,6 +382,17 @@ export function ValidationReportPanel({ result, onClose, brokerDiagnostics, elig
                   Por que não alocou
                 </Button>
               )}
+              {subAllocatedForensics && subAllocatedForensics.length > 0 && (
+                <Button
+                  variant={viewMode === "forensic" ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => setViewMode("forensic")}
+                >
+                  <Search className="h-3 w-3" />
+                  Forense
+                </Button>
+              )}
             </div>
             <div className="flex gap-1">
               {hasActiveFilters && (
@@ -425,6 +437,17 @@ export function ValidationReportPanel({ result, onClose, brokerDiagnostics, elig
             <DiagnosticView
               diagnostics={brokerDiagnostics || []}
               eligibilityExclusions={eligibilityExclusions || []}
+              expanded={expandedDiagnostics}
+              toggleExpanded={(id) => {
+                const next = new Set(expandedDiagnostics);
+                if (next.has(id)) next.delete(id); else next.add(id);
+                setExpandedDiagnostics(next);
+              }}
+              searchBroker={searchBroker}
+            />
+          ) : viewMode === "forensic" ? (
+            <ForensicView
+              forensics={subAllocatedForensics || []}
               expanded={expandedDiagnostics}
               toggleExpanded={(id) => {
                 const next = new Set(expandedDiagnostics);
@@ -956,6 +979,158 @@ function DiagnosticView({
   );
 }
 
+
+// ═══════════════════════════════════════════════════════════
+// FORENSIC VIEW: Rastreio de competição para sub-alocados
+// ═══════════════════════════════════════════════════════════
+function ForensicView({
+  forensics,
+  expanded,
+  toggleExpanded,
+  searchBroker,
+}: {
+  forensics: SubAllocatedForensic[];
+  expanded: Set<string>;
+  toggleExpanded: (id: string) => void;
+  searchBroker: string;
+}) {
+  const filtered = forensics.filter(f =>
+    !searchBroker || f.brokerName.toLowerCase().includes(searchBroker.toLowerCase())
+  );
+
+  if (filtered.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground text-sm">
+        Nenhum corretor sub-alocado encontrado.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {filtered.map(f => {
+        const isExpanded = expanded.has(f.brokerId);
+        const outcomeColor = f.lostByCompetition > f.lostByRule ? "text-amber-600" : "text-destructive";
+        
+        return (
+          <Collapsible key={f.brokerId} open={isExpanded} onOpenChange={() => toggleExpanded(f.brokerId)}>
+            <CollapsibleTrigger className="flex items-center justify-between w-full p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+              <div className="flex items-center gap-2">
+                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                <User className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium text-sm">{f.brokerName}</span>
+                <Badge variant="outline" className="text-xs">
+                  {f.finalExternalCount}/{f.targetExternals} ext
+                </Badge>
+                {f.isSaturdayInternalWorker && (
+                  <Badge variant="secondary" className="text-xs">Sáb Interno</Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>{f.totalEligibleDemands} elegíveis</span>
+                <span className="text-emerald-600">✅{f.allocatedCount}</span>
+                <span className={outcomeColor}>🏁{f.lostByCompetition}</span>
+                <span className="text-destructive">🚫{f.lostByRule}</span>
+              </div>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="mt-1 p-3 rounded-lg border bg-muted/30 space-y-3">
+                {/* Summary */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2 rounded bg-card border">
+                    <div className="text-muted-foreground">Demandas Elegíveis</div>
+                    <div className="text-lg font-bold">{f.totalEligibleDemands}</div>
+                  </div>
+                  <div className="p-2 rounded bg-card border">
+                    <div className="text-muted-foreground">Alocado com Sucesso</div>
+                    <div className="text-lg font-bold text-emerald-600">{f.allocatedCount}</div>
+                  </div>
+                  <div className="p-2 rounded bg-card border">
+                    <div className="text-muted-foreground">Perdeu por Competição</div>
+                    <div className="text-lg font-bold text-amber-600">{f.lostByCompetition}</div>
+                    <div className="text-muted-foreground mt-1">Outro corretor na frente na fila</div>
+                  </div>
+                  <div className="p-2 rounded bg-card border">
+                    <div className="text-muted-foreground">Bloqueado por Regra</div>
+                    <div className="text-lg font-bold text-destructive">{f.lostByRule}</div>
+                  </div>
+                </div>
+
+                {/* Rule blocks breakdown */}
+                {Object.keys(f.ruleBlockCounts).length > 0 && (
+                  <div>
+                    <div className="text-xs font-medium mb-1">Regras que Bloquearam:</div>
+                    <div className="space-y-1">
+                      {Object.entries(f.ruleBlockCounts)
+                        .sort(([,a], [,b]) => b - a)
+                        .map(([rule, count]) => (
+                          <div key={rule} className="flex justify-between text-xs p-1.5 rounded bg-card border">
+                            <span className="text-destructive">{rule}</span>
+                            <Badge variant="outline" className="text-xs">{count}x</Badge>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Competition losses detail */}
+                {f.lostByCompetition > 0 && (
+                  <div>
+                    <div className="text-xs font-medium mb-1">
+                      Perdas por Competição (top 15):
+                    </div>
+                    <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                      {f.competitionTrace
+                        .filter(t => t.outcome === "outcompeted")
+                        .slice(0, 15)
+                        .map((t, i) => (
+                          <div key={i} className="flex items-center gap-2 text-xs p-1.5 rounded bg-card border">
+                            <MapPin className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                            <span className="font-mono">{t.dateStr}</span>
+                            <span>{t.locationName}</span>
+                            <Badge variant="outline" className="text-xs">{t.shift === "morning" ? "M" : "T"}</Badge>
+                            <span className="text-muted-foreground">→</span>
+                            <span className="text-amber-600 font-medium">{t.selectedBrokerName}</span>
+                            <span className="text-muted-foreground ml-auto">pos {t.sortPosition}/{t.totalInQueue} | ext={t.externalCountAtTime}</span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Rule blocks detail */}
+                {f.lostByRule > 0 && (
+                  <div>
+                    <div className="text-xs font-medium mb-1">
+                      Bloqueios por Regra (top 15):
+                    </div>
+                    <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                      {f.competitionTrace
+                        .filter(t => t.outcome === "rule_blocked")
+                        .slice(0, 15)
+                        .map((t, i) => (
+                          <div key={i} className="flex items-center gap-2 text-xs p-1.5 rounded bg-card border">
+                            <Calendar className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                            <span className="font-mono">{t.dateStr}</span>
+                            <span>{t.locationName}</span>
+                            <Badge variant="outline" className="text-xs">{t.shift === "morning" ? "M" : "T"}</Badge>
+                            <span className="text-destructive font-medium">{t.blockRule}</span>
+                            <span className="text-muted-foreground text-[10px] truncate max-w-[200px]" title={t.blockReason}>
+                              {t.blockReason}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        );
+      })}
+    </div>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════
 function RuleExplanationBadge({ rule }: { rule: string }) {
