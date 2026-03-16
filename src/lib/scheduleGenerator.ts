@@ -3211,6 +3211,69 @@ async function generateWeeklyScheduleWithAccumulator(
 
   console.log(`📋 Total: ${allExternalDemands.length} demandas externas`);
 
+  // ═══════════════════════════════════════════════════════════
+  // CONSTRUIR MAPA BROKER-CÊNTRICO DE ELEGIBILIDADE
+  // Para cada corretor, quais locais externos ele está vinculado
+  // e para quais demandas (dia/turno) ele é elegível ou excluído
+  // ═══════════════════════════════════════════════════════════
+  const brokerEligibilityBuilder = new Map<string, {
+    brokerId: string;
+    brokerName: string;
+    locations: Map<string, BrokerLocationEligibility>;
+  }>();
+  
+  // Inicializar com todos os corretores que têm vínculos externos
+  for (const location of externalLocations || []) {
+    for (const lb of location.location_brokers || []) {
+      const brokerId = lb.broker_id;
+      const brokerName = lb.brokers?.name || brokerId;
+      if (!brokerEligibilityBuilder.has(brokerId)) {
+        brokerEligibilityBuilder.set(brokerId, {
+          brokerId,
+          brokerName,
+          locations: new Map()
+        });
+      }
+      const builder = brokerEligibilityBuilder.get(brokerId)!;
+      if (!builder.locations.has(location.id)) {
+        builder.locations.set(location.id, {
+          locationId: location.id,
+          locationName: location.name,
+          eligible: [],
+          excluded: []
+        });
+      }
+    }
+  }
+  
+  // Preencher com dados das demandas
+  for (const demand of allExternalDemands) {
+    for (const [brokerId, builder] of brokerEligibilityBuilder) {
+      const locEntry = builder.locations.get(demand.locationId);
+      if (!locEntry) continue; // Não vinculado a este local
+      
+      if (demand.eligibleBrokerIds.includes(brokerId)) {
+        locEntry.eligible.push({
+          dateStr: demand.dateStr,
+          shift: demand.shift,
+          dayOfWeek: demand.dayOfWeek
+        });
+      } else {
+        // Buscar motivo da exclusão no mapa de exclusões
+        const exclEntry = eligibilityExclusionMap.get(brokerId);
+        const detail = exclEntry?.details.find(d => 
+          d.locationName === demand.locationName && d.dateStr === demand.dateStr && d.shift === demand.shift
+        );
+        locEntry.excluded.push({
+          dateStr: demand.dateStr,
+          shift: demand.shift,
+          dayOfWeek: demand.dayOfWeek,
+          reason: detail?.reason || "Sem disponibilidade para este dia/turno"
+        });
+      }
+    }
+  }
+
   // Log de exclusões de elegibilidade
   const brokersWithExclusions = Array.from(eligibilityExclusionMap.values()).filter(e => e.excluded > 0);
   if (brokersWithExclusions.length > 0) {
