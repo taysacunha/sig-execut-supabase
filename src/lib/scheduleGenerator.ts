@@ -17,18 +17,9 @@ import {
   LocationRotationQueueItem,
 } from "@/hooks/useLocationRotationQueue";
 import { validateAllRulesCompliance, logViolations, RuleViolation } from "./scheduleValidator";
-
-// ═══════════════════════════════════════════════════════════
-// MÓDULO: Último trace de geração (acessível externamente)
-// ═══════════════════════════════════════════════════════════
-let lastGenerationTrace: {
-  decisionTrace: DecisionTraceEntry[];
-  brokerDiagnostics: BrokerAllocationDiagnostic[];
-} | null = null;
-
-export function getLastGenerationTrace() {
-  return lastGenerationTrace;
-}
+import { DecisionTraceEntry, BrokerAllocationDiagnostic, setLastGenerationTrace } from "./generationTrace";
+export type { DecisionTraceEntry, BrokerAllocationDiagnostic };
+export { getLastGenerationTrace } from "./generationTrace";
 
 // ═══════════════════════════════════════════════════════════
 // INTERFACES PARA RETRY SYSTEM
@@ -117,43 +108,7 @@ interface ExternalDemand {
   locationBrokerMap: Map<string, { available_morning: boolean; available_afternoon: boolean }>;
 }
 
-// ═══════════════════════════════════════════════════════════
-// DECISION TRACE: Captura motivos reais de rejeição no momento da alocação
-// ═══════════════════════════════════════════════════════════
-export interface DecisionTraceEntry {
-  demandKey: string;
-  locationName: string;
-  dateStr: string;
-  shift: "morning" | "afternoon";
-  pass: number;
-  eligibleCount: number;
-  rejections: {
-    brokerId: string;
-    brokerName: string;
-    rule: string;
-    reason: string;
-    externalShiftCount: number;
-    rule8Relaxed: boolean;
-  }[];
-  allocated: boolean;
-  allocatedBrokerName?: string;
-}
-
-export interface BrokerAllocationDiagnostic {
-  brokerId: string;
-  brokerName: string;
-  finalExternalCount: number;
-  targetExternals: number;
-  totalOpportunities: number;
-  rejectionsByRule: Record<string, number>;
-  opportunities: {
-    locationName: string;
-    dateStr: string;
-    shift: string;
-    rule: string;
-    reason: string;
-  }[];
-}
+// DecisionTraceEntry e BrokerAllocationDiagnostic agora importados de ./generationTrace
 
 export interface GenerationQualityReport {
   totalExternalDemands: number;
@@ -4568,10 +4523,10 @@ async function generateWeeklyScheduleWithAccumulator(
   }
   
   // Salvar trace no módulo para acesso externo
-  lastGenerationTrace = {
+  setLastGenerationTrace({
     decisionTrace,
     brokerDiagnostics
-  };
+  });
 
   console.log(`\n🎉 TOTAL DE ALOCAÇÕES: ${assignments.length}`);
 
