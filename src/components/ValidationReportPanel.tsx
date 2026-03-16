@@ -27,6 +27,7 @@ interface ValidationReportPanelProps {
   result: PostValidationResult | null;
   onClose: () => void;
   brokerDiagnostics?: BrokerAllocationDiagnostic[];
+  eligibilityExclusions?: EligibilityExclusion[];
 }
 
 type SeverityFilter = "all" | "error" | "warning";
