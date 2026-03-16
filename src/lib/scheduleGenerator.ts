@@ -3211,6 +3211,18 @@ async function generateWeeklyScheduleWithAccumulator(
 
   console.log(`📋 Total: ${allExternalDemands.length} demandas externas`);
 
+  // Log de exclusões de elegibilidade
+  const brokersWithExclusions = Array.from(eligibilityExclusionMap.values()).filter(e => e.excluded > 0);
+  if (brokersWithExclusions.length > 0) {
+    console.log(`\n🔍 ELEGIBILIDADE: ${brokersWithExclusions.length} corretores com exclusões`);
+    for (const entry of brokersWithExclusions.sort((a, b) => b.excluded - a.excluded).slice(0, 10)) {
+      console.log(`   ${entry.brokerName}: ${entry.eligible}/${entry.totalDemands} elegível, ${entry.excluded} excluído`);
+      for (const [reason, count] of Object.entries(entry.byReason).sort((a, b) => b[1] - a[1])) {
+        console.log(`      → ${reason}: ${count}x`);
+      }
+    }
+  }
+
   // Validação pré-geração
   const impossibleDemands = allExternalDemands.filter(d => d.eligibleBrokerIds.length === 0);
   if (impossibleDemands.length > 0) {
