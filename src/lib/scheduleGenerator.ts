@@ -822,7 +822,7 @@ function isBrokerTrulyEligibleForDemand(
   // 2. Verificar regras invioláveis com relaxamento de Regra 8
   const relaxCheck = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
   if (!relaxCheck.allowed) {
-    return relaxCheck;
+    return { allowed: false, reason: relaxCheck.reason, rule: relaxCheck.rule || "REGRA_RELAXADA" };
   }
   
   return { allowed: true, reason: "", rule: "" };
