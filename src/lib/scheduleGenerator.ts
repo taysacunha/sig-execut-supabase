@@ -3131,8 +3131,30 @@ async function generateWeeklyScheduleWithAccumulator(
       if (hasMorning) {
         const eligibleIds: string[] = [];
         for (const lb of location.location_brokers || []) {
-          if (!isBrokerAvailableForShift(lb, "morning", dayOfWeek)) continue;
+          const result = isBrokerAvailableForShiftWithReason(lb, "morning", dayOfWeek);
+          if (!result.available) {
+            // Registrar exclusão de elegibilidade
+            const brokerId = lb.broker_id;
+            const brokerName = lb.brokers?.name || brokerId;
+            if (!eligibilityExclusionMap.has(brokerId)) {
+              eligibilityExclusionMap.set(brokerId, { brokerId, brokerName, totalDemands: 0, eligible: 0, excluded: 0, byReason: {}, details: [] });
+            }
+            const entry = eligibilityExclusionMap.get(brokerId)!;
+            entry.totalDemands++;
+            entry.excluded++;
+            const reason = result.reason || "DESCONHECIDO";
+            entry.byReason[reason] = (entry.byReason[reason] || 0) + 1;
+            entry.details.push({ locationName: location.name, dateStr, shift: "morning", reason });
+            continue;
+          }
           eligibleIds.push(lb.broker_id);
+          // Contar como demanda elegível
+          const brokerId2 = lb.broker_id;
+          if (!eligibilityExclusionMap.has(brokerId2)) {
+            eligibilityExclusionMap.set(brokerId2, { brokerId: brokerId2, brokerName: lb.brokers?.name || brokerId2, totalDemands: 0, eligible: 0, excluded: 0, byReason: {}, details: [] });
+          }
+          eligibilityExclusionMap.get(brokerId2)!.totalDemands++;
+          eligibilityExclusionMap.get(brokerId2)!.eligible++;
         }
         allExternalDemands.push({
           locationId: location.id, locationName: location.name, date: new Date(date), dateStr, dayOfWeek,
@@ -3144,8 +3166,28 @@ async function generateWeeklyScheduleWithAccumulator(
       if (hasAfternoon) {
         const eligibleIds: string[] = [];
         for (const lb of location.location_brokers || []) {
-          if (!isBrokerAvailableForShift(lb, "afternoon", dayOfWeek)) continue;
+          const result = isBrokerAvailableForShiftWithReason(lb, "afternoon", dayOfWeek);
+          if (!result.available) {
+            const brokerId = lb.broker_id;
+            const brokerName = lb.brokers?.name || brokerId;
+            if (!eligibilityExclusionMap.has(brokerId)) {
+              eligibilityExclusionMap.set(brokerId, { brokerId, brokerName, totalDemands: 0, eligible: 0, excluded: 0, byReason: {}, details: [] });
+            }
+            const entry = eligibilityExclusionMap.get(brokerId)!;
+            entry.totalDemands++;
+            entry.excluded++;
+            const reason = result.reason || "DESCONHECIDO";
+            entry.byReason[reason] = (entry.byReason[reason] || 0) + 1;
+            entry.details.push({ locationName: location.name, dateStr, shift: "afternoon", reason });
+            continue;
+          }
           eligibleIds.push(lb.broker_id);
+          const brokerId2 = lb.broker_id;
+          if (!eligibilityExclusionMap.has(brokerId2)) {
+            eligibilityExclusionMap.set(brokerId2, { brokerId: brokerId2, brokerName: lb.brokers?.name || brokerId2, totalDemands: 0, eligible: 0, excluded: 0, byReason: {}, details: [] });
+          }
+          eligibilityExclusionMap.get(brokerId2)!.totalDemands++;
+          eligibilityExclusionMap.get(brokerId2)!.eligible++;
         }
         allExternalDemands.push({
           locationId: location.id, locationName: location.name, date: new Date(date), dateStr, dayOfWeek,
