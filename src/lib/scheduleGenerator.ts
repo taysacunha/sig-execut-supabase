@@ -17,7 +17,7 @@ import {
   LocationRotationQueueItem,
 } from "@/hooks/useLocationRotationQueue";
 import { validateAllRulesCompliance, logViolations, RuleViolation } from "./scheduleValidator";
-import { DecisionTraceEntry, BrokerAllocationDiagnostic, EligibilityExclusion, setLastGenerationTrace } from "./generationTrace";
+import { DecisionTraceEntry, BrokerAllocationDiagnostic, EligibilityExclusion, CompetitionTraceEntry, SubAllocatedForensic, setLastGenerationTrace } from "./generationTrace";
 export type { DecisionTraceEntry, BrokerAllocationDiagnostic, EligibilityExclusion };
 export { getLastGenerationTrace } from "./generationTrace";
 
