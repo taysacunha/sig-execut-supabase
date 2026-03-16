@@ -433,7 +433,7 @@ export function ValidationReportPanel({ result, onClose, brokerDiagnostics, elig
               }}
               searchBroker={searchBroker}
             />
-          )}
+          ) : null}
           {filteredBrokerReports.length === 0 && filteredGlobalViolations.length === 0 && filteredViolationsByRule.size === 0 && hasActiveFilters && (
             <div className="text-center py-8 text-muted-foreground text-sm">
               Nenhum resultado para os filtros aplicados.
