@@ -4110,7 +4110,8 @@ async function generateWeeklyScheduleWithAccumulator(
                   continue;
                 }
                 
-                const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
+                // CORREÇÃO: Usar helper UNIFICADO (absolute + relaxed)
+                const check = isBrokerTrulyEligibleForDemand(broker, demand, context);
                 if (!check.allowed) continue;
                 
                 const wasOverLimit = broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_PER_WEEK;
