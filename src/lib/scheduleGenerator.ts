@@ -3976,7 +3976,7 @@ async function generateWeeklyScheduleWithAccumulator(
         if (!broker) continue;
         
         // Só aceitar corretor com menos de 2 neste passo
-        if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_HARD_CAP) continue;
+        if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_PER_WEEK) continue;
         
         // CORRIGIDO: true = relaxar Regra 8 (consecutivos) para corretores com <2 externos na etapa de emergência
         const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
