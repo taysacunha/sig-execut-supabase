@@ -445,6 +445,17 @@ export function ValidationReportPanel({ result, onClose, brokerDiagnostics, elig
               }}
               searchBroker={searchBroker}
             />
+          ) : viewMode === "forensic" ? (
+            <ForensicView
+              forensics={subAllocatedForensics || []}
+              expanded={expandedDiagnostics}
+              toggleExpanded={(id) => {
+                const next = new Set(expandedDiagnostics);
+                if (next.has(id)) next.delete(id); else next.add(id);
+                setExpandedDiagnostics(next);
+              }}
+              searchBroker={searchBroker}
+            />
           ) : null}
           {filteredBrokerReports.length === 0 && filteredGlobalViolations.length === 0 && filteredViolationsByRule.size === 0 && hasActiveFilters && (
             <div className="text-center py-8 text-muted-foreground text-sm">
