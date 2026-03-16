@@ -914,18 +914,6 @@ function canAnyoneStillReachTwo(
   for (const broker of context.brokerQueue) {
     if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_PER_WEEK) continue;
     
-    // ═══════════════════════════════════════════════════════════
-    // ELEGIBILIDADE REAL: Verificar as mesmas regras que findBrokerForDemand usa
-    // Evita "possibilidade fantasma" onde o gate fica ativo mas ninguém é alocado
-    // ═══════════════════════════════════════════════════════════
-    
-    // Corretor de sábado interno não pode pegar domingo externo
-    const isSaturdayInternalWorker = context.saturdayInternalWorkers?.has(broker.brokerId);
-    
-    // Corretor de sábado externo tem limite de 2
-    const isSaturdayExternalWorker = context.saturdayExternalWorkers?.has(broker.brokerId);
-    if (isSaturdayExternalWorker && broker.externalShiftCount >= 2) continue;
-    
     let canReceiveAny = false;
     
     for (const demand of unallocatedDemands) {
@@ -934,18 +922,8 @@ function canAnyoneStillReachTwo(
       // Verificar dia da semana disponível
       if (!broker.availableWeekdays.includes(demand.dayOfWeek)) continue;
       
-      // REMOVIDO: Bloqueio fantasma de sáb/dom para saturdayInternalWorkers
-      // O bloqueio real ocorre após ETAPA 8.9 via alocações reais
-      
-      // Sexta com sábado externo
-      if (isSaturdayExternalWorker && demand.dayOfWeek === "friday" && broker.externalShiftCount >= 1) continue;
-      
-      // Sábado externo com 1+ externos
-      if (demand.dayOfWeek === "saturday" && broker.externalShiftCount >= 1) continue;
-      
-      // CORREÇÃO: Usar helper UNIFICADO que verifica TODAS as regras reais
-      // Antes: só checkTrulyInviolableRulesWithRelaxation (ignorava checkAbsoluteRules)
-      // Agora: verifica absolute + relaxed, eliminando "possibilidade fantasma"
+      // HELPER UNIFICADO: verifica TODAS as regras reais (absolute + operational + relaxed)
+      // Inclui: reserva sábado interno, sábado externo limite, sexta, Bessa, etc.
       const check = isBrokerTrulyEligibleForDemand(broker, demand, context);
       if (check.allowed) {
         canReceiveAny = true;
