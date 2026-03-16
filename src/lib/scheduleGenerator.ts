@@ -3995,8 +3995,8 @@ async function generateWeeklyScheduleWithAccumulator(
             if (!broker || broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_HARD_CAP) continue;
             if (!demand.eligibleBrokerIds.includes(broker.brokerId)) continue;
             
-            // Tentar com Regra 8 relaxada
-            const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
+            // CORREÇÃO: Usar helper UNIFICADO (absolute + relaxed)
+            const check = isBrokerTrulyEligibleForDemand(broker, demand, context);
             if (!check.allowed) continue;
             
             allocateDemand(demand, broker, context);
