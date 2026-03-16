@@ -3369,6 +3369,63 @@ async function generateWeeklyScheduleWithAccumulator(
         decisionTrace.push(traceEntry);
       }
       
+      // ═══════════════════════════════════════════════════════════
+      // RASTREIO FORENSE: Para cada corretor elegível nesta demanda,
+      // registrar se ganhou, perdeu por competição, ou foi bloqueado
+      // ═══════════════════════════════════════════════════════════
+      if (result.broker || pass === 5) {
+        const blockedBrokerIds = new Set((result.blockedBrokers || []).map(bb => bb.brokerId));
+        
+        for (const eligibleBrokerId of demand.eligibleBrokerIds) {
+          const brokerInQueue = context.brokerQueue.find(b => b.brokerId === eligibleBrokerId);
+          if (!brokerInQueue) continue;
+          
+          // Determinar posição na fila (baseado na ordenação que findBrokerForDemand usaria)
+          const eligibleInQueue = context.brokerQueue
+            .filter(b => demand.eligibleBrokerIds.includes(b.brokerId))
+            .sort((a, b) => a.externalShiftCount - b.externalShiftCount);
+          const sortPosition = eligibleInQueue.findIndex(b => b.brokerId === eligibleBrokerId) + 1;
+          
+          let outcome: CompetitionTraceEntry["outcome"];
+          let blockRule: string | undefined;
+          let blockReason: string | undefined;
+          
+          if (result.broker?.brokerId === eligibleBrokerId) {
+            outcome = "allocated";
+          } else if (blockedBrokerIds.has(eligibleBrokerId)) {
+            outcome = "rule_blocked";
+            const blockInfo = (result.blockedBrokers || []).find(bb => bb.brokerId === eligibleBrokerId);
+            blockRule = blockInfo?.rule;
+            blockReason = blockInfo?.reason;
+          } else if (!result.broker) {
+            outcome = "demand_unallocated";
+          } else {
+            outcome = "outcompeted";
+          }
+          
+          const entry: CompetitionTraceEntry = {
+            demandKey,
+            locationName: demand.locationName,
+            dateStr: demand.dateStr,
+            shift: demand.shift,
+            pass,
+            outcome,
+            sortPosition,
+            totalInQueue: eligibleInQueue.length,
+            selectedBrokerName: result.broker && result.broker.brokerId !== eligibleBrokerId ? result.broker.brokerName : undefined,
+            blockRule,
+            blockReason,
+            externalCountAtTime: brokerInQueue.externalShiftCount,
+            isSaturdayInternalWorker: context.saturdayInternalWorkers?.has(eligibleBrokerId) || false,
+          };
+          
+          if (!competitionLog.has(eligibleBrokerId)) {
+            competitionLog.set(eligibleBrokerId, []);
+          }
+          competitionLog.get(eligibleBrokerId)!.push(entry);
+        }
+      }
+      
       if (result.broker) {
         allocateDemand(demand, result.broker, context);
         allocatedDemands.add(demandKey);
