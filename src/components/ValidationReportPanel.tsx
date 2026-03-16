@@ -395,6 +395,17 @@ export function ValidationReportPanel({ result, onClose, brokerDiagnostics, elig
                   Forense
                 </Button>
               )}
+              {brokerEligibilityMap && brokerEligibilityMap.length > 0 && (
+                <Button
+                  variant={viewMode === "eligibility" ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => setViewMode("eligibility")}
+                >
+                  <Link2 className="h-3 w-3" />
+                  Vínculos
+                </Button>
+              )}
             </div>
             <div className="flex gap-1">
               {hasActiveFilters && (
