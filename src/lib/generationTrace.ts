@@ -105,11 +105,43 @@ export interface SubAllocatedForensic {
   competitionTrace: CompetitionTraceEntry[];
 }
 
+// ═══════════════════════════════════════════════════════════
+// MAPA BROKER-CÊNTRICO DE ELEGIBILIDADE EXTERNA
+// Responde: "Em quais locais externos este corretor está vinculado
+// e para quais dias/turnos ele é elegível?"
+// ═══════════════════════════════════════════════════════════
+export interface BrokerLocationEligibility {
+  locationId: string;
+  locationName: string;
+  /** Demandas onde o corretor é elegível (dia+turno) */
+  eligible: { dateStr: string; shift: string; dayOfWeek: string }[];
+  /** Demandas onde o corretor foi excluído (dia+turno+motivo) */
+  excluded: { dateStr: string; shift: string; dayOfWeek: string; reason: string }[];
+}
+
+export interface BrokerExternalEligibility {
+  brokerId: string;
+  brokerName: string;
+  /** Total de locais externos vinculados */
+  linkedLocationCount: number;
+  /** Total de demandas elegíveis na semana */
+  totalEligibleDemands: number;
+  /** Total de demandas excluídas */
+  totalExcludedDemands: number;
+  /** Detalhe por local */
+  locations: BrokerLocationEligibility[];
+  /** Externos finalmente alocados */
+  finalExternalCount: number;
+  /** Target de externos */
+  targetExternals: number;
+}
+
 let lastGenerationTrace: {
   decisionTrace: DecisionTraceEntry[];
   brokerDiagnostics: BrokerAllocationDiagnostic[];
   eligibilityExclusions: EligibilityExclusion[];
   subAllocatedForensics?: SubAllocatedForensic[];
+  brokerEligibilityMap?: BrokerExternalEligibility[];
 } | null = null;
 
 export function getLastGenerationTrace() {
@@ -121,6 +153,7 @@ export function setLastGenerationTrace(trace: {
   brokerDiagnostics: BrokerAllocationDiagnostic[];
   eligibilityExclusions: EligibilityExclusion[];
   subAllocatedForensics?: SubAllocatedForensic[];
+  brokerEligibilityMap?: BrokerExternalEligibility[];
 }) {
   lastGenerationTrace = trace;
 }
