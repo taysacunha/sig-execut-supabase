@@ -4708,11 +4708,92 @@ async function generateWeeklyScheduleWithAccumulator(
     }))
     .sort((a, b) => b.excludedCount - a.excludedCount);
 
+  // ═══════════════════════════════════════════════════════════
+  // RASTREIO FORENSE: Construir relatório de competição para sub-alocados
+  // ═══════════════════════════════════════════════════════════
+  const subAllocatedForensics: SubAllocatedForensic[] = [];
+  
+  for (const broker of context.brokerQueue) {
+    if (broker.externalShiftCount >= 2) continue; // Só diagnosticar sub-alocados
+    
+    const traces = competitionLog.get(broker.brokerId) || [];
+    const ruleBlockCounts: Record<string, number> = {};
+    let lostByCompetition = 0;
+    let lostByRule = 0;
+    let demandUnallocated = 0;
+    let allocatedCount = 0;
+    
+    for (const t of traces) {
+      switch (t.outcome) {
+        case "outcompeted": lostByCompetition++; break;
+        case "rule_blocked":
+          lostByRule++;
+          const rk = t.blockRule || "DESCONHECIDO";
+          ruleBlockCounts[rk] = (ruleBlockCounts[rk] || 0) + 1;
+          break;
+        case "demand_unallocated": demandUnallocated++; break;
+        case "allocated": allocatedCount++; break;
+      }
+    }
+    
+    const forensic: SubAllocatedForensic = {
+      brokerId: broker.brokerId,
+      brokerName: broker.brokerName,
+      finalExternalCount: broker.externalShiftCount,
+      targetExternals: broker.targetExternals,
+      totalEligibleDemands: traces.length,
+      lostByCompetition,
+      lostByRule,
+      demandUnallocated,
+      allocatedCount,
+      isSaturdayInternalWorker: context.saturdayInternalWorkers?.has(broker.brokerId) || false,
+      ruleBlockCounts,
+      competitionTrace: traces,
+    };
+    
+    subAllocatedForensics.push(forensic);
+    
+    // Log forense detalhado
+    console.log(`\n   🔬 FORENSE ${broker.brokerName}: ${broker.externalShiftCount}/${broker.targetExternals} externos`);
+    console.log(`      📊 Demandas elegíveis: ${traces.length}`);
+    console.log(`      ✅ Alocado: ${allocatedCount}`);
+    console.log(`      ❌ Perdeu por competição (outro na frente): ${lostByCompetition}`);
+    console.log(`      🚫 Bloqueado por regra: ${lostByRule}`);
+    console.log(`      ⬜ Demanda sem alocação: ${demandUnallocated}`);
+    console.log(`      🏢 Saturday internal worker: ${context.saturdayInternalWorkers?.has(broker.brokerId) ? 'SIM' : 'NÃO'}`);
+    
+    if (Object.keys(ruleBlockCounts).length > 0) {
+      console.log(`      📋 Regras que bloquearam:`);
+      for (const [rule, count] of Object.entries(ruleBlockCounts).sort((a, b) => b[1] - a[1])) {
+        console.log(`         ${rule}: ${count}x`);
+      }
+    }
+    
+    // Mostrar as primeiras 10 perdas por competição para entender padrão
+    const competitionLosses = traces.filter(t => t.outcome === "outcompeted").slice(0, 10);
+    if (competitionLosses.length > 0) {
+      console.log(`      🏁 Perdas por competição (top 10):`);
+      for (const t of competitionLosses) {
+        console.log(`         ${t.locationName} ${t.dateStr} ${t.shift} pass${t.pass} → ganhou: ${t.selectedBrokerName} (pos ${t.sortPosition}/${t.totalInQueue}, ext=${t.externalCountAtTime})`);
+      }
+    }
+    
+    // Mostrar bloqueios por regra
+    const ruleBlocks = traces.filter(t => t.outcome === "rule_blocked").slice(0, 10);
+    if (ruleBlocks.length > 0) {
+      console.log(`      🚫 Bloqueios por regra (top 10):`);
+      for (const t of ruleBlocks) {
+        console.log(`         ${t.locationName} ${t.dateStr} ${t.shift} pass${t.pass} → ${t.blockRule}: ${t.blockReason} (ext=${t.externalCountAtTime})`);
+      }
+    }
+  }
+
   // Salvar trace no módulo para acesso externo
   setLastGenerationTrace({
     decisionTrace,
     brokerDiagnostics,
-    eligibilityExclusions
+    eligibilityExclusions,
+    subAllocatedForensics
   });
 
   console.log(`\n🎉 TOTAL DE ALOCAÇÕES: ${assignments.length}`);
