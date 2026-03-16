@@ -801,80 +801,6 @@ function checkTrulyInviolableRulesWithRelaxation(
 
 // ═══════════════════════════════════════════════════════════
 // VERIFICA SE PODE EXCEDER O LIMITE DE 2 EXTERNOS
-// ═══════════════════════════════════════════════════════════
-// HELPER UNIFICADO: Verifica se um corretor REALMENTE pode receber uma demanda
-// Combina checkAbsoluteRules + checkTrulyInviolableRulesWithRelaxation
-// Elimina "possibilidades fantasma" onde o gate global fica ativo
-// mas nenhum corretor é realmente elegível
-// ═══════════════════════════════════════════════════════════
-function isBrokerTrulyEligibleForDemand(
-  broker: BrokerQueueItem,
-  demand: ExternalDemand,
-  context: AllocationContext,
-  pass: number = 5
-): { allowed: boolean; reason: string; rule: string } {
-  const isSaturday = demand.dayOfWeek === "saturday";
-  const isSunday = demand.dayOfWeek === "sunday";
-  
-  // ═══════════════════════════════════════════════════════════
-  // REGRAS OPERACIONAIS DO findBrokerForDemand (antes de checkAbsoluteRules)
-  // Estas regras DEVEM ser verificadas para evitar "possibilidade fantasma"
-  // ═══════════════════════════════════════════════════════════
-  
-  // 1. Proteção de sábado interno (para demandas de sábado) — passes 1-3
-  if (isSaturday && context.saturdayInternalWorkers?.has(broker.brokerId) && pass <= 3) {
-    return { allowed: false, reason: `Reservado para sábado interno (pass ${pass} <= 3)`, rule: "RESERVA_SABADO_INTERNO" };
-  }
-  
-  // 2. Corretor com sábado EXTERNO = máximo 2 externos na semana
-  const worksSaturdayExternal = context.saturdayExternalWorkers?.has(broker.brokerId);
-  if (worksSaturdayExternal && broker.externalShiftCount >= 2 && !isSaturday) {
-    return { allowed: false, reason: `Trabalha sábado externo, já tem ${broker.externalShiftCount} externos (máx 2)`, rule: "SABADO_EXTERNO_LIMITE" };
-  }
-  
-  // 3. Evitar sexta para quem trabalha sábado externo (com 1+ externos)
-  if (worksSaturdayExternal && demand.dayOfWeek === "friday" && broker.externalShiftCount >= 1) {
-    return { allowed: false, reason: `Trabalha sábado externo e já tem ${broker.externalShiftCount} externo(s) - evitar sexta`, rule: "SEXTA_SABADO_EXTERNO" };
-  }
-  
-  // 4. Sábado externo: não pode quem já tem 1+ externo
-  if (isSaturday && broker.externalShiftCount >= 1) {
-    return { allowed: false, reason: `Já tem ${broker.externalShiftCount} externo(s), não pode ir para sábado`, rule: "SABADO_COM_EXTERNOS" };
-  }
-  
-  // 5. Verificar regras absolutas (Regra 1 limite, Regra 4, 5, 6, 7, 9, 10)
-  const absCheck = checkAbsoluteRules(broker, demand, context, pass);
-  if (!absCheck.allowed) {
-    return absCheck;
-  }
-  
-  // 6. Regra 8 (consecutivos) com relaxamento + demais regras invioláveis
-  const relaxCheck = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
-  if (!relaxCheck.allowed) {
-    return { allowed: false, reason: relaxCheck.reason, rule: relaxCheck.rule || "REGRA_RELAXADA" };
-  }
-  
-  // 7. Proteção do Bessa em dias de semana
-  if (!isSaturday && !isSunday && broker.internalLocation === "bessa") {
-    const bessaDailyExternalCount = context.dailyBessaExternalCount.get(demand.dateStr) || 0;
-    if (bessaDailyExternalCount >= 2) {
-      return { allowed: false, reason: `Já tem ${bessaDailyExternalCount} do Bessa com externos hoje (limite: 2)`, rule: "BESSA_COBERTURA_SEMANA" };
-    }
-  }
-  
-  // 8. Proteção do Bessa para sábados
-  if (isSaturday && broker.internalLocation === "bessa") {
-    const bessaExternalCount = context.saturdayBessaExternalCount.get(demand.dateStr) || 0;
-    // Usar limite conservador: máximo 1 do Bessa no sábado
-    if (bessaExternalCount >= 1) {
-      return { allowed: false, reason: `Já tem ${bessaExternalCount} do Bessa no sábado externo`, rule: "BESSA_COBERTURA_SABADO" };
-    }
-  }
-  
-  return { allowed: true, reason: "", rule: "" };
-}
-
-// ═══════════════════════════════════════════════════════════
 // Retorna true APENAS se TODOS os elegíveis já têm 2 ou estão bloqueados
 // ═══════════════════════════════════════════════════════════
 function canExceedLimit(
@@ -887,8 +813,8 @@ function canExceedLimit(
     
     // Se algum corretor elegível tem menos de 2 externos E pode receber esta demanda
     if (broker.externalShiftCount < MAX_EXTERNAL_SHIFTS_PER_WEEK) {
-      // Usar helper UNIFICADO que verifica TODAS as regras (absolutas + relaxadas)
-      const check = isBrokerTrulyEligibleForDemand(broker, demand, context);
+      // Usar helper unificado COM relaxamento de Regra 8 (corretor com <2 pode ter consecutivo)
+      const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
       if (check.allowed) {
         // Ainda há corretor com menos de 2 que pode receber
         return false;
@@ -896,7 +822,7 @@ function canExceedLimit(
     }
   }
   
-  // Todos os elegíveis já têm 2 ou estão bloqueados por regras reais
+  // Todos os elegíveis já têm 2 ou estão bloqueados por regras invioláveis
   return true;
 }
 
@@ -914,6 +840,18 @@ function canAnyoneStillReachTwo(
   for (const broker of context.brokerQueue) {
     if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_PER_WEEK) continue;
     
+    // ═══════════════════════════════════════════════════════════
+    // ELEGIBILIDADE REAL: Verificar as mesmas regras que findBrokerForDemand usa
+    // Evita "possibilidade fantasma" onde o gate fica ativo mas ninguém é alocado
+    // ═══════════════════════════════════════════════════════════
+    
+    // Corretor de sábado interno não pode pegar domingo externo
+    const isSaturdayInternalWorker = context.saturdayInternalWorkers?.has(broker.brokerId);
+    
+    // Corretor de sábado externo tem limite de 2
+    const isSaturdayExternalWorker = context.saturdayExternalWorkers?.has(broker.brokerId);
+    if (isSaturdayExternalWorker && broker.externalShiftCount >= 2) continue;
+    
     let canReceiveAny = false;
     
     for (const demand of unallocatedDemands) {
@@ -922,14 +860,19 @@ function canAnyoneStillReachTwo(
       // Verificar dia da semana disponível
       if (!broker.availableWeekdays.includes(demand.dayOfWeek)) continue;
       
-      // HELPER UNIFICADO: verifica TODAS as regras reais (absolute + operational + relaxed)
-      // Inclui: reserva sábado interno, sábado externo limite, sexta, Bessa, etc.
-      const check = isBrokerTrulyEligibleForDemand(broker, demand, context);
+      // REMOVIDO: Bloqueio fantasma de sáb/dom para saturdayInternalWorkers
+      // O bloqueio real ocorre após ETAPA 8.9 via alocações reais
+      
+      // Sexta com sábado externo
+      if (isSaturdayExternalWorker && demand.dayOfWeek === "friday" && broker.externalShiftCount >= 1) continue;
+      
+      // Sábado externo com 1+ externos
+      if (demand.dayOfWeek === "saturday" && broker.externalShiftCount >= 1) continue;
+      
+      const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
       if (check.allowed) {
         canReceiveAny = true;
         break;
-      } else {
-        console.log(`   📊 GATE: ${broker.brokerName} NÃO pode ${demand.locationName} ${demand.dateStr} ${demand.shift}: ${check.rule} - ${check.reason}`);
       }
     }
     
@@ -3976,12 +3919,16 @@ async function generateWeeklyScheduleWithAccumulator(
         if (!broker) continue;
         
         // Só aceitar corretor com menos de 2 neste passo
-        if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_PER_WEEK) continue;
+        if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_HARD_CAP) continue;
         
-        // CORREÇÃO: Usar helper UNIFICADO (todas as regras operacionais + absolutas + relaxadas)
-        const check = isBrokerTrulyEligibleForDemand(broker, demand, context);
-        if (!check.allowed) {
-          console.log(`   ⛔ ETAPA 9 PASSO 1: ${broker.brokerName} bloqueado para ${demand.locationName} ${demand.dateStr} ${demand.shift}: ${check.rule} - ${check.reason}`);
+        // CORRIGIDO: true = relaxar Regra 8 (consecutivos) para corretores com <2 externos na etapa de emergência
+        const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
+        if (!check.allowed) continue;
+        
+        // Verificar regras absolutas (Regra 4, 5, etc.)
+        const absCheck = checkAbsoluteRules(broker, demand, context, 5);
+        if (!absCheck.allowed) {
+          console.log(`   ⛔ ETAPA 9 PASSO 1: ${broker.brokerName} bloqueado para ${demand.locationName} ${demand.dateStr} ${demand.shift}: ${absCheck.reason}`);
           continue;
         }
         
@@ -4015,8 +3962,8 @@ async function generateWeeklyScheduleWithAccumulator(
             if (!broker || broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_HARD_CAP) continue;
             if (!demand.eligibleBrokerIds.includes(broker.brokerId)) continue;
             
-            // CORREÇÃO: Usar helper UNIFICADO (absolute + relaxed)
-            const check = isBrokerTrulyEligibleForDemand(broker, demand, context);
+            // Tentar com Regra 8 relaxada
+            const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
             if (!check.allowed) continue;
             
             allocateDemand(demand, broker, context);
@@ -4062,8 +4009,7 @@ async function generateWeeklyScheduleWithAccumulator(
               .sort((a, b) => a.externalShiftCount - b.externalShiftCount);
             
             for (const broker of compensationBrokers) {
-              // CORREÇÃO: Usar helper UNIFICADO (absolute + relaxed)
-              const check = isBrokerTrulyEligibleForDemand(broker, demand, context);
+              const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
               if (!check.allowed) continue;
               
               allocateDemand(demand, broker, context);
@@ -4130,8 +4076,7 @@ async function generateWeeklyScheduleWithAccumulator(
                   continue;
                 }
                 
-                // CORREÇÃO: Usar helper UNIFICADO (absolute + relaxed)
-                const check = isBrokerTrulyEligibleForDemand(broker, demand, context);
+                const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
                 if (!check.allowed) continue;
                 
                 const wasOverLimit = broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_PER_WEEK;
@@ -4170,8 +4115,8 @@ async function generateWeeklyScheduleWithAccumulator(
                 if (!broker || broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_PER_WEEK) continue;
                 if (!demand.eligibleBrokerIds.includes(broker.brokerId)) continue;
                 
-                // CORREÇÃO: Usar helper UNIFICADO (absolute + relaxed) — evita possibilidade fantasma
-                const check = isBrokerTrulyEligibleForDemand(broker, demand, context);
+                // Verificar TODAS as regras reais (com relaxamento de Regra 8)
+                const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
                 if (!check.allowed) continue;
                 
                 // Este under-two PODE realmente pegar esta demanda
@@ -4231,8 +4176,7 @@ async function generateWeeklyScheduleWithAccumulator(
                   
                   if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_HARD_CAP) continue;
                   
-                  // CORREÇÃO: Usar helper UNIFICADO (absolute + relaxed)
-                  const check = isBrokerTrulyEligibleForDemand(broker, demand, context);
+                  const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
                   if (!check.allowed) continue;
                   
                   const wasOverLimit = broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_PER_WEEK;
@@ -4264,8 +4208,8 @@ async function generateWeeklyScheduleWithAccumulator(
                     if (!broker) continue;
                     const reasons: string[] = [];
                     if (broker.externalShiftCount >= MAX_EXTERNAL_SHIFTS_HARD_CAP) reasons.push(`HARD CAP (${broker.externalShiftCount})`);
-                    const fullCheck = isBrokerTrulyEligibleForDemand(broker, demand, context);
-                    if (!fullCheck.allowed) reasons.push(`${fullCheck.rule}: ${fullCheck.reason}`);
+                    const invCheck = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
+                    if (!invCheck.allowed) reasons.push(invCheck.reason);
                     console.log(`         - ${broker.brokerName} (${broker.externalShiftCount} ext): ${reasons.join('; ') || 'desconhecido'}`);
                   }
                 }
@@ -4308,9 +4252,7 @@ async function generateWeeklyScheduleWithAccumulator(
       
       let allocated = false;
       for (const broker of eligibleBrokers) {
-        // CORREÇÃO: Usar helper UNIFICADO + checkAbsoluteRules para emergência final
-        const absCheck = checkAbsoluteRules(broker, demand, context, 5);
-        if (!absCheck.allowed) continue;
+        // Verificar apenas regras invioláveis (construtora, etc.) mas relaxar consecutivos e gate
         const checkResult = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
         if (checkResult.allowed) {
           allocateDemand(demand, broker, context);
