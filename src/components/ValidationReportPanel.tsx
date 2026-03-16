@@ -421,9 +421,10 @@ export function ValidationReportPanel({ result, onClose, brokerDiagnostics, elig
               expandedRules={expandedRules}
               toggleRule={toggleRule}
             />
-          ) : (
+          ) : viewMode === "diagnostic" ? (
             <DiagnosticView
               diagnostics={brokerDiagnostics || []}
+              eligibilityExclusions={eligibilityExclusions || []}
               expanded={expandedDiagnostics}
               toggleExpanded={(id) => {
                 const next = new Set(expandedDiagnostics);
