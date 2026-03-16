@@ -897,10 +897,15 @@ function canAnyoneStillReachTwo(
       // Sábado externo com 1+ externos
       if (demand.dayOfWeek === "saturday" && broker.externalShiftCount >= 1) continue;
       
-      const check = checkTrulyInviolableRulesWithRelaxation(broker, demand, context, true);
+      // CORREÇÃO: Usar helper UNIFICADO que verifica TODAS as regras reais
+      // Antes: só checkTrulyInviolableRulesWithRelaxation (ignorava checkAbsoluteRules)
+      // Agora: verifica absolute + relaxed, eliminando "possibilidade fantasma"
+      const check = isBrokerTrulyEligibleForDemand(broker, demand, context);
       if (check.allowed) {
         canReceiveAny = true;
         break;
+      } else {
+        console.log(`   📊 GATE: ${broker.brokerName} NÃO pode ${demand.locationName} ${demand.dateStr} ${demand.shift}: ${check.rule} - ${check.reason}`);
       }
     }
     
