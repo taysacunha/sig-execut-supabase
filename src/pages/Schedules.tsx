@@ -704,17 +704,22 @@ const Schedules = () => {
         .delete()
         .eq("schedule_id", scheduleId);
 
+      // Capturar mapa de elegibilidade do trace em memória
+      const eligibilityMap = getLastGenerationTrace()?.brokerEligibilityMap || null;
+
       // Inserir nova validação
+      const insertData: any = {
+        schedule_id: scheduleId,
+        is_valid: validation.isValid,
+        violations: validation.violations as any,
+        unallocated_demands: validation.unallocatedDemands as any,
+        summary: validation.summary as any,
+        broker_reports: validation.brokerReports as any,
+        broker_eligibility_map: eligibilityMap as any,
+      };
       const { error } = await supabase
         .from("schedule_validation_results")
-        .insert([{
-          schedule_id: scheduleId,
-          is_valid: validation.isValid,
-          violations: validation.violations as any,
-          unallocated_demands: validation.unallocatedDemands as any,
-          summary: validation.summary as any,
-          broker_reports: validation.brokerReports as any
-        }]);
+        .insert([insertData]);
 
       if (error) throw error;
       console.log("✅ Validação salva no banco de dados");
