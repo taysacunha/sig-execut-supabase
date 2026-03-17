@@ -205,6 +205,10 @@ const Schedules = () => {
         brokerReports: savedValidation.broker_reports as any[] || [],
         unallocatedDemands: savedValidation.unallocated_demands as any[] || []
       });
+      
+      // Restaurar mapa de elegibilidade persistido
+      const savedMap = (savedValidation as any).broker_eligibility_map;
+      setPersistedEligibilityMap(savedMap && Array.isArray(savedMap) ? savedMap : null);
     } else if (!isLoadingValidation && selectedScheduleId) {
       // Se não houver validação salva e não está carregando, limpar
       setPostValidationResult(null);
