@@ -933,10 +933,10 @@ function DiagnosticView({
           <div className="p-3 rounded-lg bg-accent/50 border border-accent text-sm">
             <div className="font-medium flex items-center gap-2">
               <HelpCircle className="h-4 w-4" />
-              Diagnóstico Forense: {filtered.length} corretor{filtered.length !== 1 ? "es" : ""} com menos de 2 externos
+              Corretores que não atingiram a meta de externos: {filtered.length} corretor{filtered.length !== 1 ? "es" : ""}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Dados capturados em tempo real durante a geração. Cada rejeição mostra a regra exata que bloqueou no momento da decisão.
+              Para cada corretor abaixo, veja quantas vezes ele foi considerado para alocação e a regra que impediu.
             </p>
           </div>
 
