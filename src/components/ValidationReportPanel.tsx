@@ -967,7 +967,7 @@ function DiagnosticView({
                   <div className="ml-6 mt-2 space-y-3 pb-3">
                     {ruleEntries.length > 0 && (
                       <div className="space-y-1">
-                        <div className="text-xs font-medium text-muted-foreground">Rejeições por regra:</div>
+                        <div className="text-xs font-medium text-muted-foreground">Regras que impediram a alocação:</div>
                         {ruleEntries.map(([rule, count]) => (
                           <div key={rule} className="flex items-center justify-between p-2 rounded bg-background border text-xs">
                             <span>{rule}</span>
