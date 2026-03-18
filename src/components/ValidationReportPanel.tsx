@@ -372,39 +372,24 @@ export function ValidationReportPanel({ result, onClose, brokerDiagnostics, elig
                 <Layers className="h-3 w-3" />
                 Por Regra
               </Button>
-              {brokerDiagnostics && brokerDiagnostics.length > 0 && (
-                <Button
-                  variant={viewMode === "diagnostic" ? "default" : "outline"}
-                  size="sm"
-                  className="h-7 text-xs gap-1"
-                  onClick={() => setViewMode("diagnostic")}
-                >
-                  <HelpCircle className="h-3 w-3" />
-                  Por que não alocou
-                </Button>
-              )}
-              {subAllocatedForensics && subAllocatedForensics.length > 0 && (
-                <Button
-                  variant={viewMode === "forensic" ? "default" : "outline"}
-                  size="sm"
-                  className="h-7 text-xs gap-1"
-                  onClick={() => setViewMode("forensic")}
-                >
-                  <Search className="h-3 w-3" />
-                  Forense
-                </Button>
-              )}
-              {brokerEligibilityMap && brokerEligibilityMap.length > 0 && (
-                <Button
-                  variant={viewMode === "eligibility" ? "default" : "outline"}
-                  size="sm"
-                  className="h-7 text-xs gap-1"
-                  onClick={() => setViewMode("eligibility")}
-                >
-                  <Link2 className="h-3 w-3" />
-                  Vínculos
-                </Button>
-              )}
+              <Button
+                variant={viewMode === "diagnostic" ? "default" : "outline"}
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => setViewMode("diagnostic")}
+              >
+                <HelpCircle className="h-3 w-3" />
+                Por que não alocou
+              </Button>
+              <Button
+                variant={viewMode === "eligibility" ? "default" : "outline"}
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => setViewMode("eligibility")}
+              >
+                <Link2 className="h-3 w-3" />
+                Vínculos
+              </Button>
             </div>
             <div className="flex gap-1">
               {hasActiveFilters && (
