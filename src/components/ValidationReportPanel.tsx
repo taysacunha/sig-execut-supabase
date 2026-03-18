@@ -1078,7 +1078,7 @@ function EligibilityView({ eligibilityMap, expanded, toggleExpanded, searchBroke
                       <div className="flex flex-wrap gap-1 mt-1">
                         {loc.eligible.map((e, i) => (
                           <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                            {e.dateStr} {e.shift === "morning" ? "M" : "T"}
+                            {formatDateBR(e.dateStr)} {e.shift === "morning" ? "Manhã" : "Tarde"}
                           </span>
                         ))}
                       </div>
