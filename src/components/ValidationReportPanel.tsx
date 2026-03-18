@@ -67,9 +67,43 @@ function getRuleExplanation(rule: string): string {
 }
 
 function getRuleShortName(rule: string): string {
-  // Extract the main rule identifier
   const parts = rule.split(":");
   return parts[0].trim();
+}
+
+// ═══════════════════════════════════════════════════════════
+// HUMANIZAR RAZÕES DE EXCLUSÃO
+// Traduz strings técnicas do gerador para português claro
+// ═══════════════════════════════════════════════════════════
+const weekdayMap: Record<string, string> = {
+  monday: "segundas", tuesday: "terças", wednesday: "quartas",
+  thursday: "quintas", friday: "sextas", saturday: "sábados", sunday: "domingos",
+};
+const shiftMap: Record<string, string> = { morning: "manhã", afternoon: "tarde" };
+
+function humanizeExclusionReason(reason: string): string {
+  // DIA: monday não está em available_weekdays
+  {
+    const m = reason.match(/DIA:\s*(\w+)\s*não está em available_weekdays/i);
+    if (m) return `Corretor não trabalha às ${weekdayMap[m[1]] || m[1]}`;
+  }
+  // GLOBAL: sem disponibilidade para morning em tuesday
+  {
+    const m = reason.match(/GLOBAL:\s*sem disponibilidade para\s*(\w+)\s*em\s*(\w+)/i);
+    if (m) return `Sem disponibilidade pela ${shiftMap[m[1]] || m[1]} às ${weekdayMap[m[2]] || m[2]}`;
+  }
+  // LOCAL: weekday_shift_availability não inclui afternoon em wednesday
+  {
+    const m = reason.match(/LOCAL:\s*weekday_shift_availability não inclui\s*(\w+)\s*em\s*(\w+)/i);
+    if (m) return `Vínculo local não permite turno da ${shiftMap[m[1]] || m[1]} às ${weekdayMap[m[2]] || m[2]}`;
+  }
+  // LEGACY: available_morning = false / available_afternoon = false
+  {
+    const m = reason.match(/LEGACY:\s*available_(morning|afternoon)\s*=\s*false/i);
+    if (m) return `Turno da ${shiftMap[m[1]] || m[1]} desabilitado neste local`;
+  }
+  // Fallback: return as-is
+  return reason;
 }
 
 // ═══════════════════════════════════════════════════════════
