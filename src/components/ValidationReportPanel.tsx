@@ -909,7 +909,7 @@ function DiagnosticView({
                               <span>{formatDateBR(det.dateStr)}</span>
                               <Badge variant="outline" className="text-[10px]">{det.shift === "morning" ? "Manhã" : "Tarde"}</Badge>
                             </div>
-                            <div className="mt-1 text-orange-600 dark:text-orange-400">{det.reason}</div>
+                            <div className="mt-1 text-orange-600 dark:text-orange-400">{humanizeExclusionReason(det.reason)}</div>
                           </div>
                         ))}
                         {excl.exclusionDetails.length > 20 && (
