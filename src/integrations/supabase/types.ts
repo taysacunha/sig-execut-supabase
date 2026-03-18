@@ -2627,6 +2627,7 @@ export type Database = {
       }
       schedule_validation_results: {
         Row: {
+          broker_eligibility_map: Json | null
           broker_reports: Json | null
           created_at: string | null
           id: string
@@ -2638,6 +2639,7 @@ export type Database = {
           violations: Json | null
         }
         Insert: {
+          broker_eligibility_map?: Json | null
           broker_reports?: Json | null
           created_at?: string | null
           id?: string
@@ -2649,6 +2651,7 @@ export type Database = {
           violations?: Json | null
         }
         Update: {
+          broker_eligibility_map?: Json | null
           broker_reports?: Json | null
           created_at?: string | null
           id?: string
