@@ -1051,7 +1051,8 @@ function EligibilityView({ eligibilityMap, expanded, toggleExpanded, searchBroke
   return (
     <div className="space-y-2">
       {filtered.map(broker => {
-        const isUnder = broker.finalExternalCount < broker.targetExternals;
+        const realExternal = realExternalMap.get(broker.brokerId) ?? broker.finalExternalCount;
+        const isUnder = realExternal < broker.targetExternals;
         const isExpanded = expanded.has(broker.brokerId);
 
         return (
