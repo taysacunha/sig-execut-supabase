@@ -821,14 +821,23 @@ function DiagnosticView({
   eligibilityExclusions,
   expanded,
   toggleExpanded,
-  searchBroker
+  searchBroker,
+  brokerReports
 }: {
   diagnostics: BrokerAllocationDiagnostic[];
   eligibilityExclusions: EligibilityExclusion[];
   expanded: Set<string>;
   toggleExpanded: (id: string) => void;
   searchBroker: string;
+  brokerReports: BrokerValidationReport[];
 }) {
+  // Build real external count map from final assignments
+  const realExternalMap = useMemo(() => {
+    const map = new Map<string, number>();
+    brokerReports.forEach(r => map.set(r.brokerId, r.externalCount));
+    return map;
+  }, [brokerReports]);
+
   const filtered = diagnostics.filter(d => 
     !searchBroker || d.brokerName.toLowerCase().includes(searchBroker.toLowerCase())
   );
