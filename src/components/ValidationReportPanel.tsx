@@ -966,7 +966,7 @@ function DiagnosticView({
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="destructive" className="text-xs">
-                        {diag.finalExternalCount}/{diag.targetExternals} externos
+                        {realExternalMap.get(diag.brokerId) ?? diag.finalExternalCount}/{diag.targetExternals} externos
                       </Badge>
                       <Badge variant="secondary" className="text-xs">
                         {diag.totalOpportunities} vezes bloqueado
