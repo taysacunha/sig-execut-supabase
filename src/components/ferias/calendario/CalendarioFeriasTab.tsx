@@ -483,40 +483,9 @@ export function CalendarioFeriasTab() {
         {/* Lista filtrada */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="text-lg">
-                Férias em {format(calendarMonth, "MMMM yyyy", { locale: ptBR })}
-              </CardTitle>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Select value={selectedSetor} onValueChange={setSelectedSetor}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Setor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos os setores</SelectItem>
-                    {setores.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select value={selectedUnidade} onValueChange={setSelectedUnidade}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Unidade" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas as unidades</SelectItem>
-                    {unidades.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            <CardTitle className="text-lg">
+              Férias em {format(calendarMonth, "MMMM yyyy", { locale: ptBR })}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
