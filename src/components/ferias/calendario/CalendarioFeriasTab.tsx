@@ -197,16 +197,6 @@ export function CalendarioFeriasTab() {
     return { start, end };
   }, [calendarMonth, ganttMonths]);
 
-  // Férias that overlap the gantt range
-  const feriasGantt = useMemo(() => {
-    return feriasFiltradas.filter((f) => {
-      const intervals = getGozoIntervals(f);
-      return intervals.some((interval) =>
-        interval.start <= ganttRange.end && interval.end >= ganttRange.start
-      );
-    });
-  }, [feriasFiltradas, ganttRange]);
-
   // Get all gozo intervals for a given ferias
   const getGozoIntervals = (f: Ferias): Array<{ start: Date; end: Date }> => {
     // Flexible periods take priority
@@ -238,6 +228,16 @@ export function CalendarioFeriasTab() {
     }
     return intervals;
   };
+
+  // Férias that overlap the gantt range
+  const feriasGantt = useMemo(() => {
+    return feriasFiltradas.filter((f) => {
+      const intervals = getGozoIntervals(f);
+      return intervals.some((interval) =>
+        interval.start <= ganttRange.end && interval.end >= ganttRange.start
+      );
+    });
+  }, [feriasFiltradas, ganttRange]);
 
   // Legacy helper for dialog display
   const getGozoDates = (f: Ferias) => {
