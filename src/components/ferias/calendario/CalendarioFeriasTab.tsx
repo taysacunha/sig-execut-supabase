@@ -70,6 +70,9 @@ export function CalendarioFeriasTab() {
   const [selectedSetor, setSelectedSetor] = useState<string>("all");
   const [selectedFerias, setSelectedFerias] = useState<Ferias | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"lista" | "gantt">("lista");
+  const [searchNome, setSearchNome] = useState("");
+  const [ganttMonths, setGanttMonths] = useState("1");
 
   // Buscar férias
   const { data: ferias = [], isLoading: loadingFerias } = useQuery({
