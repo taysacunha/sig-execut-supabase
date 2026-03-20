@@ -375,6 +375,78 @@ export function CalendarioFeriasTab() {
         </Card>
       </div>
 
+      {/* View toggle + search */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex gap-1">
+          <Button
+            variant={viewMode === "lista" ? "default" : "outline"}
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setViewMode("lista")}
+          >
+            <List className="h-4 w-4" />
+            Lista
+          </Button>
+          <Button
+            variant={viewMode === "gantt" ? "default" : "outline"}
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setViewMode("gantt")}
+          >
+            <BarChart3 className="h-4 w-4" />
+            Gantt
+          </Button>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome..."
+              value={searchNome}
+              onChange={e => setSearchNome(e.target.value)}
+              className="pl-8 h-9 w-full sm:w-[200px]"
+            />
+          </div>
+          <Select value={selectedSetor} onValueChange={setSelectedSetor}>
+            <SelectTrigger className="w-full sm:w-[160px] h-9">
+              <SelectValue placeholder="Setor" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os setores</SelectItem>
+              {setores.map((s) => (
+                <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={selectedUnidade} onValueChange={setSelectedUnidade}>
+            <SelectTrigger className="w-full sm:w-[160px] h-9">
+              <SelectValue placeholder="Unidade" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as unidades</SelectItem>
+              {unidades.map((u) => (
+                <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {viewMode === "gantt" && (
+            <Select value={ganttMonths} onValueChange={setGanttMonths}>
+              <SelectTrigger className="w-full sm:w-[120px] h-9">
+                <SelectValue placeholder="Período" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1 mês</SelectItem>
+                <SelectItem value="2">2 meses</SelectItem>
+                <SelectItem value="3">3 meses</SelectItem>
+                <SelectItem value="6">6 meses</SelectItem>
+                <SelectItem value="12">Ano inteiro</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      </div>
+
+      {viewMode === "lista" ? (
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Calendário */}
         <Card className="lg:col-span-1">
