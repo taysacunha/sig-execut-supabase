@@ -10,11 +10,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, AlertCircle, Users, Palmtree, BarChart3, List, Search } from "lucide-react";
+import { Calendar as CalendarIcon, AlertCircle, Users, Palmtree, BarChart3, List } from "lucide-react";
 import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, eachDayOfInterval, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { GanttFeriasView } from "./GanttFeriasView";
 import { getYearOptions } from "@/lib/dateUtils";
+import { MultiSelect } from "@/components/ui/multi-select";
 
 interface GozoPeriodo {
   id: string;
@@ -67,12 +68,14 @@ interface Unidade {
 export function CalendarioFeriasTab() {
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   const [selectedUnidade, setSelectedUnidade] = useState<string>("all");
-  const [selectedSetor, setSelectedSetor] = useState<string>("all");
+  const [selectedSetores, setSelectedSetores] = useState<string[]>([]);
+  const [selectedColaboradores, setSelectedColaboradores] = useState<string[]>([]);
   const [selectedFerias, setSelectedFerias] = useState<Ferias | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"lista" | "gantt">("lista");
   const [searchNome, setSearchNome] = useState("");
-  const [ganttMonths, setGanttMonths] = useState("1");
+  const [ganttMonths, setGanttMonths] = useState<string[]>([]); // empty = current month only
+  const [ganttYear, setGanttYear] = useState(new Date().getFullYear());
 
   // Buscar férias
   const { data: ferias = [], isLoading: loadingFerias } = useQuery({
@@ -168,14 +171,30 @@ export function CalendarioFeriasTab() {
     },
   });
 
+  // Build colaborador options for multi-select
+  const colaboradorOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    ferias.forEach((f) => {
+      if (f.colaborador_id && f.colaborador?.nome) {
+        map.set(f.colaborador_id, f.colaborador.nome);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [ferias]);
+
   // Filtrar férias
   const feriasFiltradas = useMemo(() => {
     return ferias.filter((f) => {
-      if (selectedSetor !== "all" && f.colaborador?.setor?.id !== selectedSetor) {
+      if (selectedSetores.length > 0 && !selectedSetores.includes(f.colaborador?.setor?.id || "")) {
         return false;
       }
-      if (selectedUnidade !== "all") {
-        return true;
+      if (selectedUnidade !== "all" && f.colaborador?.unidade?.nome !== unidades.find(u => u.id === selectedUnidade)?.nome) {
+        return false;
+      }
+      if (selectedColaboradores.length > 0 && !selectedColaboradores.includes(f.colaborador_id)) {
+        return false;
       }
       if (searchNome) {
         const nome = f.colaborador?.nome?.toLowerCase() || "";
@@ -183,19 +202,26 @@ export function CalendarioFeriasTab() {
       }
       return true;
     });
-  }, [ferias, selectedSetor, selectedUnidade, searchNome]);
+  }, [ferias, selectedSetores, selectedUnidade, selectedColaboradores, searchNome, unidades]);
 
-  // Gantt date range
+  // Gantt date range — based on selected months or full year
   const ganttRange = useMemo(() => {
-    const months = parseInt(ganttMonths) || 1;
-    if (months === 12) {
-      const year = calendarMonth.getFullYear();
-      return { start: new Date(year, 0, 1), end: new Date(year, 11, 31) };
+    if (ganttMonths.includes("year")) {
+      return { start: new Date(ganttYear, 0, 1), end: new Date(ganttYear, 11, 31) };
     }
-    const start = startOfMonth(calendarMonth);
-    const end = endOfMonth(addMonths(calendarMonth, months - 1));
-    return { start, end };
-  }, [calendarMonth, ganttMonths]);
+    if (ganttMonths.length === 0) {
+      // Default: current calendar month
+      return { start: startOfMonth(calendarMonth), end: endOfMonth(calendarMonth) };
+    }
+    // Parse selected months (format: "0" to "11") and build range
+    const monthNums = ganttMonths.map(Number).sort((a, b) => a - b);
+    const minMonth = monthNums[0];
+    const maxMonth = monthNums[monthNums.length - 1];
+    return {
+      start: new Date(ganttYear, minMonth, 1),
+      end: endOfMonth(new Date(ganttYear, maxMonth, 1)),
+    };
+  }, [calendarMonth, ganttMonths, ganttYear]);
 
   // Get all gozo intervals for a given ferias
   const getGozoIntervals = (f: Ferias): Array<{ start: Date; end: Date }> => {
@@ -397,27 +423,23 @@ export function CalendarioFeriasTab() {
             Gantt
           </Button>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por nome..."
-              value={searchNome}
-              onChange={e => setSearchNome(e.target.value)}
-              className="pl-8 h-9 w-full sm:w-[200px]"
-            />
-          </div>
-          <Select value={selectedSetor} onValueChange={setSelectedSetor}>
-            <SelectTrigger className="w-full sm:w-[160px] h-9">
-              <SelectValue placeholder="Setor" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os setores</SelectItem>
-              {setores.map((s) => (
-                <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
+          <MultiSelect
+            options={colaboradorOptions}
+            selected={selectedColaboradores}
+            onChange={setSelectedColaboradores}
+            placeholder="Colaboradores"
+            className="w-full sm:w-[200px]"
+            maxDisplay={1}
+          />
+          <MultiSelect
+            options={setores.map((s) => ({ value: s.id, label: s.nome }))}
+            selected={selectedSetores}
+            onChange={setSelectedSetores}
+            placeholder="Setores"
+            className="w-full sm:w-[180px]"
+            maxDisplay={1}
+          />
           <Select value={selectedUnidade} onValueChange={setSelectedUnidade}>
             <SelectTrigger className="w-full sm:w-[160px] h-9">
               <SelectValue placeholder="Unidade" />
@@ -430,18 +452,49 @@ export function CalendarioFeriasTab() {
             </SelectContent>
           </Select>
           {viewMode === "gantt" && (
-            <Select value={ganttMonths} onValueChange={setGanttMonths}>
-              <SelectTrigger className="w-full sm:w-[120px] h-9">
-                <SelectValue placeholder="Período" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1">1 mês</SelectItem>
-                <SelectItem value="2">2 meses</SelectItem>
-                <SelectItem value="3">3 meses</SelectItem>
-                <SelectItem value="6">6 meses</SelectItem>
-                <SelectItem value="12">Ano inteiro</SelectItem>
-              </SelectContent>
-            </Select>
+            <>
+              <MultiSelect
+                options={[
+                  { value: "0", label: "Janeiro" },
+                  { value: "1", label: "Fevereiro" },
+                  { value: "2", label: "Março" },
+                  { value: "3", label: "Abril" },
+                  { value: "4", label: "Maio" },
+                  { value: "5", label: "Junho" },
+                  { value: "6", label: "Julho" },
+                  { value: "7", label: "Agosto" },
+                  { value: "8", label: "Setembro" },
+                  { value: "9", label: "Outubro" },
+                  { value: "10", label: "Novembro" },
+                  { value: "11", label: "Dezembro" },
+                  { value: "year", label: "Ano inteiro" },
+                ]}
+                selected={ganttMonths}
+                onChange={(vals) => {
+                  // If "year" is toggled, select only it
+                  if (vals.includes("year") && !ganttMonths.includes("year")) {
+                    setGanttMonths(["year"]);
+                  } else if (ganttMonths.includes("year") && vals.length > 1) {
+                    setGanttMonths(vals.filter((v) => v !== "year"));
+                  } else {
+                    setGanttMonths(vals);
+                  }
+                }}
+                placeholder="Meses"
+                className="w-full sm:w-[180px]"
+                maxDisplay={2}
+              />
+              <Select value={String(ganttYear)} onValueChange={(v) => setGanttYear(Number(v))}>
+                <SelectTrigger className="w-full sm:w-[100px] h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {getYearOptions().map((y) => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
           )}
         </div>
       </div>
