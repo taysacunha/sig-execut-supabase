@@ -966,7 +966,7 @@ function DiagnosticView({
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="destructive" className="text-xs">
-                        {realExternalMap.get(diag.brokerId) ?? diag.finalExternalCount} plantões externos (meta: {diag.targetExternals})
+                        {realExternalMap.get(diag.brokerId) ?? diag.finalExternalCount} externos no mês (meta: {diag.targetExternals}/semana)
                       </Badge>
                       <Badge variant="secondary" className="text-xs">
                         Considerado {diag.totalOpportunities} vezes, não alocado
