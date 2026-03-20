@@ -1,7 +1,7 @@
 import * as React from "react";
-import { Check, ChevronDown, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Check, ChevronDown, X, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +17,8 @@ interface MultiSelectProps {
   placeholder?: string;
   className?: string;
   maxDisplay?: number;
+  searchable?: boolean;
+  searchPlaceholder?: string;
 }
 
 export function MultiSelect({
@@ -26,8 +28,20 @@ export function MultiSelect({
   placeholder = "Selecione...",
   className,
   maxDisplay = 2,
+  searchable = false,
+  searchPlaceholder = "Buscar...",
 }: MultiSelectProps) {
   const [open, setOpen] = React.useState(false);
+  const [search, setSearch] = React.useState("");
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  // Focus input when popover opens
+  React.useEffect(() => {
+    if (open && searchable) {
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+    if (!open) setSearch("");
+  }, [open, searchable]);
 
   const toggle = (value: string) => {
     if (selected.includes(value)) {
@@ -38,6 +52,10 @@ export function MultiSelect({
   };
 
   const selectedLabels = options.filter((o) => selected.includes(o.value));
+
+  const filtered = search
+    ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
+    : options;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -58,7 +76,21 @@ export function MultiSelect({
           <ChevronDown className="ml-1 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[220px] p-0" align="start">
+      <PopoverContent className="w-[240px] p-0" align="start">
+        {searchable && (
+          <div className="p-2 border-b">
+            <div className="relative">
+              <Search className="absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                ref={inputRef}
+                placeholder={searchPlaceholder}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-8 pl-7 text-sm"
+              />
+            </div>
+          </div>
+        )}
         <div className="max-h-[280px] overflow-y-auto p-1">
           {selected.length > 0 && (
             <button
@@ -69,7 +101,10 @@ export function MultiSelect({
               Limpar seleção
             </button>
           )}
-          {options.map((option) => {
+          {filtered.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-3">Nenhum resultado</p>
+          )}
+          {filtered.map((option) => {
             const isSelected = selected.includes(option.value);
             return (
               <button
