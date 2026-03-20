@@ -496,8 +496,8 @@ export function CalendarioFeriasTab() {
               </Select>
             </>
           )}
+        </div>
       </div>
-
 
       {viewMode === "lista" ? (
       <div className="grid gap-6 lg:grid-cols-3">
