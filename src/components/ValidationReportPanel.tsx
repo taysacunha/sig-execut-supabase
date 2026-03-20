@@ -864,10 +864,10 @@ function DiagnosticView({
           <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-sm">
             <div className="font-medium flex items-center gap-2 text-orange-800 dark:text-orange-300">
               <AlertTriangle className="h-4 w-4" />
-              Exclusões de Elegibilidade: {filteredExclusions.length} corretor{filteredExclusions.length !== 1 ? "es" : ""} com demandas bloqueadas
+              Turnos bloqueados por disponibilidade: {filteredExclusions.length} corretor{filteredExclusions.length !== 1 ? "es" : ""}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Corretores que foram excluídos de demandas ANTES da alocação. Isso indica problemas de configuração de disponibilidade (global, local ou dias da semana).
+              Corretores que foram impedidos de concorrer a turnos por configurações de disponibilidade (global, local ou dias da semana).
             </p>
           </div>
 
@@ -886,10 +886,10 @@ function DiagnosticView({
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="secondary" className="text-xs">
-                        {excl.eligibleCount}/{excl.totalDemandsInLinkedLocations} elegível
+                        Disponível em {excl.eligibleCount} de {excl.totalDemandsInLinkedLocations} turnos
                       </Badge>
                       <Badge variant="destructive" className="text-xs">
-                        {excl.excludedCount} excluído{excl.excludedCount !== 1 ? "s" : ""}
+                        Bloqueado em {excl.excludedCount} turno{excl.excludedCount !== 1 ? "s" : ""}
                       </Badge>
                     </div>
                   </div>
@@ -898,7 +898,7 @@ function DiagnosticView({
                   <div className="ml-6 mt-2 space-y-3 pb-3">
                     {reasonEntries.length > 0 && (
                       <div className="space-y-1">
-                        <div className="text-xs font-medium text-muted-foreground">Exclusões por motivo:</div>
+                        <div className="text-xs font-medium text-muted-foreground">Motivos do bloqueio:</div>
                         {reasonEntries.map(([reason, count]) => (
                           <div key={reason} className="flex items-center justify-between p-2 rounded bg-background border text-xs">
                             <span className="text-orange-700 dark:text-orange-400">{humanizeExclusionReason(reason)}</span>
@@ -910,7 +910,7 @@ function DiagnosticView({
 
                     {excl.exclusionDetails.length > 0 && (
                       <div className="space-y-1">
-                        <div className="text-xs font-medium text-muted-foreground">Detalhes ({excl.exclusionDetails.length} exclusões):</div>
+                        <div className="text-xs font-medium text-muted-foreground">Turnos bloqueados ({excl.exclusionDetails.length}):</div>
                         {excl.exclusionDetails.slice(0, 20).map((det, i) => (
                           <div key={i} className="p-2 rounded bg-background border text-xs">
                             <div className="flex items-center gap-2">
@@ -925,7 +925,7 @@ function DiagnosticView({
                         ))}
                         {excl.exclusionDetails.length > 20 && (
                           <div className="text-xs text-muted-foreground text-center">
-                            ... e mais {excl.exclusionDetails.length - 20} exclusões
+                            ... e mais {excl.exclusionDetails.length - 20} turnos bloqueados
                           </div>
                         )}
                       </div>
@@ -938,16 +938,16 @@ function DiagnosticView({
         </div>
       )}
 
-      {/* Seção de Diagnóstico de Alocação (existente) */}
+      {/* Seção de Diagnóstico de Alocação */}
       {filtered.length > 0 && (
         <div className="space-y-2">
           <div className="p-3 rounded-lg bg-accent/50 border border-accent text-sm">
             <div className="font-medium flex items-center gap-2">
               <HelpCircle className="h-4 w-4" />
-              Corretores que não atingiram a meta de externos: {filtered.length} corretor{filtered.length !== 1 ? "es" : ""}
+              Corretores abaixo da meta de externos: {filtered.length} corretor{filtered.length !== 1 ? "es" : ""}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Para cada corretor abaixo, veja quantas vezes ele foi considerado para alocação e a regra que impediu.
+              Para cada corretor abaixo, veja quantas vezes foi considerado para alocação e qual regra impediu.
             </p>
           </div>
 
@@ -966,10 +966,10 @@ function DiagnosticView({
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="destructive" className="text-xs">
-                        {realExternalMap.get(diag.brokerId) ?? diag.finalExternalCount}/{diag.targetExternals} externos
+                        {realExternalMap.get(diag.brokerId) ?? diag.finalExternalCount} plantões externos (meta: {diag.targetExternals})
                       </Badge>
                       <Badge variant="secondary" className="text-xs">
-                        {diag.totalOpportunities} vezes bloqueado
+                        Considerado {diag.totalOpportunities} vezes, não alocado
                       </Badge>
                     </div>
                   </div>
@@ -990,7 +990,7 @@ function DiagnosticView({
 
                     {diag.opportunities.length > 0 && (
                       <div className="space-y-1">
-                        <div className="text-xs font-medium text-muted-foreground">Detalhes ({diag.opportunities.length} oportunidades):</div>
+                        <div className="text-xs font-medium text-muted-foreground">Detalhes ({diag.opportunities.length} tentativas):</div>
                         {diag.opportunities.slice(0, 20).map((opp, i) => (
                           <div key={i} className="p-2 rounded bg-background border text-xs">
                             <div className="flex items-center gap-2">
@@ -1000,12 +1000,12 @@ function DiagnosticView({
                               <span>{formatDateBR(opp.dateStr)}</span>
                               <Badge variant="outline" className="text-[10px]">{opp.shift === "morning" ? "Manhã" : "Tarde"}</Badge>
                             </div>
-                            <div className="mt-1 text-muted-foreground">{ruleExplanations[opp.rule] || opp.rule}: {opp.reason}</div>
+                            <div className="mt-1 text-muted-foreground">{ruleExplanations[opp.rule] || opp.rule}</div>
                           </div>
                         ))}
                         {diag.opportunities.length > 20 && (
                           <div className="text-xs text-muted-foreground text-center">
-                            ... e mais {diag.opportunities.length - 20} oportunidades
+                            ... e mais {diag.opportunities.length - 20} tentativas
                           </div>
                         )}
                       </div>
@@ -1050,6 +1050,15 @@ function EligibilityView({ eligibilityMap, expanded, toggleExpanded, searchBroke
 
   return (
     <div className="space-y-2">
+      <div className="p-3 rounded-lg bg-accent/50 border border-accent text-sm">
+        <div className="font-medium flex items-center gap-2">
+          <Link2 className="h-4 w-4" />
+          Vínculos Externos: {filtered.length} corretor{filtered.length !== 1 ? "es" : ""}
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">
+          Mostra em quais locais externos cada corretor está vinculado, quais turnos estão disponíveis e quais estão bloqueados por regras de disponibilidade.
+        </p>
+      </div>
       {filtered.map(broker => {
         const realExternal = realExternalMap.get(broker.brokerId) ?? broker.finalExternalCount;
         const isUnder = realExternal < broker.targetExternals;
@@ -1063,17 +1072,17 @@ function EligibilityView({ eligibilityMap, expanded, toggleExpanded, searchBroke
                 <User className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="font-medium text-sm">{broker.brokerName}</span>
                 <Badge variant={isUnder ? "destructive" : "secondary"} className="text-xs ml-auto">
-                  {realExternal}/{broker.targetExternals} externos
+                  {realExternal} plantões externos (meta: {broker.targetExternals})
                 </Badge>
                 <Badge variant="outline" className="text-xs">
-                  {broker.linkedLocationCount} locais vinculados
+                  Vinculado a {broker.linkedLocationCount} {broker.linkedLocationCount === 1 ? "local" : "locais"}
                 </Badge>
                 <Badge variant="outline" className="text-xs">
-                  {broker.totalEligibleDemands} elegíveis
+                  Disponível em {broker.totalEligibleDemands} turnos
                 </Badge>
                 {broker.totalExcludedDemands > 0 && (
                   <Badge variant="outline" className="text-xs text-amber-600">
-                    {broker.totalExcludedDemands} excluídos
+                    Bloqueado em {broker.totalExcludedDemands} turnos
                   </Badge>
                 )}
               </div>
@@ -1086,30 +1095,36 @@ function EligibilityView({ eligibilityMap, expanded, toggleExpanded, searchBroke
                       <MapPin className="h-3 w-3 text-muted-foreground" />
                       <span className="text-sm font-medium">{loc.locationName}</span>
                       <Badge variant="outline" className="text-[10px]">
-                        {loc.eligible.length} elegíveis
+                        {loc.eligible.length} turnos disponíveis
                       </Badge>
                       {loc.excluded.length > 0 && (
                         <Badge variant="outline" className="text-[10px] text-amber-600">
-                          {loc.excluded.length} excluídos
+                          {loc.excluded.length} turnos bloqueados
                         </Badge>
                       )}
                     </div>
                     {loc.eligible.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {loc.eligible.map((e, i) => (
-                          <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                            {formatDateBR(e.dateStr)} {e.shift === "morning" ? "Manhã" : "Tarde"}
-                          </span>
-                        ))}
+                      <div className="mt-1">
+                        <div className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400 mb-0.5">Turnos disponíveis:</div>
+                        <div className="flex flex-wrap gap-1">
+                          {loc.eligible.map((e, i) => (
+                            <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                              {formatDateBR(e.dateStr)} {e.shift === "morning" ? "Manhã" : "Tarde"}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     )}
                     {loc.excluded.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {loc.excluded.map((e, i) => (
-                          <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800" title={humanizeExclusionReason(e.reason)}>
-                            {formatDateBR(e.dateStr)} {e.shift === "morning" ? "Manhã" : "Tarde"} — {humanizeExclusionReason(e.reason)}
-                          </span>
-                        ))}
+                      <div className="mt-1">
+                        <div className="text-[10px] font-medium text-amber-700 dark:text-amber-400 mb-0.5">Turnos bloqueados:</div>
+                        <div className="flex flex-wrap gap-1">
+                          {loc.excluded.map((e, i) => (
+                            <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800" title={humanizeExclusionReason(e.reason)}>
+                              {formatDateBR(e.dateStr)} {e.shift === "morning" ? "Manhã" : "Tarde"} — {humanizeExclusionReason(e.reason)}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>

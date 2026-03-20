@@ -8,9 +8,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar } from "@/components/ui/calendar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Calendar as CalendarIcon, AlertCircle, Users, Palmtree } from "lucide-react";
-import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Calendar as CalendarIcon, AlertCircle, Users, Palmtree, BarChart3, List, Search } from "lucide-react";
+import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, eachDayOfInterval, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { GanttFeriasView } from "./GanttFeriasView";
+import { getYearOptions } from "@/lib/dateUtils";
 
 interface GozoPeriodo {
   id: string;
@@ -66,6 +70,9 @@ export function CalendarioFeriasTab() {
   const [selectedSetor, setSelectedSetor] = useState<string>("all");
   const [selectedFerias, setSelectedFerias] = useState<Ferias | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"lista" | "gantt">("lista");
+  const [searchNome, setSearchNome] = useState("");
+  const [ganttMonths, setGanttMonths] = useState("1");
 
   // Buscar férias
   const { data: ferias = [], isLoading: loadingFerias } = useQuery({
@@ -170,9 +177,35 @@ export function CalendarioFeriasTab() {
       if (selectedUnidade !== "all") {
         return true;
       }
+      if (searchNome) {
+        const nome = f.colaborador?.nome?.toLowerCase() || "";
+        if (!nome.includes(searchNome.toLowerCase())) return false;
+      }
       return true;
     });
-  }, [ferias, selectedSetor, selectedUnidade]);
+  }, [ferias, selectedSetor, selectedUnidade, searchNome]);
+
+  // Gantt date range
+  const ganttRange = useMemo(() => {
+    const months = parseInt(ganttMonths) || 1;
+    if (months === 12) {
+      const year = calendarMonth.getFullYear();
+      return { start: new Date(year, 0, 1), end: new Date(year, 11, 31) };
+    }
+    const start = startOfMonth(calendarMonth);
+    const end = endOfMonth(addMonths(calendarMonth, months - 1));
+    return { start, end };
+  }, [calendarMonth, ganttMonths]);
+
+  // Férias that overlap the gantt range
+  const feriasGantt = useMemo(() => {
+    return feriasFiltradas.filter((f) => {
+      const intervals = getGozoIntervals(f);
+      return intervals.some((interval) =>
+        interval.start <= ganttRange.end && interval.end >= ganttRange.start
+      );
+    });
+  }, [feriasFiltradas, ganttRange]);
 
   // Get all gozo intervals for a given ferias
   const getGozoIntervals = (f: Ferias): Array<{ start: Date; end: Date }> => {
@@ -342,6 +375,78 @@ export function CalendarioFeriasTab() {
         </Card>
       </div>
 
+      {/* View toggle + search */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex gap-1">
+          <Button
+            variant={viewMode === "lista" ? "default" : "outline"}
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setViewMode("lista")}
+          >
+            <List className="h-4 w-4" />
+            Lista
+          </Button>
+          <Button
+            variant={viewMode === "gantt" ? "default" : "outline"}
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setViewMode("gantt")}
+          >
+            <BarChart3 className="h-4 w-4" />
+            Gantt
+          </Button>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome..."
+              value={searchNome}
+              onChange={e => setSearchNome(e.target.value)}
+              className="pl-8 h-9 w-full sm:w-[200px]"
+            />
+          </div>
+          <Select value={selectedSetor} onValueChange={setSelectedSetor}>
+            <SelectTrigger className="w-full sm:w-[160px] h-9">
+              <SelectValue placeholder="Setor" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os setores</SelectItem>
+              {setores.map((s) => (
+                <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={selectedUnidade} onValueChange={setSelectedUnidade}>
+            <SelectTrigger className="w-full sm:w-[160px] h-9">
+              <SelectValue placeholder="Unidade" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as unidades</SelectItem>
+              {unidades.map((u) => (
+                <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {viewMode === "gantt" && (
+            <Select value={ganttMonths} onValueChange={setGanttMonths}>
+              <SelectTrigger className="w-full sm:w-[120px] h-9">
+                <SelectValue placeholder="Período" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1 mês</SelectItem>
+                <SelectItem value="2">2 meses</SelectItem>
+                <SelectItem value="3">3 meses</SelectItem>
+                <SelectItem value="6">6 meses</SelectItem>
+                <SelectItem value="12">Ano inteiro</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      </div>
+
+      {viewMode === "lista" ? (
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Calendário */}
         <Card className="lg:col-span-1">
@@ -378,40 +483,9 @@ export function CalendarioFeriasTab() {
         {/* Lista filtrada */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="text-lg">
-                Férias em {format(calendarMonth, "MMMM yyyy", { locale: ptBR })}
-              </CardTitle>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Select value={selectedSetor} onValueChange={setSelectedSetor}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Setor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos os setores</SelectItem>
-                    {setores.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select value={selectedUnidade} onValueChange={setSelectedUnidade}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Unidade" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas as unidades</SelectItem>
-                    {unidades.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            <CardTitle className="text-lg">
+              Férias em {format(calendarMonth, "MMMM yyyy", { locale: ptBR })}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -505,6 +579,17 @@ export function CalendarioFeriasTab() {
           </CardContent>
         </Card>
       </div>
+      ) : (
+        <GanttFeriasView
+          ferias={feriasGantt}
+          startDate={ganttRange.start}
+          endDate={ganttRange.end}
+          onSelectFerias={(f) => {
+            setSelectedFerias(f);
+            setDetailsOpen(true);
+          }}
+        />
+      )}
 
       {/* Dialog de detalhes */}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
