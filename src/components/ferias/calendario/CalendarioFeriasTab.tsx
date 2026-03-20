@@ -171,14 +171,30 @@ export function CalendarioFeriasTab() {
     },
   });
 
+  // Build colaborador options for multi-select
+  const colaboradorOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    ferias.forEach((f) => {
+      if (f.colaborador_id && f.colaborador?.nome) {
+        map.set(f.colaborador_id, f.colaborador.nome);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [ferias]);
+
   // Filtrar férias
   const feriasFiltradas = useMemo(() => {
     return ferias.filter((f) => {
-      if (selectedSetor !== "all" && f.colaborador?.setor?.id !== selectedSetor) {
+      if (selectedSetores.length > 0 && !selectedSetores.includes(f.colaborador?.setor?.id || "")) {
         return false;
       }
-      if (selectedUnidade !== "all") {
-        return true;
+      if (selectedUnidade !== "all" && f.colaborador?.unidade?.nome !== unidades.find(u => u.id === selectedUnidade)?.nome) {
+        return false;
+      }
+      if (selectedColaboradores.length > 0 && !selectedColaboradores.includes(f.colaborador_id)) {
+        return false;
       }
       if (searchNome) {
         const nome = f.colaborador?.nome?.toLowerCase() || "";
@@ -186,19 +202,26 @@ export function CalendarioFeriasTab() {
       }
       return true;
     });
-  }, [ferias, selectedSetor, selectedUnidade, searchNome]);
+  }, [ferias, selectedSetores, selectedUnidade, selectedColaboradores, searchNome, unidades]);
 
-  // Gantt date range
+  // Gantt date range — based on selected months or full year
   const ganttRange = useMemo(() => {
-    const months = parseInt(ganttMonths) || 1;
-    if (months === 12) {
-      const year = calendarMonth.getFullYear();
-      return { start: new Date(year, 0, 1), end: new Date(year, 11, 31) };
+    if (ganttMonths.includes("year")) {
+      return { start: new Date(ganttYear, 0, 1), end: new Date(ganttYear, 11, 31) };
     }
-    const start = startOfMonth(calendarMonth);
-    const end = endOfMonth(addMonths(calendarMonth, months - 1));
-    return { start, end };
-  }, [calendarMonth, ganttMonths]);
+    if (ganttMonths.length === 0) {
+      // Default: current calendar month
+      return { start: startOfMonth(calendarMonth), end: endOfMonth(calendarMonth) };
+    }
+    // Parse selected months (format: "0" to "11") and build range
+    const monthNums = ganttMonths.map(Number).sort((a, b) => a - b);
+    const minMonth = monthNums[0];
+    const maxMonth = monthNums[monthNums.length - 1];
+    return {
+      start: new Date(ganttYear, minMonth, 1),
+      end: endOfMonth(new Date(ganttYear, maxMonth, 1)),
+    };
+  }, [calendarMonth, ganttMonths, ganttYear]);
 
   // Get all gozo intervals for a given ferias
   const getGozoIntervals = (f: Ferias): Array<{ start: Date; end: Date }> => {
