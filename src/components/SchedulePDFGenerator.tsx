@@ -507,10 +507,10 @@ export function SchedulePDFGenerator({ assignments, scheduleWeekStart, scheduleW
         {/* OBSERVAÇÕES */}
         {observationContent && (
           <div style={{ marginTop: "2mm" }}>
-            <h2 style={{ fontSize: "10px", fontWeight: "bold", margin: "0 0 1mm 0", borderBottom: "1px solid #3b82f6", paddingBottom: "0.5mm", color: "#3b82f6" }}>
+            <h2 style={{ fontSize: "12px", fontWeight: "bold", margin: "0 0 1mm 0", borderBottom: "1px solid #3b82f6", paddingBottom: "0.5mm", color: "#3b82f6" }}>
               OBSERVAÇÕES
             </h2>
-            <p style={{ fontSize: "10px", color: "#333", whiteSpace: "pre-wrap", margin: 0, lineHeight: "1.5" }}>
+            <p style={{ fontSize: "12px", color: "#333", whiteSpace: "pre-wrap", margin: 0, lineHeight: "1.5" }}>
               {observationContent}
             </p>
           </div>
