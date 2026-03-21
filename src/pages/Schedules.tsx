@@ -2200,11 +2200,9 @@ const Schedules = () => {
                 if (selectedSchedule?.week_start_date && selectedSchedule?.week_end_date) {
                   const weekStartFormatted = format(new Date(selectedSchedule.week_start_date + "T00:00:00"), "dd-MM-yyyy");
                   const weekEndFormatted = format(new Date(selectedSchedule.week_end_date + "T00:00:00"), "dd-MM-yyyy");
-                  const generatedDateTime = format(new Date(), "dd-MM-yyyy HH'h'mm");
-                  pdfTitle = `Plantões - ${weekStartFormatted} a ${weekEndFormatted} - gerado em ${generatedDateTime}`;
+                  pdfTitle = `Plantões - ${weekStartFormatted} a ${weekEndFormatted}`;
                 } else {
-                  const generatedDateTime = format(new Date(), "dd-MM-yyyy HH'h'mm");
-                  pdfTitle = `Plantões - gerado em ${generatedDateTime}`;
+                  pdfTitle = `Plantões`;
                 }
                 
                 document.title = pdfTitle;
