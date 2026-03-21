@@ -2206,8 +2206,12 @@ const Schedules = () => {
                 }
                 
                 document.title = pdfTitle;
+                const restoreTitle = () => {
+                  document.title = originalTitle;
+                  window.removeEventListener('afterprint', restoreTitle);
+                };
+                window.addEventListener('afterprint', restoreTitle);
                 window.print();
-                setTimeout(() => { document.title = originalTitle; }, 1000);
               }}>
                 <FileText className="mr-2 h-4 w-4" />
                 Gerar PDF
