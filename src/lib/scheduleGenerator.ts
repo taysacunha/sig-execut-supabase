@@ -4734,7 +4734,7 @@ async function generateWeeklyScheduleWithAccumulator(
         if (!activePeriod) continue;
         
         // ── VERIFICAR DATAS EXCLUÍDAS (internos seg-sex) ─────────────
-        if (isDayFullyExcluded(activePeriod.id, dateStr)) {
+        if (isDayFullyExcluded(activePeriod.id, dateStr, internalLocation.id)) {
           console.log(`   🚫 ${locationName}: data ${dateStr} excluída inteiramente — pulando`);
           continue;
         }
