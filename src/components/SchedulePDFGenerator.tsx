@@ -91,12 +91,11 @@ export function SchedulePDFGenerator({ assignments, brokers: propBrokers, schedu
       brokerSchedule[a.broker.id][a.assignment_date].push(a);
     });
 
-    const sortedBrokers = Array.from(
-      new Set(assignments.map(a => a.broker.id))
-    )
-      .map(id => assignments.find(a => a.broker.id === id)?.broker)
-      .filter(Boolean)
-      .sort((a, b) => a.name.localeCompare(b.name));
+    // ✅ Priorizar lista de corretores da escala (inclui quem tem agenda livre)
+    const sortedBrokers = (propBrokers && propBrokers.length > 0
+      ? propBrokers
+      : Array.from(new Map(assignments.map(a => [a.broker.id, a.broker])).values())
+    ).sort((a: any, b: any) => a.name.localeCompare(b.name));
 
     const uniqueLocations = Array.from(
       new Set(assignments.map(a => a.location.id))

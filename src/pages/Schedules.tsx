@@ -2244,10 +2244,11 @@ const Schedules = () => {
             </Tabs>
           )}
 
-          {selectedScheduleId && scheduleAssignments && scheduleAssignments.length > 0 && (
+          {selectedScheduleId && (
             <SchedulePDFGenerator 
               key={selectedScheduleId} 
-              assignments={scheduleAssignments}
+              assignments={scheduleAssignments || []}
+              brokers={scheduleBrokers}
               scheduleWeekStart={schedules?.find(s => s.id === selectedScheduleId)?.week_start_date}
               scheduleWeekEnd={schedules?.find(s => s.id === selectedScheduleId)?.week_end_date}
               generatedAt={schedules?.find(s => s.id === selectedScheduleId)?.created_at}
