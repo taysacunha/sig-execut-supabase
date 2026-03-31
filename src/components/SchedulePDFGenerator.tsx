@@ -61,11 +61,19 @@ export function SchedulePDFGenerator({ assignments, brokers: propBrokers, schedu
     // Priorizar datas fornecidas do schedule (igual ao ScheduleCalendarView)
     const weekStart = scheduleWeekStart 
       ? new Date(scheduleWeekStart + "T00:00:00")
-      : new Date(Math.min(...assignments.map(a => new Date(a.assignment_date + "T00:00:00").getTime())));
+      : assignments.length > 0 
+        ? new Date(Math.min(...assignments.map(a => new Date(a.assignment_date + "T00:00:00").getTime())))
+        : null;
       
     const weekEnd = scheduleWeekEnd
       ? new Date(scheduleWeekEnd + "T00:00:00")
-      : new Date(Math.max(...assignments.map(a => new Date(a.assignment_date + "T00:00:00").getTime())));
+      : assignments.length > 0
+        ? new Date(Math.max(...assignments.map(a => new Date(a.assignment_date + "T00:00:00").getTime())))
+        : null;
+
+    if (!weekStart || !weekEnd) {
+      return { brokerSchedule: {}, weekDays: [], sortedBrokers: [], uniqueLocations: [], weekStart: null, weekEnd: null };
+    }
 
     const allDates = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
