@@ -3208,8 +3208,8 @@ async function generateWeeklyScheduleWithAccumulator(
       }
 
       // Aplicar exclusão por turno (caso não seja dia todo excluído)
-      if (isShiftExcluded(activePeriod.id, dateStr, "morning")) hasMorning = false;
-      if (isShiftExcluded(activePeriod.id, dateStr, "afternoon")) hasAfternoon = false;
+      if (isShiftExcluded(activePeriod.id, dateStr, "morning", location.id)) hasMorning = false;
+      if (isShiftExcluded(activePeriod.id, dateStr, "afternoon", location.id)) hasAfternoon = false;
 
       if (!hasMorning && !hasAfternoon) continue;
 
