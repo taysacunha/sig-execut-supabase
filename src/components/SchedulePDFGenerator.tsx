@@ -53,7 +53,8 @@ export function SchedulePDFGenerator({ assignments, brokers: propBrokers, schedu
   });
   const observationContent = observation?.content || "";
   const processedData = useMemo(() => {
-    if (!assignments || assignments.length === 0) {
+    const hasBrokers = propBrokers && propBrokers.length > 0;
+    if ((!assignments || assignments.length === 0) && !hasBrokers) {
       return { brokerSchedule: {}, weekDays: [], sortedBrokers: [], uniqueLocations: [], weekStart: null, weekEnd: null };
     }
 
