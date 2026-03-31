@@ -17,6 +17,7 @@ interface ScheduleAssignment {
 
 interface SchedulePDFGeneratorProps {
   assignments: ScheduleAssignment[];
+  brokers?: Array<{ id: string; name: string; creci?: string }>;
   scheduleWeekStart?: string;
   scheduleWeekEnd?: string;
   generatedAt?: string;
