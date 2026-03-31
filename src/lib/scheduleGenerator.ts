@@ -3917,7 +3917,7 @@ async function generateWeeklyScheduleWithAccumulator(
       }
       
       // ── VERIFICAR DATAS EXCLUÍDAS (internos sábado) ──────────────
-      if (isDayFullyExcluded(activePeriod.id, saturdayDateStr)) {
+      if (isDayFullyExcluded(activePeriod.id, saturdayDateStr, internalLocation.id)) {
         console.log(`   🚫 ${internalLocation.name}: data ${saturdayDateStr} excluída inteiramente — pulando`);
         continue;
       }
