@@ -35,7 +35,7 @@ const weekdaysMap: Record<string, string> = {
   sunday: "Dom",
 };
 
-export function SchedulePDFGenerator({ assignments, scheduleWeekStart, scheduleWeekEnd, generatedAt, updatedAt, scheduleId }: SchedulePDFGeneratorProps) {
+export function SchedulePDFGenerator({ assignments, brokers: propBrokers, scheduleWeekStart, scheduleWeekEnd, generatedAt, updatedAt, scheduleId }: SchedulePDFGeneratorProps) {
   // Load observation for PDF
   const { data: observation } = useQuery({
     queryKey: ["schedule-observation", scheduleId],
