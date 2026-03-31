@@ -2978,26 +2978,107 @@ async function generateWeeklyScheduleWithAccumulator(
     excludedDatesMap.get(ed.period_id)!.set(ed.excluded_date, { shifts });
   });
 
+  // ═══════════════════════════════════════════════════════════
+  // locationExcludedDatesMap: location_id → dateStr → { shifts: null | string[] }
+  // Agrega exclusões de TODOS os períodos de um local, para cobrir cenários
+  // onde a exclusão foi salva num período diferente do "activePeriod" encontrado.
+  // ═══════════════════════════════════════════════════════════
+  const locationExcludedDatesMap = new Map<string, Map<string, ExcludedDateEntry>>();
+  
+  // Mapear period_id → location_id usando dados já carregados
+  const periodToLocationMap = new Map<string, string>();
+  for (const loc of (externalLocations || [])) {
+    for (const p of (loc.location_periods || [])) {
+      periodToLocationMap.set(p.id, loc.id);
+    }
+  }
+  for (const loc of (internalLocationsData || [])) {
+    for (const p of (loc.location_periods || [])) {
+      periodToLocationMap.set(p.id, loc.id);
+    }
+  }
+  
+  excludedDates?.forEach((ed: any) => {
+    const locationId = periodToLocationMap.get(ed.period_id);
+    if (!locationId) return;
+    if (!locationExcludedDatesMap.has(locationId)) locationExcludedDatesMap.set(locationId, new Map());
+    const shifts = (ed.excluded_shifts && ed.excluded_shifts.length > 0) ? ed.excluded_shifts : null;
+    const existing = locationExcludedDatesMap.get(locationId)!.get(ed.excluded_date);
+    if (existing) {
+      // Se já existe uma exclusão total, manter
+      if (existing.shifts === null) return;
+      // Se a nova é total, substituir
+      if (shifts === null) {
+        locationExcludedDatesMap.get(locationId)!.set(ed.excluded_date, { shifts: null });
+        return;
+      }
+      // Mesclar turnos excluídos
+      const merged = new Set([...(existing.shifts || []), ...shifts]);
+      locationExcludedDatesMap.get(locationId)!.set(ed.excluded_date, { shifts: Array.from(merged) });
+    } else {
+      locationExcludedDatesMap.get(locationId)!.set(ed.excluded_date, { shifts });
+    }
+  });
+
+  // Log de exclusões carregadas para diagnóstico
+  console.log(`📋 Exclusões carregadas: ${excludedDates?.length || 0} registros em period_excluded_dates`);
+  for (const [locId, dates] of locationExcludedDatesMap.entries()) {
+    const locName = [...(externalLocations || []), ...(internalLocationsData || [])].find(l => l.id === locId)?.name || locId;
+    for (const [dateStr, entry] of dates.entries()) {
+      console.log(`   🚫 ${locName}: ${dateStr} excluído (${entry.shifts === null ? 'dia inteiro' : entry.shifts.join(', ')})`);
+    }
+  }
+
   // Função auxiliar: verifica se um turno específico está excluído
-  const isShiftExcluded = (periodId: string, dateStr: string, shift: "morning" | "afternoon"): boolean => {
+  // Verifica tanto pelo period_id direto quanto pelo location_id (fallback)
+  const isShiftExcluded = (periodId: string, dateStr: string, shift: "morning" | "afternoon", locationId?: string): boolean => {
+    // Verificar pelo period_id direto
     const periodExclusions = excludedDatesMap.get(periodId);
-    if (!periodExclusions) return false;
-    const entry = periodExclusions.get(dateStr);
-    if (!entry) return false;
-    // null = dia todo excluído
-    if (entry.shifts === null) return true;
-    return entry.shifts.includes(shift);
+    if (periodExclusions) {
+      const entry = periodExclusions.get(dateStr);
+      if (entry) {
+        if (entry.shifts === null) return true;
+        if (entry.shifts.includes(shift)) return true;
+      }
+    }
+    // Fallback: verificar por location_id (cobre caso de period_id diferente)
+    if (locationId) {
+      const locExclusions = locationExcludedDatesMap.get(locationId);
+      if (locExclusions) {
+        const entry = locExclusions.get(dateStr);
+        if (entry) {
+          if (entry.shifts === null) return true;
+          if (entry.shifts.includes(shift)) return true;
+        }
+      }
+    }
+    return false;
   };
 
   // Verifica se o dia INTEIRO está excluído (ambos os turnos ou shifts === null)
-  const isDayFullyExcluded = (periodId: string, dateStr: string): boolean => {
+  // Verifica tanto pelo period_id direto quanto pelo location_id (fallback)
+  const isDayFullyExcluded = (periodId: string, dateStr: string, locationId?: string): boolean => {
+    // Verificar pelo period_id direto
     const periodExclusions = excludedDatesMap.get(periodId);
-    if (!periodExclusions) return false;
-    const entry = periodExclusions.get(dateStr);
-    if (!entry) return false;
-    if (entry.shifts === null) return true;
-    // Se ambos os turnos estão explicitamente excluídos
-    return entry.shifts.includes("morning") && entry.shifts.includes("afternoon");
+    if (periodExclusions) {
+      const entry = periodExclusions.get(dateStr);
+      if (entry) {
+        if (entry.shifts === null) return true;
+        if (entry.shifts.includes("morning") && entry.shifts.includes("afternoon")) return true;
+      }
+    }
+    // Fallback: verificar por location_id
+    if (locationId) {
+      const locExclusions = locationExcludedDatesMap.get(locationId);
+      if (locExclusions) {
+        const entry = locExclusions.get(dateStr);
+        if (entry) {
+          if (entry.shifts === null) return true;
+          if (entry.shifts.includes("morning") && entry.shifts.includes("afternoon")) return true;
+        }
+      }
+    }
+    return false;
   };
 
   const specificConfigsMap = new Map<string, any>();
