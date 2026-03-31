@@ -116,7 +116,7 @@ export function SchedulePDFGenerator({ assignments, brokers: propBrokers, schedu
       weekStart,
       weekEnd,
     };
-  }, [assignments, scheduleWeekStart, scheduleWeekEnd]);
+  }, [assignments, propBrokers, scheduleWeekStart, scheduleWeekEnd]);
 
   const { brokerSchedule, weekDays, sortedBrokers, uniqueLocations, weekStart, weekEnd } = processedData;
 
