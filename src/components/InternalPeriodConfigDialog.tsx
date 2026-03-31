@@ -607,8 +607,11 @@ export function InternalPeriodConfigDialog({
           <div className="space-y-4 border-t pt-4">
             <div className="flex items-center gap-2">
               <X className="h-5 w-5 text-destructive" />
-              <Label className="text-base font-semibold">Datas Excluídas (Feriados/Fechamentos)</Label>
+              <Label className="text-base font-semibold">Datas Excluídas deste Local (Feriados/Fechamentos)</Label>
             </div>
+            <p className="text-sm text-muted-foreground">
+              As datas excluídas abaixo valem apenas para este local e período ({periodName}). O gerador de escalas não criará plantões nestas datas.
+            </p>
             
             <div className="flex flex-col gap-3 p-4 bg-muted/30 rounded-md">
               <div className="flex flex-col sm:flex-row gap-2">

@@ -575,7 +575,7 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
     if (locationType === "internal") {
       setEditingInternalPeriod({
         id: periodId,
-        name: `${format(new Date(period.start_date), "MMM/yyyy", { locale: ptBR })}`,
+        name: `${locationName} — ${format(new Date(period.start_date), "MMM/yyyy", { locale: ptBR })}`,
       });
     } else {
       setEditingPeriodId(periodId);
