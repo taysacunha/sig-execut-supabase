@@ -147,6 +147,22 @@ const Schedules = () => {
     staleTime: 5 * 60 * 1000,
   });
 
+  // ✅ Buscar corretores vinculados à escala (inclui quem tem agenda livre/sem alocações)
+  const { data: scheduleBrokers = [] } = useQuery({
+    queryKey: ["schedule_brokers", selectedScheduleId],
+    queryFn: async () => {
+      if (!selectedScheduleId) return [];
+      const { data, error } = await supabase
+        .from("schedule_brokers")
+        .select("broker:brokers(id, name, creci)")
+        .eq("schedule_id", selectedScheduleId);
+      if (error) throw error;
+      return (data || []).map((r: any) => r.broker).filter(Boolean);
+    },
+    enabled: !!selectedScheduleId,
+    staleTime: 5 * 60 * 1000,
+  });
+
   // ✅ QUERY: Buscar validação salva (vinculada à primeira escala do mês)
   const { data: savedValidation, isLoading: isLoadingValidation } = useQuery({
     queryKey: ["schedule_validation", selectedScheduleId, schedules],
@@ -2228,10 +2244,11 @@ const Schedules = () => {
             </Tabs>
           )}
 
-          {selectedScheduleId && scheduleAssignments && scheduleAssignments.length > 0 && (
+          {selectedScheduleId && (
             <SchedulePDFGenerator 
               key={selectedScheduleId} 
-              assignments={scheduleAssignments}
+              assignments={scheduleAssignments || []}
+              brokers={scheduleBrokers}
               scheduleWeekStart={schedules?.find(s => s.id === selectedScheduleId)?.week_start_date}
               scheduleWeekEnd={schedules?.find(s => s.id === selectedScheduleId)?.week_end_date}
               generatedAt={schedules?.find(s => s.id === selectedScheduleId)?.created_at}

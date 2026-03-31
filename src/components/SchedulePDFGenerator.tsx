@@ -17,6 +17,7 @@ interface ScheduleAssignment {
 
 interface SchedulePDFGeneratorProps {
   assignments: ScheduleAssignment[];
+  brokers?: Array<{ id: string; name: string; creci?: string }>;
   scheduleWeekStart?: string;
   scheduleWeekEnd?: string;
   generatedAt?: string;
@@ -34,7 +35,7 @@ const weekdaysMap: Record<string, string> = {
   sunday: "Dom",
 };
 
-export function SchedulePDFGenerator({ assignments, scheduleWeekStart, scheduleWeekEnd, generatedAt, updatedAt, scheduleId }: SchedulePDFGeneratorProps) {
+export function SchedulePDFGenerator({ assignments, brokers: propBrokers, scheduleWeekStart, scheduleWeekEnd, generatedAt, updatedAt, scheduleId }: SchedulePDFGeneratorProps) {
   // Load observation for PDF
   const { data: observation } = useQuery({
     queryKey: ["schedule-observation", scheduleId],
@@ -52,18 +53,27 @@ export function SchedulePDFGenerator({ assignments, scheduleWeekStart, scheduleW
   });
   const observationContent = observation?.content || "";
   const processedData = useMemo(() => {
-    if (!assignments || assignments.length === 0) {
+    const hasBrokers = propBrokers && propBrokers.length > 0;
+    if ((!assignments || assignments.length === 0) && !hasBrokers) {
       return { brokerSchedule: {}, weekDays: [], sortedBrokers: [], uniqueLocations: [], weekStart: null, weekEnd: null };
     }
 
     // Priorizar datas fornecidas do schedule (igual ao ScheduleCalendarView)
     const weekStart = scheduleWeekStart 
       ? new Date(scheduleWeekStart + "T00:00:00")
-      : new Date(Math.min(...assignments.map(a => new Date(a.assignment_date + "T00:00:00").getTime())));
+      : assignments.length > 0 
+        ? new Date(Math.min(...assignments.map(a => new Date(a.assignment_date + "T00:00:00").getTime())))
+        : null;
       
     const weekEnd = scheduleWeekEnd
       ? new Date(scheduleWeekEnd + "T00:00:00")
-      : new Date(Math.max(...assignments.map(a => new Date(a.assignment_date + "T00:00:00").getTime())));
+      : assignments.length > 0
+        ? new Date(Math.max(...assignments.map(a => new Date(a.assignment_date + "T00:00:00").getTime())))
+        : null;
+
+    if (!weekStart || !weekEnd) {
+      return { brokerSchedule: {}, weekDays: [], sortedBrokers: [], uniqueLocations: [], weekStart: null, weekEnd: null };
+    }
 
     const allDates = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
@@ -81,12 +91,11 @@ export function SchedulePDFGenerator({ assignments, scheduleWeekStart, scheduleW
       brokerSchedule[a.broker.id][a.assignment_date].push(a);
     });
 
-    const sortedBrokers = Array.from(
-      new Set(assignments.map(a => a.broker.id))
-    )
-      .map(id => assignments.find(a => a.broker.id === id)?.broker)
-      .filter(Boolean)
-      .sort((a, b) => a.name.localeCompare(b.name));
+    // ✅ Priorizar lista de corretores da escala (inclui quem tem agenda livre)
+    const sortedBrokers = (propBrokers && propBrokers.length > 0
+      ? propBrokers
+      : Array.from(new Map(assignments.map(a => [a.broker.id, a.broker])).values())
+    ).sort((a: any, b: any) => a.name.localeCompare(b.name));
 
     const uniqueLocations = Array.from(
       new Set(assignments.map(a => a.location.id))
@@ -107,7 +116,7 @@ export function SchedulePDFGenerator({ assignments, scheduleWeekStart, scheduleW
       weekStart,
       weekEnd,
     };
-  }, [assignments, scheduleWeekStart, scheduleWeekEnd]);
+  }, [assignments, propBrokers, scheduleWeekStart, scheduleWeekEnd]);
 
   const { brokerSchedule, weekDays, sortedBrokers, uniqueLocations, weekStart, weekEnd } = processedData;
 
