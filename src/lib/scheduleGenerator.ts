@@ -4749,11 +4749,11 @@ async function generateWeeklyScheduleWithAccumulator(
         // Aplicar exclusão de turno parcial
         let hasMorning = dayConfig.has_morning === true;
         let hasAfternoon = dayConfig.has_afternoon === true;
-        if (isShiftExcluded(activePeriod.id, dateStr, "morning")) {
+        if (isShiftExcluded(activePeriod.id, dateStr, "morning", internalLocation.id)) {
           hasMorning = false;
           console.log(`   🚫 ${locationName}: turno manhã excluído em ${dateStr}`);
         }
-        if (isShiftExcluded(activePeriod.id, dateStr, "afternoon")) {
+        if (isShiftExcluded(activePeriod.id, dateStr, "afternoon", internalLocation.id)) {
           hasAfternoon = false;
           console.log(`   🚫 ${locationName}: turno tarde excluído em ${dateStr}`);
         }
