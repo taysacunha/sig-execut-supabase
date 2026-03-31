@@ -3944,11 +3944,11 @@ async function generateWeeklyScheduleWithAccumulator(
       // Aplicar exclusão de turno parcial no sábado
       let hasMorning = saturdayConfig.has_morning !== false;
       let hasAfternoon = saturdayConfig.has_afternoon !== false;
-      if (isShiftExcluded(activePeriod.id, saturdayDateStr, "morning")) {
+      if (isShiftExcluded(activePeriod.id, saturdayDateStr, "morning", internalLocation.id)) {
         hasMorning = false;
         console.log(`   🚫 ${internalLocation.name}: turno manhã excluído em ${saturdayDateStr}`);
       }
-      if (isShiftExcluded(activePeriod.id, saturdayDateStr, "afternoon")) {
+      if (isShiftExcluded(activePeriod.id, saturdayDateStr, "afternoon", internalLocation.id)) {
         hasAfternoon = false;
         console.log(`   🚫 ${internalLocation.name}: turno tarde excluído em ${saturdayDateStr}`);
       }
