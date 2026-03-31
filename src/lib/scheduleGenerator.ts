@@ -3173,7 +3173,10 @@ async function generateWeeklyScheduleWithAccumulator(
       if (!activePeriod) continue;
 
       // Verificar exclusões (suporte a turno específico)
-      if (isDayFullyExcluded(activePeriod.id, dateStr)) continue;
+      if (isDayFullyExcluded(activePeriod.id, dateStr, location.id)) {
+        console.log(`   🚫 EXTERNO ${location.name}: data ${dateStr} excluída inteiramente — pulando`);
+        continue;
+      }
 
       // Verificar configuração específica ou padrão
       const specificConfig = specificConfigsMap.get(`${activePeriod.id}-${dateStr}`);
