@@ -1,73 +1,63 @@
 
+Objetivo: corrigir o gerador para respeitar exatamente as datas excluídas cadastradas pelo usuário em cada local/período, sem transformar isso em bloqueio global.
 
-## Plano: Melhorar Vínculos/Diagnóstico + Gantt de Férias
+1. Confirmar a origem do problema
+- Hoje o gerador lê `period_excluded_dates` e monta `excludedDatesMap` por `period_id`.
+- A aplicação das exclusões já existe em `src/lib/scheduleGenerator.ts`:
+  - externos: `isDayFullyExcluded(activePeriod.id, dateStr)` e `isShiftExcluded(...)`
+  - internos sábado e seg-sex: mesma lógica
+- Então o erro não é “falta de regra global”, e sim algum desencontro entre:
+  - o período onde a data foi cadastrada
+  - o período ativo encontrado na geração
+  - ou o fluxo/tela onde o usuário entende que cadastrou a exclusão, mas ela não está sendo refletida no local esperado
 
-### Problema 1: Vínculos e "Por que não alocou" confusos
+2. Ajustar a regra para bater com o que o usuário cadastrou
+- Manter a exclusão por local/período, como você pediu.
+- Revisar o algoritmo para, ao gerar uma data de um local:
+  - localizar o período ativo desse local
+  - consultar apenas as exclusões daquele período/local
+  - pular o dia inteiro quando a exclusão for total
+  - desligar apenas manhã/tarde quando a exclusão for parcial
+- Não adicionar nenhuma agregação global de datas.
 
-**O que está errado:**
-- Termos como "elegíveis", "excluídos", "demandas" são jargão técnico do gerador, não linguagem de negócio
-- Ao expandir um corretor nos Vínculos, o usuário vê uma lista de datas verdes/amarelas sem contexto claro
-- Falta mostrar: "em quais locais este corretor FOI efetivamente alocado" vs "onde ele poderia ir mas não foi"
+3. Fechar a brecha provável do fluxo de configuração
+- Revisar o cadastro de exclusões no fluxo de períodos internos em `src/components/InternalPeriodConfigDialog.tsx`.
+- Deixar explícito no plano de implementação que a exclusão deve sempre ficar vinculada ao `period_id` correto do local que está sendo editado.
+- Validar também o fluxo de `LocationPeriodTree` para garantir que o período aberto para edição é mesmo o período mensal correto do local, evitando salvar exclusão em outro contexto e depois gerar em um período diferente.
 
-**Solução — Reescrever textos e reorganizar a EligibilityView:**
+4. Melhorar rastreabilidade no gerador
+- Incluir logs/trace mais claros em `src/lib/scheduleGenerator.ts` para cada data excluída respeitada:
+  - local
+  - período
+  - data
+  - tipo da exclusão: dia inteiro / manhã / tarde
+- Isso facilita identificar rapidamente quando o usuário cadastrou a exclusão em um local/período e a geração consultou outro.
 
-**Arquivo: `src/components/ValidationReportPanel.tsx`**
+5. Melhorar a clareza na interface
+- Em `InternalPeriodConfigDialog.tsx`, deixar o texto mais explícito para o usuário:
+  - que a exclusão vale para aquele período daquele local
+  - e que “Dia inteiro”, “Manhã” e “Tarde” impactam a geração exatamente nesses turnos
+- Se necessário, também exibir o intervalo do período no cabeçalho do diálogo para reduzir confusão.
 
-- **Labels da listagem (sem expandir):**
-  - `13/2 externos` → `13 plantões externos (meta: 2)` 
-  - `3 locais vinculados` → `Vinculado a 3 locais`
-  - `12 elegíveis` → `Disponível em 12 turnos`
-  - `5 excluídos` → `Bloqueado em 5 turnos`
+6. Validação esperada após implementar
+- Se o usuário excluir 03/04/2026 e 04/04/2026 em um local específico:
+  - esse local não deve receber plantões nesses dias/turnos excluídos
+  - outros locais só devem ser afetados se também tiverem exclusão cadastrada
+- Se a exclusão for só manhã:
+  - tarde continua podendo gerar
+- Se a exclusão for dia inteiro:
+  - o local é totalmente pulado naquele dia
 
-- **Conteúdo expandido — reorganizar por local:**
-  - Título do local com ícone
-  - Seção "Turnos disponíveis" (verde) — listar dia + turno
-  - Seção "Turnos bloqueados" (amarelo) — listar dia + turno + motivo traduzido
-  - Cada motivo já usa `humanizeExclusionReason`, manter
-
-- **DiagnosticView (Por que não alocou):**
-  - `{count} vezes bloqueado` → `Considerado {count} vezes, não alocado`
-  - Nos detalhes, trocar `{regra}: {reason}` por apenas a explicação da regra já traduzida
-
-### Problema 2: Calendário de Férias → Gráfico de Gantt
-
-**O que o usuário quer:** visualização tipo Gantt onde cada linha é um colaborador e barras horizontais mostram os períodos de gozo, permitindo ver sobreposições visuais entre colaboradores.
-
-**Implementação — CSS puro (sem biblioteca extra):**
-
-**Novo arquivo: `src/components/ferias/calendario/GanttFeriasView.tsx`**
-
-- Componente que recebe a lista de férias filtradas e renderiza um Gantt horizontal
-- **Eixo Y:** nome do colaborador (com badge de setor)
-- **Eixo X:** dias do período selecionado (mês ou meses)
-- **Barras:** intervalos de gozo coloridos por setor, com tooltip mostrando detalhes
-- **Sobreposições:** quando dois colaboradores do mesmo setor têm férias sobrepostas, destacar com borda vermelha
-- Header com dias numerados e marcação de fins de semana
-
-**Filtros (no componente pai):**
-- Busca por nome (um ou mais colaboradores)
-- Filtro por setor (multi-select ou select simples, um ou mais)
-- Seletor de período: mês/meses ou ano inteiro
-- Os filtros já existem parcialmente no `CalendarioFeriasTab`, serão expandidos
-
-**Arquivo: `src/components/ferias/calendario/CalendarioFeriasTab.tsx`**
-
-- Adicionar toggle "Lista | Gantt" para alternar entre a visualização atual e o Gantt
-- Adicionar filtro de busca por nome
-- Manter filtros existentes (setor, unidade)
-- Adicionar seletor de intervalo de datas (mês único ou range de meses)
-- Passar dados filtrados para o `GanttFeriasView`
-
-**Detalhes técnicos do Gantt:**
-- Cada dia = uma célula de largura fixa (~28px), scroll horizontal para períodos longos
-- Barras posicionadas com CSS absolute dentro de uma grid
-- Cores por setor (reutilizar `SETOR_COLORS` do aniversariantes ou criar paleta)
-- Linhas zebradas para legibilidade
-- Ao passar o mouse sobre uma barra: tooltip com nome, setor, período, dias vendidos
-- Ao clicar: abrir o dialog de detalhes existente
-
-### Arquivos alterados
-1. `src/components/ValidationReportPanel.tsx` — reescrever labels e textos
-2. `src/components/ferias/calendario/GanttFeriasView.tsx` — novo componente Gantt
-3. `src/components/ferias/calendario/CalendarioFeriasTab.tsx` — adicionar toggle Gantt + filtro por nome
-
+Detalhes técnicos
+- Arquivos principais:
+  - `src/lib/scheduleGenerator.ts`
+  - `src/components/InternalPeriodConfigDialog.tsx`
+  - possivelmente `src/components/LocationPeriodTree.tsx`
+- Pontos já existentes no código:
+  - `excludedDatesMap`
+  - `isDayFullyExcluded(periodId, dateStr)`
+  - `isShiftExcluded(periodId, dateStr, shift)`
+- Direção correta:
+  - reforçar a correspondência local/período/data
+  - evitar qualquer solução “global”
+  - melhorar diagnóstico e texto da UI para refletir exatamente o comportamento cadastrado
