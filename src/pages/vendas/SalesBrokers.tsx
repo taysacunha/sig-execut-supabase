@@ -348,7 +348,12 @@ const SalesBrokers = () => {
     }
 
     if (editingBroker) {
-      updateMutation.mutate({ id: editingBroker.id, data: result.data });
+      const teamChanged = formData.team_id !== originalTeamId;
+      updateMutation.mutate({ 
+        id: editingBroker.id, 
+        data: result.data,
+        cascadeTeamFrom: teamChanged ? updateSalesFrom : null,
+      });
     } else {
       createMutation.mutate(result.data);
     }
