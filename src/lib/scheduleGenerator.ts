@@ -3137,14 +3137,7 @@ async function generateWeeklyScheduleWithAccumulator(
       // CORREÇÃO: Se array vazio, tratar como "sem restrição local" e usar fallback legacy
       const localShifts = localAvail[dayOfWeek];
       if (localShifts.length === 0) {
-        // Fallback para campos legacy quando array local está vazio
-        if (shift === "morning" && lb.available_morning === false) {
-          return { available: false, reason: `LEGACY: available_morning = false (local vazio)` };
-        }
-        if (shift === "afternoon" && lb.available_afternoon === false) {
-          return { available: false, reason: `LEGACY: available_afternoon = false (local vazio)` };
-        }
-        return { available: true };
+        return { available: false, reason: `LOCAL: nenhum turno disponível em ${dayOfWeek}` };
       }
       if (!localShifts.includes(shift)) {
         return { available: false, reason: `LOCAL: weekday_shift_availability não inclui ${shift} em ${dayOfWeek}` };
