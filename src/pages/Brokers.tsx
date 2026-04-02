@@ -89,7 +89,7 @@ const Brokers = () => {
   const [deleteBrokerId, setDeleteBrokerId] = useState<string | null>(null);
   const [deleteBrokerName, setDeleteBrokerName] = useState<string>("");
   
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(25);
   const queryClient = useQueryClient();
   
   // ✅ USAR PERMISSÃO DE SISTEMA em vez de role
@@ -282,6 +282,28 @@ const Brokers = () => {
     setCurrentPage(1);
   };
 
+  const handleItemsPerPageChange = (value: number) => {
+    setItemsPerPage(value);
+    setCurrentPage(1);
+  };
+
+  const ItemsPerPageSelector = () => (
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-muted-foreground">Exibir:</span>
+      {[25, 50, 100].map((value) => (
+        <Button
+          key={value}
+          variant={itemsPerPage === value ? "default" : "outline"}
+          size="sm"
+          onClick={() => handleItemsPerPageChange(value)}
+          className="h-8 px-3"
+        >
+          {value}
+        </Button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-4">
@@ -348,6 +370,15 @@ const Brokers = () => {
           />
         </div>
       </div>
+
+      {!isLoading && sortedBrokers.length > 0 && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            {sortedBrokers.length} corretor(es) encontrado(s)
+          </div>
+          <ItemsPerPageSelector />
+        </div>
+      )}
 
       <div className="rounded-md border overflow-x-auto">
         <Table>
@@ -496,60 +527,65 @@ const Brokers = () => {
       </div>
 
       {!isLoading && sortedBrokers.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="text-sm text-muted-foreground">
-            Mostrando {startIndex + 1}-{Math.min(endIndex, sortedBrokers.length)} de {sortedBrokers.length} corretores
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-sm text-muted-foreground">
+              Mostrando {startIndex + 1}-{Math.min(endIndex, sortedBrokers.length)} de {sortedBrokers.length} corretores
+            </div>
+            
+            {totalPages > 1 && (
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious 
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                  
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                    if (
+                      page === 1 ||
+                      page === totalPages ||
+                      (page >= currentPage - 1 && page <= currentPage + 1)
+                    ) {
+                      return (
+                        <PaginationItem key={page}>
+                          <PaginationLink
+                            onClick={() => setCurrentPage(page)}
+                            isActive={currentPage === page}
+                            className="cursor-pointer"
+                          >
+                            {page}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    } else if (
+                      page === currentPage - 2 ||
+                      page === currentPage + 2
+                    ) {
+                      return (
+                        <PaginationItem key={page}>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      );
+                    }
+                    return null;
+                  })}
+                  
+                  <PaginationItem>
+                    <PaginationNext 
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            )}
           </div>
-          
-          {totalPages > 1 && (
-            <Pagination>
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious 
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                  />
-                </PaginationItem>
-                
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
-                  if (
-                    page === 1 ||
-                    page === totalPages ||
-                    (page >= currentPage - 1 && page <= currentPage + 1)
-                  ) {
-                    return (
-                      <PaginationItem key={page}>
-                        <PaginationLink
-                          onClick={() => setCurrentPage(page)}
-                          isActive={currentPage === page}
-                          className="cursor-pointer"
-                        >
-                          {page}
-                        </PaginationLink>
-                      </PaginationItem>
-                    );
-                  } else if (
-                    page === currentPage - 2 ||
-                    page === currentPage + 2
-                  ) {
-                    return (
-                      <PaginationItem key={page}>
-                        <PaginationEllipsis />
-                      </PaginationItem>
-                    );
-                  }
-                  return null;
-                })}
-                
-                <PaginationItem>
-                  <PaginationNext 
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          )}
+          <div className="flex justify-end">
+            <ItemsPerPageSelector />
+          </div>
         </div>
       )}
 
