@@ -371,6 +371,15 @@ const Brokers = () => {
         </div>
       </div>
 
+      {!isLoading && sortedBrokers.length > 0 && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            {sortedBrokers.length} corretor(es) encontrado(s)
+          </div>
+          <ItemsPerPageSelector />
+        </div>
+      )}
+
       <div className="rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
