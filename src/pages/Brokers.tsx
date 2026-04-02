@@ -149,9 +149,30 @@ const Brokers = () => {
         weekday_shift_availability: data.weekday_shift_availability
       }).eq("id", id);
       if (error) throw error;
+
+      // Cascatear disponibilidade para todos os locais vinculados
+      const newAvail = data.weekday_shift_availability;
+      const hasMorning = Object.values(newAvail).some(shifts => shifts?.includes("morning"));
+      const hasAfternoon = Object.values(newAvail).some(shifts => shifts?.includes("afternoon"));
+
+      const { data: linkedLocations } = await supabase
+        .from("location_brokers")
+        .select("id")
+        .eq("broker_id", id);
+
+      if (linkedLocations && linkedLocations.length > 0) {
+        for (const lb of linkedLocations) {
+          await supabase.from("location_brokers").update({
+            weekday_shift_availability: newAvail as any,
+            available_morning: hasMorning,
+            available_afternoon: hasAfternoon,
+          }).eq("id", lb.id);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["brokers"] });
+      queryClient.invalidateQueries({ queryKey: ["locations"] });
       toast.success("Corretor atualizado com sucesso!");
       setOpen(false);
       setEditingBroker(null);
