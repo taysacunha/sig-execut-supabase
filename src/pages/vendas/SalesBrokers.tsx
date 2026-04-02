@@ -328,7 +328,7 @@ const SalesBrokers = () => {
     setDialogOpen(false);
     setEditingBroker(null);
     setOriginalTeamId(null);
-    setUpdateSalesFrom(null);
+    setCascadeMonth(null);
     setFormData({ name: "", nome_exibicao: null, creci: null, team_id: null, is_active: true, deactivated_month: null, is_manager: false, hire_date: null, birth_date: null, broker_type: "venda" });
     setErrors({});
   };
