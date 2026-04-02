@@ -1,55 +1,29 @@
 
 
-## Plano: Corrigir bug critico — disponibilidade local sendo ignorada
+## Plano: Corrigir visibilidade de corretores inativos
 
-### Problema
+### Bug 1: Corretores inativos sumiram da pagina Corretores
 
-Taciana tem disponibilidade global no domingo de manha, mas no Nammos ela NAO tem domingo configurado. O gerador ignorou essa restricao e alocou ela no domingo para o Nammos.
+A query em `src/pages/Brokers.tsx` (linha 103-106) busca TODOS os corretores sem filtro de `is_active`. O codigo esta correto — nao ha filtro escondendo inativos. Possibilidades:
+- Pode ser um problema de paginacao (com 25 por pagina, os inativos podem estar em outra pagina)
+- Ou a ordenacao por `created_at DESC` os empurra para o final
 
-### Causa raiz
+**Correcao**: Adicionar um filtro visual (dropdown/tabs) para "Todos / Ativos / Inativos" na pagina, com default "Todos". Isso garante que o usuario sempre encontre os inativos facilmente, independente da paginacao.
 
-No arquivo `src/lib/scheduleGenerator.ts`, linhas 3136-3147, a funcao `isBrokerAvailableForShiftWithReason` trata array vazio `[]` no `weekday_shift_availability` do vinculo local como "sem restricao" e faz fallback para campos legacy. Isso esta errado:
+### Bug 2: Corretores inativos continuam aparecendo nos locais
 
-```typescript
-// CÓDIGO ATUAL (ERRADO):
-if (localShifts.length === 0) {
-  // Fallback para campos legacy quando array local está vazio
-  if (shift === "morning" && lb.available_morning === false) { ... }
-  if (shift === "afternoon" && lb.available_afternoon === false) { ... }
-  return { available: true };  // ← BUG: trata vazio como "disponível"
-}
-```
+Quando um corretor e desativado (`toggleActiveMutation`), apenas o campo `is_active` na tabela `brokers` e atualizado. Os registros em `location_brokers` permanecem intactos, entao o corretor inativo continua vinculado e visivel nos locais.
 
-Quando o cascateamento do corretor ou a edicao direta do local resulta em `sunday: []`, isso significa "NAO disponivel no domingo para este local". Mas o codigo atual interpreta como "sem restricao" e retorna `true`.
+**Correcao**: No `toggleActiveMutation` de `src/pages/Brokers.tsx`, quando o corretor for desativado (`is_active` passa de `true` para `false`), deletar todos os registros de `location_brokers` desse corretor. Quando reativado, nao restaurar automaticamente — o usuario precisara vincular novamente nos locais desejados. Tambem invalidar a query `["locations"]`.
 
-### Correcao
+### Arquivos alterados
 
-**Arquivo: `src/lib/scheduleGenerator.ts`** — na funcao `isBrokerAvailableForShiftWithReason` (linha ~3139):
+1. **`src/pages/Brokers.tsx`**:
+   - Adicionar estado `statusFilter` com opcoes "all" / "active" / "inactive"
+   - Adicionar botoes/tabs de filtro acima da tabela (junto aos controles de paginacao)
+   - Aplicar filtro no `filteredBrokers`
+   - No `toggleActiveMutation`, ao desativar: deletar registros de `location_brokers` do corretor
+   - Invalidar query `["locations"]` no `onSuccess` do toggle
 
-- Array vazio `[]` deve significar **indisponivel** para aquele dia, nao "sem restricao"
-- Remover o fallback legacy quando o array local existe mas esta vazio
-- Resultado: `sunday: []` → retorna `{ available: false, reason: "LOCAL: nenhum turno disponivel em sunday" }`
-
-```typescript
-// CÓDIGO CORRIGIDO:
-if (localShifts.length === 0) {
-  return { available: false, reason: `LOCAL: nenhum turno disponível em ${dayOfWeek}` };
-}
-```
-
-### Verificacao de consistencia
-
-Ha 3 funcoes de checagem de disponibilidade no mesmo arquivo. Preciso alinhar todas:
-
-1. **`isBrokerAvailableForShiftWithReason`** (linha 3118) — externos: TEM o bug, precisa corrigir
-2. **`isBrokerAvailableForInternalShift`** (linha 4687) — internos: ja funciona correto (array vazio → `.includes()` retorna false)
-3. **`getAvailableBrokersForShift`** (linha 5227) — dialog de adicao manual: ja funciona correto (`!dayAvailability` captura array vazio como falsy? Nao — array vazio e truthy, mas `!dayAvailability.includes(shift)` retorna true, entao filtra corretamente)
-
-Apenas a funcao #1 precisa de correcao.
-
-### Resumo
-
-- 1 arquivo alterado: `src/lib/scheduleGenerator.ts`
-- 1 linha de logica substituida (linhas 3137-3147 → 2 linhas)
-- A disponibilidade configurada no local passa a ser absoluta e inviolavel
+2. **`src/pages/Locations.tsx`** — sem alteracao necessaria (o dropdown de corretores ja filtra `is_active: true`)
 
