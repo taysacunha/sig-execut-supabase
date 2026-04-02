@@ -102,6 +102,8 @@ const SalesBrokers = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteBroker, setDeleteBroker] = useState<SalesBroker | null>(null);
   const [editingBroker, setEditingBroker] = useState<SalesBroker | null>(null);
+  const [updateSalesFrom, setUpdateSalesFrom] = useState<string | null>(null);
+  const [originalTeamId, setOriginalTeamId] = useState<string | null>(null);
   const [formData, setFormData] = useState<BrokerFormData>({
     name: "",
     nome_exibicao: null,
@@ -210,7 +212,7 @@ const SalesBrokers = () => {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: BrokerFormData }) => {
+    mutationFn: async ({ id, data, cascadeTeamFrom }: { id: string; data: BrokerFormData; cascadeTeamFrom?: string | null }) => {
       const { error } = await supabase
         .from("sales_brokers")
         .update({
@@ -227,10 +229,24 @@ const SalesBrokers = () => {
         } as any)
         .eq("id", id);
       if (error) throw error;
+
+      // Cascade team_id to sales table if requested
+      if (cascadeTeamFrom && data.team_id) {
+        const { error: salesError } = await supabase
+          .from("sales")
+          .update({ team_id: data.team_id } as any)
+          .eq("broker_id", id)
+          .gte("year_month", cascadeTeamFrom);
+        if (salesError) {
+          console.error("Erro ao atualizar vendas:", salesError);
+          throw new Error("Corretor atualizado, mas houve erro ao migrar vendas para a nova equipe.");
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales-brokers"] });
       queryClient.invalidateQueries({ queryKey: ["sales-teams"] });
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-birthdays"] });
       toast.success("Corretor atualizado com sucesso!");
       handleCloseDialog();
@@ -284,6 +300,8 @@ const SalesBrokers = () => {
   };
   const handleOpenEdit = (broker: SalesBroker) => {
     setEditingBroker(broker);
+    setOriginalTeamId(broker.team_id);
+    setUpdateSalesFrom(null);
     setFormData({
       name: broker.name,
       nome_exibicao: (broker as any).nome_exibicao || null,
@@ -303,6 +321,8 @@ const SalesBrokers = () => {
   const handleCloseDialog = () => {
     setDialogOpen(false);
     setEditingBroker(null);
+    setOriginalTeamId(null);
+    setUpdateSalesFrom(null);
     setFormData({ name: "", nome_exibicao: null, creci: null, team_id: null, is_active: true, deactivated_month: null, is_manager: false, hire_date: null, birth_date: null, broker_type: "venda" });
     setErrors({});
   };
@@ -328,7 +348,12 @@ const SalesBrokers = () => {
     }
 
     if (editingBroker) {
-      updateMutation.mutate({ id: editingBroker.id, data: result.data });
+      const teamChanged = formData.team_id !== originalTeamId;
+      updateMutation.mutate({ 
+        id: editingBroker.id, 
+        data: result.data,
+        cascadeTeamFrom: teamChanged ? updateSalesFrom : null,
+      });
     } else {
       createMutation.mutate(result.data);
     }
@@ -632,6 +657,33 @@ const SalesBrokers = () => {
                   ))}
                 </SelectContent>
               </Select>
+              {/* Show cascade option when team changed during edit */}
+              {editingBroker && formData.team_id !== originalTeamId && formData.team_id && (
+                <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2">
+                  <p className="text-sm font-medium text-foreground">
+                    Atualizar vendas existentes para a nova equipe?
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Selecione a partir de qual mês as vendas deste corretor devem ser migradas para a nova equipe.
+                  </p>
+                  <Select
+                    value={updateSalesFrom || "none"}
+                    onValueChange={(value) => setUpdateSalesFrom(value === "none" ? null : value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Não atualizar vendas" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Não atualizar vendas</SelectItem>
+                      {monthOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          A partir de {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">

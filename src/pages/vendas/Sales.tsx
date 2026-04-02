@@ -597,7 +597,7 @@ export default function Sales() {
                               >
                                 <Pencil className="h-4 w-4" />
                               </Button>
-                              {isAdmin && (
+                              {canEditVendas && (
                                 <Button
                                   variant="ghost"
                                   size="icon"
