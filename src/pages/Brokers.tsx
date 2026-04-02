@@ -375,14 +375,33 @@ const Brokers = () => {
           )}
         </div>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nome ou CRECI..."
-            value={searchTerm}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-9"
-          />
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome ou CRECI..."
+              value={searchTerm}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <div className="flex items-center gap-1">
+            {([
+              { value: "all" as const, label: "Todos" },
+              { value: "active" as const, label: "Ativos" },
+              { value: "inactive" as const, label: "Inativos" },
+            ]).map((opt) => (
+              <Button
+                key={opt.value}
+                variant={statusFilter === opt.value ? "default" : "outline"}
+                size="sm"
+                onClick={() => { setStatusFilter(opt.value); setCurrentPage(1); }}
+                className="h-9"
+              >
+                {opt.label}
+              </Button>
+            ))}
+          </div>
         </div>
       </div>
 
