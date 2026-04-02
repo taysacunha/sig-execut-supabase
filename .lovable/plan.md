@@ -1,29 +1,49 @@
 
 
-## Plano: Corrigir visibilidade de corretores inativos
+## Plano: Garantir que corretores inativos nao aparecem nos locais
 
-### Bug 1: Corretores inativos sumiram da pagina Corretores
+### Problema
 
-A query em `src/pages/Brokers.tsx` (linha 103-106) busca TODOS os corretores sem filtro de `is_active`. O codigo esta correto — nao ha filtro escondendo inativos. Possibilidades:
-- Pode ser um problema de paginacao (com 25 por pagina, os inativos podem estar em outra pagina)
-- Ou a ordenacao por `created_at DESC` os empurra para o final
+Joao Marcos esta inativo mas ainda aparece no campo de corretores disponiveis ao editar locais. Isso acontece porque:
 
-**Correcao**: Adicionar um filtro visual (dropdown/tabs) para "Todos / Ativos / Inativos" na pagina, com default "Todos". Isso garante que o usuario sempre encontre os inativos facilmente, independente da paginacao.
+1. Ele foi desativado ANTES do codigo de limpeza automatica ser adicionado, entao seus registros em `location_brokers` ainda existem
+2. A query de corretores em `Locations.tsx` ja filtra `is_active: true` (linha 213), mas os `location_brokers` existentes carregam o broker_id dele ao editar — e o `BrokerAvailabilityForm` itera sobre `brokers` (ativos), entao ele nao deveria aparecer na lista. Porem, se os registros em `location_brokers` existem, ao salvar, sao re-inseridos
 
-### Bug 2: Corretores inativos continuam aparecendo nos locais
+### Correcoes
 
-Quando um corretor e desativado (`toggleActiveMutation`), apenas o campo `is_active` na tabela `brokers` e atualizado. Os registros em `location_brokers` permanecem intactos, entao o corretor inativo continua vinculado e visivel nos locais.
+**1. Limpeza de dados existentes (migration)**
 
-**Correcao**: No `toggleActiveMutation` de `src/pages/Brokers.tsx`, quando o corretor for desativado (`is_active` passa de `true` para `false`), deletar todos os registros de `location_brokers` desse corretor. Quando reativado, nao restaurar automaticamente — o usuario precisara vincular novamente nos locais desejados. Tambem invalidar a query `["locations"]`.
+Executar um DELETE para remover todos os registros de `location_brokers` cujo `broker_id` referencia um corretor inativo:
+
+```sql
+DELETE FROM location_brokers 
+WHERE broker_id IN (
+  SELECT id FROM brokers WHERE is_active = false
+);
+```
+
+**2. Filtrar selectedBrokers ao carregar para edicao (`src/pages/Locations.tsx`, linha ~444-456)**
+
+Ao carregar os corretores associados de um local para edicao, filtrar apenas os que pertencem a corretores ativos:
+
+```typescript
+// Ao carregar location_brokers para edicao, filtrar inativos
+const activeBrokerIds = new Set(brokers?.map(b => b.id) || []);
+setSelectedBrokers(
+  brokers_data
+    ?.filter(b => activeBrokerIds.has(b.broker_id))
+    ?.map(b => ({ ... })) || []
+);
+```
+
+Isso garante que mesmo que existam registros residuais em `location_brokers`, eles nao aparecem ao editar.
+
+**3. Ao reativar corretor: pre-popular disponibilidade ao vincular (`src/pages/Locations.tsx`)**
+
+Isso ja funciona naturalmente: ao marcar um corretor no `BrokerAvailabilityForm`, o `toggleBroker` cria a entrada com a disponibilidade vinda do cadastro do corretor (via `brokerAvailabilityMap`). Nenhuma alteracao necessaria aqui.
 
 ### Arquivos alterados
 
-1. **`src/pages/Brokers.tsx`**:
-   - Adicionar estado `statusFilter` com opcoes "all" / "active" / "inactive"
-   - Adicionar botoes/tabs de filtro acima da tabela (junto aos controles de paginacao)
-   - Aplicar filtro no `filteredBrokers`
-   - No `toggleActiveMutation`, ao desativar: deletar registros de `location_brokers` do corretor
-   - Invalidar query `["locations"]` no `onSuccess` do toggle
-
-2. **`src/pages/Locations.tsx`** — sem alteracao necessaria (o dropdown de corretores ja filtra `is_active: true`)
+1. **Migration SQL** — limpeza de `location_brokers` de corretores inativos
+2. **`src/pages/Locations.tsx`** — filtrar `selectedBrokers` por corretores ativos ao carregar para edicao
 
