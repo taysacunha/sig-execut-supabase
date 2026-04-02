@@ -286,6 +286,8 @@ const SalesBrokers = () => {
   };
   const handleOpenEdit = (broker: SalesBroker) => {
     setEditingBroker(broker);
+    setOriginalTeamId(broker.team_id);
+    setUpdateSalesFrom(null);
     setFormData({
       name: broker.name,
       nome_exibicao: (broker as any).nome_exibicao || null,
