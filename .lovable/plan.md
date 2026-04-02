@@ -1,37 +1,25 @@
 
 
-## Plano: Corrigir troca de equipe retroativa e acesso a exclusao de vendas
+## Plano: Trocar lista longa por seletores de Mes e Ano
 
-### Problema 1: Flavia mudou de equipe mas vendas antigas ficaram com a equipe errada
+### Problema
 
-Quando o `team_id` de um corretor e atualizado em `SalesBrokers.tsx`, apenas o registro do corretor muda. As vendas ja cadastradas na tabela `sales` mantem o `team_id` antigo. Nao existe cascateamento.
+O campo "Atualizar vendas a partir de" usa um `Select` com 24 meses listados, gerando uma lista gigante e confusa.
 
-**Correcao em `src/pages/vendas/SalesBrokers.tsx`**: No `updateMutation`, quando o `team_id` mudar, atualizar tambem todas as vendas do corretor a partir de uma data configuravel. Adicionar ao dialog de edicao um campo opcional "Atualizar vendas a partir de" (tipo mes/ano) que aparece quando o usuario troca a equipe. Se preenchido, executa:
+### Correcao
 
-```typescript
-await supabase.from("sales")
-  .update({ team_id: newTeamId })
-  .eq("broker_id", id)
-  .gte("year_month", selectedFromMonth); // ex: "2026-01"
-```
+Substituir o `Select` unico por dois selects lado a lado: um de **Mes** (Janeiro a Dezembro) e um de **Ano** (ultimos 3 anos). O valor final continua sendo montado como `yyyy-MM` para o `cascadeTeamFrom`.
 
-Isso resolve o caso da Flavia: ao trocar para "Mar", o usuario seleciona "Janeiro 2026" e todas as vendas de janeiro em diante sao migradas.
+### Alteracoes em `src/pages/vendas/SalesBrokers.tsx`
 
-### Problema 2: Nao consegue excluir vendas
+1. Trocar o estado `updateSalesFrom` (string `yyyy-MM`) por dois estados: `cascadeMonth` e `cascadeYear`, ou manter `updateSalesFrom` e compor ele a partir de dois selects separados
+2. Substituir o bloco do `Select` (linhas 669-684) por dois selects:
+   - **Ano**: anos de `currentYear - 2` ate `currentYear`
+   - **Mes**: Janeiro a Dezembro (valores "01" a "12")
+3. Adicionar opcao "Nao atualizar" como checkbox ou manter o comportamento: se ambos selecionados, monta `yyyy-MM`; se nao, `null`
+4. Reusar o componente `YearMonthSelector` que ja existe em `src/components/vendas/YearMonthSelector.tsx` — ele aceita `selectedYear`, `selectedMonth`, `onYearChange`, `onMonthChange` e resolve exatamente esse caso
 
-O botao de excluir JA EXISTE no codigo (linha 600-608 de `Sales.tsx`), mas esta restrito a `isAdmin`. O usuario provavelmente tem permissao `canEditVendas` mas nao e admin.
+### Resultado
 
-**Correcao em `src/pages/vendas/Sales.tsx`**: Trocar a condicao do botao de excluir de `isAdmin` para `canEditVendas`, mantendo o AlertDialog de confirmacao que ja existe. A logica de exclusao (deleteMutation) ja funciona corretamente.
-
-```typescript
-// ANTES (linha 600):
-{isAdmin && (
-// DEPOIS:
-{canEditVendas && (
-```
-
-### Arquivos alterados
-
-1. **`src/pages/vendas/SalesBrokers.tsx`** — Adicionar campo "Atualizar vendas a partir de" no dialog de edicao quando equipe mudar; no `updateMutation`, cascatear `team_id` para tabela `sales`
-2. **`src/pages/vendas/Sales.tsx`** — Trocar `isAdmin` por `canEditVendas` no botao de excluir venda
+Dois selects compactos (Ano + Mes) em vez de uma lista de 24 itens.
 
