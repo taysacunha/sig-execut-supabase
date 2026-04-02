@@ -441,18 +441,22 @@ const Locations = () => {
     setShiftConfigMode(location.shift_config_mode || "weekday");
 
     // Carregar corretores associados
-    const { data: brokers } = await supabase
+    const { data: linkedBrokers } = await supabase
       .from("location_brokers")
       .select("*")
       .eq("location_id", location.id);
     
+    // Filtrar apenas corretores ativos ao carregar para edição
+    const activeBrokerIds = new Set(brokers?.map((b: any) => b.id) || []);
     setSelectedBrokers(
-      brokers?.map((b: any) => ({
-        brokerId: b.broker_id,
-        availableMorning: b.available_morning,
-        availableAfternoon: b.available_afternoon,
-        weekday_shift_availability: b.weekday_shift_availability || undefined,
-      })) || []
+      linkedBrokers
+        ?.filter((b: any) => activeBrokerIds.has(b.broker_id))
+        ?.map((b: any) => ({
+          brokerId: b.broker_id,
+          availableMorning: b.available_morning,
+          availableAfternoon: b.available_afternoon,
+          weekday_shift_availability: b.weekday_shift_availability || undefined,
+        })) || []
     );
     setOpen(true);
   };
