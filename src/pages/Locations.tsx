@@ -441,7 +441,7 @@ const Locations = () => {
     setShiftConfigMode(location.shift_config_mode || "weekday");
 
     // Carregar corretores associados
-    const { data: brokers } = await supabase
+    const { data: linkedBrokers } = await supabase
       .from("location_brokers")
       .select("*")
       .eq("location_id", location.id);
@@ -449,7 +449,7 @@ const Locations = () => {
     // Filtrar apenas corretores ativos ao carregar para edição
     const activeBrokerIds = new Set(brokers?.map((b: any) => b.id) || []);
     setSelectedBrokers(
-      brokers_data
+      linkedBrokers
         ?.filter((b: any) => activeBrokerIds.has(b.broker_id))
         ?.map((b: any) => ({
           brokerId: b.broker_id,
