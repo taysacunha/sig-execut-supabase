@@ -672,22 +672,34 @@ const SalesBrokers = () => {
                   <p className="text-xs text-muted-foreground">
                     Selecione a partir de qual mês as vendas deste corretor devem ser migradas para a nova equipe.
                   </p>
-                  <Select
-                    value={updateSalesFrom || "none"}
-                    onValueChange={(value) => setUpdateSalesFrom(value === "none" ? null : value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Não atualizar vendas" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Não atualizar vendas</SelectItem>
-                      {monthOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          A partir de {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center gap-2">
+                    <Select value={cascadeYear} onValueChange={setCascadeYear}>
+                      <SelectTrigger className="w-[100px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 3 }, (_, i) => (new Date().getFullYear() - i).toString()).map((y) => (
+                          <SelectItem key={y} value={y}>{y}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={cascadeMonth ?? "none"} onValueChange={(v) => setCascadeMonth(v === "none" ? null : v)}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue placeholder="Selecione o mês" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Não atualizar</SelectItem>
+                        {[
+                          { v: "01", l: "Janeiro" }, { v: "02", l: "Fevereiro" }, { v: "03", l: "Março" },
+                          { v: "04", l: "Abril" }, { v: "05", l: "Maio" }, { v: "06", l: "Junho" },
+                          { v: "07", l: "Julho" }, { v: "08", l: "Agosto" }, { v: "09", l: "Setembro" },
+                          { v: "10", l: "Outubro" }, { v: "11", l: "Novembro" }, { v: "12", l: "Dezembro" },
+                        ].map((m) => (
+                          <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               )}
             </div>
