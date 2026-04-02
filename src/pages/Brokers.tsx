@@ -264,10 +264,14 @@ const Brokers = () => {
   };
 
   const searchNormalized = normalizeText(debouncedSearch);
-  const filteredBrokers = brokers?.filter((broker) =>
-    normalizeText(broker.name).includes(searchNormalized) ||
-    normalizeText(broker.creci).includes(searchNormalized)
-  );
+  const filteredBrokers = brokers?.filter((broker) => {
+    // Filtro de status
+    if (statusFilter === "active" && !broker.is_active) return false;
+    if (statusFilter === "inactive" && broker.is_active) return false;
+    // Filtro de busca
+    return normalizeText(broker.name).includes(searchNormalized) ||
+      normalizeText(broker.creci).includes(searchNormalized);
+  });
 
   const sortedBrokers = [...(filteredBrokers || [])].sort((a, b) => {
     const aValue = a[sortColumn];
