@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -102,8 +102,14 @@ const SalesBrokers = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteBroker, setDeleteBroker] = useState<SalesBroker | null>(null);
   const [editingBroker, setEditingBroker] = useState<SalesBroker | null>(null);
-  const [updateSalesFrom, setUpdateSalesFrom] = useState<string | null>(null);
+  const [cascadeYear, setCascadeYear] = useState<string>(new Date().getFullYear().toString());
+  const [cascadeMonth, setCascadeMonth] = useState<string | null>(null);
   const [originalTeamId, setOriginalTeamId] = useState<string | null>(null);
+
+  const updateSalesFrom = useMemo(() => {
+    if (cascadeMonth) return `${cascadeYear}-${cascadeMonth}`;
+    return null;
+  }, [cascadeYear, cascadeMonth]);
   const [formData, setFormData] = useState<BrokerFormData>({
     name: "",
     nome_exibicao: null,
@@ -301,7 +307,7 @@ const SalesBrokers = () => {
   const handleOpenEdit = (broker: SalesBroker) => {
     setEditingBroker(broker);
     setOriginalTeamId(broker.team_id);
-    setUpdateSalesFrom(null);
+    setCascadeMonth(null);
     setFormData({
       name: broker.name,
       nome_exibicao: (broker as any).nome_exibicao || null,
@@ -322,7 +328,7 @@ const SalesBrokers = () => {
     setDialogOpen(false);
     setEditingBroker(null);
     setOriginalTeamId(null);
-    setUpdateSalesFrom(null);
+    setCascadeMonth(null);
     setFormData({ name: "", nome_exibicao: null, creci: null, team_id: null, is_active: true, deactivated_month: null, is_manager: false, hire_date: null, birth_date: null, broker_type: "venda" });
     setErrors({});
   };
@@ -666,22 +672,34 @@ const SalesBrokers = () => {
                   <p className="text-xs text-muted-foreground">
                     Selecione a partir de qual mês as vendas deste corretor devem ser migradas para a nova equipe.
                   </p>
-                  <Select
-                    value={updateSalesFrom || "none"}
-                    onValueChange={(value) => setUpdateSalesFrom(value === "none" ? null : value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Não atualizar vendas" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Não atualizar vendas</SelectItem>
-                      {monthOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          A partir de {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center gap-2">
+                    <Select value={cascadeYear} onValueChange={setCascadeYear}>
+                      <SelectTrigger className="w-[100px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 3 }, (_, i) => (new Date().getFullYear() - i).toString()).map((y) => (
+                          <SelectItem key={y} value={y}>{y}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={cascadeMonth ?? "none"} onValueChange={(v) => setCascadeMonth(v === "none" ? null : v)}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue placeholder="Selecione o mês" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Não atualizar</SelectItem>
+                        {[
+                          { v: "01", l: "Janeiro" }, { v: "02", l: "Fevereiro" }, { v: "03", l: "Março" },
+                          { v: "04", l: "Abril" }, { v: "05", l: "Maio" }, { v: "06", l: "Junho" },
+                          { v: "07", l: "Julho" }, { v: "08", l: "Agosto" }, { v: "09", l: "Setembro" },
+                          { v: "10", l: "Outubro" }, { v: "11", l: "Novembro" }, { v: "12", l: "Dezembro" },
+                        ].map((m) => (
+                          <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               )}
             </div>
