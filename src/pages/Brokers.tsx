@@ -90,6 +90,7 @@ const Brokers = () => {
   const [deleteBrokerName, setDeleteBrokerName] = useState<string>("");
   
   const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const queryClient = useQueryClient();
   
   // ✅ USAR PERMISSÃO DE SISTEMA em vez de role
