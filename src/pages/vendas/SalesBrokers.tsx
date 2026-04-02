@@ -212,7 +212,7 @@ const SalesBrokers = () => {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: BrokerFormData }) => {
+    mutationFn: async ({ id, data, cascadeTeamFrom }: { id: string; data: BrokerFormData; cascadeTeamFrom?: string | null }) => {
       const { error } = await supabase
         .from("sales_brokers")
         .update({
@@ -229,10 +229,24 @@ const SalesBrokers = () => {
         } as any)
         .eq("id", id);
       if (error) throw error;
+
+      // Cascade team_id to sales table if requested
+      if (cascadeTeamFrom && data.team_id) {
+        const { error: salesError } = await supabase
+          .from("sales")
+          .update({ team_id: data.team_id } as any)
+          .eq("broker_id", id)
+          .gte("year_month", cascadeTeamFrom);
+        if (salesError) {
+          console.error("Erro ao atualizar vendas:", salesError);
+          throw new Error("Corretor atualizado, mas houve erro ao migrar vendas para a nova equipe.");
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales-brokers"] });
       queryClient.invalidateQueries({ queryKey: ["sales-teams"] });
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-birthdays"] });
       toast.success("Corretor atualizado com sucesso!");
       handleCloseDialog();
