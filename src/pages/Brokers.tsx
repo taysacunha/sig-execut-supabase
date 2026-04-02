@@ -89,7 +89,7 @@ const Brokers = () => {
   const [deleteBrokerId, setDeleteBrokerId] = useState<string | null>(null);
   const [deleteBrokerName, setDeleteBrokerName] = useState<string>("");
   
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(25);
   const queryClient = useQueryClient();
   
   // ✅ USAR PERMISSÃO DE SISTEMA em vez de role
