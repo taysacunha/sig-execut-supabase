@@ -191,14 +191,24 @@ const Brokers = () => {
 
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
+      const newStatus = !is_active;
       const { error } = await supabase
         .from("brokers")
-        .update({ is_active: !is_active })
+        .update({ is_active: newStatus })
         .eq("id", id);
       if (error) throw error;
+
+      // Ao desativar, remover corretor de todos os locais
+      if (!newStatus) {
+        await supabase
+          .from("location_brokers")
+          .delete()
+          .eq("broker_id", id);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["brokers"] });
+      queryClient.invalidateQueries({ queryKey: ["locations"] });
       toast.success("Status atualizado!");
     },
   });
