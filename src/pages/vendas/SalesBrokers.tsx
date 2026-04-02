@@ -102,6 +102,8 @@ const SalesBrokers = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteBroker, setDeleteBroker] = useState<SalesBroker | null>(null);
   const [editingBroker, setEditingBroker] = useState<SalesBroker | null>(null);
+  const [updateSalesFrom, setUpdateSalesFrom] = useState<string | null>(null);
+  const [originalTeamId, setOriginalTeamId] = useState<string | null>(null);
   const [formData, setFormData] = useState<BrokerFormData>({
     name: "",
     nome_exibicao: null,
