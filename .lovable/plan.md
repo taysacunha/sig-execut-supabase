@@ -1,49 +1,37 @@
 
 
-## Plano: Garantir que corretores inativos nao aparecem nos locais
+## Plano: Corrigir troca de equipe retroativa e acesso a exclusao de vendas
 
-### Problema
+### Problema 1: Flavia mudou de equipe mas vendas antigas ficaram com a equipe errada
 
-Joao Marcos esta inativo mas ainda aparece no campo de corretores disponiveis ao editar locais. Isso acontece porque:
+Quando o `team_id` de um corretor e atualizado em `SalesBrokers.tsx`, apenas o registro do corretor muda. As vendas ja cadastradas na tabela `sales` mantem o `team_id` antigo. Nao existe cascateamento.
 
-1. Ele foi desativado ANTES do codigo de limpeza automatica ser adicionado, entao seus registros em `location_brokers` ainda existem
-2. A query de corretores em `Locations.tsx` ja filtra `is_active: true` (linha 213), mas os `location_brokers` existentes carregam o broker_id dele ao editar — e o `BrokerAvailabilityForm` itera sobre `brokers` (ativos), entao ele nao deveria aparecer na lista. Porem, se os registros em `location_brokers` existem, ao salvar, sao re-inseridos
-
-### Correcoes
-
-**1. Limpeza de dados existentes (migration)**
-
-Executar um DELETE para remover todos os registros de `location_brokers` cujo `broker_id` referencia um corretor inativo:
-
-```sql
-DELETE FROM location_brokers 
-WHERE broker_id IN (
-  SELECT id FROM brokers WHERE is_active = false
-);
-```
-
-**2. Filtrar selectedBrokers ao carregar para edicao (`src/pages/Locations.tsx`, linha ~444-456)**
-
-Ao carregar os corretores associados de um local para edicao, filtrar apenas os que pertencem a corretores ativos:
+**Correcao em `src/pages/vendas/SalesBrokers.tsx`**: No `updateMutation`, quando o `team_id` mudar, atualizar tambem todas as vendas do corretor a partir de uma data configuravel. Adicionar ao dialog de edicao um campo opcional "Atualizar vendas a partir de" (tipo mes/ano) que aparece quando o usuario troca a equipe. Se preenchido, executa:
 
 ```typescript
-// Ao carregar location_brokers para edicao, filtrar inativos
-const activeBrokerIds = new Set(brokers?.map(b => b.id) || []);
-setSelectedBrokers(
-  brokers_data
-    ?.filter(b => activeBrokerIds.has(b.broker_id))
-    ?.map(b => ({ ... })) || []
-);
+await supabase.from("sales")
+  .update({ team_id: newTeamId })
+  .eq("broker_id", id)
+  .gte("year_month", selectedFromMonth); // ex: "2026-01"
 ```
 
-Isso garante que mesmo que existam registros residuais em `location_brokers`, eles nao aparecem ao editar.
+Isso resolve o caso da Flavia: ao trocar para "Mar", o usuario seleciona "Janeiro 2026" e todas as vendas de janeiro em diante sao migradas.
 
-**3. Ao reativar corretor: pre-popular disponibilidade ao vincular (`src/pages/Locations.tsx`)**
+### Problema 2: Nao consegue excluir vendas
 
-Isso ja funciona naturalmente: ao marcar um corretor no `BrokerAvailabilityForm`, o `toggleBroker` cria a entrada com a disponibilidade vinda do cadastro do corretor (via `brokerAvailabilityMap`). Nenhuma alteracao necessaria aqui.
+O botao de excluir JA EXISTE no codigo (linha 600-608 de `Sales.tsx`), mas esta restrito a `isAdmin`. O usuario provavelmente tem permissao `canEditVendas` mas nao e admin.
+
+**Correcao em `src/pages/vendas/Sales.tsx`**: Trocar a condicao do botao de excluir de `isAdmin` para `canEditVendas`, mantendo o AlertDialog de confirmacao que ja existe. A logica de exclusao (deleteMutation) ja funciona corretamente.
+
+```typescript
+// ANTES (linha 600):
+{isAdmin && (
+// DEPOIS:
+{canEditVendas && (
+```
 
 ### Arquivos alterados
 
-1. **Migration SQL** — limpeza de `location_brokers` de corretores inativos
-2. **`src/pages/Locations.tsx`** — filtrar `selectedBrokers` por corretores ativos ao carregar para edicao
+1. **`src/pages/vendas/SalesBrokers.tsx`** — Adicionar campo "Atualizar vendas a partir de" no dialog de edicao quando equipe mudar; no `updateMutation`, cascatear `team_id` para tabela `sales`
+2. **`src/pages/vendas/Sales.tsx`** — Trocar `isAdmin` por `canEditVendas` no botao de excluir venda
 
