@@ -282,6 +282,28 @@ const Brokers = () => {
     setCurrentPage(1);
   };
 
+  const handleItemsPerPageChange = (value: number) => {
+    setItemsPerPage(value);
+    setCurrentPage(1);
+  };
+
+  const ItemsPerPageSelector = () => (
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-muted-foreground">Exibir:</span>
+      {[25, 50, 100].map((value) => (
+        <Button
+          key={value}
+          variant={itemsPerPage === value ? "default" : "outline"}
+          size="sm"
+          onClick={() => handleItemsPerPageChange(value)}
+          className="h-8 px-3"
+        >
+          {value}
+        </Button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-4">
