@@ -90,6 +90,7 @@ const Brokers = () => {
   const [deleteBrokerName, setDeleteBrokerName] = useState<string>("");
   
   const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const queryClient = useQueryClient();
   
   // ✅ USAR PERMISSÃO DE SISTEMA em vez de role
@@ -190,14 +191,24 @@ const Brokers = () => {
 
   const toggleActiveMutation = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
+      const newStatus = !is_active;
       const { error } = await supabase
         .from("brokers")
-        .update({ is_active: !is_active })
+        .update({ is_active: newStatus })
         .eq("id", id);
       if (error) throw error;
+
+      // Ao desativar, remover corretor de todos os locais
+      if (!newStatus) {
+        await supabase
+          .from("location_brokers")
+          .delete()
+          .eq("broker_id", id);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["brokers"] });
+      queryClient.invalidateQueries({ queryKey: ["locations"] });
       toast.success("Status atualizado!");
     },
   });
@@ -253,10 +264,14 @@ const Brokers = () => {
   };
 
   const searchNormalized = normalizeText(debouncedSearch);
-  const filteredBrokers = brokers?.filter((broker) =>
-    normalizeText(broker.name).includes(searchNormalized) ||
-    normalizeText(broker.creci).includes(searchNormalized)
-  );
+  const filteredBrokers = brokers?.filter((broker) => {
+    // Filtro de status
+    if (statusFilter === "active" && !broker.is_active) return false;
+    if (statusFilter === "inactive" && broker.is_active) return false;
+    // Filtro de busca
+    return normalizeText(broker.name).includes(searchNormalized) ||
+      normalizeText(broker.creci).includes(searchNormalized);
+  });
 
   const sortedBrokers = [...(filteredBrokers || [])].sort((a, b) => {
     const aValue = a[sortColumn];
@@ -360,14 +375,33 @@ const Brokers = () => {
           )}
         </div>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nome ou CRECI..."
-            value={searchTerm}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-9"
-          />
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome ou CRECI..."
+              value={searchTerm}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <div className="flex items-center gap-1">
+            {([
+              { value: "all" as const, label: "Todos" },
+              { value: "active" as const, label: "Ativos" },
+              { value: "inactive" as const, label: "Inativos" },
+            ]).map((opt) => (
+              <Button
+                key={opt.value}
+                variant={statusFilter === opt.value ? "default" : "outline"}
+                size="sm"
+                onClick={() => { setStatusFilter(opt.value); setCurrentPage(1); }}
+                className="h-9"
+              >
+                {opt.label}
+              </Button>
+            ))}
+          </div>
         </div>
       </div>
 
