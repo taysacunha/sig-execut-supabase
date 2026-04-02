@@ -657,6 +657,33 @@ const SalesBrokers = () => {
                   ))}
                 </SelectContent>
               </Select>
+              {/* Show cascade option when team changed during edit */}
+              {editingBroker && formData.team_id !== originalTeamId && formData.team_id && (
+                <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2">
+                  <p className="text-sm font-medium text-foreground">
+                    Atualizar vendas existentes para a nova equipe?
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Selecione a partir de qual mês as vendas deste corretor devem ser migradas para a nova equipe.
+                  </p>
+                  <Select
+                    value={updateSalesFrom || "none"}
+                    onValueChange={(value) => setUpdateSalesFrom(value === "none" ? null : value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Não atualizar vendas" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Não atualizar vendas</SelectItem>
+                      {monthOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          A partir de {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
