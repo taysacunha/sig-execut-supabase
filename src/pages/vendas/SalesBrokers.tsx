@@ -102,8 +102,14 @@ const SalesBrokers = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteBroker, setDeleteBroker] = useState<SalesBroker | null>(null);
   const [editingBroker, setEditingBroker] = useState<SalesBroker | null>(null);
-  const [updateSalesFrom, setUpdateSalesFrom] = useState<string | null>(null);
+  const [cascadeYear, setCascadeYear] = useState<string>(new Date().getFullYear().toString());
+  const [cascadeMonth, setCascadeMonth] = useState<string | null>(null);
   const [originalTeamId, setOriginalTeamId] = useState<string | null>(null);
+
+  const updateSalesFrom = useMemo(() => {
+    if (cascadeMonth) return `${cascadeYear}-${cascadeMonth}`;
+    return null;
+  }, [cascadeYear, cascadeMonth]);
   const [formData, setFormData] = useState<BrokerFormData>({
     name: "",
     nome_exibicao: null,
