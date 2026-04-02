@@ -3,11 +3,6 @@ import { z } from "zod";
 const weekdayShiftAvailabilitySchema = z.record(
   z.string(), 
   z.array(z.enum(["morning", "afternoon"]))
-).refine(
-  (availability) => {
-    return Object.values(availability).some(shifts => shifts && shifts.length > 0);
-  },
-  { message: "Selecione pelo menos um dia e turno disponível" }
 );
 
 export const brokerSchema = z.object({

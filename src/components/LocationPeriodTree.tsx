@@ -1802,6 +1802,21 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
                               4: "thursday", 5: "friday", 6: "saturday",
                             };
 
+                            // 🗑️ Ao editar, limpar registros antigos antes de inserir os novos
+                            if (editingPeriodId) {
+                              const { error: delSpecific } = await supabase
+                                .from("period_specific_day_configs")
+                                .delete()
+                                .eq("period_id", editingPeriodId);
+                              if (delSpecific) throw delSpecific;
+
+                              const { error: delDay } = await supabase
+                                .from("period_day_configs")
+                                .delete()
+                                .eq("period_id", editingPeriodId);
+                              if (delDay) throw delDay;
+                            }
+
                             // 1️⃣ Processar dias úteis (seg-sex)
                             if (weekdayDates.length > 0) {
                               const uniqueWeekdays = Array.from(
