@@ -379,6 +379,15 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
     ? reportEvaluationsData.filter(e => e.nota > 0).reduce((acc, e) => acc + e.nota, 0) / reportEvaluationsData.filter(e => e.nota > 0).length
     : 0;
 
+  const formatCurrencyFull = (value: number) => {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  };
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
