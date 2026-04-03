@@ -12,6 +12,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
   DollarSign,
   FileText,
   Users,
@@ -20,6 +28,8 @@ import {
   Download,
   Loader2,
   Info,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -86,6 +96,7 @@ interface BrokerIndividualReportProps {
 
 export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualReportProps) {
   const [selectedBrokerId, setSelectedBrokerId] = useState<string>("");
+  const [brokerSearchOpen, setBrokerSearchOpen] = useState(false);
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear().toString());
   const [periodType, setPeriodType] = useState<PeriodType>("annual");
   const [selectedMonth, setSelectedMonth] = useState(() => String(new Date().getMonth() + 1).padStart(2, "0"));
@@ -369,6 +380,15 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
     ? reportEvaluationsData.filter(e => e.nota > 0).reduce((acc, e) => acc + e.nota, 0) / reportEvaluationsData.filter(e => e.nota > 0).length
     : 0;
 
+  const formatCurrencyFull = (value: number) => {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  };
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -487,19 +507,52 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
     <div className="space-y-6">
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-4">
-        <Select value={selectedBrokerId} onValueChange={setSelectedBrokerId}>
-          <SelectTrigger className="w-[250px]">
-            <SelectValue placeholder="Selecione um corretor" />
-          </SelectTrigger>
-          <SelectContent>
-            {brokers.map((broker: { id: string; name: string; sales_teams: { name: string } | null }) => (
-              <SelectItem key={broker.id} value={broker.id}>
-                {broker.name}
-                {broker.sales_teams && ` (${broker.sales_teams.name})`}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Popover open={brokerSearchOpen} onOpenChange={setBrokerSearchOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={brokerSearchOpen}
+              className="w-[280px] justify-between"
+            >
+              {selectedBrokerId
+                ? brokers.find((b: any) => b.id === selectedBrokerId)?.name || "Selecione..."
+                : "Selecione um corretor"}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[280px] p-0">
+            <Command>
+              <CommandInput placeholder="Buscar corretor..." />
+              <CommandList>
+                <CommandEmpty>Nenhum corretor encontrado.</CommandEmpty>
+                <CommandGroup>
+                  {brokers.map((broker: any) => (
+                    <CommandItem
+                      key={broker.id}
+                      value={broker.name + (broker.sales_teams?.name ? ` (${broker.sales_teams.name})` : "")}
+                      onSelect={() => {
+                        setSelectedBrokerId(broker.id);
+                        setBrokerSearchOpen(false);
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          selectedBrokerId === broker.id ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      {broker.name}
+                      {broker.sales_teams && (
+                        <span className="ml-1 text-muted-foreground text-xs">({broker.sales_teams.name})</span>
+                      )}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
 
         <Select value={selectedYear} onValueChange={setSelectedYear}>
           <SelectTrigger className="w-[100px]">
@@ -617,7 +670,7 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-xl font-bold text-primary">{formatCurrency(totalVGV)}</div>
+                <div className="text-xl font-bold text-primary">{formatCurrencyFull(totalVGV)}</div>
                 <Popover>
                   <PopoverTrigger asChild>
                     <p className="text-xs text-muted-foreground cursor-pointer hover:text-primary transition-colors underline">
