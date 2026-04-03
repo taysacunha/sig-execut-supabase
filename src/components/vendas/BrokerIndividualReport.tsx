@@ -636,7 +636,7 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-xl font-bold text-primary">{formatCurrency(totalVGV)}</div>
+                <div className="text-xl font-bold text-primary">{formatCurrencyFull(totalVGV)}</div>
                 <Popover>
                   <PopoverTrigger asChild>
                     <p className="text-xs text-muted-foreground cursor-pointer hover:text-primary transition-colors underline">
