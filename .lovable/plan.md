@@ -1,56 +1,31 @@
 
 
-## Plano: Garantir que corretores sem plantao aparecam no PDF
+## Plano: Campo de busca no seletor de corretor e VGV com valor completo
 
-### Problema
+### Alteracoes em `src/components/vendas/BrokerIndividualReport.tsx`
 
-A query `scheduleBrokers` (linha 151 de `Schedules.tsx`) busca da tabela `schedule_brokers` usando `selectedScheduleId`. Porem, `schedule_brokers` referencia a tabela legada `schedules(id)`, enquanto `selectedScheduleId` e um ID de `generated_schedules`. Resultado: a query sempre retorna vazio, e o PDF cai no fallback (linha 95-97 de `SchedulePDFGenerator.tsx`) que extrai corretores apenas dos assignments — excluindo quem nao tem plantao alocado, como Adjane.
+**1. VGV com valor completo (linha 372-378)**
 
-### Correcao
-
-Alterar a query `scheduleBrokers` em `Schedules.tsx` para buscar todos os corretores ativos (`is_active = true`) da tabela `brokers`, em vez de usar a tabela legada `schedule_brokers`. Assim, o PDF recebe a lista completa de corretores ativos e exibe todos, mesmo sem alocacoes.
-
-### Alteracao em `src/pages/Schedules.tsx` (linhas 150-164)
-
-Substituir a query atual:
+O `formatCurrency` usa `notation: "compact"`, que abrevia valores (ex: "R$ 1,2 mi" em vez de "R$ 1.200.000,00"). Remover essa opcao para exibir o valor completo com duas casas decimais no card VGV Total. Manter `formatCurrencyShort` para os graficos (labels curtos fazem sentido ali).
 
 ```typescript
-// ANTES: busca da tabela legada (sempre retorna vazio)
-const { data: scheduleBrokers = [] } = useQuery({
-  queryKey: ["schedule_brokers", selectedScheduleId],
-  queryFn: async () => {
-    ...from("schedule_brokers")...
-  },
-});
+// ANTES
+notation: "compact",
+
+// DEPOIS
+minimumFractionDigits: 2,
+maximumFractionDigits: 2,
 ```
 
-Por:
+Nota: o `formatCurrency` tambem e usado no eixo Y e tooltip dos graficos. Para evitar que os eixos fiquem com numeros muito longos, criar uma funcao separada `formatCurrencyFull` para o card, e manter `formatCurrency` com compact para graficos. Ou: usar `formatCurrencyFull` no card e tooltip, e manter compact no eixo Y.
 
-```typescript
-// DEPOIS: busca todos os corretores ativos
-const { data: scheduleBrokers = [] } = useQuery({
-  queryKey: ["brokers", "active-for-schedule"],
-  queryFn: async () => {
-    const { data, error } = await supabase
-      .from("brokers")
-      .select("id, name, creci")
-      .eq("is_active", true)
-      .order("name");
-    if (error) throw error;
-    return data || [];
-  },
-  staleTime: 5 * 60 * 1000,
-});
-```
+Abordagem: renomear `formatCurrency` atual para `formatCurrencyCompact`, criar novo `formatCurrency` sem compact (valor completo), usar o completo no card e tooltip, e o compact no eixo Y.
 
-### Resultado
+**2. Campo de busca no seletor de corretor (linhas 490-502)**
 
-- O `SchedulePDFGenerator` recebe `propBrokers` com todos os corretores ativos
-- Linha 95-96 usa `propBrokers` (nao vazio) em vez do fallback
-- Corretores sem alocacao aparecem no PDF com linha vazia e marcador `-`
-- Nenhum outro arquivo precisa ser alterado
+Substituir o `Select` por um `Popover` + `Command` (padrao cmdk ja instalado no projeto em `src/components/ui/command.tsx`). Isso adiciona um campo de busca integrado ao dropdown, permitindo filtrar corretores por nome.
 
 ### Arquivo alterado
 
-1. **`src/pages/Schedules.tsx`** — substituir query de `schedule_brokers` por query de `brokers` ativos
+1. **`src/components/vendas/BrokerIndividualReport.tsx`**
 
