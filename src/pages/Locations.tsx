@@ -205,7 +205,7 @@ const Locations = () => {
   });
 
   const { data: brokers } = useQuery({
-    queryKey: ["brokers"],
+    queryKey: ["brokers", "active"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("brokers")
