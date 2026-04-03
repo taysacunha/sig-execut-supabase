@@ -147,19 +147,18 @@ const Schedules = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  // ✅ Buscar corretores vinculados à escala (inclui quem tem agenda livre/sem alocações)
+  // ✅ Buscar todos os corretores ativos (garante que apareçam no PDF mesmo sem plantões)
   const { data: scheduleBrokers = [] } = useQuery({
-    queryKey: ["schedule_brokers", selectedScheduleId],
+    queryKey: ["brokers", "active-for-schedule"],
     queryFn: async () => {
-      if (!selectedScheduleId) return [];
       const { data, error } = await supabase
-        .from("schedule_brokers")
-        .select("broker:brokers(id, name, creci)")
-        .eq("schedule_id", selectedScheduleId);
+        .from("brokers")
+        .select("id, name, creci")
+        .eq("is_active", true)
+        .order("name");
       if (error) throw error;
-      return (data || []).map((r: any) => r.broker).filter(Boolean);
+      return data || [];
     },
-    enabled: !!selectedScheduleId,
     staleTime: 5 * 60 * 1000,
   });
 
