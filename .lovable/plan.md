@@ -1,35 +1,56 @@
 
 
-## Plano: Corrigir cache de corretores e limpeza de inativos nos locais
+## Plano: Garantir que corretores sem plantao aparecam no PDF
 
-### Bug 1: Inativos somem ao desativar corretor
+### Problema
 
-**Causa raiz**: `Brokers.tsx` e `Locations.tsx` usam a mesma `queryKey: ["brokers"]` mas com queries diferentes:
-- `Brokers.tsx`: busca TODOS os corretores (sem filtro `is_active`)
-- `Locations.tsx`: busca apenas ativos (`is_active: true`)
+A query `scheduleBrokers` (linha 151 de `Schedules.tsx`) busca da tabela `schedule_brokers` usando `selectedScheduleId`. Porem, `schedule_brokers` referencia a tabela legada `schedules(id)`, enquanto `selectedScheduleId` e um ID de `generated_schedules`. Resultado: a query sempre retorna vazio, e o PDF cai no fallback (linha 95-97 de `SchedulePDFGenerator.tsx`) que extrai corretores apenas dos assignments — excluindo quem nao tem plantao alocado, como Adjane.
 
-Quando React Query invalida `["brokers"]`, pode refazer a query errada ou retornar dados cacheados inconsistentes. Por isso, ao desativar um corretor, a lista "perde" os inativos.
+### Correcao
 
-**Correcao**: Separar as query keys:
-- `Brokers.tsx`: `queryKey: ["brokers", "all"]`
-- `Locations.tsx`: `queryKey: ["brokers", "active"]`
-- No `toggleActiveMutation`, invalidar ambas: `["brokers"]` (prefix match ja cobre as duas)
+Alterar a query `scheduleBrokers` em `Schedules.tsx` para buscar todos os corretores ativos (`is_active = true`) da tabela `brokers`, em vez de usar a tabela legada `schedule_brokers`. Assim, o PDF recebe a lista completa de corretores ativos e exibe todos, mesmo sem alocacoes.
 
-### Bug 2: Inativos ainda aparecem no dialog de editar local
+### Alteracao em `src/pages/Schedules.tsx` (linhas 150-164)
 
-**Causa raiz**: A limpeza de `location_brokers` ao desativar funciona para desativacoes FUTURAS, mas Joao Marcos e Daniella foram desativados ANTES desse codigo existir. Seus registros residuais em `location_brokers` ainda existem. O filtro `activeBrokerIds` no `openEditDialog` deveria resolver, mas como a query `["brokers"]` esta contaminada (bug 1), o Set de IDs ativos pode estar incorreto.
+Substituir a query atual:
 
-**Correcao**:
-1. Corrigir a query key resolve o filtro automaticamente
-2. Executar SQL de limpeza para remover registros residuais:
-```sql
-DELETE FROM location_brokers 
-WHERE broker_id IN (SELECT id FROM brokers WHERE is_active = false);
+```typescript
+// ANTES: busca da tabela legada (sempre retorna vazio)
+const { data: scheduleBrokers = [] } = useQuery({
+  queryKey: ["schedule_brokers", selectedScheduleId],
+  queryFn: async () => {
+    ...from("schedule_brokers")...
+  },
+});
 ```
 
-### Alteracoes
+Por:
 
-1. **`src/pages/Brokers.tsx`**: Mudar queryKey para `["brokers", "all"]`
-2. **`src/pages/Locations.tsx`**: Mudar queryKey para `["brokers", "active"]`
-3. **SQL de limpeza**: Deletar `location_brokers` de corretores inativos existentes
+```typescript
+// DEPOIS: busca todos os corretores ativos
+const { data: scheduleBrokers = [] } = useQuery({
+  queryKey: ["brokers", "active-for-schedule"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("brokers")
+      .select("id, name, creci")
+      .eq("is_active", true)
+      .order("name");
+    if (error) throw error;
+    return data || [];
+  },
+  staleTime: 5 * 60 * 1000,
+});
+```
+
+### Resultado
+
+- O `SchedulePDFGenerator` recebe `propBrokers` com todos os corretores ativos
+- Linha 95-96 usa `propBrokers` (nao vazio) em vez do fallback
+- Corretores sem alocacao aparecem no PDF com linha vazia e marcador `-`
+- Nenhum outro arquivo precisa ser alterado
+
+### Arquivo alterado
+
+1. **`src/pages/Schedules.tsx`** — substituir query de `schedule_brokers` por query de `brokers` ativos
 
