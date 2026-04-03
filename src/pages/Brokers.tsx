@@ -98,7 +98,7 @@ const Brokers = () => {
   const canEditEscalas = canEdit("escalas");
 
   const { data: brokers, isLoading } = useQuery({
-    queryKey: ["brokers"],
+    queryKey: ["brokers", "all"],
     queryFn: async () => {
       // Sempre buscar todos os corretores - RLS protege baseado em system_access
       const { data, error } = await supabase
