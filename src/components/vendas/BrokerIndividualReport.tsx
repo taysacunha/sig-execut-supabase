@@ -96,6 +96,7 @@ interface BrokerIndividualReportProps {
 
 export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualReportProps) {
   const [selectedBrokerId, setSelectedBrokerId] = useState<string>("");
+  const [brokerSearchOpen, setBrokerSearchOpen] = useState(false);
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear().toString());
   const [periodType, setPeriodType] = useState<PeriodType>("annual");
   const [selectedMonth, setSelectedMonth] = useState(() => String(new Date().getMonth() + 1).padStart(2, "0"));
