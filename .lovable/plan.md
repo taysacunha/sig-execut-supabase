@@ -1,25 +1,35 @@
 
 
-## Plano: Trocar lista longa por seletores de Mes e Ano
+## Plano: Corrigir cache de corretores e limpeza de inativos nos locais
 
-### Problema
+### Bug 1: Inativos somem ao desativar corretor
 
-O campo "Atualizar vendas a partir de" usa um `Select` com 24 meses listados, gerando uma lista gigante e confusa.
+**Causa raiz**: `Brokers.tsx` e `Locations.tsx` usam a mesma `queryKey: ["brokers"]` mas com queries diferentes:
+- `Brokers.tsx`: busca TODOS os corretores (sem filtro `is_active`)
+- `Locations.tsx`: busca apenas ativos (`is_active: true`)
 
-### Correcao
+Quando React Query invalida `["brokers"]`, pode refazer a query errada ou retornar dados cacheados inconsistentes. Por isso, ao desativar um corretor, a lista "perde" os inativos.
 
-Substituir o `Select` unico por dois selects lado a lado: um de **Mes** (Janeiro a Dezembro) e um de **Ano** (ultimos 3 anos). O valor final continua sendo montado como `yyyy-MM` para o `cascadeTeamFrom`.
+**Correcao**: Separar as query keys:
+- `Brokers.tsx`: `queryKey: ["brokers", "all"]`
+- `Locations.tsx`: `queryKey: ["brokers", "active"]`
+- No `toggleActiveMutation`, invalidar ambas: `["brokers"]` (prefix match ja cobre as duas)
 
-### Alteracoes em `src/pages/vendas/SalesBrokers.tsx`
+### Bug 2: Inativos ainda aparecem no dialog de editar local
 
-1. Trocar o estado `updateSalesFrom` (string `yyyy-MM`) por dois estados: `cascadeMonth` e `cascadeYear`, ou manter `updateSalesFrom` e compor ele a partir de dois selects separados
-2. Substituir o bloco do `Select` (linhas 669-684) por dois selects:
-   - **Ano**: anos de `currentYear - 2` ate `currentYear`
-   - **Mes**: Janeiro a Dezembro (valores "01" a "12")
-3. Adicionar opcao "Nao atualizar" como checkbox ou manter o comportamento: se ambos selecionados, monta `yyyy-MM`; se nao, `null`
-4. Reusar o componente `YearMonthSelector` que ja existe em `src/components/vendas/YearMonthSelector.tsx` — ele aceita `selectedYear`, `selectedMonth`, `onYearChange`, `onMonthChange` e resolve exatamente esse caso
+**Causa raiz**: A limpeza de `location_brokers` ao desativar funciona para desativacoes FUTURAS, mas Joao Marcos e Daniella foram desativados ANTES desse codigo existir. Seus registros residuais em `location_brokers` ainda existem. O filtro `activeBrokerIds` no `openEditDialog` deveria resolver, mas como a query `["brokers"]` esta contaminada (bug 1), o Set de IDs ativos pode estar incorreto.
 
-### Resultado
+**Correcao**:
+1. Corrigir a query key resolve o filtro automaticamente
+2. Executar SQL de limpeza para remover registros residuais:
+```sql
+DELETE FROM location_brokers 
+WHERE broker_id IN (SELECT id FROM brokers WHERE is_active = false);
+```
 
-Dois selects compactos (Ano + Mes) em vez de uma lista de 24 itens.
+### Alteracoes
+
+1. **`src/pages/Brokers.tsx`**: Mudar queryKey para `["brokers", "all"]`
+2. **`src/pages/Locations.tsx`**: Mudar queryKey para `["brokers", "active"]`
+3. **SQL de limpeza**: Deletar `location_brokers` de corretores inativos existentes
 
