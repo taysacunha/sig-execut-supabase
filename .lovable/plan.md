@@ -1,82 +1,53 @@
 
 
-## Plano: Alertas de elegibilidade nos fluxos manuais + indicador visual + filtro de inativos
+## Plano: Corrigir gerador ignorando datas desmarcadas no calendario (Nammos/Botanic)
 
-### Resumo
+### Causa raiz
 
-As alocacoes manuais continuam livres (sem bloqueio), mas o sistema passara a alertar quando o corretor nao esta vinculado/disponivel para o local escolhido. Alem disso, alocacoes feitas manualmente terao um indicador visual discreto. Corretores inativos serao filtrados de todos os fluxos manuais.
+Quando o usuario configura um local externo no modo `weekday` e usa o calendario para selecionar/desmarcar dias especificos, a UI salva os dias selecionados em **duas** tabelas:
+- `period_day_configs` — por dia da semana (ex: "monday", "tuesday")
+- `period_specific_day_configs` — por data especifica (ex: "2025-04-22")
 
-### 1. Coluna `is_manual` na tabela `schedule_assignments`
+Ao **desmarcar** o dia 21/04 no calendario, o registro de `period_specific_day_configs` para essa data e removido. Porem, o gerador de escalas para locais no modo `weekday` funciona assim (linha 3174-3199):
 
-**Migration SQL**: adicionar coluna booleana `is_manual` com default `false`.
+1. Procura config especifica para a data → se encontrar, usa
+2. Se NAO encontrar E modo = `specific_date` → pula a data
+3. Se NAO encontrar E modo = `weekday` → **usa `period_day_configs` pelo dia da semana**
 
-```sql
-ALTER TABLE schedule_assignments ADD COLUMN is_manual boolean NOT NULL DEFAULT false;
+No passo 3, como 21/04 e uma segunda-feira e "monday" esta configurado em `period_day_configs` (porque outras segundas estao selecionadas), o gerador **cria demanda para 21/04 mesmo estando desmarcado**.
+
+Em resumo: desmarcar uma data especifica no calendario nao tem efeito na geracao para locais `weekday`, porque o gerador ignora a ausencia e usa o fallback por dia da semana.
+
+### Correcao
+
+Alterar o gerador em `src/lib/scheduleGenerator.ts` para que, quando um periodo possui registros em `period_specific_day_configs`, esses registros funcionem como **whitelist**: se a data nao esta na lista, pular — independente do `shift_config_mode`.
+
+**Logica nova** (entre linhas 3174 e 3180):
+
+```
+// Verificar se este periodo tem configs especificas cadastradas
+const periodHasSpecificConfigs = allSpecificConfigs?.some(c => c.period_id === activePeriod.id);
+
+const specificConfig = specificConfigsMap.get(`${activePeriod.id}-${dateStr}`);
+
+if (specificConfig) {
+  // usar config especifica (sem mudanca)
+} else if (location.shift_config_mode === 'specific_date') {
+  continue; // pular (sem mudanca)
+} else if (periodHasSpecificConfigs) {
+  // NOVO: periodo tem whitelist de datas especificas,
+  // mas esta data NAO esta na lista → pular
+  continue;
+} else {
+  // usar period_day_configs por weekday (sem mudanca)
+}
 ```
 
-Isso permite distinguir alocacoes do gerador automatico (false) de edicoes manuais (true).
+Para performance, pre-computar um `Set` de period_ids que possuem configs especificas, em vez de iterar `allSpecificConfigs` a cada data.
 
-### 2. Marcar alocacoes manuais nas mutations
+A mesma correcao deve ser aplicada na funcao `detectUnallocatedDemands` (linha ~5120) para manter consistencia entre geracao e validacao.
 
-Em `src/pages/Schedules.tsx`, adicionar `is_manual: true` nos seguintes pontos:
+### Arquivo alterado
 
-- `addAssignmentMutation` (insert) — linha 619
-- `editLocationMutation` (update) — linhas 547, 554, 563
-- `swapShiftsMutation` (update) — linhas 659, 667
-- `updateBrokerMutation` (update) — linha 310
-- `swapBrokersMutation` (update) — linha 268
-
-### 3. Indicador visual na tabela de alocacoes
-
-Em `src/pages/Schedules.tsx`, na renderizacao da tabela de alocacoes, exibir um pequeno icone ou badge discreto (ex: icone de "mao" ou "M") ao lado do nome do corretor quando `assignment.is_manual === true`. Tooltip: "Alocacao manual".
-
-### 4. Alerta de elegibilidade no EditAssignmentDialog
-
-Em `src/components/EditAssignmentDialog.tsx`:
-
-- Buscar `location_brokers` para o corretor da alocacao atual
-- Ao selecionar um local, verificar se o corretor esta vinculado a esse local via `location_brokers`
-- Se NAO estiver vinculado: abrir AlertDialog de aviso ("O corretor X nao esta configurado como disponivel para o local Y. Deseja continuar?") com opcoes Cancelar/Prosseguir
-- Se estiver vinculado mas nao tiver o turno/dia disponivel: alertar tambem
-- Prosseguir salva normalmente
-
-### 5. Alerta de elegibilidade no ScheduleSwapDialog
-
-Em `src/components/ScheduleSwapDialog.tsx`:
-
-- Buscar `location_brokers` dos dois corretores envolvidos
-- Antes de confirmar a troca, verificar se:
-  - Corretor A esta vinculado ao local do Corretor B
-  - Corretor B esta vinculado ao local do Corretor A
-- Se algum nao estiver: mostrar aviso no dialog de confirmacao (texto amarelo, ex: "⚠ Corretor X nao esta disponivel para o local Y")
-- O usuario pode prosseguir mesmo assim
-
-### 6. Alerta no ScheduleReplacementDialog
-
-Em `src/components/ScheduleReplacementDialog.tsx`:
-
-- No dialog de confirmacao, verificar elegibilidade do corretor selecionado para o local externo
-- Se nao elegivel: adicionar aviso visual antes dos botoes
-
-### 7. Filtrar inativos em todos os fluxos manuais
-
-- `getAvailableBrokersForShift` (`src/lib/scheduleGenerator.ts` linha 5201): adicionar `.eq("brokers.is_active", true)` ou filtrar no JS
-- `getBrokersFromInternalShift`: ja filtra por assignments existentes, mas adicionar filtro `broker.is_active`
-- `ScheduleSwapDialog`: a query ja busca de assignments, mas filtrar `broker.is_active` no resultado
-- `EditAssignmentDialog`: nao lista corretores, lista locais — OK
-- `AddAssignmentDialog`: ja busca brokers ativos (verificar)
-
-### 8. Atualizar types.ts
-
-Regenerar ou adicionar manualmente `is_manual` ao tipo `schedule_assignments` em `src/integrations/supabase/types.ts`.
-
-### Arquivos alterados
-
-1. **Migration SQL** — nova coluna `is_manual`
-2. **`src/integrations/supabase/types.ts`** — adicionar campo
-3. **`src/pages/Schedules.tsx`** — marcar `is_manual: true` nas mutations + indicador visual na tabela
-4. **`src/components/EditAssignmentDialog.tsx`** — buscar `location_brokers`, alertar se nao elegivel
-5. **`src/components/ScheduleSwapDialog.tsx`** — buscar `location_brokers` dos dois corretores, alertar na confirmacao
-6. **`src/components/ScheduleReplacementDialog.tsx`** — alertar elegibilidade na confirmacao
-7. **`src/lib/scheduleGenerator.ts`** — filtrar `is_active` em `getAvailableBrokersForShift` e `getBrokersFromInternalShift`
+1. **`src/lib/scheduleGenerator.ts`** — adicionar verificacao de whitelist por periodo nas duas funcoes (geracao + validacao)
 
