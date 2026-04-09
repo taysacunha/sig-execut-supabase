@@ -1642,7 +1642,7 @@ function findBrokerForDemand(
   // REGRA SUPREMA: ÚNICO CORRETOR CONFIGURADO - SUPERA TODAS AS OUTRAS REGRAS!
   // ═══════════════════════════════════════════════════════════════════════════
   const locationData = context.externalLocations?.find(l => l.id === demand.locationId);
-  const configuredBrokersCount = locationData?.location_brokers?.length || 0;
+  const configuredBrokersCount = locationData?.location_brokers?.filter((lb: any) => context.activeBrokerIdsSet.has(lb.broker_id))?.length || 0;
   
   if (configuredBrokersCount === 1 && demand.eligibleBrokerIds.length === 1) {
     const onlyBrokerId = demand.eligibleBrokerIds[0];
