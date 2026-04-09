@@ -2448,6 +2448,7 @@ export type Database = {
           end_time: string
           generated_schedule_id: string
           id: string
+          is_manual: boolean
           location_id: string
           shift_type: string
           start_time: string
@@ -2460,6 +2461,7 @@ export type Database = {
           end_time: string
           generated_schedule_id: string
           id?: string
+          is_manual?: boolean
           location_id: string
           shift_type: string
           start_time: string
@@ -2472,6 +2474,7 @@ export type Database = {
           end_time?: string
           generated_schedule_id?: string
           id?: string
+          is_manual?: boolean
           location_id?: string
           shift_type?: string
           start_time?: string
