@@ -2062,7 +2062,12 @@ const Schedules = () => {
                           className="font-medium"
                           style={{ color: isExternal ? "#dc2626" : "inherit" }}
                         >
-                          {assignment.broker?.name}
+                          <span className="inline-flex items-center gap-1">
+                            {assignment.broker?.name}
+                            {(assignment as any).is_manual && (
+                              <span title="Alocação manual" className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 text-[10px] font-bold cursor-help">M</span>
+                            )}
+                          </span>
                         </TableCell>
                         <TableCell
                           style={{ color: isExternal ? "#dc2626" : "inherit" }}
