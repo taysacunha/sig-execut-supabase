@@ -3454,7 +3454,8 @@ async function generateWeeklyScheduleWithAccumulator(
     dailyBessaExternalCount: new Map<string, number>(),
     // NOVOS: Contadores mensais para balanceamento de domingo
     monthSundayCount: accumulator.monthSundayCount || {},
-    monthSundayAtLocation: accumulator.monthSundayAtLocation || {}
+    monthSundayAtLocation: accumulator.monthSundayAtLocation || {},
+    activeBrokerIdsSet,
   };
 
   // Passes de alocação
