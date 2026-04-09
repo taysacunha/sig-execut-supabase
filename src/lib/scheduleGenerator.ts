@@ -2962,6 +2962,7 @@ async function generateWeeklyScheduleWithAccumulator(
   const brokerExternalLocationCounts = new Map<string, number>();
   for (const location of externalLocations || []) {
     for (const lb of location.location_brokers || []) {
+      if (!activeBrokerIdsSet.has(lb.broker_id)) continue; // Pular inativos
       const currentCount = brokerExternalLocationCounts.get(lb.broker_id) || 0;
       brokerExternalLocationCounts.set(lb.broker_id, currentCount + 1);
     }
@@ -3214,6 +3215,7 @@ async function generateWeeklyScheduleWithAccumulator(
 
       const locationBrokerMap = new Map<string, { available_morning: boolean; available_afternoon: boolean }>();
       for (const lb of location.location_brokers || []) {
+        if (!activeBrokerIdsSet.has(lb.broker_id)) continue; // Pular inativos
         locationBrokerMap.set(lb.broker_id, {
           available_morning: isBrokerAvailableForShift(lb, "morning", dayOfWeek),
           available_afternoon: isBrokerAvailableForShift(lb, "afternoon", dayOfWeek)
@@ -3225,6 +3227,7 @@ async function generateWeeklyScheduleWithAccumulator(
       if (hasMorning) {
         const eligibleIds: string[] = [];
         for (const lb of location.location_brokers || []) {
+          if (!activeBrokerIdsSet.has(lb.broker_id)) continue; // Pular inativos
           const result = isBrokerAvailableForShiftWithReason(lb, "morning", dayOfWeek);
           if (!result.available) {
             // Registrar exclusão de elegibilidade
@@ -3260,6 +3263,7 @@ async function generateWeeklyScheduleWithAccumulator(
       if (hasAfternoon) {
         const eligibleIds: string[] = [];
         for (const lb of location.location_brokers || []) {
+          if (!activeBrokerIdsSet.has(lb.broker_id)) continue; // Pular inativos
           const result = isBrokerAvailableForShiftWithReason(lb, "afternoon", dayOfWeek);
           if (!result.available) {
             const brokerId = lb.broker_id;
