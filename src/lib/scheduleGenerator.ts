@@ -257,25 +257,17 @@ interface AllocationContext {
   saturdayBessaExternalCount: Map<string, number>;
   lastWeekExternals: { brokerId: string; date: string }[];
   allocatedExternalDays: Map<string, Set<string>>;
-  // NOVO: Mapa de reservas obrigatórias
   mandatoryReservations: ReservationMap;
-  // NOVO: Corretores pré-identificados para trabalhar sábado interno (Tambaú)
   saturdayInternalWorkers: Set<string>;
-  // NOVO: Corretores que foram alocados para sábado EXTERNO (target = 1 externo após isso)
   saturdayExternalWorkers: Set<string>;
-  // NOVO: Filas de rotação por local externo
   locationRotationQueues: Map<string, LocationRotationQueueItem[]>;
-  // NOVO: Rastrear alocações para atualizar filas
   locationAllocationsForQueueUpdate: Array<{ location_id: string; broker_id: string; assignment_date: string }>;
-  // NOVO: IDs de locais internos para verificar regra de fim de semana
   internalLocationIds?: Set<string>;
-  // NOVO: Contador diário de corretores do Bessa com externos (para proteção em dias de semana)
   dailyBessaExternalCount: Map<string, number>;
-  // ═══════════════════════════════════════════════════════════
-  // NOVOS CONTADORES MENSAIS para balanceamento de domingo
-  // ═══════════════════════════════════════════════════════════
   monthSundayCount?: { [brokerId: string]: number };
   monthSundayAtLocation?: { [locationId: string]: { [brokerId: string]: number } };
+  // SET de IDs de corretores ativos para filtrar location_brokers residuais
+  activeBrokerIdsSet: Set<string>;
 }
 
 const MAX_EXTERNAL_SHIFTS_PER_WEEK = 2;
