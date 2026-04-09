@@ -3969,7 +3969,7 @@ async function generateWeeklyScheduleWithAccumulator(
       const alreadyAllocatedBrokerIds = new Set(alreadyAllocated.map(a => a.broker_id));
       
       // Corretores do local
-      const locationBrokers = internalLocation.location_brokers || [];
+      const locationBrokers = (internalLocation.location_brokers || []).filter((lb: any) => activeBrokerIdsSet.has(lb.broker_id));
       const locationBrokerIds = new Set(locationBrokers.map((lb: any) => lb.broker_id));
       
       // ═══════════════════════════════════════════════════════════
@@ -4708,7 +4708,7 @@ async function generateWeeklyScheduleWithAccumulator(
       console.log(`\n   📍 Processando ${locationName}...`);
       
       // Corretores configurados para este local interno
-      const locationBrokers = internalLocation.location_brokers || [];
+      const locationBrokers = (internalLocation.location_brokers || []).filter((lb: any) => activeBrokerIdsSet.has(lb.broker_id));
       if (locationBrokers.length === 0) {
         console.log(`   ⚠️ ${locationName}: sem corretores configurados`);
         continue;
