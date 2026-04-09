@@ -5169,7 +5169,7 @@ export async function getBrokersFromInternalShift(
 ): Promise<any[]> {
   const { data: internalAssignments, error } = await supabase
     .from("schedule_assignments")
-    .select(`id, broker_id, location_id, shift_type, start_time, end_time, broker:brokers(id, name, creci), location:locations(id, name, location_type)`)
+    .select(`id, broker_id, location_id, shift_type, start_time, end_time, broker:brokers(id, name, creci, is_active), location:locations(id, name, location_type)`)
     .eq("generated_schedule_id", generatedScheduleId)
     .eq("assignment_date", date)
     .eq("shift_type", shiftType);
@@ -5179,7 +5179,7 @@ export async function getBrokersFromInternalShift(
     return [];
   }
 
-  return internalAssignments?.filter((a: any) => a.location?.location_type === "internal") || [];
+  return internalAssignments?.filter((a: any) => a.location?.location_type === "internal" && a.broker?.is_active !== false) || [];
 }
 
 export async function getAvailableBrokersForShift(
@@ -5198,7 +5198,7 @@ export async function getAvailableBrokersForShift(
       available_morning, 
       available_afternoon,
       weekday_shift_availability,
-      brokers (id, name, creci, available_weekdays)
+      brokers (id, name, creci, available_weekdays, is_active)
     `)
     .eq("location_id", locationId);
 
@@ -5223,6 +5223,7 @@ export async function getAvailableBrokersForShift(
   const availableBrokers = locationBrokers?.filter((lb: any) => {
     const broker = lb.brokers;
     if (!broker) return false;
+    if (!broker.is_active) return false;
     
     if (!broker.available_weekdays?.includes(dayOfWeek)) return false;
     

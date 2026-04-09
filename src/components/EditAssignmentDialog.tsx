@@ -24,7 +24,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, MapPin, ArrowRight } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, MapPin, ArrowRight, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 
 interface Assignment {
@@ -60,6 +61,9 @@ export function EditAssignmentDialog({
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
   const [conflictDialogOpen, setConflictDialogOpen] = useState(false);
   const [conflictAssignment, setConflictAssignment] = useState<Assignment | null>(null);
+  const [eligibilityWarningOpen, setEligibilityWarningOpen] = useState(false);
+  const [pendingLocationId, setPendingLocationId] = useState<string | null>(null);
+  const [pendingLocationName, setPendingLocationName] = useState<string>("");
 
   // Reset state when dialog opens
   useEffect(() => {
@@ -67,8 +71,24 @@ export function EditAssignmentDialog({
       setSearchTerm("");
       setSelectedLocationId(null);
       setConflictAssignment(null);
+      setPendingLocationId(null);
     }
   }, [open]);
+
+  // Fetch broker's eligible locations
+  const { data: brokerLocationIds } = useQuery({
+    queryKey: ["broker-location-ids", assignment?.broker_id],
+    queryFn: async () => {
+      if (!assignment?.broker_id) return [];
+      const { data, error } = await supabase
+        .from("location_brokers")
+        .select("location_id")
+        .eq("broker_id", assignment.broker_id);
+      if (error) throw error;
+      return data?.map((lb: any) => lb.location_id) || [];
+    },
+    enabled: open && !!assignment?.broker_id,
+  });
 
   // Fetch available locations for this day/shift
   const { data: availableLocations, isLoading } = useQuery({
@@ -81,7 +101,6 @@ export function EditAssignmentDialog({
       const weekdays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
       const dayOfWeek = weekdays[dayOfWeekNum];
 
-      // Fetch locations with their configurations
       const { data: locations, error } = await supabase
         .from("locations")
         .select(`
@@ -95,15 +114,12 @@ export function EditAssignmentDialog({
 
       if (error) throw error;
 
-      // Fetch specific day configs
       const { data: specificConfigs } = await supabase
         .from("period_specific_day_configs")
         .select("*")
         .eq("specific_date", dateStr);
 
-      // Filter locations that have shifts configured for this day
       const validLocations = locations?.filter((loc: any) => {
-        // Check specific config first
         const specificConfig = specificConfigs?.find((sc: any) => {
           const period = loc.location_periods?.find((p: any) => p.id === sc.period_id);
           return period !== undefined;
@@ -115,7 +131,6 @@ export function EditAssignmentDialog({
             : specificConfig.has_afternoon;
         }
 
-        // Check period day config
         const date = new Date(dateStr + "T00:00:00");
         const period = loc.location_periods?.find((p: any) => {
           const start = new Date(p.start_date + "T00:00:00");
@@ -144,10 +159,14 @@ export function EditAssignmentDialog({
     normalizeText(loc.city || "").includes(normalizedSearch)
   );
 
-  const handleLocationSelect = (locationId: string) => {
+  const isBrokerEligible = (locationId: string): boolean => {
+    if (!brokerLocationIds) return true; // Still loading, assume eligible
+    return brokerLocationIds.includes(locationId);
+  };
+
+  const proceedWithSave = (locationId: string) => {
     if (!assignment) return;
 
-    // Check for conflict
     const conflict = allAssignments.find(
       (a) =>
         a.location_id === locationId &&
@@ -161,11 +180,32 @@ export function EditAssignmentDialog({
       setConflictAssignment(conflict);
       setConflictDialogOpen(true);
     } else {
-      // No conflict, save directly
       if (assignment.id) {
         onSave({ assignmentId: assignment.id, newLocationId: locationId });
         onOpenChange(false);
       }
+    }
+  };
+
+  const handleLocationSelect = (locationId: string, locationName: string) => {
+    if (!assignment) return;
+
+    // Check eligibility for external locations
+    const loc = availableLocations?.find((l: any) => l.id === locationId);
+    if (loc?.location_type === "external" && !isBrokerEligible(locationId)) {
+      setPendingLocationId(locationId);
+      setPendingLocationName(locationName);
+      setEligibilityWarningOpen(true);
+      return;
+    }
+
+    proceedWithSave(locationId);
+  };
+
+  const handleEligibilityConfirm = () => {
+    setEligibilityWarningOpen(false);
+    if (pendingLocationId) {
+      proceedWithSave(pendingLocationId);
     }
   };
 
@@ -198,7 +238,6 @@ export function EditAssignmentDialog({
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* Current assignment info */}
             <div className="p-3 bg-muted rounded-lg">
               <p className="text-sm font-medium">Alocação Atual:</p>
               <div className="flex items-center gap-2 mt-1">
@@ -209,7 +248,6 @@ export function EditAssignmentDialog({
               </div>
             </div>
 
-            {/* Search */}
             <div>
               <Label htmlFor="search-location">Buscar Local</Label>
               <Input
@@ -220,7 +258,6 @@ export function EditAssignmentDialog({
               />
             </div>
 
-            {/* Location list */}
             <div>
               <Label>Selecione o Novo Local</Label>
               {isLoading ? (
@@ -244,17 +281,20 @@ export function EditAssignmentDialog({
                             a.shift_type === assignment.shift_type &&
                             a.id !== assignment.id
                         );
+                        const notEligible = loc.location_type === "external" && !isBrokerEligible(loc.id);
 
                         return (
                           <button
                             key={loc.id}
                             disabled={isCurrent}
-                            onClick={() => handleLocationSelect(loc.id)}
+                            onClick={() => handleLocationSelect(loc.id, loc.name)}
                             className={`w-full p-3 text-left rounded-md transition-colors ${
                               isCurrent
                                 ? "bg-muted opacity-50 cursor-not-allowed"
                                 : hasConflict
                                 ? "hover:bg-amber-50 dark:hover:bg-amber-950 border border-amber-200 dark:border-amber-800"
+                                : notEligible
+                                ? "hover:bg-orange-50 dark:hover:bg-orange-950 border border-orange-200 dark:border-orange-800"
                                 : "hover:bg-accent"
                             }`}
                           >
@@ -271,14 +311,22 @@ export function EditAssignmentDialog({
                                   <p className="text-xs text-muted-foreground ml-6">{loc.city}</p>
                                 )}
                               </div>
-                              {hasConflict && (
-                                <Badge variant="outline" className="text-amber-600 border-amber-400">
-                                  Ocupado
-                                </Badge>
-                              )}
-                              {isCurrent && (
-                                <Badge variant="secondary">Atual</Badge>
-                              )}
+                              <div className="flex items-center gap-1">
+                                {notEligible && (
+                                  <Badge variant="outline" className="text-orange-600 border-orange-400 text-xs">
+                                    <AlertTriangle className="h-3 w-3 mr-1" />
+                                    Não vinculado
+                                  </Badge>
+                                )}
+                                {hasConflict && (
+                                  <Badge variant="outline" className="text-amber-600 border-amber-400">
+                                    Ocupado
+                                  </Badge>
+                                )}
+                                {isCurrent && (
+                                  <Badge variant="secondary">Atual</Badge>
+                                )}
+                              </div>
                             </div>
                           </button>
                         );
@@ -291,6 +339,37 @@ export function EditAssignmentDialog({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Eligibility warning dialog */}
+      <AlertDialog open={eligibilityWarningOpen} onOpenChange={setEligibilityWarningOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Corretor Não Vinculado
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  O corretor <strong className="text-foreground">{assignment.broker?.name}</strong> não está configurado como disponível para o local <strong className="text-foreground">{pendingLocationName}</strong>.
+                </p>
+                <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950 dark:border-amber-800">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-amber-700 dark:text-amber-400 text-sm">
+                    Esta alocação será marcada como manual. Deseja continuar mesmo assim?
+                  </AlertDescription>
+                </Alert>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleEligibilityConfirm}>
+              Prosseguir Mesmo Assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Conflict confirmation dialog */}
       <AlertDialog open={conflictDialogOpen} onOpenChange={setConflictDialogOpen}>

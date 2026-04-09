@@ -41,7 +41,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, Loader2, Edit, Trash2, FileText, ArrowUpDown, AlertCircle, MapPin, Plus, ArrowLeftRight, ClipboardCheck, RefreshCw, Lock } from "lucide-react";
+import { Calendar, Loader2, Edit, Trash2, FileText, ArrowUpDown, AlertCircle, MapPin, Plus, ArrowLeftRight, ClipboardCheck, RefreshCw, Lock, Hand } from "lucide-react";
 import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -266,7 +266,7 @@ const Schedules = () => {
       // 1. Atualizar o plantão EXTERNO com o novo corretor
       const { error: updateError } = await supabase
         .from("schedule_assignments")
-        .update({ broker_id: newBrokerId })
+        .update({ broker_id: newBrokerId, is_manual: true } as any)
         .eq("id", externalAssignmentId);
       
       if (updateError) throw updateError;
@@ -307,7 +307,7 @@ const Schedules = () => {
 
       const { error } = await supabase
         .from("schedule_assignments")
-        .update({ broker_id: newBrokerId })
+        .update({ broker_id: newBrokerId, is_manual: true } as any)
         .eq("id", assignmentId);
       
       if (error) throw error;
@@ -544,14 +544,14 @@ const Schedules = () => {
         // Atualizar a primeira alocação para o novo local
         const { error: err1 } = await supabase
           .from("schedule_assignments")
-          .update({ location_id: newLocationId })
+          .update({ location_id: newLocationId, is_manual: true } as any)
           .eq("id", assignmentId);
         if (err1) throw err1;
         
         // Atualizar a segunda alocação para o local antigo da primeira
         const { error: err2 } = await supabase
           .from("schedule_assignments")
-          .update({ location_id: currentAssignment.location_id })
+          .update({ location_id: currentAssignment.location_id, is_manual: true } as any)
           .eq("id", conflictAssignmentId);
         if (err2) throw err2;
         
@@ -560,7 +560,7 @@ const Schedules = () => {
         // Apenas atualizar o local
         const { error } = await supabase
           .from("schedule_assignments")
-          .update({ location_id: newLocationId })
+          .update({ location_id: newLocationId, is_manual: true } as any)
           .eq("id", assignmentId);
         if (error) throw error;
         console.log(`✅ Local atualizado`);
@@ -624,7 +624,8 @@ const Schedules = () => {
           shift_type: shift,
           start_time: startTime,
           end_time: endTime,
-        }]);
+          is_manual: true,
+        } as any]);
       
       if (error) throw error;
       console.log(`✅ Alocação adicionada/substituída`);
@@ -656,7 +657,7 @@ const Schedules = () => {
       // Atualizar assignment A com o local do B
       const { error: errorA } = await supabase
         .from("schedule_assignments")
-        .update({ location_id: assignmentB.location_id })
+        .update({ location_id: assignmentB.location_id, is_manual: true } as any)
         .eq("id", assignmentA.id);
       
       if (errorA) throw errorA;
@@ -664,7 +665,7 @@ const Schedules = () => {
       // Atualizar assignment B com o local do A
       const { error: errorB } = await supabase
         .from("schedule_assignments")
-        .update({ location_id: assignmentA.location_id })
+        .update({ location_id: assignmentA.location_id, is_manual: true } as any)
         .eq("id", assignmentB.id);
       
       if (errorB) throw errorB;
@@ -2061,7 +2062,12 @@ const Schedules = () => {
                           className="font-medium"
                           style={{ color: isExternal ? "#dc2626" : "inherit" }}
                         >
-                          {assignment.broker?.name}
+                          <span className="inline-flex items-center gap-1">
+                            {assignment.broker?.name}
+                            {(assignment as any).is_manual && (
+                              <span title="Alocação manual" className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 text-[10px] font-bold cursor-help">M</span>
+                            )}
+                          </span>
                         </TableCell>
                         <TableCell
                           style={{ color: isExternal ? "#dc2626" : "inherit" }}
