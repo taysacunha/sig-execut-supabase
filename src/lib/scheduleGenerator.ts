@@ -257,25 +257,17 @@ interface AllocationContext {
   saturdayBessaExternalCount: Map<string, number>;
   lastWeekExternals: { brokerId: string; date: string }[];
   allocatedExternalDays: Map<string, Set<string>>;
-  // NOVO: Mapa de reservas obrigatórias
   mandatoryReservations: ReservationMap;
-  // NOVO: Corretores pré-identificados para trabalhar sábado interno (Tambaú)
   saturdayInternalWorkers: Set<string>;
-  // NOVO: Corretores que foram alocados para sábado EXTERNO (target = 1 externo após isso)
   saturdayExternalWorkers: Set<string>;
-  // NOVO: Filas de rotação por local externo
   locationRotationQueues: Map<string, LocationRotationQueueItem[]>;
-  // NOVO: Rastrear alocações para atualizar filas
   locationAllocationsForQueueUpdate: Array<{ location_id: string; broker_id: string; assignment_date: string }>;
-  // NOVO: IDs de locais internos para verificar regra de fim de semana
   internalLocationIds?: Set<string>;
-  // NOVO: Contador diário de corretores do Bessa com externos (para proteção em dias de semana)
   dailyBessaExternalCount: Map<string, number>;
-  // ═══════════════════════════════════════════════════════════
-  // NOVOS CONTADORES MENSAIS para balanceamento de domingo
-  // ═══════════════════════════════════════════════════════════
   monthSundayCount?: { [brokerId: string]: number };
   monthSundayAtLocation?: { [locationId: string]: { [brokerId: string]: number } };
+  // SET de IDs de corretores ativos para filtrar location_brokers residuais
+  activeBrokerIdsSet: Set<string>;
 }
 
 const MAX_EXTERNAL_SHIFTS_PER_WEEK = 2;
@@ -1650,7 +1642,7 @@ function findBrokerForDemand(
   // REGRA SUPREMA: ÚNICO CORRETOR CONFIGURADO - SUPERA TODAS AS OUTRAS REGRAS!
   // ═══════════════════════════════════════════════════════════════════════════
   const locationData = context.externalLocations?.find(l => l.id === demand.locationId);
-  const configuredBrokersCount = locationData?.location_brokers?.length || 0;
+  const configuredBrokersCount = locationData?.location_brokers?.filter((lb: any) => context.activeBrokerIdsSet.has(lb.broker_id))?.length || 0;
   
   if (configuredBrokersCount === 1 && demand.eligibleBrokerIds.length === 1) {
     const onlyBrokerId = demand.eligibleBrokerIds[0];
@@ -2726,6 +2718,12 @@ async function generateWeeklyScheduleWithAccumulator(
     return [];
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // SET GLOBAL DE CORRETORES ATIVOS
+  // Usado para filtrar location_brokers residuais de corretores inativos
+  // ═══════════════════════════════════════════════════════════
+  const activeBrokerIdsSet = new Set(allBrokers.map((b: any) => b.id));
+
   const [
     { data: internalLocations },
     { data: locationBrokersData }
@@ -2956,6 +2954,7 @@ async function generateWeeklyScheduleWithAccumulator(
   const brokerExternalLocationCounts = new Map<string, number>();
   for (const location of externalLocations || []) {
     for (const lb of location.location_brokers || []) {
+      if (!activeBrokerIdsSet.has(lb.broker_id)) continue; // Pular inativos
       const currentCount = brokerExternalLocationCounts.get(lb.broker_id) || 0;
       brokerExternalLocationCounts.set(lb.broker_id, currentCount + 1);
     }
@@ -3208,6 +3207,7 @@ async function generateWeeklyScheduleWithAccumulator(
 
       const locationBrokerMap = new Map<string, { available_morning: boolean; available_afternoon: boolean }>();
       for (const lb of location.location_brokers || []) {
+        if (!activeBrokerIdsSet.has(lb.broker_id)) continue; // Pular inativos
         locationBrokerMap.set(lb.broker_id, {
           available_morning: isBrokerAvailableForShift(lb, "morning", dayOfWeek),
           available_afternoon: isBrokerAvailableForShift(lb, "afternoon", dayOfWeek)
@@ -3219,6 +3219,7 @@ async function generateWeeklyScheduleWithAccumulator(
       if (hasMorning) {
         const eligibleIds: string[] = [];
         for (const lb of location.location_brokers || []) {
+          if (!activeBrokerIdsSet.has(lb.broker_id)) continue; // Pular inativos
           const result = isBrokerAvailableForShiftWithReason(lb, "morning", dayOfWeek);
           if (!result.available) {
             // Registrar exclusão de elegibilidade
@@ -3254,6 +3255,7 @@ async function generateWeeklyScheduleWithAccumulator(
       if (hasAfternoon) {
         const eligibleIds: string[] = [];
         for (const lb of location.location_brokers || []) {
+          if (!activeBrokerIdsSet.has(lb.broker_id)) continue; // Pular inativos
           const result = isBrokerAvailableForShiftWithReason(lb, "afternoon", dayOfWeek);
           if (!result.available) {
             const brokerId = lb.broker_id;
@@ -3452,7 +3454,8 @@ async function generateWeeklyScheduleWithAccumulator(
     dailyBessaExternalCount: new Map<string, number>(),
     // NOVOS: Contadores mensais para balanceamento de domingo
     monthSundayCount: accumulator.monthSundayCount || {},
-    monthSundayAtLocation: accumulator.monthSundayAtLocation || {}
+    monthSundayAtLocation: accumulator.monthSundayAtLocation || {},
+    activeBrokerIdsSet,
   };
 
   // Passes de alocação
@@ -3959,7 +3962,7 @@ async function generateWeeklyScheduleWithAccumulator(
       const alreadyAllocatedBrokerIds = new Set(alreadyAllocated.map(a => a.broker_id));
       
       // Corretores do local
-      const locationBrokers = internalLocation.location_brokers || [];
+      const locationBrokers = (internalLocation.location_brokers || []).filter((lb: any) => activeBrokerIdsSet.has(lb.broker_id));
       const locationBrokerIds = new Set(locationBrokers.map((lb: any) => lb.broker_id));
       
       // ═══════════════════════════════════════════════════════════
@@ -4698,7 +4701,7 @@ async function generateWeeklyScheduleWithAccumulator(
       console.log(`\n   📍 Processando ${locationName}...`);
       
       // Corretores configurados para este local interno
-      const locationBrokers = internalLocation.location_brokers || [];
+      const locationBrokers = (internalLocation.location_brokers || []).filter((lb: any) => activeBrokerIdsSet.has(lb.broker_id));
       if (locationBrokers.length === 0) {
         console.log(`   ⚠️ ${locationName}: sem corretores configurados`);
         continue;
