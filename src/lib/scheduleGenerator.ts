@@ -2726,6 +2726,12 @@ async function generateWeeklyScheduleWithAccumulator(
     return [];
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // SET GLOBAL DE CORRETORES ATIVOS
+  // Usado para filtrar location_brokers residuais de corretores inativos
+  // ═══════════════════════════════════════════════════════════
+  const activeBrokerIdsSet = new Set(allBrokers.map((b: any) => b.id));
+
   const [
     { data: internalLocations },
     { data: locationBrokersData }
