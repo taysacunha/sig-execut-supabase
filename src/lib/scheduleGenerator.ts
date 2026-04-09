@@ -3081,8 +3081,10 @@ async function generateWeeklyScheduleWithAccumulator(
   };
 
   const specificConfigsMap = new Map<string, any>();
+  const periodsWithSpecificConfigs = new Set<string>();
   allSpecificConfigs?.forEach((config: any) => {
     specificConfigsMap.set(`${config.period_id}-${config.specific_date}`, config);
+    periodsWithSpecificConfigs.add(config.period_id);
   });
 
   // IDs de locais internos
@@ -3186,6 +3188,10 @@ async function generateWeeklyScheduleWithAccumulator(
         if (specificConfig.afternoon_end) afternoonEnd = specificConfig.afternoon_end;
         maxBrokersCount = specificConfig.max_brokers_count || 1;
       } else if (location.shift_config_mode === 'specific_date') {
+        continue;
+      } else if (periodsWithSpecificConfigs.has(activePeriod.id)) {
+        // Período tem whitelist de datas específicas mas esta data não está na lista → pular
+        console.log(`   🚫 EXTERNO ${location.name}: data ${dateStr} não está na whitelist de datas específicas — pulando`);
         continue;
       } else {
         const dayConfig = activePeriod.period_day_configs?.find((dc: any) => dc.weekday === dayOfWeek);
@@ -5102,8 +5108,10 @@ export async function validateGeneratedSchedule(
   const { data: allSpecificConfigs } = await supabase.from("period_specific_day_configs").select("*");
 
   const specificConfigsMap = new Map<string, any>();
+  const periodsWithSpecificConfigs = new Set<string>();
   allSpecificConfigs?.forEach((config: any) => {
     specificConfigsMap.set(`${config.period_id}-${config.specific_date}`, config);
+    periodsWithSpecificConfigs.add(config.period_id);
   });
 
   for (let date = new Date(weekStart); date <= weekEnd; date = addDays(date, 1)) {
@@ -5123,6 +5131,8 @@ export async function validateGeneratedSchedule(
         expectedMorning = specificConfig.has_morning;
         expectedAfternoon = specificConfig.has_afternoon;
       } else if (location.shift_config_mode === 'specific_date') {
+        continue;
+      } else if (periodsWithSpecificConfigs.has(period.id)) {
         continue;
       } else {
         const dayConfig = period.period_day_configs?.find((dc: any) => dc.weekday === dayOfWeek);
