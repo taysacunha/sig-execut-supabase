@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -16,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Search, ArrowDownUp, MapPin } from "lucide-react";
+import { Loader2, Search, ArrowDownUp, MapPin, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { normalizeText } from "@/lib/textUtils";
@@ -51,7 +50,7 @@ export const ScheduleSwapDialog = ({
   const [selectedAssignment, setSelectedAssignment] = useState<SwapAssignment | null>(null);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
 
-  // Buscar TODAS as alocações do mesmo dia/turno (exceto o atual)
+  // Fetch all assignments for same day/shift (excluding current and inactive brokers)
   const { data: availableAssignments, isLoading } = useQuery({
     queryKey: ["swap_assignments", generatedScheduleId, date, shiftType],
     queryFn: async () => {
@@ -61,7 +60,7 @@ export const ScheduleSwapDialog = ({
           id,
           broker_id,
           location_id,
-          broker:brokers(id, name),
+          broker:brokers(id, name, is_active),
           location:locations(id, name, location_type)
         `)
         .eq("generated_schedule_id", generatedScheduleId)
@@ -71,18 +70,43 @@ export const ScheduleSwapDialog = ({
 
       if (error) throw error;
 
-      return (data || []).map((a: any) => ({
-        id: a.id,
-        broker_id: a.broker_id,
-        broker_name: a.broker?.name || "Desconhecido",
-        location_id: a.location_id,
-        location_name: a.location?.name || "Desconhecido",
-        location_type: a.location?.location_type || "internal",
-      })) as SwapAssignment[];
+      return (data || [])
+        .filter((a: any) => a.broker?.is_active !== false)
+        .map((a: any) => ({
+          id: a.id,
+          broker_id: a.broker_id,
+          broker_name: a.broker?.name || "Desconhecido",
+          location_id: a.location_id,
+          location_name: a.location?.name || "Desconhecido",
+          location_type: a.location?.location_type || "internal",
+        })) as SwapAssignment[];
     },
   });
 
-  // Filtrar por busca
+  // Fetch eligibility data for both brokers
+  const { data: eligibilityData } = useQuery({
+    queryKey: ["swap-eligibility", currentAssignment.broker_id, selectedAssignment?.broker_id],
+    queryFn: async () => {
+      const brokerIds = [currentAssignment.broker_id];
+      if (selectedAssignment) brokerIds.push(selectedAssignment.broker_id);
+
+      const { data, error } = await supabase
+        .from("location_brokers")
+        .select("broker_id, location_id")
+        .in("broker_id", brokerIds);
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!selectedAssignment,
+  });
+
+  const isBrokerEligibleForLocation = (brokerId: string, locationId: string): boolean => {
+    if (!eligibilityData) return true;
+    return eligibilityData.some((lb: any) => lb.broker_id === brokerId && lb.location_id === locationId);
+  };
+
+  // Filter by search
   const filteredAssignments = availableAssignments?.filter((a) => {
     if (!searchTerm) return true;
     const normalized = normalizeText(searchTerm);
@@ -106,6 +130,15 @@ export const ScheduleSwapDialog = ({
 
   const formattedDate = format(new Date(date + "T00:00:00"), "EEEE, dd/MM/yyyy", { locale: ptBR });
   const shiftLabel = shiftType === "morning" ? "Manhã" : "Tarde";
+
+  // Calculate eligibility warnings for the confirmation dialog
+  const currentToSelectedEligible = selectedAssignment 
+    ? isBrokerEligibleForLocation(currentAssignment.broker_id, selectedAssignment.location_id) 
+    : true;
+  const selectedToCurrentEligible = selectedAssignment 
+    ? isBrokerEligibleForLocation(selectedAssignment.broker_id, currentAssignment.location_id) 
+    : true;
+  const hasEligibilityWarning = !currentToSelectedEligible || !selectedToCurrentEligible;
 
   if (isLoading) {
     return (
@@ -203,7 +236,6 @@ export const ScheduleSwapDialog = ({
 
                 {/* Visual da troca */}
                 <div className="space-y-3 bg-muted/50 p-4 rounded-lg">
-                  {/* Corretor A */}
                   <div className="flex items-center gap-3">
                     <div className="flex-1 p-3 rounded bg-background border">
                       <p className="font-semibold text-foreground">{currentAssignment.broker_name}</p>
@@ -222,7 +254,6 @@ export const ScheduleSwapDialog = ({
                     <ArrowDownUp className="h-6 w-6 text-primary" />
                   </div>
 
-                  {/* Corretor B */}
                   <div className="flex items-center gap-3">
                     <div className="flex-1 p-3 rounded bg-background border">
                       <p className="font-semibold text-foreground">{selectedAssignment?.broker_name}</p>
@@ -237,6 +268,22 @@ export const ScheduleSwapDialog = ({
                     </div>
                   </div>
                 </div>
+
+                {/* Eligibility warnings */}
+                {hasEligibilityWarning && (
+                  <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950 dark:border-amber-800">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-700 dark:text-amber-400 text-sm space-y-1">
+                      {!currentToSelectedEligible && (
+                        <p>⚠️ <strong>{currentAssignment.broker_name}</strong> não está vinculado ao local <strong>{selectedAssignment?.location_name}</strong></p>
+                      )}
+                      {!selectedToCurrentEligible && (
+                        <p>⚠️ <strong>{selectedAssignment?.broker_name}</strong> não está vinculado ao local <strong>{currentAssignment.location_name}</strong></p>
+                      )}
+                      <p className="text-xs mt-1">A troca será marcada como alocação manual.</p>
+                    </AlertDescription>
+                  </Alert>
+                )}
 
                 <p className="text-xs text-muted-foreground">
                   📅 {formattedDate} | ⏰ {shiftLabel}

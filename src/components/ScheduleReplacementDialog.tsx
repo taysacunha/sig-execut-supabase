@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { getBrokersFromInternalShift, getAvailableBrokersForShift } from "@/lib/scheduleGenerator";
+import { supabase } from "@/integrations/supabase/client";
 import { AlertCircle, ArrowRight, User, UserCheck, AlertTriangle } from "lucide-react";
 import { normalizeText } from "@/lib/textUtils";
 import {
@@ -80,7 +81,26 @@ export function ScheduleReplacementDialog({
     enabled: !!locationId,
   });
 
+  // Query 3: Broker eligibility for the target location
+  const { data: eligibleBrokerIds } = useQuery({
+    queryKey: ["location-broker-ids", locationId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("location_brokers")
+        .select("broker_id")
+        .eq("location_id", locationId);
+      if (error) throw error;
+      return data?.map((lb: any) => lb.broker_id) || [];
+    },
+    enabled: !!locationId,
+  });
+
   const isLoading = isLoadingInternal || isLoadingAvailable;
+
+  const isBrokerEligible = (brokerId: string): boolean => {
+    if (!eligibleBrokerIds) return true;
+    return eligibleBrokerIds.includes(brokerId);
+  };
 
   // Handler ao clicar em um corretor
   const handleBrokerClick = (selection: InternalAssignment | AvailableBroker) => {
@@ -103,13 +123,21 @@ export function ScheduleReplacementDialog({
     setPendingSelection(null);
   };
 
-  // Obter nome do corretor selecionado
+  // Obter nome e id do corretor selecionado
   const getSelectedBrokerName = (): string => {
     if (!pendingSelection) return "";
     if ("isAvailable" in pendingSelection) {
       return pendingSelection.broker?.name || "";
     }
     return (pendingSelection as InternalAssignment).broker?.name || "";
+  };
+
+  const getSelectedBrokerId = (): string => {
+    if (!pendingSelection) return "";
+    if ("isAvailable" in pendingSelection) {
+      return pendingSelection.broker?.id || "";
+    }
+    return (pendingSelection as InternalAssignment).broker?.id || "";
   };
 
   // Verificar se é corretor disponível
@@ -148,6 +176,10 @@ export function ScheduleReplacementDialog({
   const dateFormatted = new Date(date + "T00:00:00").toLocaleDateString("pt-BR");
   const hasNoOptions = searchedInternalBrokers.length === 0 && searchedAvailableBrokers.length === 0;
   const hasNoResults = hasNoOptions && searchTerm.length > 0;
+
+  // Check eligibility for the pending selection
+  const pendingBrokerId = getSelectedBrokerId();
+  const pendingNotEligible = pendingBrokerId ? !isBrokerEligible(pendingBrokerId) : false;
 
   return (
     <>
@@ -300,6 +332,17 @@ export function ScheduleReplacementDialog({
                     </Badge>
                   </div>
                 </div>
+
+                {/* Eligibility warning */}
+                {pendingNotEligible && (
+                  <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950 dark:border-amber-800">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-700 dark:text-amber-400 text-sm">
+                      ⚠️ <strong>{getSelectedBrokerName()}</strong> não está vinculado a este local externo. A alocação será marcada como manual.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 <p className="text-amber-600 text-sm font-medium">
                   ⚠️ Esta ação não pode ser desfeita automaticamente.
                 </p>
