@@ -1,32 +1,42 @@
 
+Plano: corrigir o card "Próximas Férias" para considerar também o 2º período
 
-## Plano: Corrigir dashboard para exibir todas as férias agendadas (incluindo pendentes)
+Diagnóstico
+- O problema está isolado no card de "Próximas Férias" em `src/pages/ferias/FeriasDashboard.tsx`.
+- Hoje a query desse card busca apenas dados do 1º período (`quinzena1_inicio` / `gozo_quinzena1_inicio`) e a lógica só verifica esse início.
+- Se a Taysa estiver com início em `24/04` no 2º período (`quinzena2_inicio` ou `gozo_quinzena2_inicio`), ela nunca entra no filtro.
+- Isso explica por que ela pode existir no sistema e ainda assim não aparecer especificamente nesse card.
 
-### Problema
+O que vou ajustar
+1. Expandir a query de `proximasFerias`
+- Incluir também:
+  - `quinzena2_inicio`
+  - `gozo_quinzena2_inicio`
+  - opcionalmente os `*_fim` para manter a estrutura consistente
 
-O dashboard filtra férias por status `["aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo", "concluida"]`, mas exclui dois status importantes:
+2. Trocar a lógica de "pegar só um início" por "pegar o próximo início válido"
+- Para cada registro de férias:
+  - se `gozo_flexivel = true`: usar os períodos de `ferias_gozo_periodos`
+  - se `gozo_diferente = true`: considerar `gozo_quinzena1_inicio` e `gozo_quinzena2_inicio`
+  - senão: considerar `quinzena1_inicio` e `quinzena2_inicio`
+- Filtrar todas as datas de início entre hoje e +30 dias
+- Escolher a menor delas como `inicio` exibido no card
 
-1. **`"pendente"`** — férias agendadas aguardando aprovação
-2. **`"ativa"`** — status padrão da coluna (default do banco: `'ativa'::text`)
+3. Manter 1 item por férias no card
+- Mesmo que existam dois períodos, o card continua mostrando apenas a próxima data relevante daquele registro
+- Exemplo: se o 1º período já passou e o 2º começa em 24/04, o card deve mostrar 24/04
 
-As férias da Taysa provavelmente estão em um desses dois status, por isso não aparecem.
+4. Evitar nova divergência
+- Extrair uma pequena função helper dentro do próprio `FeriasDashboard.tsx` para resolver os inícios possíveis
+- Assim a regra fica mais clara e reduz chance de voltar a quebrar
 
-Além disso, o dashboard **não chama** `atualizar_status_ferias` antes de buscar os dados (diferente da página FeriasFerias.tsx que chama), então os status podem estar desatualizados.
+Arquivo a alterar
+- `src/pages/ferias/FeriasDashboard.tsx`
 
-### Correções em `src/pages/ferias/FeriasDashboard.tsx`
-
-#### 1. Incluir `"pendente"` e `"ativa"` nos filtros de status
-Nas 3 queries que filtram por status:
-- "Férias este Mês" (linha 54)
-- "Próximas Férias" (linha 234)
-- "Alertas de período aquisitivo" (linha 160)
-
-Adicionar `"pendente"` e `"ativa"` à lista de status.
-
-#### 2. Chamar `atualizar_status_ferias` antes de buscar os dados
-Adicionar chamada ao RPC `atualizar_status_ferias` no início da query principal ("Férias este Mês") para garantir que os status estejam atualizados.
-
-### Arquivo alterado
-
-1. **`src/pages/ferias/FeriasDashboard.tsx`** — adicionar status faltantes + chamar RPC de atualização
-
+Validação após implementar
+- Confirmar que aparece:
+  1. férias com início no 1º período
+  2. férias com início no 2º período
+  3. férias com `gozo_diferente`
+  4. férias com `gozo_flexivel`
+- Verificar especificamente o caso da Taysa com início em 24/04 no card "Próximas Férias"
