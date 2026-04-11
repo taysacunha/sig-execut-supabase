@@ -39,6 +39,7 @@ export default function FeriasDashboard() {
         .from("ferias_ferias")
         .select(`
           id,
+          gozo_flexivel,
           quinzena1_inicio,
           quinzena1_fim,
           quinzena2_inicio,
@@ -50,21 +51,42 @@ export default function FeriasDashboard() {
           gozo_quinzena2_fim,
           ferias_colaboradores(nome)
         `)
-        .in("status", ["aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo"]);
+        .in("status", ["aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo", "concluida"]);
       if (error) throw error;
+      
+      // Fetch flexible gozo periods for vacations with gozo_flexivel
+      const flexIds = (data || []).filter((f: any) => f.gozo_flexivel).map((f: any) => f.id);
+      let gozoPeriodosMap: Record<string, any[]> = {};
+      if (flexIds.length > 0) {
+        const { data: periodos } = await supabase
+          .from("ferias_gozo_periodos")
+          .select("ferias_id, data_inicio, data_fim")
+          .in("ferias_id", flexIds);
+        for (const p of periodos || []) {
+          if (!gozoPeriodosMap[p.ferias_id]) gozoPeriodosMap[p.ferias_id] = [];
+          gozoPeriodosMap[p.ferias_id].push(p);
+        }
+      }
       
       // Filter vacations that overlap with current month
       const monthStartStr = format(monthStart, "yyyy-MM-dd");
       const monthEndStr = format(monthEnd, "yyyy-MM-dd");
       
       return (data || []).filter((f: any) => {
+        // Check flexible gozo periods first
+        if (f.gozo_flexivel && gozoPeriodosMap[f.id]?.length) {
+          return gozoPeriodosMap[f.id].some((p: any) => 
+            p.data_inicio <= monthEndStr && p.data_fim >= monthStartStr
+          );
+        }
+        
         const q1Start = f.gozo_diferente ? f.gozo_quinzena1_inicio : f.quinzena1_inicio;
         const q1End = f.gozo_diferente ? f.gozo_quinzena1_fim : f.quinzena1_fim;
         const q2Start = f.gozo_diferente ? f.gozo_quinzena2_inicio : f.quinzena2_inicio;
         const q2End = f.gozo_diferente ? f.gozo_quinzena2_fim : f.quinzena2_fim;
         
         return (q1Start <= monthEndStr && q1End >= monthStartStr) ||
-               (q2Start <= monthEndStr && q2End >= monthStartStr);
+               (q2Start && q2End && q2Start <= monthEndStr && q2End >= monthStartStr);
       });
     },
   });
@@ -202,23 +224,58 @@ export default function FeriasDashboard() {
         .from("ferias_ferias")
         .select(`
           id,
+          gozo_flexivel,
           quinzena1_inicio,
           quinzena1_fim,
           gozo_diferente,
           gozo_quinzena1_inicio,
           ferias_colaboradores(nome)
         `)
-        .in("status", ["aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo"]);
+        .in("status", ["aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo", "concluida"]);
       if (error) throw error;
       
-      return (data || []).filter((f: any) => {
-        const inicio = f.gozo_diferente ? f.gozo_quinzena1_inicio : f.quinzena1_inicio;
-        return inicio >= todayStr && inicio <= in30DaysStr;
-      }).map((f: any) => ({
-        id: f.id,
-        nome: f.ferias_colaboradores?.nome || "N/A",
-        inicio: f.gozo_diferente ? f.gozo_quinzena1_inicio : f.quinzena1_inicio,
-      })).sort((a: any, b: any) => a.inicio.localeCompare(b.inicio));
+      // Fetch flexible gozo periods
+      const flexIds = (data || []).filter((f: any) => f.gozo_flexivel).map((f: any) => f.id);
+      let gozoPeriodosMap: Record<string, any[]> = {};
+      if (flexIds.length > 0) {
+        const { data: periodos } = await supabase
+          .from("ferias_gozo_periodos")
+          .select("ferias_id, data_inicio, data_fim")
+          .in("ferias_id", flexIds);
+        for (const p of periodos || []) {
+          if (!gozoPeriodosMap[p.ferias_id]) gozoPeriodosMap[p.ferias_id] = [];
+          gozoPeriodosMap[p.ferias_id].push(p);
+        }
+      }
+      
+      const results: any[] = [];
+      
+      for (const f of data || []) {
+        if (f.gozo_flexivel && gozoPeriodosMap[f.id]?.length) {
+          // For flexible vacations, find earliest upcoming sub-period start
+          const upcomingPeriods = gozoPeriodosMap[f.id]
+            .filter((p: any) => p.data_inicio >= todayStr && p.data_inicio <= in30DaysStr);
+          if (upcomingPeriods.length > 0) {
+            const earliest = upcomingPeriods.sort((a: any, b: any) => a.data_inicio.localeCompare(b.data_inicio))[0];
+            results.push({
+              id: f.id,
+              nome: (f as any).ferias_colaboradores?.nome || "N/A",
+              inicio: earliest.data_inicio,
+            });
+          }
+        } else {
+          const inicio = f.gozo_diferente ? f.gozo_quinzena1_inicio : f.quinzena1_inicio;
+          if (inicio && inicio >= todayStr && inicio <= in30DaysStr) {
+            results.push({
+              id: f.id,
+              nome: (f as any).ferias_colaboradores?.nome || "N/A",
+              inicio,
+            });
+          }
+        }
+      }
+      
+      return results.sort((a, b) => a.inicio.localeCompare(b.inicio));
     },
   });
 
