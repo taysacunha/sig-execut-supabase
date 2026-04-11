@@ -35,6 +35,9 @@ export default function FeriasDashboard() {
   const { data: feriasEsteMes = [], isLoading: loadingFerias } = useQuery({
     queryKey: ["ferias-dashboard-ferias-mes"],
     queryFn: async () => {
+      // Atualizar status antes de buscar
+      await supabase.rpc("atualizar_status_ferias");
+      
       const { data, error } = await supabase
         .from("ferias_ferias")
         .select(`
@@ -51,7 +54,7 @@ export default function FeriasDashboard() {
           gozo_quinzena2_fim,
           ferias_colaboradores(nome)
         `)
-        .in("status", ["aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo", "concluida"]);
+        .in("status", ["pendente", "ativa", "aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo", "concluida"]);
       if (error) throw error;
       
       // Fetch flexible gozo periods for vacations with gozo_flexivel
@@ -157,7 +160,7 @@ export default function FeriasDashboard() {
       const { data: feriasAtivas } = await supabase
         .from("ferias_ferias")
         .select("colaborador_id, quinzena1_inicio")
-        .in("status", ["pendente", "aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo"]);
+        .in("status", ["pendente", "ativa", "aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo"]);
 
       const colaboradoresComFerias = new Set((feriasAtivas || []).map((f) => f.colaborador_id));
 
@@ -231,7 +234,7 @@ export default function FeriasDashboard() {
           gozo_quinzena1_inicio,
           ferias_colaboradores(nome)
         `)
-        .in("status", ["aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo", "concluida"]);
+        .in("status", ["pendente", "ativa", "aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo", "concluida"]);
       if (error) throw error;
       
       // Fetch flexible gozo periods
