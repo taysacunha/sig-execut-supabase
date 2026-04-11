@@ -229,9 +229,10 @@ export default function FeriasDashboard() {
           id,
           gozo_flexivel,
           quinzena1_inicio,
-          quinzena1_fim,
+          quinzena2_inicio,
           gozo_diferente,
           gozo_quinzena1_inicio,
+          gozo_quinzena2_inicio,
           ferias_colaboradores(nome)
         `)
         .in("status", ["pendente", "ativa", "aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo", "concluida"]);
@@ -251,30 +252,34 @@ export default function FeriasDashboard() {
         }
       }
       
+      // Helper: collect all potential start dates for a vacation record
+      const getPotentialStarts = (f: any): string[] => {
+        if (f.gozo_flexivel && gozoPeriodosMap[f.id]?.length) {
+          return gozoPeriodosMap[f.id].map((p: any) => p.data_inicio);
+        }
+        const starts: string[] = [];
+        if (f.gozo_diferente) {
+          if (f.gozo_quinzena1_inicio) starts.push(f.gozo_quinzena1_inicio);
+          if (f.gozo_quinzena2_inicio) starts.push(f.gozo_quinzena2_inicio);
+        } else {
+          if (f.quinzena1_inicio) starts.push(f.quinzena1_inicio);
+          if (f.quinzena2_inicio) starts.push(f.quinzena2_inicio);
+        }
+        return starts;
+      };
+
       const results: any[] = [];
       
       for (const f of data || []) {
-        if (f.gozo_flexivel && gozoPeriodosMap[f.id]?.length) {
-          // For flexible vacations, find earliest upcoming sub-period start
-          const upcomingPeriods = gozoPeriodosMap[f.id]
-            .filter((p: any) => p.data_inicio >= todayStr && p.data_inicio <= in30DaysStr);
-          if (upcomingPeriods.length > 0) {
-            const earliest = upcomingPeriods.sort((a: any, b: any) => a.data_inicio.localeCompare(b.data_inicio))[0];
-            results.push({
-              id: f.id,
-              nome: (f as any).ferias_colaboradores?.nome || "N/A",
-              inicio: earliest.data_inicio,
-            });
-          }
-        } else {
-          const inicio = f.gozo_diferente ? f.gozo_quinzena1_inicio : f.quinzena1_inicio;
-          if (inicio && inicio >= todayStr && inicio <= in30DaysStr) {
-            results.push({
-              id: f.id,
-              nome: (f as any).ferias_colaboradores?.nome || "N/A",
-              inicio,
-            });
-          }
+        const upcoming = getPotentialStarts(f)
+          .filter((d) => d >= todayStr && d <= in30DaysStr)
+          .sort();
+        if (upcoming.length > 0) {
+          results.push({
+            id: f.id,
+            nome: (f as any).ferias_colaboradores?.nome || "N/A",
+            inicio: upcoming[0],
+          });
         }
       }
       
