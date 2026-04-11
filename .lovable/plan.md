@@ -1,54 +1,47 @@
 
-Objetivo: corrigir de vez o card “Próximas Férias” para que a Taysa apareça quando tiver início em 24/04.
+Problema identificado:
+- A página `/dev` mostra os registros lendo direto da tabela `dev_tracker` em `src/pages/DevTracker.tsx`.
+- Essa tabela está com RLS ativo e só permite acesso para usuário autenticado com role admin/super_admin (`.lovable/dev_tracker_migration.sql`).
+- Porém a rota `/dev` em `src/App.tsx` não usa `ProtectedRoute`. Então a página abre só com o código secreto, mesmo sem sessão Supabase válida.
+- Resultado: você entra na tela, mas a query em `loadFeatures()` não consegue ler `dev_tracker`, e a UI acaba parecendo “vazia”.
+- Além disso, não existe no frontend nenhum uso da edge function `log-dev-work`; então um “pedido no chat” não grava automaticamente algo nessa tabela. Hoje os dados só aparecem se alguém inserir manualmente na página ou chamar essa function por fora.
 
-Diagnóstico mais provável pelo código atual:
-1. O card já considera 1º e 2º período, então o problema restante tende a estar na origem dos dados.
-2. O dashboard só usa `ferias_gozo_periodos` quando `gozo_flexivel = true`. Em outras telas, a lógica já é mais tolerante e considera os períodos flexíveis pela existência dos registros. Se a Taysa tiver subperíodos salvos mas o flag estiver inconsistente, o card ignora a data real.
-3. A query de “Próximas Férias” busca todas as férias e filtra no cliente. Isso pode sofrer com o limite padrão de 1000 linhas do Supabase e deixar registros de fora sem aviso.
-4. Depois de salvar/editar férias, o fluxo atual invalida `["ferias-ferias"]`, mas não invalida `["ferias-dashboard-proximas"]`. Com `staleTime` de 5 minutos no app, o card pode continuar mostrando cache antigo.
+O que vou corrigir:
+1. Proteger `/dev` com autenticação real
+- Envolver a rota `/dev` e `/dev/deploy-guide` com `ProtectedRoute`.
+- Isso evita abrir a tela sem sessão e elimina o falso estado de “sem registros” para usuário deslogado.
 
-Plano de correção:
-1. Confirmar a origem do caso da Taysa
-- No modo de implementação, consultar o registro dela em `ferias_ferias` e, se existir, em `ferias_gozo_periodos`.
-- Verificar especialmente:
-  - `status`
-  - `quinzena1_inicio` / `quinzena2_inicio`
-  - `gozo_quinzena1_inicio` / `gozo_quinzena2_inicio`
-  - `gozo_flexivel`
-  - existência de linhas em `ferias_gozo_periodos`
+2. Melhorar o diagnóstico da página
+- Ajustar `loadFeatures()` para diferenciar:
+  - sem dados de fato
+  - erro de permissão/autenticação
+  - falha de leitura
+- Exibir mensagem clara quando o usuário estiver sem sessão ou sem permissão, em vez de mostrar lista vazia.
 
-2. Tornar a leitura de datas do dashboard consistente com o restante do módulo
-- Extrair uma helper local no `FeriasDashboard.tsx` para resolver inícios reais da férias.
-- Regra:
-  - se houver períodos em `ferias_gozo_periodos`, usar esses períodos como fonte principal
-  - senão, se `gozo_diferente`, usar `gozo_quinzena1/2`
-  - senão, usar `quinzena1/2`
-- Isso elimina dependência excessiva do flag `gozo_flexivel`.
+3. Ligar a página ao fluxo automatizado correto
+- Decidir entre dois caminhos:
+  - manter `/dev` como cadastro manual apenas
+  - ou adicionar um botão/ação para consumir a edge function `log-dev-work`
+- Se a intenção é ver “o registro que pedi” ao Lovable, então a UI precisa refletir esse fluxo ou pelo menos deixar claro que pedidos no chat não populam `dev_tracker` automaticamente hoje.
 
-3. Corrigir a query de “Próximas Férias” para não depender de carregar tudo
-- Evitar buscar todas as férias sem recorte.
-- Montar a lista usando apenas registros relevantes para a janela de hoje até +30 dias:
-  - férias padrão/gozo diferente com datas de início no intervalo
-  - férias flexíveis com `ferias_gozo_periodos.data_inicio` no intervalo
-- Se necessário, unir os dois conjuntos no cliente e deduplicar por `ferias.id`.
-
-4. Atualizar o cache do dashboard quando férias forem alteradas
-- Ao salvar/excluir férias em `FeriasDialog.tsx` e `FeriasFerias.tsx`, invalidar também:
-  - `["ferias-dashboard-proximas"]`
-  - `["ferias-dashboard-ferias-mes"]`
-  - `["ferias-dashboard-alertas"]`
-- Assim o card reflete a alteração imediatamente, sem esperar os 5 minutos do cache.
+4. Revisar segurança do fluxo dev
+- Remover dependência do código secreto hardcoded como única proteção prática.
+- Manter a verificação por role como fonte real de acesso.
+- Opcionalmente, trocar o fluxo para usar a edge function em vez de CRUD direto no cliente, se quiser centralizar regras.
 
 Arquivos a ajustar:
-1. `src/pages/ferias/FeriasDashboard.tsx`
-2. `src/pages/ferias/FeriasFerias.tsx`
-3. `src/components/ferias/ferias/FeriasDialog.tsx` (se a invalidação ficar centralizada no próprio dialog)
+- `src/App.tsx`
+- `src/pages/DevTracker.tsx`
 
-Validação após implementar:
-1. Confirmar que a Taysa aparece no card com 24/04.
-2. Testar férias com:
-- 1º período
-- 2º período
-- `gozo_diferente`
-- períodos em `ferias_gozo_periodos`
-3. Editar uma férias e verificar se o dashboard atualiza na hora, sem precisar esperar cache.
+Detalhe técnico:
+- Hoje há um desalinhamento entre frontend e banco:
+  - frontend: libera `/dev` com senha local (`DEV_CODE`)
+  - banco: exige usuário autenticado admin/super_admin via RLS
+- Isso explica por que a página pode abrir e ainda assim não mostrar o conteúdo.
+- A edge function `supabase/functions/log-dev-work/index.ts` existe, mas não é chamada por nenhum arquivo em `src/`.
+
+Validação depois da implementação:
+- Entrar em `/dev` logado como admin/super_admin e confirmar que os registros aparecem.
+- Entrar deslogado e confirmar redirecionamento para `/auth`.
+- Validar que erro de permissão não aparece mais como “Nenhuma funcionalidade registrada”.
+- Se o fluxo automatizado for ligado à function, confirmar que um novo registro criado por esse caminho aparece na lista logo após salvar.
