@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useUserRole } from "@/hooks/useUserRole";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,10 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { toast } from "@/hooks/use-toast";
-import { Lock, Plus, Pencil, Trash2, FileDown, Eye, EyeOff, DollarSign } from "lucide-react";
+import { Plus, Pencil, Trash2, FileDown, Eye, DollarSign, ShieldAlert, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
-
-const DEV_CODE = "S1g.D3v!Sup4b4s3";
 
 const SYSTEMS = [
   { value: "infraestrutura", label: "Login / Infraestrutura" },
@@ -96,11 +95,10 @@ const FeatureTable = ({ items, hourlyRate, onView, onEdit, onDelete, systemLabel
 };
 
 const DevTracker = () => {
-  const [authenticated, setAuthenticated] = useState(false);
-  const [code, setCode] = useState("");
-  const [showCode, setShowCode] = useState(false);
+  const { role, loading: roleLoading, isAdmin } = useUserRole();
   const [features, setFeatures] = useState<DevFeature[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingFeature, setEditingFeature] = useState<DevFeature | null>(null);
   const [viewingFeature, setViewingFeature] = useState<DevFeature | null>(null);
@@ -115,25 +113,29 @@ const DevTracker = () => {
     localStorage.setItem("dev_tracker_hourly_rate", String(hourlyRate));
   }, [hourlyRate]);
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (code === DEV_CODE) {
-      setAuthenticated(true);
+  // Auto-load when role is resolved and user has access
+  useEffect(() => {
+    if (!roleLoading && isAdmin) {
       loadFeatures();
-    } else {
-      toast({ title: "Código incorreto", variant: "destructive" });
     }
-  };
+  }, [roleLoading, isAdmin]);
 
   const loadFeatures = async () => {
     setLoading(true);
+    setLoadError(null);
     const { data, error } = await supabase
       .from("dev_tracker" as any)
       .select("*")
       .order("system_name")
       .order("display_order");
     if (error) {
-      toast({ title: "Erro ao carregar dados", description: error.message, variant: "destructive" });
+      console.error("DevTracker load error:", error);
+      if (error.code === "42501" || error.message?.includes("permission") || error.message?.includes("RLS")) {
+        setLoadError("Sem permissão para acessar os registros. Verifique se sua role é admin ou super_admin.");
+      } else {
+        setLoadError(`Erro ao carregar dados: ${error.message}`);
+      }
+      setFeatures([]);
     } else {
       setFeatures((data as any) || []);
     }
@@ -264,35 +266,29 @@ const DevTracker = () => {
     doc.save("registro-desenvolvimento-sig-execut.pdf");
   };
 
-  // --- Login screen ---
-  if (!authenticated) {
+  // --- Loading role ---
+  if (roleLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // --- Access denied ---
+  if (!isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Card className="w-full max-w-sm">
-          <CardHeader className="text-center">
-            <Lock className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
-            <CardTitle>Área Restrita</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="relative">
-                <Input
-                  type={showCode ? "text" : "password"}
-                  placeholder="Digite o código de acesso"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                  onClick={() => setShowCode(!showCode)}
-                >
-                  {showCode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              <Button type="submit" className="w-full">Acessar</Button>
-            </form>
+          <CardContent className="py-12 text-center space-y-4">
+            <ShieldAlert className="mx-auto h-10 w-10 text-destructive" />
+            <p className="text-lg font-semibold text-foreground">Acesso Restrito</p>
+            <p className="text-sm text-muted-foreground">
+              Esta página é acessível apenas para administradores (admin / super_admin).
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Sua role atual: <span className="font-medium">{role || "nenhuma"}</span>
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -307,11 +303,6 @@ const DevTracker = () => {
 
   const grandTotalHours = features.reduce((s, f) => s + f.hours, 0);
   const grandTotalCost = grandTotalHours * hourlyRate;
-
-  const getFilteredItems = (tab: string) => {
-    if (tab === "todos") return null; // handled by accordion
-    return features.filter((f) => f.system_name === tab);
-  };
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8 max-w-7xl mx-auto">
@@ -348,7 +339,18 @@ const DevTracker = () => {
       </div>
 
       {loading ? (
-        <p className="text-muted-foreground">Carregando...</p>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" />
+          <span className="text-muted-foreground">Carregando...</span>
+        </div>
+      ) : loadError ? (
+        <Card>
+          <CardContent className="py-12 text-center space-y-3">
+            <ShieldAlert className="mx-auto h-8 w-8 text-destructive" />
+            <p className="text-muted-foreground">{loadError}</p>
+            <Button variant="outline" size="sm" onClick={loadFeatures}>Tentar novamente</Button>
+          </CardContent>
+        </Card>
       ) : features.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
