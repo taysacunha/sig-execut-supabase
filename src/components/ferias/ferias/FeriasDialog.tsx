@@ -855,6 +855,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     onSuccess: () => {
       toast.success(isEditing ? "Férias atualizada com sucesso!" : "Férias cadastrada com sucesso!");
       queryClient.invalidateQueries({ queryKey: ["ferias-colaboradores-com-ferias"] });
+      queryClient.invalidateQueries({ queryKey: ["ferias-dashboard-proximas"] });
+      queryClient.invalidateQueries({ queryKey: ["ferias-dashboard-ferias-mes"] });
+      queryClient.invalidateQueries({ queryKey: ["ferias-dashboard-alertas"] });
       onSuccess();
     },
     onError: (error) => {

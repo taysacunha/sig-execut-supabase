@@ -160,6 +160,12 @@ export default function FeriasFerias() {
 
   const years = getYearOptions(3, 3).map(String);
 
+  const invalidateFeriasDashboardQueries = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["ferias-dashboard-proximas"] });
+    queryClient.invalidateQueries({ queryKey: ["ferias-dashboard-ferias-mes"] });
+    queryClient.invalidateQueries({ queryKey: ["ferias-dashboard-alertas"] });
+  }, [queryClient]);
+
   // ========== Queries ==========
 
   const { data: ferias = [], isLoading: feriasLoading, error: feriasError } = useQuery({
@@ -240,6 +246,7 @@ export default function FeriasFerias() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ferias-ferias"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-colaboradores-com-ferias"] });
+      invalidateFeriasDashboardQueries();
       toast.success("Férias excluída com sucesso!");
     },
     onError: () => toast.error("Erro ao excluir férias"),
