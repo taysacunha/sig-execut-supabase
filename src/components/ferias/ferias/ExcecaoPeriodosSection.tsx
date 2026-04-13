@@ -219,7 +219,7 @@ export function ExcecaoPeriodosSection({
         ]);
       }
     }
-  }, [distribuicaoTipo, excecaoTipo, isHydrating]);
+  }, [distribuicaoTipo, excecaoTipo]);
 
   // Reset distribuição when diasVendidos changes in vender mode (skip during edit hydration)
   useEffect(() => {
