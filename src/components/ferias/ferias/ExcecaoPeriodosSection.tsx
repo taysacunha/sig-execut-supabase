@@ -219,7 +219,7 @@ export function ExcecaoPeriodosSection({
         ]);
       }
     }
-  }, [distribuicaoTipo, excecaoTipo, isHydrating]);
+  }, [distribuicaoTipo, excecaoTipo]);
 
   // Reset distribuição when diasVendidos changes in vender mode (skip during edit hydration)
   useEffect(() => {
@@ -229,7 +229,7 @@ export function ExcecaoPeriodosSection({
       onDistribuicaoTipoChange("");
       setTimeout(() => onDistribuicaoTipoChange(dt), 0);
     }
-  }, [diasVendidos]);
+  }, [diasVendidos, isHydrating]);
 
   // Reset when tipo changes (skip during edit hydration)
   useEffect(() => {
@@ -239,7 +239,7 @@ export function ExcecaoPeriodosSection({
     if (excecaoTipo === "gozo_diferente") {
       onDiasVendidosChange(0);
     }
-  }, [excecaoTipo]);
+  }, [excecaoTipo, isHydrating]);
 
   return (
     <div className="space-y-4">

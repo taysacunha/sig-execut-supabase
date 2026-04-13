@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { ExcecaoPeriodosSection, type GozoPeriodo } from "./ExcecaoPeriodosSection";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -188,6 +188,21 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const selectedColab = colaboradores.find(c => c.id === selectedColabId);
   const familiarId = selectedColab?.familiar_id;
   const familiarNome = familiarId ? colaboradores.find(c => c.id === familiarId)?.nome : null;
+
+  // Fetch afastamentos for selected collaborator
+  const { data: afastamentos = [] } = useQuery({
+    queryKey: ["ferias-afastamentos-dialog", selectedColabId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ferias_afastamentos")
+        .select("id, data_inicio, data_fim, motivo, motivo_descricao")
+        .eq("colaborador_id", selectedColabId!)
+        .order("data_inicio");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!selectedColabId,
+  });
 
   const { data: feriasFamiliar } = useQuery({
     queryKey: ["ferias-familiar", familiarId],
@@ -462,18 +477,36 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     } else if (ferias.gozo_flexivel) {
       // Mark hydrating BEFORE setting state so ExcecaoPeriodosSection skips auto-resets
       setExcHydrating(true);
-      setExcecaoTipo(ferias.vender_dias ? "vender" : ferias.gozo_diferente ? "gozo_diferente" : null);
-      setExcDistribuicaoTipo(ferias.distribuicao_tipo || "");
-      setExcDiasVendidos(ferias.dias_vendidos || 0);
-      // Load existing gozo_periodos for editing
+      // Load existing gozo_periodos for editing, then infer types from actual data
       (async () => {
         const { data: existingPeriodos } = await supabase
           .from("ferias_gozo_periodos" as any)
           .select("id, ferias_id, numero, dias, data_inicio, data_fim, referencia_periodo, tipo")
           .eq("ferias_id", ferias.id)
           .order("numero");
-        if (existingPeriodos && existingPeriodos.length > 0) {
-          setExcPeriodos((existingPeriodos as any[]).map((p: any) => ({
+        const loaded = (existingPeriodos as any[]) || [];
+        if (loaded.length > 0) {
+          // Infer excecaoTipo from periodo data
+          const tipos = [...new Set(loaded.map((p: any) => p.tipo))];
+          const inferredTipo: "vender" | "gozo_diferente" | null = 
+            tipos.includes("vender") ? "vender" : 
+            tipos.includes("gozo_diferente") ? "gozo_diferente" : 
+            (ferias.vender_dias ? "vender" : ferias.gozo_diferente ? "gozo_diferente" : null);
+          
+          // Infer distribuicaoTipo from referencia_periodo values
+          const refs = [...new Set(loaded.map((p: any) => p.referencia_periodo))];
+          let inferredDist = ferias.distribuicao_tipo || "";
+          if (!inferredDist) {
+            if (refs.includes(0)) inferredDist = "livre";
+            else if (refs.includes(1) && refs.includes(2)) inferredDist = "ambos";
+            else if (refs.includes(1)) inferredDist = "1";
+            else if (refs.includes(2)) inferredDist = "2";
+          }
+
+          setExcecaoTipo(inferredTipo);
+          setExcDistribuicaoTipo(inferredDist);
+          setExcDiasVendidos(ferias.dias_vendidos || 0);
+          setExcPeriodos(loaded.map((p: any) => ({
             id: p.id || crypto.randomUUID(),
             referencia_periodo: p.referencia_periodo,
             dias: p.dias,
@@ -481,10 +514,13 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             data_fim: p.data_fim,
           })));
         } else {
+          setExcecaoTipo(ferias.vender_dias ? "vender" : ferias.gozo_diferente ? "gozo_diferente" : null);
+          setExcDistribuicaoTipo(ferias.distribuicao_tipo || "");
+          setExcDiasVendidos(ferias.dias_vendidos || 0);
           setExcPeriodos([]);
         }
-        // Release hydration lock after periods are loaded
-        setTimeout(() => setExcHydrating(false), 0);
+        // Release hydration lock after all state is set in this tick
+        setTimeout(() => setExcHydrating(false), 50);
       })();
     } else {
       setExcecaoTipo(null);
@@ -936,6 +972,32 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     return { isValid: errors.length === 0 || data.is_excecao, errors, requiresException, exceptionReason };
   };
 
+  // Check afastamento conflicts with vacation periods
+  const afastamentoConflicts = useMemo(() => {
+    if (afastamentos.length === 0) return [];
+    // Build vacation intervals
+    const vacIntervals: { start: string; end: string }[] = [];
+    if (excecaoTipo && excPeriodos.length > 0) {
+      for (const p of excPeriodos) {
+        if (p.data_inicio && p.data_fim) vacIntervals.push({ start: p.data_inicio, end: p.data_fim });
+      }
+    }
+    if (vacIntervals.length === 0) {
+      if (q1Inicio && q1Fim) vacIntervals.push({ start: q1Inicio, end: q1Fim });
+      if (q2Inicio && q2Fim) vacIntervals.push({ start: q2Inicio, end: q2Fim });
+    }
+    const conflicts: { afastamento: typeof afastamentos[0]; periodo: string }[] = [];
+    for (const af of afastamentos) {
+      for (const vi of vacIntervals) {
+        if (af.data_inicio <= vi.end && af.data_fim >= vi.start) {
+          conflicts.push({ afastamento: af, periodo: `${formatDateBR(vi.start)} a ${formatDateBR(vi.end)}` });
+          break;
+        }
+      }
+    }
+    return conflicts;
+  }, [afastamentos, excecaoTipo, excPeriodos, q1Inicio, q1Fim, q2Inicio, q2Fim]);
+
   const onSubmit = (data: FeriasFormData) => {
     const validation = validateVacation(data);
     if (validation.requiresException && !data.is_excecao) {
@@ -949,6 +1011,21 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     if (gozoDateError) {
       toast.error(gozoDateError);
       return;
+    }
+    // Block save if vacation overlaps afastamento
+    if (afastamentoConflicts.length > 0) {
+      toast.error("Férias conflitam com período de afastamento. Ajuste as datas antes de salvar.");
+      return;
+    }
+    // Validate sub-period chronological order and overlaps
+    if (excecaoTipo && excPeriodos.length > 1) {
+      const sorted = [...excPeriodos].filter(p => p.data_inicio).sort((a, b) => a.data_inicio.localeCompare(b.data_inicio));
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i].data_inicio <= sorted[i - 1].data_fim) {
+          toast.error(`Sub-períodos se sobrepõem: ${formatDateBR(sorted[i - 1].data_inicio)} e ${formatDateBR(sorted[i].data_inicio)}`);
+          return;
+        }
+      }
     }
     mutation.mutate(data);
   };
@@ -1094,9 +1171,29 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                     <CardTitle className="text-sm flex items-center gap-2"><Info className="h-4 w-4 text-primary" />Período Aquisitivo (automático)</CardTitle>
                   </CardHeader>
                   <CardContent><p className="text-sm">{formatDateBR(periodoAquisitivo.inicio)} a {formatDateBR(periodoAquisitivo.fim)}</p></CardContent>
-                </Card>
+               </Card>
               )}
 
+              {/* Afastamentos alert */}
+              {afastamentos.length > 0 && (
+                <Alert className={afastamentoConflicts.length > 0 ? "border-destructive/50 bg-destructive/10" : "border-amber-500/30 bg-amber-500/10"}>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle className="text-sm">
+                    {afastamentoConflicts.length > 0 ? "⚠️ Conflito com afastamento!" : "Afastamentos registrados"}
+                  </AlertTitle>
+                  <AlertDescription className="text-xs space-y-1">
+                    {afastamentos.map(af => (
+                      <div key={af.id} className={afastamentoConflicts.some(c => c.afastamento.id === af.id) ? "font-semibold text-destructive" : ""}>
+                        {formatDateBR(af.data_inicio)} a {formatDateBR(af.data_fim)} — {af.motivo_descricao || af.motivo}
+                        {afastamentoConflicts.some(c => c.afastamento.id === af.id) && " (CONFLITO)"}
+                      </div>
+                    ))}
+                    {afastamentoConflicts.length > 0 && (
+                      <p className="mt-2 font-semibold text-destructive">Ajuste as datas de férias para não sobrepor períodos de afastamento.</p>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-sm">1º Período (15 dias)</CardTitle></CardHeader>
                 <CardContent className="grid grid-cols-2 gap-4">

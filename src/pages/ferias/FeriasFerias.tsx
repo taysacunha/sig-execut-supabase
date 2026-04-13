@@ -13,7 +13,7 @@ import {
   Loader2, Edit, Eye, Plus, Sparkles, CalendarMinus,
   FileText, Clock, XCircle, Download, ArrowUpDown, Printer,
   ChevronLeft, ChevronRight, Trash2, ChevronDown, ChevronUp,
-  Send, Undo2
+  Send, Undo2, AlertCircle
 } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -234,6 +234,55 @@ export default function FeriasFerias() {
     }
     return map;
   }, [gozoPeriodos]);
+
+  // Fetch all afastamentos for the year to detect conflicts
+  const feriasColabIds = useMemo(() => [...new Set(ferias.map(f => f.colaborador_id).filter(Boolean))], [ferias]);
+  const { data: allAfastamentos = [] } = useQuery({
+    queryKey: ["ferias-afastamentos-table", anoFilter],
+    queryFn: async () => {
+      if (feriasColabIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from("ferias_afastamentos")
+        .select("id, colaborador_id, data_inicio, data_fim, motivo, motivo_descricao")
+        .in("colaborador_id", feriasColabIds);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: feriasColabIds.length > 0,
+  });
+
+  // Map: ferias_id → has conflict with afastamento
+  const feriasAfastamentoConflicts = useMemo(() => {
+    const conflictSet = new Set<string>();
+    for (const f of ferias) {
+      if (!f.colaborador_id) continue;
+      const colabAfasts = allAfastamentos.filter(a => a.colaborador_id === f.colaborador_id);
+      if (colabAfasts.length === 0) continue;
+      // Get vacation intervals
+      const intervals: { start: string; end: string }[] = [];
+      if (f.gozo_flexivel && gozoPeriodosByFeriasId[f.id]?.length) {
+        for (const p of gozoPeriodosByFeriasId[f.id]) {
+          intervals.push({ start: p.data_inicio, end: p.data_fim });
+        }
+      } else if (f.gozo_diferente && f.gozo_quinzena1_inicio) {
+        intervals.push({ start: f.gozo_quinzena1_inicio, end: f.gozo_quinzena1_fim! });
+        if (f.gozo_quinzena2_inicio) intervals.push({ start: f.gozo_quinzena2_inicio, end: f.gozo_quinzena2_fim! });
+      } else {
+        intervals.push({ start: f.quinzena1_inicio, end: f.quinzena1_fim });
+        if (f.quinzena2_inicio) intervals.push({ start: f.quinzena2_inicio, end: f.quinzena2_fim! });
+      }
+      for (const af of colabAfasts) {
+        for (const iv of intervals) {
+          if (af.data_inicio <= iv.end && af.data_fim >= iv.start) {
+            conflictSet.add(f.id);
+            break;
+          }
+        }
+        if (conflictSet.has(f.id)) break;
+      }
+    }
+    return conflictSet;
+  }, [ferias, allAfastamentos, gozoPeriodosByFeriasId]);
 
   const { data: setores = [] } = useQuery({
     queryKey: ["ferias-setores-filter"],
@@ -599,7 +648,16 @@ export default function FeriasFerias() {
                           <TableCell>{f.vender_dias && f.dias_vendidos ? <Badge variant="outline" className="text-xs">{f.dias_vendidos} dias</Badge> : <span className="text-muted-foreground text-xs">—</span>}</TableCell>
                           <TableCell><Badge variant="outline" className={statusColors[f.status]}>{statusLabels[f.status] || f.status}</Badge></TableCell>
                           <TableCell>{f.origem === "formulario_anual" ? <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 gap-1"><Sparkles className="h-3 w-3" />Gerada</Badge> : <span className="text-muted-foreground text-xs">Manual</span>}</TableCell>
-                          <TableCell>{f.is_excecao ? <Badge variant="outline" className="bg-orange-500/10 text-orange-600 border-orange-500/20 gap-1"><AlertTriangle className="h-3 w-3" />Sim</Badge> : <CheckCircle2 className="h-4 w-4 text-green-500" />}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              {f.is_excecao ? <Badge variant="outline" className="bg-orange-500/10 text-orange-600 border-orange-500/20 gap-1"><AlertTriangle className="h-3 w-3" />Sim</Badge> : <CheckCircle2 className="h-4 w-4 text-green-500" />}
+                              {feriasAfastamentoConflicts.has(f.id) && (
+                                <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 gap-1 text-xs">
+                                  <AlertCircle className="h-3 w-3" />Conflito afast.
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
                               <Button variant="ghost" size="sm" onClick={() => { setSelectedFerias(f); setViewDialogOpen(true); }}><Eye className="h-4 w-4" /></Button>
