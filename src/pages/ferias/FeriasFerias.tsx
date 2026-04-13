@@ -809,6 +809,24 @@ export default function FeriasFerias() {
       <ReducaoFeriasDialog open={reducaoDialogOpen} onOpenChange={setReducaoDialogOpen} ferias={reducaoFerias} colaboradorNome={reducaoFerias?.colaborador?.nome || ""} onSuccess={() => queryClient.invalidateQueries({ queryKey: ["ferias-ferias"] })} />
       <FormularioAnualDialog open={formDialogOpen} onOpenChange={setFormDialogOpen} formulario={selectedFormulario} anoReferencia={parseInt(formAnoFilter)} onSuccess={() => { queryClient.invalidateQueries({ queryKey: ["ferias-formularios"] }); queryClient.invalidateQueries({ queryKey: ["ferias-colaboradores-com-formulario"] }); setFormDialogOpen(false); }} />
       <FormularioAnualViewDialog open={formViewDialogOpen} onOpenChange={setFormViewDialogOpen} formulario={selectedFormulario} />
+
+      {/* Confirm dialog for unmarking enviado_contador */}
+      <AlertDialog open={!!contadorConfirmId} onOpenChange={(open) => { if (!open) setContadorConfirmId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desmarcar envio ao contador</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este período já foi marcado como enviado ao contador. Tem certeza que deseja desmarcar? Alterações após o envio devem ser comunicadas ao contador separadamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { if (contadorConfirmId) toggleEnviadoContadorMutation.mutate({ id: contadorConfirmId, value: false }); }}>
+              Desmarcar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
