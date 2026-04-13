@@ -19,8 +19,8 @@ export default function FeriasDashboard() {
   const monthEnd = endOfMonth(today);
   const feriasDashboardStatuses = ["pendente", "ativa", "aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo", "concluida"];
 
-  const buildGozoPeriodosMap = (periodos: Array<{ ferias_id: string; data_inicio: string; data_fim: string }>) => {
-    const periodosMap: Record<string, Array<{ data_inicio: string; data_fim: string }>> = {};
+  const buildGozoPeriodosMap = (periodos: Array<{ ferias_id: string; data_inicio: string; data_fim: string; referencia_periodo: number | null }>) => {
+    const periodosMap: Record<string, Array<{ data_inicio: string; data_fim: string; referencia_periodo: number | null }>> = {};
 
     for (const periodo of periodos) {
       if (!periodosMap[periodo.ferias_id]) {
@@ -30,7 +30,10 @@ export default function FeriasDashboard() {
       periodosMap[periodo.ferias_id].push({
         data_inicio: periodo.data_inicio,
         data_fim: periodo.data_fim,
+        referencia_periodo: periodo.referencia_periodo,
       });
+
+      periodosMap[periodo.ferias_id].sort((a, b) => a.data_inicio.localeCompare(b.data_inicio));
     }
 
     return periodosMap;
@@ -38,12 +41,28 @@ export default function FeriasDashboard() {
 
   const getResolvedVacationPeriods = (
     ferias: any,
-    gozoPeriodosMap: Record<string, Array<{ data_inicio: string; data_fim: string }>>,
+    gozoPeriodosMap: Record<string, Array<{ data_inicio: string; data_fim: string; referencia_periodo: number | null }>>,
   ) => {
     const periodosFlexiveis = gozoPeriodosMap[ferias.id];
 
     if (periodosFlexiveis?.length) {
-      return periodosFlexiveis;
+      const periodosResolvidos = periodosFlexiveis.map(({ data_inicio, data_fim }) => ({ data_inicio, data_fim }));
+      const referenciasUsadas = new Set(periodosFlexiveis.map((periodo) => periodo.referencia_periodo));
+
+      const q1Inicio = ferias.gozo_diferente ? ferias.gozo_quinzena1_inicio || ferias.quinzena1_inicio : ferias.quinzena1_inicio;
+      const q1Fim = ferias.gozo_diferente ? ferias.gozo_quinzena1_fim || ferias.quinzena1_fim : ferias.quinzena1_fim;
+      const q2Inicio = ferias.gozo_diferente ? ferias.gozo_quinzena2_inicio || ferias.quinzena2_inicio : ferias.quinzena2_inicio;
+      const q2Fim = ferias.gozo_diferente ? ferias.gozo_quinzena2_fim || ferias.quinzena2_fim : ferias.quinzena2_fim;
+
+      if (!referenciasUsadas.has(1) && q1Inicio && q1Fim) {
+        periodosResolvidos.push({ data_inicio: q1Inicio, data_fim: q1Fim });
+      }
+
+      if (!referenciasUsadas.has(2) && q2Inicio && q2Fim) {
+        periodosResolvidos.push({ data_inicio: q2Inicio, data_fim: q2Fim });
+      }
+
+      return periodosResolvidos.sort((a, b) => a.data_inicio.localeCompare(b.data_inicio));
     }
 
     if (ferias.gozo_diferente) {
@@ -69,7 +88,7 @@ export default function FeriasDashboard() {
 
   const getResolvedVacationStarts = (
     ferias: any,
-    gozoPeriodosMap: Record<string, Array<{ data_inicio: string; data_fim: string }>>,
+    gozoPeriodosMap: Record<string, Array<{ data_inicio: string; data_fim: string; referencia_periodo: number | null }>>,
   ) => getResolvedVacationPeriods(ferias, gozoPeriodosMap)
     .map((periodo) => periodo.data_inicio)
     .sort();
@@ -115,11 +134,11 @@ export default function FeriasDashboard() {
       if (error) throw error;
       
        const feriasIds = (data || []).map((f: any) => f.id);
-       let gozoPeriodosMap: Record<string, Array<{ data_inicio: string; data_fim: string }>> = {};
+        let gozoPeriodosMap: Record<string, Array<{ data_inicio: string; data_fim: string; referencia_periodo: number | null }>> = {};
        if (feriasIds.length > 0) {
         const { data: periodos } = await supabase
           .from("ferias_gozo_periodos")
-          .select("ferias_id, data_inicio, data_fim")
+           .select("ferias_id, data_inicio, data_fim, referencia_periodo")
            .in("ferias_id", feriasIds)
            .range(0, 5000);
          gozoPeriodosMap = buildGozoPeriodosMap(periodos || []);
@@ -264,6 +283,8 @@ export default function FeriasDashboard() {
   const { data: proximasFerias = [], isLoading: loadingProximas } = useQuery({
     queryKey: ["ferias-dashboard-proximas"],
     queryFn: async () => {
+      await supabase.rpc("atualizar_status_ferias");
+
       const todayStr = format(today, "yyyy-MM-dd");
       const in30DaysStr = format(in30Days, "yyyy-MM-dd");
 
@@ -288,7 +309,7 @@ export default function FeriasDashboard() {
       const feriasIds = allFerias.map((f: any) => f.id);
       const { data: allPeriodos } = await supabase
         .from("ferias_gozo_periodos")
-        .select("ferias_id, data_inicio, data_fim")
+        .select("ferias_id, data_inicio, data_fim, referencia_periodo")
         .in("ferias_id", feriasIds)
         .range(0, 5000);
 

@@ -403,8 +403,10 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     if (!open) return;
     isResettingRef.current = true;
     if (ferias) {
+      const hasFlexible = !!ferias.gozo_flexivel;
       const hasVenda = ferias.vender_dias && (ferias.dias_vendidos || 0) > 0;
       const hasGozo = ferias.gozo_diferente;
+      const inferredIsExcecao = !!(ferias.is_excecao || hasFlexible || hasVenda || hasGozo);
       let opcao: "nenhum" | "vender" | "gozo_diferente" = "nenhum";
       if (hasVenda) opcao = "vender";
       else if (hasGozo) opcao = "gozo_diferente";
@@ -435,7 +437,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         gozo_venda_q1_fim: hasVenda && !isStdSale ? (ferias.gozo_quinzena1_fim || "") : "",
         gozo_venda_q2_inicio: hasVenda && !isStdSale ? (ferias.gozo_quinzena2_inicio || "") : "",
         gozo_venda_q2_fim: hasVenda && !isStdSale ? (ferias.gozo_quinzena2_fim || "") : "",
-        is_excecao: ferias.is_excecao || false,
+        is_excecao: inferredIsExcecao,
         excecao_motivo: ferias.excecao_motivo || "",
         excecao_justificativa: ferias.excecao_justificativa || "",
       });
@@ -484,7 +486,10 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           .select("id, ferias_id, numero, dias, data_inicio, data_fim, referencia_periodo, tipo")
           .eq("ferias_id", ferias.id)
           .order("numero");
-        const loaded = (existingPeriodos as any[]) || [];
+        const loaded = ((existingPeriodos as any[]) || []).sort((a, b) => {
+          const byDate = (a.data_inicio || "").localeCompare(b.data_inicio || "");
+          return byDate !== 0 ? byDate : (a.numero || 0) - (b.numero || 0);
+        });
         if (loaded.length > 0) {
           // Infer excecaoTipo from periodo data
           const tipos = [...new Set(loaded.map((p: any) => p.tipo))];
@@ -503,6 +508,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             else if (refs.includes(2)) inferredDist = "2";
           }
 
+          form.setValue("is_excecao", true);
+          form.setValue("opcao_adicional", inferredTipo || "nenhum");
           setExcecaoTipo(inferredTipo);
           setExcDistribuicaoTipo(inferredDist);
           setExcDiasVendidos(ferias.dias_vendidos || 0);
@@ -514,6 +521,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             data_fim: p.data_fim,
           })));
         } else {
+          form.setValue("is_excecao", !!(ferias.is_excecao || ferias.gozo_flexivel));
+          form.setValue("opcao_adicional", ferias.vender_dias ? "vender" : ferias.gozo_diferente ? "gozo_diferente" : "nenhum");
           setExcecaoTipo(ferias.vender_dias ? "vender" : ferias.gozo_diferente ? "gozo_diferente" : null);
           setExcDistribuicaoTipo(ferias.distribuicao_tipo || "");
           setExcDiasVendidos(ferias.dias_vendidos || 0);
@@ -906,6 +915,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         await supabase.from("ferias_gozo_periodos" as any).delete().eq("ferias_id", feriasId);
         const periodosPayload = excPeriodos
           .filter(p => p.data_inicio && p.data_fim && p.dias > 0)
+          .sort((a, b) => a.data_inicio.localeCompare(b.data_inicio))
           .map((p, idx) => ({
             ferias_id: feriasId,
             tipo: excecaoTipo,
@@ -1019,7 +1029,14 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     }
     // Validate sub-period chronological order and overlaps
     if (excecaoTipo && excPeriodos.length > 1) {
-      const sorted = [...excPeriodos].filter(p => p.data_inicio).sort((a, b) => a.data_inicio.localeCompare(b.data_inicio));
+      const preenchidos = excPeriodos.filter(p => p.data_inicio && p.data_fim);
+      for (let i = 1; i < preenchidos.length; i++) {
+        if (preenchidos[i].data_inicio < preenchidos[i - 1].data_inicio) {
+          toast.error("Os subperíodos devem ser informados em ordem cronológica.");
+          return;
+        }
+      }
+      const sorted = [...preenchidos].sort((a, b) => a.data_inicio.localeCompare(b.data_inicio));
       for (let i = 1; i < sorted.length; i++) {
         if (sorted[i].data_inicio <= sorted[i - 1].data_fim) {
           toast.error(`Sub-períodos se sobrepõem: ${formatDateBR(sorted[i - 1].data_inicio)} e ${formatDateBR(sorted[i].data_inicio)}`);

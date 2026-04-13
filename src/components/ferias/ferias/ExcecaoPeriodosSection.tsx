@@ -229,7 +229,7 @@ export function ExcecaoPeriodosSection({
       onDistribuicaoTipoChange("");
       setTimeout(() => onDistribuicaoTipoChange(dt), 0);
     }
-  }, [diasVendidos, isHydrating]);
+  }, [diasVendidos]);
 
   // Reset when tipo changes (skip during edit hydration)
   useEffect(() => {
@@ -239,7 +239,7 @@ export function ExcecaoPeriodosSection({
     if (excecaoTipo === "gozo_diferente") {
       onDiasVendidosChange(0);
     }
-  }, [excecaoTipo, isHydrating]);
+  }, [excecaoTipo]);
 
   return (
     <div className="space-y-4">
