@@ -607,19 +607,19 @@ export default function FeriasFerias() {
                           <TableCell className="font-medium">{f.colaborador?.nome || "—"}</TableCell>
                           <TableCell>{f.colaborador?.setor_titular?.nome || "—"}</TableCell>
                           <TableCell className="text-sm">
-                            {f.gozo_flexivel && gozoPeriodosByFeriasId[f.id]?.length
+                            {gozoPeriodosByFeriasId[f.id]?.length
                               ? (() => {
                                   const periods = gozoPeriodosByFeriasId[f.id];
-                                  const hasQ2Flex = periods.some(p => p.referencia_periodo === 2);
+                                  const refsUsed = new Set(periods.map(p => p.referencia_periodo));
                                   return (
                                     <>
                                       {periods.map((p) => (
                                         <div key={p.id}>{formatPeriodo(p.data_inicio, p.data_fim)} <span className="text-muted-foreground">({p.dias}d)</span></div>
                                       ))}
-                                      {!hasQ2Flex && f.quinzena2_inicio && f.quinzena2_fim && (
+                                      {!refsUsed.has(2) && f.quinzena2_inicio && f.quinzena2_fim && (
                                         <div>{formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim)}</div>
                                       )}
-                                      {!hasQ2Flex && !f.quinzena2_inicio && (
+                                      {!refsUsed.has(2) && !f.quinzena2_inicio && (
                                         <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 gap-1 text-xs mt-1"><Clock className="h-3 w-3" />2º pendente</Badge>
                                       )}
                                     </>
