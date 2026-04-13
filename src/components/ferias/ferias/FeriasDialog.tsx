@@ -461,6 +461,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           .order("numero");
         if (existingPeriodos && existingPeriodos.length > 0) {
           setExcPeriodos((existingPeriodos as any[]).map((p: any) => ({
+            id: p.id || crypto.randomUUID(),
             referencia_periodo: p.referencia_periodo,
             dias: p.dias,
             data_inicio: p.data_inicio,
