@@ -1171,9 +1171,29 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                     <CardTitle className="text-sm flex items-center gap-2"><Info className="h-4 w-4 text-primary" />Período Aquisitivo (automático)</CardTitle>
                   </CardHeader>
                   <CardContent><p className="text-sm">{formatDateBR(periodoAquisitivo.inicio)} a {formatDateBR(periodoAquisitivo.fim)}</p></CardContent>
-                </Card>
+               </Card>
               )}
 
+              {/* Afastamentos alert */}
+              {afastamentos.length > 0 && (
+                <Alert className={afastamentoConflicts.length > 0 ? "border-destructive/50 bg-destructive/10" : "border-amber-500/30 bg-amber-500/10"}>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle className="text-sm">
+                    {afastamentoConflicts.length > 0 ? "⚠️ Conflito com afastamento!" : "Afastamentos registrados"}
+                  </AlertTitle>
+                  <AlertDescription className="text-xs space-y-1">
+                    {afastamentos.map(af => (
+                      <div key={af.id} className={afastamentoConflicts.some(c => c.afastamento.id === af.id) ? "font-semibold text-destructive" : ""}>
+                        {formatDateBR(af.data_inicio)} a {formatDateBR(af.data_fim)} — {af.motivo_descricao || af.motivo}
+                        {afastamentoConflicts.some(c => c.afastamento.id === af.id) && " (CONFLITO)"}
+                      </div>
+                    ))}
+                    {afastamentoConflicts.length > 0 && (
+                      <p className="mt-2 font-semibold text-destructive">Ajuste as datas de férias para não sobrepor períodos de afastamento.</p>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-sm">1º Período (15 dias)</CardTitle></CardHeader>
                 <CardContent className="grid grid-cols-2 gap-4">
