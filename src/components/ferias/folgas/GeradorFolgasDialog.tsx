@@ -209,7 +209,24 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     },
   });
 
-  // Query chefes de setor
+  // Query afastamentos ativos no mês
+  const { data: afastamentos = [] } = useQuery({
+    queryKey: ["ferias-afastamentos-gerador", year, month],
+    queryFn: async () => {
+      const monthStart = format(startOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
+      const monthEnd = format(endOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
+      
+      const { data, error } = await supabase
+        .from("ferias_afastamentos")
+        .select("colaborador_id, motivo, data_inicio, data_fim")
+        .lte("data_inicio", monthEnd)
+        .gte("data_fim", monthStart);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+
   const { data: setorChefes = [] } = useQuery({
     queryKey: ["ferias-setor-chefes-gerador"],
     queryFn: async () => {
