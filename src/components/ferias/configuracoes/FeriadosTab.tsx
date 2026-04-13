@@ -157,8 +157,8 @@ export function FeriadosTab() {
   // Separate recurrent and unique holidays
   const { recorrentes, unicos } = useMemo(() => {
     const matchesSearch = (f: Feriado) =>
-      f.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      f.tipo?.toLowerCase().includes(searchTerm.toLowerCase());
+      normalizeText(f.nome).includes(normalizeText(searchTerm)) ||
+      normalizeText(f.tipo || "").includes(normalizeText(searchTerm));
 
     const recorrentesFiltered = feriados.filter(
       (f) => f.recorrente && matchesSearch(f)

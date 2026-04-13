@@ -187,7 +187,7 @@ const SetorDialog = ({ open, onOpenChange, setor }: SetorDialogProps) => {
   const [searchChefe, setSearchChefe] = useState("");
   
   const filteredColaboradores = colaboradores.filter(c =>
-    c.nome.toLowerCase().includes(searchChefe.toLowerCase())
+    normalizeText(c.nome).includes(normalizeText(searchChefe))
   );
 
   const toggleChefe = (colaboradorId: string) => {

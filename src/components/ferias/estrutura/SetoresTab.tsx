@@ -126,7 +126,7 @@ const SetoresTab = () => {
   };
 
   const filteredSetores = setores.filter((s) =>
-    s.nome.toLowerCase().includes(search.toLowerCase())
+    normalizeText(s.nome).includes(normalizeText(search))
   );
 
   const sortedSetores = [...filteredSetores].sort((a, b) => {

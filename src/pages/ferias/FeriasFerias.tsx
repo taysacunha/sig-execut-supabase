@@ -37,6 +37,7 @@ import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { useUserRole } from "@/hooks/useUserRole";
 import { usePagination } from "@/hooks/usePagination";
 import { TablePagination } from "@/components/vendas/TableControls";
+import { normalizeText } from "@/lib/textUtils";
 
 // ========== Types ==========
 

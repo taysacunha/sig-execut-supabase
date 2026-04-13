@@ -89,7 +89,7 @@ const UnidadesTab = () => {
   });
 
   const filteredUnidades = unidades.filter((u) =>
-    u.nome.toLowerCase().includes(search.toLowerCase())
+    normalizeText(u.nome).includes(normalizeText(search))
   );
 
   const handleEdit = (unidade: Unidade) => {

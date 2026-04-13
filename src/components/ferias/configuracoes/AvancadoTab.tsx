@@ -88,9 +88,9 @@ export function AvancadoTab() {
 
   const filteredConfigs = configuracoes.filter(
     (c) =>
-      c.chave.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.valor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (c.descricao?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
+      normalizeText(c.chave).includes(normalizeText(searchTerm)) ||
+      normalizeText(c.valor).includes(normalizeText(searchTerm)) ||
+      normalizeText(c.descricao || "").includes(normalizeText(searchTerm))
   );
 
   const saveMutation = useMutation({

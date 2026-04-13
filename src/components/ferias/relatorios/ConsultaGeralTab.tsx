@@ -89,7 +89,7 @@ export function ConsultaGeralTab() {
     if (!ferias) return [];
     return ferias
       .filter((f) => {
-        const matchesSearch = !searchTerm || f.colaborador?.nome?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = !searchTerm || normalizeText(f.colaborador?.nome || "").includes(normalizeText(searchTerm));
         const matchesSetor = selectedSetor === "_all_" || f.colaborador?.setor?.id === selectedSetor;
         const matchesStatus = selectedStatus === "_all_" || f.status === selectedStatus;
         const matchesTipo = selectedTipo === "_all_" || 

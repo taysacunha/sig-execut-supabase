@@ -72,7 +72,7 @@ const CargosTab = () => {
   });
 
   const filteredCargos = cargos.filter((c) =>
-    c.nome.toLowerCase().includes(search.toLowerCase())
+    normalizeText(c.nome).includes(normalizeText(search))
   );
 
   const handleSort = (field: SortField) => {

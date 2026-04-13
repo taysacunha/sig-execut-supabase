@@ -83,7 +83,7 @@ const EquipesTab = () => {
   });
 
   const filteredEquipes = equipes.filter((e) =>
-    e.nome.toLowerCase().includes(search.toLowerCase())
+    normalizeText(e.nome).includes(normalizeText(search))
   );
 
   const handleEdit = (equipe: Equipe) => {

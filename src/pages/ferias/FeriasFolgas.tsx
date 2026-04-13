@@ -203,10 +203,10 @@ const FeriasFolgas = () => {
   // Filtrar folgas por busca
   const filteredFolgas = useMemo(() => {
     if (!searchTerm.trim()) return folgas;
-    const term = searchTerm.toLowerCase();
+    const term = normalizeText(searchTerm);
     return folgas.filter(f => 
-      f.colaborador?.nome?.toLowerCase().includes(term) ||
-      f.colaborador?.nome_exibicao?.toLowerCase().includes(term)
+      normalizeText(f.colaborador?.nome || "").includes(term) ||
+      normalizeText(f.colaborador?.nome_exibicao || "").includes(term)
     );
   }, [folgas, searchTerm]);
 

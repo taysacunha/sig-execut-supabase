@@ -49,10 +49,10 @@ const FeriasCreditos = () => {
 
   const filteredCreditos = useMemo(() => {
     if (!searchTerm.trim()) return creditos;
-    const term = searchTerm.toLowerCase();
+    const term = normalizeText(searchTerm);
     return creditos.filter((c: any) =>
-      c.colaborador?.nome?.toLowerCase().includes(term) ||
-      c.colaborador?.nome_exibicao?.toLowerCase().includes(term)
+      normalizeText(c.colaborador?.nome || "").includes(term) ||
+      normalizeText(c.colaborador?.nome_exibicao || "").includes(term)
     );
   }, [creditos, searchTerm]);
 
