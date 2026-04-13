@@ -648,7 +648,16 @@ export default function FeriasFerias() {
                           <TableCell>{f.vender_dias && f.dias_vendidos ? <Badge variant="outline" className="text-xs">{f.dias_vendidos} dias</Badge> : <span className="text-muted-foreground text-xs">—</span>}</TableCell>
                           <TableCell><Badge variant="outline" className={statusColors[f.status]}>{statusLabels[f.status] || f.status}</Badge></TableCell>
                           <TableCell>{f.origem === "formulario_anual" ? <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 gap-1"><Sparkles className="h-3 w-3" />Gerada</Badge> : <span className="text-muted-foreground text-xs">Manual</span>}</TableCell>
-                          <TableCell>{f.is_excecao ? <Badge variant="outline" className="bg-orange-500/10 text-orange-600 border-orange-500/20 gap-1"><AlertTriangle className="h-3 w-3" />Sim</Badge> : <CheckCircle2 className="h-4 w-4 text-green-500" />}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              {f.is_excecao ? <Badge variant="outline" className="bg-orange-500/10 text-orange-600 border-orange-500/20 gap-1"><AlertTriangle className="h-3 w-3" />Sim</Badge> : <CheckCircle2 className="h-4 w-4 text-green-500" />}
+                              {feriasAfastamentoConflicts.has(f.id) && (
+                                <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 gap-1 text-xs">
+                                  <AlertCircle className="h-3 w-3" />Conflito afast.
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
                               <Button variant="ghost" size="sm" onClick={() => { setSelectedFerias(f); setViewDialogOpen(true); }}><Eye className="h-4 w-4" /></Button>
