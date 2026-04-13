@@ -30,6 +30,8 @@ interface ExcecaoPeriodosSectionProps {
   q1Fim: string;
   q2Inicio: string;
   q2Fim: string;
+  /** When true, skip all auto-reset/init useEffects (edit hydration in progress) */
+  isHydrating?: boolean;
 }
 
 const formatDateBR = (dateStr: string) => {
@@ -160,6 +162,7 @@ export function ExcecaoPeriodosSection({
   q1Fim,
   q2Inicio,
   q2Fim,
+  isHydrating = false,
 }: ExcecaoPeriodosSectionProps) {
   const diasGozo = 30 - diasVendidos;
 
