@@ -244,7 +244,10 @@ const ColaboradorDialog = ({ open, onOpenChange, colaborador }: ColaboradorDialo
 
   // Reset flag when dialog closes
   useEffect(() => {
-    if (!open) setHasLoadedSubstitutos(false);
+    if (!open) {
+      setHasLoadedSubstitutos(false);
+      setActiveTab("dados");
+    }
   }, [open]);
 
   const mutation = useMutation({
