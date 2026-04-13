@@ -126,7 +126,7 @@ serve(async (req: Request) => {
     
     // SEMPRE usar o domínio publicado para links de email (nunca preview)
     // Isso evita que usuários caiam no auth-bridge do lovable.dev
-    const siteUrl = Deno.env.get("SITE_URL") || "https://sigest.lovable.app";
+    const siteUrl = Deno.env.get("SITE_URL") || "https://sig-execut.lovable.app";
     console.log(`[invite-user] Using canonical redirect URL: ${siteUrl}`);
 
     // Se é um reenvio, buscar email do usuário existente
