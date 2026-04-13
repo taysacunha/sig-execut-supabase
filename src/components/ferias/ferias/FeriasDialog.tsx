@@ -1145,6 +1145,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                   q1Fim={q1Fim}
                   q2Inicio={q2Inicio}
                   q2Fim={q2Fim}
+                  isHydrating={excHydrating}
                 />
               </div>
             ) : (
