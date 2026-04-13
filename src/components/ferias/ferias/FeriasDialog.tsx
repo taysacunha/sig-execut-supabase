@@ -189,6 +189,21 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const familiarId = selectedColab?.familiar_id;
   const familiarNome = familiarId ? colaboradores.find(c => c.id === familiarId)?.nome : null;
 
+  // Fetch afastamentos for selected collaborator
+  const { data: afastamentos = [] } = useQuery({
+    queryKey: ["ferias-afastamentos-dialog", selectedColabId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ferias_afastamentos")
+        .select("id, data_inicio, data_fim, motivo, motivo_descricao")
+        .eq("colaborador_id", selectedColabId!)
+        .order("data_inicio");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!selectedColabId,
+  });
+
   const { data: feriasFamiliar } = useQuery({
     queryKey: ["ferias-familiar", familiarId],
     queryFn: async () => {
