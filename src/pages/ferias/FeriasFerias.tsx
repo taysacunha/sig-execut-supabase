@@ -260,7 +260,7 @@ export default function FeriasFerias() {
       if (colabAfasts.length === 0) continue;
       // Get vacation intervals
       const intervals: { start: string; end: string }[] = [];
-      if (f.gozo_flexivel && gozoPeriodosByFeriasId[f.id]?.length) {
+      if (gozoPeriodosByFeriasId[f.id]?.length) {
         for (const p of gozoPeriodosByFeriasId[f.id]) {
           intervals.push({ start: p.data_inicio, end: p.data_fim });
         }
@@ -834,8 +834,8 @@ export default function FeriasFerias() {
                         <TableHead className="cursor-pointer select-none" onClick={() => handleContadorSort("nome")}>Colaborador <ArrowUpDown className="inline h-3 w-3 ml-1" /></TableHead>
                         <TableHead className="cursor-pointer select-none" onClick={() => handleContadorSort("setor")}>Setor <ArrowUpDown className="inline h-3 w-3 ml-1" /></TableHead>
                         <TableHead>Período Aquisitivo</TableHead>
-                        <TableHead>1º Período</TableHead>
-                        <TableHead>2º Período</TableHead>
+                        {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1") && <TableHead>1º Período</TableHead>}
+                        {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2") && <TableHead>2º Período</TableHead>}
                         <TableHead>Dias Vendidos</TableHead>
                         <TableHead className="text-center">Enviado</TableHead>
                       </TableRow>
@@ -846,8 +846,8 @@ export default function FeriasFerias() {
                           <TableCell className="font-medium">{f.colaborador?.nome || "—"}</TableCell>
                           <TableCell>{f.colaborador?.setor_titular?.nome || "—"}</TableCell>
                           <TableCell className="text-sm">{f.periodo_aquisitivo_inicio && f.periodo_aquisitivo_fim ? formatPeriodo(f.periodo_aquisitivo_inicio, f.periodo_aquisitivo_fim) : "—"}</TableCell>
-                          <TableCell className="text-sm">{formatPeriodo(f.quinzena1_inicio, f.quinzena1_fim)}</TableCell>
-                          <TableCell className="text-sm">{f.quinzena2_inicio && f.quinzena2_fim ? formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim) : "—"}</TableCell>
+                          {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1") && <TableCell className="text-sm">{formatPeriodo(f.quinzena1_inicio, f.quinzena1_fim)}</TableCell>}
+                          {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2") && <TableCell className="text-sm">{f.quinzena2_inicio && f.quinzena2_fim ? formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim) : "—"}</TableCell>}
                           <TableCell>{f.vender_dias && f.dias_vendidos ? <Badge variant="outline" className="text-xs">{Math.min(f.dias_vendidos, 10)} dias</Badge> : <span className="text-muted-foreground text-xs">—</span>}</TableCell>
                           <TableCell className="text-center">
                             {f.enviado_contador ? (
