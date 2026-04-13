@@ -80,6 +80,7 @@ const ColaboradorDialog = ({ open, onOpenChange, colaborador }: ColaboradorDialo
   const isEditing = !!colaborador;
   const [selectedSetoresSubstitutos, setSelectedSetoresSubstitutos] = useState<string[]>([]);
   const [familiarOpen, setFamiliarOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("dados");
 
   // Fetch setores
   const { data: setores = [] } = useQuery({
