@@ -256,6 +256,22 @@ export default function FeriasFerias() {
     onError: () => toast.error("Erro ao excluir férias"),
   });
 
+  const toggleEnviadoContadorMutation = useMutation({
+    mutationFn: async ({ id, value }: { id: string; value: boolean }) => {
+      const { error } = await supabase.from("ferias_ferias").update({
+        enviado_contador: value,
+        enviado_contador_em: value ? new Date().toISOString() : null,
+      }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["ferias-ferias"] });
+      toast.success(vars.value ? "Marcado como enviado ao contador" : "Desmarcado do envio ao contador");
+      setContadorConfirmId(null);
+    },
+    onError: () => toast.error("Erro ao atualizar status de envio"),
+  });
+
   const deleteFormularioMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("ferias_formulario_anual").delete().eq("id", id);
