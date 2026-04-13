@@ -105,6 +105,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const [excDistribuicaoTipo, setExcDistribuicaoTipo] = useState("");
   const [excDiasVendidos, setExcDiasVendidos] = useState(0);
   const [excPeriodos, setExcPeriodos] = useState<GozoPeriodo[]>([]);
+  const [excHydrating, setExcHydrating] = useState(false);
 
   const form = useForm<FeriasFormData>({
     resolver: zodResolver(feriasSchema),
@@ -457,7 +458,10 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       setExcDistribuicaoTipo("");
       setExcDiasVendidos(0);
       setExcPeriodos([]);
+      setExcHydrating(false);
     } else if (ferias.gozo_flexivel) {
+      // Mark hydrating BEFORE setting state so ExcecaoPeriodosSection skips auto-resets
+      setExcHydrating(true);
       setExcecaoTipo(ferias.vender_dias ? "vender" : ferias.gozo_diferente ? "gozo_diferente" : null);
       setExcDistribuicaoTipo(ferias.distribuicao_tipo || "");
       setExcDiasVendidos(ferias.dias_vendidos || 0);
@@ -479,12 +483,15 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         } else {
           setExcPeriodos([]);
         }
+        // Release hydration lock after periods are loaded
+        setTimeout(() => setExcHydrating(false), 0);
       })();
     } else {
       setExcecaoTipo(null);
       setExcDistribuicaoTipo("");
       setExcDiasVendidos(0);
       setExcPeriodos([]);
+      setExcHydrating(false);
     }
     setTimeout(() => { isResettingRef.current = false; }, 0);
   }, [ferias, open]);
