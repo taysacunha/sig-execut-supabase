@@ -1,26 +1,45 @@
 
 
-## Correção do fluxo de convite — URL errada
+## Criar página de Auditoria para o módulo de Férias e Folgas
 
-### Problema
-A edge function `invite-user` usa `"https://sigest.lovable.app"` como URL de redirecionamento. A URL correta é `https://sig-execut.lovable.app`. Não há secret `SITE_URL` configurado, então o fallback errado é sempre usado. Resultado: todo link de convite leva o usuário para um domínio inexistente.
+### O que falta
+- A sidebar já tem o link `/ferias/auditoria` (restrito a admin/super_admin)
+- Mas **não existe** a página `src/pages/ferias/FeriasAuditLogs.tsx`
+- E **não existe** a rota no `App.tsx` para `/ferias/auditoria`
 
-### Correções
+### Alterações
 
-**1. Corrigir o fallback na edge function** (`supabase/functions/invite-user/index.ts`, linha 129)
-- Trocar `"https://sigest.lovable.app"` por `"https://sig-execut.lovable.app"`
-- Fazer redeploy da function
+**1. Criar `src/pages/ferias/FeriasAuditLogs.tsx`**
+Seguindo o padrão idêntico aos outros módulos (Escalas, Vendas, Estoque):
+```tsx
+import { AuditLogsPanel } from "@/components/AuditLogsPanel";
 
-**2. Verificação manual necessária no painel Supabase**
-- Abrir: https://supabase.com/dashboard/project/msbhhsrtfqfqcsofnsuy/auth/url-configuration
-- Confirmar que **Site URL** = `https://sig-execut.lovable.app`
-- Confirmar que **Redirect URLs** contém `https://sig-execut.lovable.app/auth`
-- Se estiver diferente, corrigir lá
+export default function FeriasAuditLogs() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Auditoria - Férias e Folgas</h1>
+        <p className="text-muted-foreground">Histórico de alterações no módulo de férias e folgas</p>
+      </div>
+      <AuditLogsPanel defaultModule="ferias" defaultTab="modules" showAdminTab={false} />
+    </div>
+  );
+}
+```
 
-### Arquivos
-- `supabase/functions/invite-user/index.ts` — uma linha alterada (129)
+**2. Registrar a rota em `src/App.tsx`**
+- Adicionar lazy import: `const FeriasAuditLogs = lazy(() => import("./pages/ferias/FeriasAuditLogs"));`
+- Adicionar rota dentro do bloco `<Route path="/ferias">`:
+```tsx
+<Route path="auditoria" element={
+  <RoleGuard allowedRoles={["super_admin", "admin"]}>
+    <FeriasAuditLogs />
+  </RoleGuard>
+} />
+```
 
 ### Resultado
-- Links de convite passarão a redirecionar para `https://sig-execut.lovable.app/auth`
-- Convidados chegarão na tela de definir senha corretamente
+- Link "Auditoria" na sidebar de Férias passará a funcionar
+- Apenas super_admin e admin terão acesso (mesma proteção dos outros módulos)
+- Exibirá logs filtrados pelo módulo "ferias"
 
