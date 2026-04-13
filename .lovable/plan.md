@@ -1,45 +1,36 @@
 
 
-## Criar página de Auditoria para o módulo de Férias e Folgas
+## Problema
 
-### O que falta
-- A sidebar já tem o link `/ferias/auditoria` (restrito a admin/super_admin)
-- Mas **não existe** a página `src/pages/ferias/FeriasAuditLogs.tsx`
-- E **não existe** a rota no `App.tsx` para `/ferias/auditoria`
+O `GeradorFolgasDialog` não consulta a tabela `ferias_afastamentos`. Na etapa de exclusões (linhas 363-375), ele verifica apenas:
+- Período de experiência
+- Perda registrada
+- Férias no mês
+- Férias dividida em dois meses
 
-### Alterações
+**Não verifica afastamentos.** Resultado: colaboradores afastados (licença médica, maternidade, etc.) entram na escala normalmente.
 
-**1. Criar `src/pages/ferias/FeriasAuditLogs.tsx`**
-Seguindo o padrão idêntico aos outros módulos (Escalas, Vendas, Estoque):
-```tsx
-import { AuditLogsPanel } from "@/components/AuditLogsPanel";
+## Correção
 
-export default function FeriasAuditLogs() {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Auditoria - Férias e Folgas</h1>
-        <p className="text-muted-foreground">Histórico de alterações no módulo de férias e folgas</p>
-      </div>
-      <AuditLogsPanel defaultModule="ferias" defaultTab="modules" showAdminTab={false} />
-    </div>
-  );
-}
-```
+**Arquivo:** `src/components/ferias/folgas/GeradorFolgasDialog.tsx`
 
-**2. Registrar a rota em `src/App.tsx`**
-- Adicionar lazy import: `const FeriasAuditLogs = lazy(() => import("./pages/ferias/FeriasAuditLogs"));`
-- Adicionar rota dentro do bloco `<Route path="/ferias">`:
-```tsx
-<Route path="auditoria" element={
-  <RoleGuard allowedRoles={["super_admin", "admin"]}>
-    <FeriasAuditLogs />
-  </RoleGuard>
-} />
-```
+**1. Adicionar query de afastamentos ativos no mês** (após a query de perdas, ~linha 210)
+- Buscar `ferias_afastamentos` onde `data_inicio <= fim_do_mês` E `data_fim >= início_do_mês`
+- Retornar `colaborador_id`, `motivo`, `data_inicio`, `data_fim`
+
+**2. Adicionar função helper `isAfastado`** (junto com os outros helpers, ~linha 332)
+- Verificar se o colaborador tem algum afastamento que cubra **todos os sábados do mês** → excluir completamente
+- Se cobre apenas **alguns sábados** → remover esses sábados da lista de disponíveis (igual já faz com férias via `isColabOnVacation`)
+
+**3. Adicionar exclusão no Step 1** (linha 363-375)
+- Antes das outras verificações, checar se o colaborador está afastado durante todo o mês → adicionar razão "Afastado (licença médica)" ou similar
+- Para afastamentos parciais, filtrar os sábados disponíveis no Step 4 (igual já filtra férias)
+
+**4. Filtrar sábados por afastamento no Step 4** (linhas 417-433)
+- Ao calcular `availableSats`, além de `isColabOnVacation`, verificar também se o sábado cai dentro de um período de afastamento
 
 ### Resultado
-- Link "Auditoria" na sidebar de Férias passará a funcionar
-- Apenas super_admin e admin terão acesso (mesma proteção dos outros módulos)
-- Exibirá logs filtrados pelo módulo "ferias"
+- Juliana (licença médica + maternidade) não aparecerá na escala de folgas
+- Qualquer colaborador com afastamento registrado cobrindo sábados do mês será excluído ou terá esses sábados removidos
+- A lógica segue o mesmo padrão das outras regras já existentes
 
