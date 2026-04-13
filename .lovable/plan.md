@@ -1,115 +1,101 @@
 
+Diagnóstico honesto do que está no código hoje
 
-# Plano de Correções e Novas Funcionalidades — Módulo de Férias
+1. Taysa no dashboard
+- O card “Próximas Férias” foi alterado em `src/pages/ferias/FeriasDashboard.tsx`.
+- Porém a correção ficou parcial: ele ainda depende de uma busca inicial em `ferias_ferias` por campos de início (`quinzena1_inicio`, `quinzena2_inicio`, `gozo_quinzena1_inicio`, `gozo_quinzena2_inicio`) e só depois complementa com `ferias_gozo_periodos`.
+- Isso explica por que a Taysa ainda pode continuar de fora. Se o registro dela não entra na primeira seleção do jeito esperado, ela nunca aparece.
+- Então: isso não está resolvido de fato.
 
-São 7 itens distintos. Vou detalhar cada um separadamente.
+2. PDF com filtro por mês e período
+- Os filtros existem sim em `src/components/ferias/relatorios/ContadorPDFGenerator.tsx`.
+- Eles aparecem na tela `Férias > Relatórios > aba Contador`, não na aba `Férias > Férias > Tabela do Contador`.
+- Ou seja: foi implementado, mas em um lugar diferente do que você provavelmente estava procurando.
+- Além disso, a aba “Tabela do Contador” em `src/pages/ferias/FeriasFerias.tsx` continua com exportação própria, sem esses novos filtros. Isso gera inconsistência.
 
----
+3. Afastamento
+- O componente existe em `src/components/ferias/colaboradores/AfastamentosSection.tsx`.
+- Hoje ele só aparece dentro de `ColaboradorViewDialog.tsx`, ou seja: ao abrir “Visualizar colaborador”.
+- Não foi integrado na listagem principal de colaboradores, nem no cadastro/edição do colaborador.
+- Também não encontrei integração real dele com:
+  - bloqueio no cadastro de férias
+  - exclusão de colaborador disponível no sistema de folga
+  - badge de afastado na tabela
+- Então: a base começou, mas a funcionalidade está incompleta perante o que você pediu.
 
-## 1. Card "Próximas Férias" no Dashboard — Taysa não aparece
+4. Validação de campos obrigatórios em abas
+- Isso foi implementado em `src/components/ferias/colaboradores/ColaboradorDialog.tsx`.
+- Há `activeTab`, `onInvalid`, troca automática de aba e indicador vermelho nas tabs com erro.
+- Esse item parece realmente presente no código.
 
-**Problema**: A lógica de resolução de datas já está robusta (`getResolvedVacationPeriods`), mas o filtro server-side com `.or()` pode estar excluindo registros cujas datas de início estão em campos que o filtro não cobre (ex: datas salvas apenas em `ferias_gozo_periodos`). Além disso, o `gozoPeriodosMap` só contém períodos cujo `data_inicio` cai na janela de 30 dias — mas se a férias padrão não tem nenhum campo de início na janela, ela sequer é carregada da query principal.
+5. Edição de férias
+- Em `src/components/ferias/ferias/FeriasDialog.tsx` há lógica para restaurar os dados da férias ao editar, inclusive `gozo_flexivel` e leitura de `ferias_gozo_periodos`.
+- Então houve tentativa real de corrigir isso.
+- Mas sem testar na interface, não dá para afirmar que cobre todos os cenários. Pelo código, a intenção foi implementada.
 
-**Correção**: Inverter a abordagem — primeiro buscar TODOS os `ferias_gozo_periodos` com `data_inicio` na janela + TODOS os `ferias_ferias` com qualquer campo de início na janela. Depois, para cada `ferias_ferias`, carregar também os períodos flexíveis associados (mesmo que fora da janela), para que `getResolvedVacationPeriods` funcione corretamente. Garantir que a query de `ferias_ferias` também busque por registros que NÃO têm campos de início na janela mas TÊM períodos flexíveis na janela (via os IDs vindos de `ferias_gozo_periodos`).
+6. Enviado ao contador
+- Isso está presente em `src/pages/ferias/FeriasFerias.tsx`, `src/components/ferias/ferias/FeriasDialog.tsx` e `src/components/ferias/ferias/FeriasViewDialog.tsx`.
+- Há coluna “Enviado”, botão para marcar/desmarcar e alerta ao editar férias já enviadas.
+- Esse item parece implementado.
 
-**Arquivo**: `src/pages/ferias/FeriasDashboard.tsx`
+O que provavelmente aconteceu
+- Parte do trabalho foi feita, mas:
+  - uma parte ficou incompleta
+  - uma parte foi colocada em telas diferentes das que você esperava
+  - e o bug mais crítico da Taysa continuou sem solução
+- Então sua percepção faz sentido: você não está vendo o resultado como deveria.
 
----
+Plano de correção, agora focado no que falta aparecer de verdade
 
-## 2. ColaboradorDialog — Campos obrigatórios em outras abas não mostram erro
+1. Corrigir de vez o card da Taysa
+- Reescrever a query de “Próximas Férias” para não depender de filtro inicial por campos da tabela `ferias_ferias`.
+- Estratégia:
+  - buscar férias elegíveis por status
+  - buscar todos os `ferias_gozo_periodos` dessas férias
+  - resolver os períodos reais no cliente com prioridade total para:
+    1. `ferias_gozo_periodos`
+    2. `gozo_diferente`
+    3. períodos padrão
+  - só depois filtrar quem começa nos próximos 30 dias
+- Isso elimina o risco de perder a Taysa por causa do filtro inicial.
 
-**Problema**: O formulário tem 3 abas (Dados Pessoais, Vínculos, Outros). Campos obrigatórios como `setor_titular_id` ficam na aba "Vínculos". Quando o usuário clica em "Salvar" sem preencher, o Zod valida e bloqueia, mas a UI não navega para a aba com erro nem mostra feedback visível.
+2. Unificar onde ficam os filtros do contador
+- Hoje existe:
+  - `Relatórios > Contador` com filtros por mês/período
+  - `Férias > Tabela do Contador` sem esses filtros
+- Vou alinhar isso de um destes jeitos:
+  - ou mover a exportação principal para usar o mesmo componente
+  - ou replicar os filtros também na aba “Tabela do Contador”
+- Recomendação: unificar a lógica para não existirem dois fluxos diferentes.
 
-**Correção**: 
-- Trocar de `defaultValue` para `value` controlado no componente `Tabs`
-- Ao submeter com erros, verificar quais campos têm erro e navegar automaticamente para a aba correspondente
-- Adicionar indicador visual (badge/ícone vermelho) nas tabs que contêm erros
-- Mostrar toast informando "Preencha os campos obrigatórios"
+3. Fazer afastamento aparecer onde faz sentido
+- Adicionar um ponto visível na tela de colaboradores:
+  - badge “Afastado” na listagem
+  - acesso ao afastamento também no editar ou em ação dedicada, não só em “visualizar”
+- Integrar afastamento com regras do sistema:
+  - impedir férias sobrepostas
+  - alertar conflito com férias já existentes
+  - remover afastados das listas de disponibilidade de folga
 
-**Arquivo**: `src/components/ferias/colaboradores/ColaboradorDialog.tsx`
+4. Revisar os fluxos já alterados
+- Confirmar e ajustar:
+  - validação entre abas no colaborador
+  - edição de férias com preenchimento correto em padrão, exceção, gozo diferente e gozo flexível
+  - comportamento da marcação “enviado ao contador”
 
----
+Arquivos que precisarei ajustar
+- `src/pages/ferias/FeriasDashboard.tsx`
+- `src/pages/ferias/FeriasFerias.tsx`
+- `src/components/ferias/relatorios/ContadorPDFGenerator.tsx`
+- `src/pages/ferias/FeriasColaboradores.tsx`
+- `src/components/ferias/colaboradores/ColaboradorViewDialog.tsx`
+- `src/components/ferias/colaboradores/ColaboradorDialog.tsx`
+- `src/components/ferias/ferias/FeriasDialog.tsx`
+- `src/pages/ferias/FeriasFolgas.tsx`
 
-## 3. FeriasDialog — Editar não carrega dados existentes
-
-**Problema**: O `useEffect` de reset (linha 378-450) já popula o formulário com os dados da férias ao editar. Porém o campo `colaborador_id` é um combobox que filtra apenas colaboradores "disponíveis" (sem férias cadastrada). Como o colaborador já TEM férias, ele é excluído da lista — exceto pela condição `if (isEditing && ferias?.colaborador_id === c.id) return true` na linha 182. O problema real pode ser que o objeto `ferias` passado ao dialog não contém todos os campos necessários, ou os `excPeriodos`/`excecaoTipo` não são restaurados ao editar uma exceção.
-
-**Correção**:
-- Garantir que ao editar, os campos de exceção (`excecaoTipo`, `excDistribuicaoTipo`, `excDiasVendidos`, `excPeriodos`) sejam restaurados a partir dos dados da férias e dos `ferias_gozo_periodos`
-- Carregar os `ferias_gozo_periodos` da férias sendo editada para popular o estado local
-- Verificar que o objeto `ferias` passado ao dialog contém todos os campos (incluindo `gozo_flexivel`, `distribuicao_tipo`, etc.)
-
-**Arquivos**: `src/components/ferias/ferias/FeriasDialog.tsx`, `src/pages/ferias/FeriasFerias.tsx`
-
----
-
-## 4. Afastamento de colaboradores (funcionalidade nova)
-
-**Problema**: Não existe forma de registrar que um colaborador está afastado (acidente, licença maternidade, etc.).
-
-**Implementação**:
-- Criar tabela `ferias_afastamentos` com: `id`, `colaborador_id`, `motivo` (enum: acidente, licenca_maternidade, licenca_paternidade, doenca, outros), `motivo_descricao`, `data_inicio`, `data_fim`, `observacoes`, `created_at`, `created_by`
-- Adicionar seção no `ColaboradorDialog` ou `ColaboradorViewDialog` para visualizar/gerenciar afastamentos
-- Na geração de folgas, excluir colaboradores afastados no período
-- No cadastro de férias, alertar se o período choca com afastamento ativo
-- Mostrar badge "Afastado" na tabela de colaboradores quando há afastamento ativo
-- Validar: se colaborador já tem férias no período do afastamento, alertar o usuário
-
-**Arquivos novos**: migration SQL, possivelmente `src/components/ferias/colaboradores/AfastamentoDialog.tsx`
-**Arquivos modificados**: `ColaboradorDialog.tsx`, `ColaboradorViewDialog.tsx`, `FeriasDialog.tsx`, `FeriasFolgas.tsx`, `FeriasColaboradores.tsx`
-
----
-
-## 5. Busca por nome sem tratamento de acentos
-
-**Problema**: Em `FeriasFerias.tsx` (linhas 272, 287), a busca usa `.toLowerCase().includes()` sem normalizar acentos. Pesquisar "vanesia" não encontra "vanésia". O mesmo pode ocorrer em `FeriasFolgas.tsx`, `CalendarioFeriasTab.tsx`, e nos comboboxes de seleção de colaborador.
-
-**Correção**: Substituir todas as ocorrências de `.toLowerCase().includes()` por `normalizeText()` (já existente em `src/lib/textUtils.ts`). Localizar e corrigir em:
-- `src/pages/ferias/FeriasFerias.tsx` — filteredFerias e filteredFormularios
-- `src/pages/ferias/FeriasFolgas.tsx` — qualquer filtro por nome
-- `src/components/ferias/calendario/CalendarioFeriasTab.tsx` — filtro por nome
-- `src/components/ferias/ferias/FeriasDialog.tsx` — combobox de colaborador
-- Qualquer outro local no módulo férias que faça busca textual
-
-**Arquivos**: múltiplos no módulo férias
-
----
-
-## 6. Controle de envio ao contador (funcionalidade nova)
-
-**Problema**: Não existe forma de marcar que um período de férias foi encaminhado ao contador.
-
-**Implementação**:
-- Adicionar coluna `enviado_contador` (boolean, default false) e `enviado_contador_em` (timestamp) na tabela `ferias_ferias`
-- Na tabela de férias e na aba do contador, adicionar botão/checkbox para marcar como "Enviado ao contador"
-- Ao tentar editar uma férias marcada como enviada, exibir alerta: "Este período já foi encaminhado ao contador. Alterações devem ser feitas apenas internamente."
-- Permitir a edição, mas com confirmação explícita
-
-**Arquivos**: migration SQL, `FeriasFerias.tsx`, `FeriasDialog.tsx`, `ContadorPDFGenerator.tsx`
-
----
-
-## 7. PDF do Contador — Filtro por meses e períodos
-
-**Problema**: O PDF do contador só filtra por ano e setor. O usuário quer selecionar meses específicos e/ou períodos.
-
-**Correção**:
-- Adicionar multi-select de meses (janeiro a dezembro)
-- Adicionar filtro de período (1º quinzena, 2º quinzena, ambos)
-- Aplicar filtros na query e na geração do PDF
-- Atualizar o preview da tabela com os mesmos filtros
-
-**Arquivo**: `src/components/ferias/relatorios/ContadorPDFGenerator.tsx`
-
----
-
-## Ordem de implementação sugerida
-
-1. **Busca com acentos** (rápido, impacto amplo)
-2. **ColaboradorDialog — erro em abas** (UX crítico)
-3. **FeriasDialog — editar carrega dados** (bug funcional)
-4. **Card Próximas Férias** (bug recorrente, Taysa)
-5. **PDF Contador — filtros** (melhoria)
-6. **Controle envio ao contador** (funcionalidade nova)
-7. **Afastamentos** (funcionalidade nova, maior escopo)
-
+Critério de aceite
+- Taysa aparece no card “Próximas Férias” com 24/04
+- O usuário encontra claramente os filtros de mês/período no fluxo do contador que realmente usa
+- O afastamento fica visível e acessível sem “caça ao recurso”
+- Afastamento interfere nas férias e nas folgas como você pediu
+- O que estiver no plano passa a ficar perceptível na interface, não só no código
