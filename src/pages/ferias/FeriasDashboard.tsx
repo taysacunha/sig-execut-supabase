@@ -258,115 +258,43 @@ export default function FeriasDashboard() {
     },
   });
 
-  // Próximas férias (próximos 30 dias)
+  // Próximas férias (próximos 30 dias) — busca por status, resolve períodos client-side
   const { data: proximasFerias = [], isLoading: loadingProximas } = useQuery({
     queryKey: ["ferias-dashboard-proximas"],
     queryFn: async () => {
       const todayStr = format(today, "yyyy-MM-dd");
       const in30DaysStr = format(in30Days, "yyyy-MM-dd");
-      const upcomingStartsFilter = [
-        `and(quinzena1_inicio.gte.${todayStr},quinzena1_inicio.lte.${in30DaysStr})`,
-        `and(quinzena2_inicio.gte.${todayStr},quinzena2_inicio.lte.${in30DaysStr})`,
-        `and(gozo_quinzena1_inicio.gte.${todayStr},gozo_quinzena1_inicio.lte.${in30DaysStr})`,
-        `and(gozo_quinzena2_inicio.gte.${todayStr},gozo_quinzena2_inicio.lte.${in30DaysStr})`,
-      ].join(",");
-      
-      const [
-        { data: feriasNaJanela, error: feriasNaJanelaError },
-        { data: periodosNaJanela, error: periodosNaJanelaError },
-      ] = await Promise.all([
-        supabase
-          .from("ferias_ferias")
-          .select(`
-            id,
-            gozo_flexivel,
-            quinzena1_inicio,
-            quinzena1_fim,
-            quinzena2_inicio,
-            quinzena2_fim,
-            gozo_diferente,
-            gozo_quinzena1_inicio,
-            gozo_quinzena1_fim,
-            gozo_quinzena2_inicio,
-            gozo_quinzena2_fim,
-            ferias_colaboradores(nome)
-          `)
-          .in("status", feriasDashboardStatuses)
-          .or(upcomingStartsFilter)
-          .range(0, 5000),
-        supabase
-          .from("ferias_gozo_periodos")
-          .select("ferias_id, data_inicio, data_fim")
-          .gte("data_inicio", todayStr)
-          .lte("data_inicio", in30DaysStr)
-          .range(0, 5000),
-      ]);
 
-      if (feriasNaJanelaError) throw feriasNaJanelaError;
-      if (periodosNaJanelaError) throw periodosNaJanelaError;
+      // 1) Buscar TODAS as férias elegíveis por status (sem filtro de data)
+      const { data: allFerias, error: ferError } = await supabase
+        .from("ferias_ferias")
+        .select(`
+          id, gozo_flexivel,
+          quinzena1_inicio, quinzena1_fim,
+          quinzena2_inicio, quinzena2_fim,
+          gozo_diferente,
+          gozo_quinzena1_inicio, gozo_quinzena1_fim,
+          gozo_quinzena2_inicio, gozo_quinzena2_fim,
+          ferias_colaboradores(nome)
+        `)
+        .in("status", feriasDashboardStatuses)
+        .range(0, 5000);
+      if (ferError) throw ferError;
+      if (!allFerias?.length) return [];
 
-      const feriasMap = new Map<string, any>((feriasNaJanela || []).map((ferias: any) => [ferias.id, ferias]));
-      const feriasIdsComPeriodos = Array.from(new Set((periodosNaJanela || []).map((periodo: any) => periodo.ferias_id)));
-      const feriasIdsFaltantes = feriasIdsComPeriodos.filter((id) => !feriasMap.has(id));
+      // 2) Buscar TODOS os gozo_periodos dessas férias
+      const feriasIds = allFerias.map((f: any) => f.id);
+      const { data: allPeriodos } = await supabase
+        .from("ferias_gozo_periodos")
+        .select("ferias_id, data_inicio, data_fim")
+        .in("ferias_id", feriasIds)
+        .range(0, 5000);
 
-      if (feriasIdsFaltantes.length > 0) {
-        const { data: feriasComPeriodos, error: feriasComPeriodosError } = await supabase
-          .from("ferias_ferias")
-          .select(`
-            id,
-            gozo_flexivel,
-            quinzena1_inicio,
-            quinzena1_fim,
-            quinzena2_inicio,
-            quinzena2_fim,
-            gozo_diferente,
-            gozo_quinzena1_inicio,
-            gozo_quinzena1_fim,
-            gozo_quinzena2_inicio,
-            gozo_quinzena2_fim,
-            ferias_colaboradores(nome)
-          `)
-          .in("id", feriasIdsFaltantes)
-          .in("status", feriasDashboardStatuses)
-          .range(0, 5000);
+      const gozoPeriodosMap = buildGozoPeriodosMap(allPeriodos || []);
 
-        if (feriasComPeriodosError) throw feriasComPeriodosError;
-
-        for (const ferias of feriasComPeriodos || []) {
-          feriasMap.set(ferias.id, ferias);
-        }
-      }
-
-      // Build gozo periodos map from periodos found in the window
-      const gozoPeriodosMap = buildGozoPeriodosMap(periodosNaJanela || []);
-
-      // Also fetch ALL gozo_periodos for ferias that were found (to fully resolve their periods)
-      const allFeriasIds = Array.from(feriasMap.keys());
-      if (allFeriasIds.length > 0) {
-        const { data: allPeriodos } = await supabase
-          .from("ferias_gozo_periodos")
-          .select("ferias_id, data_inicio, data_fim")
-          .in("ferias_id", allFeriasIds)
-          .range(0, 5000);
-        // Merge into map (only add periods not already present)
-        if (allPeriodos) {
-          for (const p of allPeriodos) {
-            if (!gozoPeriodosMap[p.ferias_id]) {
-              gozoPeriodosMap[p.ferias_id] = [];
-            }
-            const exists = gozoPeriodosMap[p.ferias_id].some(
-              (existing) => existing.data_inicio === p.data_inicio && existing.data_fim === p.data_fim
-            );
-            if (!exists) {
-              gozoPeriodosMap[p.ferias_id].push({ data_inicio: p.data_inicio, data_fim: p.data_fim });
-            }
-          }
-        }
-      }
-
+      // 3) Resolver períodos e filtrar os que começam nos próximos 30 dias
       const results: any[] = [];
-      
-      for (const f of feriasMap.values()) {
+      for (const f of allFerias) {
         const upcoming = getResolvedVacationStarts(f, gozoPeriodosMap)
           .filter((d) => d >= todayStr && d <= in30DaysStr)
           .sort();
@@ -378,7 +306,7 @@ export default function FeriasDashboard() {
           });
         }
       }
-      
+
       return results.sort((a, b) => a.inicio.localeCompare(b.inicio));
     },
   });

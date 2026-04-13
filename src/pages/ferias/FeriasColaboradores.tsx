@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, Filter, Users, Eye } from "lucide-react";
+import { Plus, Pencil, Trash2, Filter, Users, Eye, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -75,6 +75,29 @@ const FeriasColaboradores = () => {
       return data as Colaborador[];
     },
   });
+
+  // Fetch active afastamentos to show badge
+  const { data: afastamentosAtivos = [] } = useQuery({
+    queryKey: ["ferias-afastamentos-ativos"],
+    queryFn: async () => {
+      const todayStr = new Date().toISOString().split("T")[0];
+      const { data, error } = await supabase
+        .from("ferias_afastamentos")
+        .select("colaborador_id, motivo")
+        .lte("data_inicio", todayStr)
+        .gte("data_fim", todayStr);
+      if (error) return [];
+      return data;
+    },
+  });
+
+  const afastadosSet = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of afastamentosAtivos) {
+      map.set(a.colaborador_id, a.motivo);
+    }
+    return map;
+  }, [afastamentosAtivos]);
 
   const { data: setores = [] } = useQuery({
     queryKey: ["ferias-setores-list"],
@@ -287,7 +310,15 @@ const FeriasColaboradores = () => {
                   paginatedData.map((colaborador) => (
                     <TableRow key={colaborador.id}>
                       <TableCell>
-                        <p className="font-medium">{colaborador.nome}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{colaborador.nome}</p>
+                          {afastadosSet.has(colaborador.id) && (
+                            <Badge variant="destructive" className="text-xs flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" />
+                              Afastado
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>{colaborador.ferias_setores?.nome || "-"}</TableCell>
                       <TableCell>{colaborador.ferias_cargos?.nome || "-"}</TableCell>

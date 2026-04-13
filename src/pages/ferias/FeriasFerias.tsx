@@ -138,6 +138,8 @@ export default function FeriasFerias() {
   const canEditFerias = canEdit("ferias");
   const isAdmin = hasRoleAccess(["super_admin", "admin", "manager"]);
   const [contadorConfirmId, setContadorConfirmId] = useState<string | null>(null);
+  const [contadorMesFilter, setContadorMesFilter] = useState<string>("all");
+  const [contadorPeriodoFilter, setContadorPeriodoFilter] = useState<string>("all");
 
   const [activeTab, setActiveTab] = useState("ferias");
   const [searchTerm, setSearchTerm] = useState("");
@@ -356,7 +358,27 @@ export default function FeriasFerias() {
       });
   }, [filteredFerias, contadorSortField, contadorSortDir]);
 
-  const contadorPagination = usePagination(contadorData, contadorPerPage);
+  // Filtrar contadorData por mês e período
+  const contadorDataFiltered = useMemo(() => {
+    return contadorData.filter((f) => {
+      if (contadorMesFilter !== "all") {
+        const mes = parseInt(contadorMesFilter);
+        const q1Month = f.quinzena1_inicio ? new Date(f.quinzena1_inicio + "T00:00:00").getMonth() + 1 : null;
+        const q2Month = f.quinzena2_inicio ? new Date(f.quinzena2_inicio + "T00:00:00").getMonth() + 1 : null;
+        if (contadorPeriodoFilter === "1") {
+          if (q1Month !== mes) return false;
+        } else if (contadorPeriodoFilter === "2") {
+          if (q2Month !== mes) return false;
+        } else {
+          if (q1Month !== mes && q2Month !== mes) return false;
+        }
+      }
+      if (contadorPeriodoFilter === "2" && !f.quinzena2_inicio) return false;
+      return true;
+    });
+  }, [contadorData, contadorMesFilter, contadorPeriodoFilter]);
+
+  const contadorFilteredPagination = usePagination(contadorDataFiltered, contadorPerPage);
 
   const calcAdjustedPeriodo = (inicio: string, fim: string, diasVendidos: number) => {
     if (diasVendidos <= 0) return formatPeriodo(inicio, fim);
@@ -369,7 +391,7 @@ export default function FeriasFerias() {
   };
 
   const generateContadorPDF = useCallback(() => {
-    if (contadorData.length === 0) { toast.error("Nenhum dado para exportar"); return; }
+    if (contadorDataFiltered.length === 0) { toast.error("Nenhum dado para exportar"); return; }
     const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const margin = 15;
@@ -379,7 +401,14 @@ export default function FeriasFerias() {
     pdf.setFont("helvetica", "bold");
     pdf.text(`TABELA DE FÉRIAS - CONTADOR - ${anoFilter}`, pageWidth / 2, 15, { align: "center" });
 
-    let yPos = 25;
+    // Subtitle with filters
+    pdf.setFontSize(9);
+    pdf.setFont("helvetica", "normal");
+    const mesLabel = contadorMesFilter !== "all" ? MONTHS[parseInt(contadorMesFilter) - 1] : "Todos";
+    const periodoLabel = contadorPeriodoFilter === "1" ? "1ª Quinzena" : contadorPeriodoFilter === "2" ? "2ª Quinzena" : "Ambos";
+    pdf.text(`Mês: ${mesLabel} | Período: ${periodoLabel}`, pageWidth / 2, 21, { align: "center" });
+
+    let yPos = 28;
     const colWidths = [50, 30, 30, 45, 45, 45, 25];
     const headers = ["Colaborador", "CPF", "Setor", "Per. Aquisitivo", "1º Período", "2º Período", "Dias V."];
 
@@ -394,7 +423,7 @@ export default function FeriasFerias() {
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(7);
 
-    contadorData.forEach((f, idx) => {
+    contadorDataFiltered.forEach((f, idx) => {
       if (yPos > 190) {
         pdf.addPage();
         yPos = 15;
@@ -441,11 +470,11 @@ export default function FeriasFerias() {
 
     pdf.setFontSize(7);
     pdf.setTextColor(120, 120, 120);
-    pdf.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")} | * Dias vendidos limitados a 10`, pageWidth / 2, pdf.internal.pageSize.getHeight() - 5, { align: "center" });
+    pdf.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")} | * Dias vendidos limitados a 10 | Total: ${contadorDataFiltered.length}`, pageWidth / 2, pdf.internal.pageSize.getHeight() - 5, { align: "center" });
 
     pdf.save(`ferias-contador-${anoFilter}.pdf`);
     toast.success("PDF do contador exportado!");
-  }, [contadorData, anoFilter, formatPeriodo]);
+  }, [contadorDataFiltered, anoFilter, contadorMesFilter, contadorPeriodoFilter, formatPeriodo]);
 
   return (
     <div className="space-y-6">
@@ -724,9 +753,11 @@ export default function FeriasFerias() {
         {/* ========== ABA: TABELA DO CONTADOR ========== */}
         <TabsContent value="contador" className="mt-6 space-y-6">
           <div className="flex flex-wrap gap-4 items-end justify-between">
-            <div className="flex gap-4 items-end">
+            <div className="flex flex-wrap gap-4 items-end">
               <div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar colaborador..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 w-56" /></div>
               <Select value={setorFilter} onValueChange={setSetorFilter}><SelectTrigger className="w-48"><SelectValue placeholder="Setor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os setores</SelectItem>{setores.map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}</SelectContent></Select>
+              <Select value={contadorMesFilter} onValueChange={setContadorMesFilter}><SelectTrigger className="w-44"><SelectValue placeholder="Mês" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os meses</SelectItem>{MONTHS.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent></Select>
+              <Select value={contadorPeriodoFilter} onValueChange={setContadorPeriodoFilter}><SelectTrigger className="w-40"><SelectValue placeholder="Período" /></SelectTrigger><SelectContent><SelectItem value="all">Ambos</SelectItem><SelectItem value="1">1ª Quinzena</SelectItem><SelectItem value="2">2ª Quinzena</SelectItem></SelectContent></Select>
             </div>
             <Button variant="outline" className="gap-2" onClick={() => generateContadorPDF()}><Printer className="h-4 w-4" />Exportar PDF</Button>
           </div>
@@ -735,8 +766,8 @@ export default function FeriasFerias() {
             <CardContent className="p-0">
               {feriasLoading ? (
                 <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-              ) : contadorData.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground"><Download className="h-12 w-12 mb-4 opacity-50" /><p>Nenhuma férias encontrada para o ano selecionado</p></div>
+              ) : contadorDataFiltered.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground"><Download className="h-12 w-12 mb-4 opacity-50" /><p>Nenhuma férias encontrada para os filtros selecionados</p></div>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
@@ -752,7 +783,7 @@ export default function FeriasFerias() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {contadorPagination.paginatedItems.map((f) => (
+                      {contadorFilteredPagination.paginatedItems.map((f) => (
                         <TableRow key={f.id}>
                           <TableCell className="font-medium">{f.colaborador?.nome || "—"}</TableCell>
                           <TableCell>{f.colaborador?.setor_titular?.nome || "—"}</TableCell>
@@ -788,12 +819,12 @@ export default function FeriasFerias() {
                     </TableBody>
                   </Table>
                   <TablePagination
-                    currentPage={contadorPagination.currentPage}
-                    totalPages={contadorPagination.totalPages}
+                    currentPage={contadorFilteredPagination.currentPage}
+                    totalPages={contadorFilteredPagination.totalPages}
                     itemsPerPage={contadorPerPage}
-                    onPageChange={contadorPagination.setCurrentPage}
-                    onItemsPerPageChange={(v) => { setContadorPerPage(v); contadorPagination.setCurrentPage(1); }}
-                    totalItems={contadorData.length}
+                    onPageChange={contadorFilteredPagination.setCurrentPage}
+                    onItemsPerPageChange={(v) => { setContadorPerPage(v); contadorFilteredPagination.setCurrentPage(1); }}
+                    totalItems={contadorDataFiltered.length}
                   />
                 </div>
               )}

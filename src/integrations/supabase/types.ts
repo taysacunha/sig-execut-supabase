@@ -819,6 +819,53 @@ export type Database = {
           },
         ]
       }
+      ferias_afastamentos: {
+        Row: {
+          colaborador_id: string
+          created_at: string | null
+          created_by: string | null
+          data_fim: string
+          data_inicio: string
+          id: string
+          motivo: string
+          motivo_descricao: string | null
+          observacoes: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          colaborador_id: string
+          created_at?: string | null
+          created_by?: string | null
+          data_fim: string
+          data_inicio: string
+          id?: string
+          motivo: string
+          motivo_descricao?: string | null
+          observacoes?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          colaborador_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          data_fim?: string
+          data_inicio?: string
+          id?: string
+          motivo?: string
+          motivo_descricao?: string | null
+          observacoes?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ferias_afastamentos_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "ferias_colaboradores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ferias_audit_logs: {
         Row: {
           action: string
