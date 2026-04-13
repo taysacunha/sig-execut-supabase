@@ -486,6 +486,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       setExcDiasVendidos(0);
       setExcPeriodos([]);
     }
+    setTimeout(() => { isResettingRef.current = false; }, 0);
   }, [ferias, open]);
 
   // Check conflicts
