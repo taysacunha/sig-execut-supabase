@@ -320,7 +320,12 @@ function UserManagementContent() {
       setInviteOpen(false);
       fetchUsers();
     } catch (error: any) {
-      toast.error(error.message || "Erro ao convidar usuário");
+      const msg = error.message || "";
+      if (msg.includes("rate limit") || msg.includes("Limite de envio") || msg.includes("limite")) {
+        toast.error("Limite de emails atingido. Aguarde alguns minutos e tente novamente.");
+      } else {
+        toast.error(msg || "Erro ao convidar usuário");
+      }
     } finally {
       setInviting(false);
     }
@@ -338,7 +343,12 @@ function UserManagementContent() {
       toast.success(data.message || "Convite reenviado!");
       fetchUsers();
     } catch (error: any) {
-      toast.error(error.message || "Erro ao reenviar convite");
+      const msg = error.message || "";
+      if (msg.includes("rate limit") || msg.includes("Limite de envio") || msg.includes("limite")) {
+        toast.error("Limite de emails atingido. Aguarde alguns minutos e tente novamente.");
+      } else {
+        toast.error(msg || "Erro ao reenviar convite");
+      }
     } finally {
       setResendingInvite(null);
     }

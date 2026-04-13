@@ -226,6 +226,39 @@ serve(async (req: Request) => {
 
       if (reinviteError) {
         console.error("Error re-inviting user:", reinviteError);
+        
+        // Tratar rate limit (429) - restaurar usuário deletado
+        const isRateLimit = (reinviteError as any).status === 429 || (reinviteError as any).code === "over_email_send_rate_limit" || reinviteError.message?.includes("rate limit");
+        if (isRateLimit) {
+          // Recriar o usuário sem enviar email para não perder o registro
+          console.log("Rate limit hit during resend - recreating user without email");
+          const { data: recreated } = await adminClient.auth.admin.createUser({
+            email: email!,
+            email_confirm: false,
+            user_metadata: { created_by: caller.email, role: role },
+          });
+          if (recreated?.user) {
+            const newId = recreated.user.id;
+            const finalRole = role || existingRoleData?.role || 'collaborator';
+            await adminClient.from("user_roles").insert({ user_id: newId, role: finalRole });
+            await adminClient.from("user_profiles").insert({ user_id: newId, name: name || existingProfileData?.name || email });
+            const systemsToRestore = systems || existingSystemsData || [];
+            if (systemsToRestore.length > 0) {
+              const systemInserts = systemsToRestore.map((sys: any) => ({
+                user_id: newId,
+                system_name: typeof sys === 'string' ? sys : sys.system_name,
+                permission_type: typeof sys === 'string' ? 'view_edit' : (sys.permission_type || 'view_edit'),
+              }));
+              await adminClient.from("system_access").insert(systemInserts);
+            }
+            console.log(`User recreated as ${newId} after rate limit`);
+          }
+          return new Response(
+            JSON.stringify({ error: "Limite de envio de emails atingido. Aguarde alguns minutos antes de tentar novamente." }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
         return new Response(
           JSON.stringify({ error: `Erro ao reenviar convite: ${reinviteError.message}` }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -303,6 +336,8 @@ serve(async (req: Request) => {
 
     const existingUser = existingUsers.users.find(u => u.email === email);
     
+    let deletedPendingUser: { id: string; roleData: any; systemsData: any; profileData: any } | null = null;
+
     if (existingUser) {
       if (existingUser.user_metadata?.password_set === true) {
         console.log("User already active with password set");
@@ -312,6 +347,11 @@ serve(async (req: Request) => {
         );
       }
       
+      // Salvar dados antes de deletar para poder restaurar se o convite falhar
+      const { data: savedRole } = await adminClient.from("user_roles").select("role").eq("user_id", existingUser.id).single();
+      const { data: savedSystems } = await adminClient.from("system_access").select("system_name, permission_type").eq("user_id", existingUser.id);
+      const { data: savedProfile } = await adminClient.from("user_profiles").select("name").eq("user_id", existingUser.id).single();
+
       console.log(`Deleting existing pending user ${existingUser.id} to recreate`);
       await adminClient.from("user_roles").delete().eq("user_id", existingUser.id);
       await adminClient.from("system_access").delete().eq("user_id", existingUser.id);
@@ -324,6 +364,7 @@ serve(async (req: Request) => {
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+      deletedPendingUser = { id: existingUser.id, roleData: savedRole, systemsData: savedSystems, profileData: savedProfile };
     }
 
     // Criar usuário com inviteUserByEmail
@@ -339,6 +380,16 @@ serve(async (req: Request) => {
 
     if (inviteError) {
       console.error("Error inviting user:", inviteError);
+      
+      // Tratar rate limit (429)
+      const isRateLimit = (inviteError as any).status === 429 || (inviteError as any).code === "over_email_send_rate_limit" || inviteError.message?.includes("rate limit");
+      if (isRateLimit) {
+        return new Response(
+          JSON.stringify({ error: "Limite de envio de emails atingido. Aguarde alguns minutos antes de tentar novamente." }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
       return new Response(
         JSON.stringify({ error: `Erro ao convidar usuário: ${inviteError.message}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
