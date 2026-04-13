@@ -748,6 +748,7 @@ export default function FeriasFerias() {
                         <TableHead>1º Período</TableHead>
                         <TableHead>2º Período</TableHead>
                         <TableHead>Dias Vendidos</TableHead>
+                        <TableHead className="text-center">Enviado</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -759,6 +760,29 @@ export default function FeriasFerias() {
                           <TableCell className="text-sm">{formatPeriodo(f.quinzena1_inicio, f.quinzena1_fim)}</TableCell>
                           <TableCell className="text-sm">{f.quinzena2_inicio && f.quinzena2_fim ? formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim) : "—"}</TableCell>
                           <TableCell>{f.vender_dias && f.dias_vendidos ? <Badge variant="outline" className="text-xs">{Math.min(f.dias_vendidos, 10)} dias</Badge> : <span className="text-muted-foreground text-xs">—</span>}</TableCell>
+                          <TableCell className="text-center">
+                            {f.enviado_contador ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-green-600 hover:text-orange-600 gap-1"
+                                title={`Enviado em ${f.enviado_contador_em ? formatDate(f.enviado_contador_em) : "—"}. Clique para desmarcar.`}
+                                onClick={() => setContadorConfirmId(f.id)}
+                              >
+                                <CheckCircle2 className="h-4 w-4" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-muted-foreground hover:text-primary gap-1"
+                                title="Marcar como enviado ao contador"
+                                onClick={() => toggleEnviadoContadorMutation.mutate({ id: f.id, value: true })}
+                              >
+                                <Send className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
