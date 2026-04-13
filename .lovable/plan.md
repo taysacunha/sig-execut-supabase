@@ -1,28 +1,31 @@
 
 
-## Diagnóstico
+## Problemas identificados
 
-O problema é uma **condição de corrida entre useEffects**. Quando o dialog abre em modo de edição:
+1. **Status "Encerrado" incorreto**: A função `isActive` compara com `new Date()` — se hoje está antes do período, retorna `false`, e o código mostra "Encerrado". Falta distinguir 3 estados: **Futuro** (ainda não começou), **Ativo** (em andamento), **Encerrado** (já terminou).
 
-1. O `useEffect` principal (linha 378) executa `form.reset(...)` com todos os valores corretos da férias (colaborador, datas, opção adicional, etc.)
-2. Porém, o `form.reset()` dispara mudanças em todos os campos `watch()`
-3. O `useEffect` da linha 346, que observa `opcaoAdicional`, é acionado logo em seguida
-4. Esse efeito **limpa** todos os campos de gozo/venda que acabaram de ser preenchidos
-5. Da mesma forma, o efeito da linha 237 recalcula `quinzena1_fim` a partir de `q1Inicio`, sobrescrevendo o valor salvo no banco
+2. **Sem validação de conflito entre afastamentos**: Ao registrar um novo afastamento, não há verificação se o período se sobrepõe a outro afastamento já existente do mesmo colaborador.
 
-Resultado: o formulário abre aparentemente vazio — os campos foram preenchidos e imediatamente limpos pelos efeitos subsequentes.
+## Correções
 
-## Correção
+**Arquivo**: `src/components/ferias/colaboradores/AfastamentosSection.tsx`
 
-Adicionar uma flag `isResetting` (ref) que bloqueia os useEffects "limpadores" durante o reset inicial.
+### 1. Corrigir lógica de status
 
-**Arquivo**: `src/components/ferias/ferias/FeriasDialog.tsx`
+Substituir a função `isActive` por uma função `getStatus` que retorna 3 estados:
 
-### Mudanças:
+```
+Se hoje < data_inicio → "futuro" (badge azul/outline "Agendado")
+Se hoje >= data_inicio E hoje <= data_fim → "ativo" (badge destructive "Ativo")  
+Se hoje > data_fim → "encerrado" (badge secondary "Encerrado")
+```
 
-1. Criar `const isResettingRef = useRef(false)` no topo do componente
-2. No `useEffect` de reset (linha 378), setar `isResettingRef.current = true` antes do `form.reset()` e `setTimeout(() => isResettingRef.current = false, 0)` depois — isso garante que os efeitos disparados pelo reset são ignorados
-3. Em cada `useEffect` que limpa campos (linhas 237, 246, 330-344, 346-375), adicionar um guard: `if (isResettingRef.current) return;`
+Atualizar o card para usar o novo status (cor do border, badge).
 
-Isso preserva os valores carregados do banco durante a edição, mas mantém o comportamento de limpeza quando o usuário altera campos manualmente.
+### 2. Validação de conflito entre períodos
+
+Antes de salvar, verificar se o novo período se sobrepõe a algum afastamento existente (excluindo o próprio registro se for edição). Usar a lista `afastamentos` já carregada:
+
+- Para cada afastamento existente, checar se `novoInicio <= existenteFim && novoFim >= existenteInicio`
+- Se houver conflito, mostrar erro e bloquear o salvamento
 
