@@ -1,47 +1,115 @@
 
-Problema identificado:
-- A página `/dev` mostra os registros lendo direto da tabela `dev_tracker` em `src/pages/DevTracker.tsx`.
-- Essa tabela está com RLS ativo e só permite acesso para usuário autenticado com role admin/super_admin (`.lovable/dev_tracker_migration.sql`).
-- Porém a rota `/dev` em `src/App.tsx` não usa `ProtectedRoute`. Então a página abre só com o código secreto, mesmo sem sessão Supabase válida.
-- Resultado: você entra na tela, mas a query em `loadFeatures()` não consegue ler `dev_tracker`, e a UI acaba parecendo “vazia”.
-- Além disso, não existe no frontend nenhum uso da edge function `log-dev-work`; então um “pedido no chat” não grava automaticamente algo nessa tabela. Hoje os dados só aparecem se alguém inserir manualmente na página ou chamar essa function por fora.
 
-O que vou corrigir:
-1. Proteger `/dev` com autenticação real
-- Envolver a rota `/dev` e `/dev/deploy-guide` com `ProtectedRoute`.
-- Isso evita abrir a tela sem sessão e elimina o falso estado de “sem registros” para usuário deslogado.
+# Plano de Correções e Novas Funcionalidades — Módulo de Férias
 
-2. Melhorar o diagnóstico da página
-- Ajustar `loadFeatures()` para diferenciar:
-  - sem dados de fato
-  - erro de permissão/autenticação
-  - falha de leitura
-- Exibir mensagem clara quando o usuário estiver sem sessão ou sem permissão, em vez de mostrar lista vazia.
+São 7 itens distintos. Vou detalhar cada um separadamente.
 
-3. Ligar a página ao fluxo automatizado correto
-- Decidir entre dois caminhos:
-  - manter `/dev` como cadastro manual apenas
-  - ou adicionar um botão/ação para consumir a edge function `log-dev-work`
-- Se a intenção é ver “o registro que pedi” ao Lovable, então a UI precisa refletir esse fluxo ou pelo menos deixar claro que pedidos no chat não populam `dev_tracker` automaticamente hoje.
+---
 
-4. Revisar segurança do fluxo dev
-- Remover dependência do código secreto hardcoded como única proteção prática.
-- Manter a verificação por role como fonte real de acesso.
-- Opcionalmente, trocar o fluxo para usar a edge function em vez de CRUD direto no cliente, se quiser centralizar regras.
+## 1. Card "Próximas Férias" no Dashboard — Taysa não aparece
 
-Arquivos a ajustar:
-- `src/App.tsx`
-- `src/pages/DevTracker.tsx`
+**Problema**: A lógica de resolução de datas já está robusta (`getResolvedVacationPeriods`), mas o filtro server-side com `.or()` pode estar excluindo registros cujas datas de início estão em campos que o filtro não cobre (ex: datas salvas apenas em `ferias_gozo_periodos`). Além disso, o `gozoPeriodosMap` só contém períodos cujo `data_inicio` cai na janela de 30 dias — mas se a férias padrão não tem nenhum campo de início na janela, ela sequer é carregada da query principal.
 
-Detalhe técnico:
-- Hoje há um desalinhamento entre frontend e banco:
-  - frontend: libera `/dev` com senha local (`DEV_CODE`)
-  - banco: exige usuário autenticado admin/super_admin via RLS
-- Isso explica por que a página pode abrir e ainda assim não mostrar o conteúdo.
-- A edge function `supabase/functions/log-dev-work/index.ts` existe, mas não é chamada por nenhum arquivo em `src/`.
+**Correção**: Inverter a abordagem — primeiro buscar TODOS os `ferias_gozo_periodos` com `data_inicio` na janela + TODOS os `ferias_ferias` com qualquer campo de início na janela. Depois, para cada `ferias_ferias`, carregar também os períodos flexíveis associados (mesmo que fora da janela), para que `getResolvedVacationPeriods` funcione corretamente. Garantir que a query de `ferias_ferias` também busque por registros que NÃO têm campos de início na janela mas TÊM períodos flexíveis na janela (via os IDs vindos de `ferias_gozo_periodos`).
 
-Validação depois da implementação:
-- Entrar em `/dev` logado como admin/super_admin e confirmar que os registros aparecem.
-- Entrar deslogado e confirmar redirecionamento para `/auth`.
-- Validar que erro de permissão não aparece mais como “Nenhuma funcionalidade registrada”.
-- Se o fluxo automatizado for ligado à function, confirmar que um novo registro criado por esse caminho aparece na lista logo após salvar.
+**Arquivo**: `src/pages/ferias/FeriasDashboard.tsx`
+
+---
+
+## 2. ColaboradorDialog — Campos obrigatórios em outras abas não mostram erro
+
+**Problema**: O formulário tem 3 abas (Dados Pessoais, Vínculos, Outros). Campos obrigatórios como `setor_titular_id` ficam na aba "Vínculos". Quando o usuário clica em "Salvar" sem preencher, o Zod valida e bloqueia, mas a UI não navega para a aba com erro nem mostra feedback visível.
+
+**Correção**: 
+- Trocar de `defaultValue` para `value` controlado no componente `Tabs`
+- Ao submeter com erros, verificar quais campos têm erro e navegar automaticamente para a aba correspondente
+- Adicionar indicador visual (badge/ícone vermelho) nas tabs que contêm erros
+- Mostrar toast informando "Preencha os campos obrigatórios"
+
+**Arquivo**: `src/components/ferias/colaboradores/ColaboradorDialog.tsx`
+
+---
+
+## 3. FeriasDialog — Editar não carrega dados existentes
+
+**Problema**: O `useEffect` de reset (linha 378-450) já popula o formulário com os dados da férias ao editar. Porém o campo `colaborador_id` é um combobox que filtra apenas colaboradores "disponíveis" (sem férias cadastrada). Como o colaborador já TEM férias, ele é excluído da lista — exceto pela condição `if (isEditing && ferias?.colaborador_id === c.id) return true` na linha 182. O problema real pode ser que o objeto `ferias` passado ao dialog não contém todos os campos necessários, ou os `excPeriodos`/`excecaoTipo` não são restaurados ao editar uma exceção.
+
+**Correção**:
+- Garantir que ao editar, os campos de exceção (`excecaoTipo`, `excDistribuicaoTipo`, `excDiasVendidos`, `excPeriodos`) sejam restaurados a partir dos dados da férias e dos `ferias_gozo_periodos`
+- Carregar os `ferias_gozo_periodos` da férias sendo editada para popular o estado local
+- Verificar que o objeto `ferias` passado ao dialog contém todos os campos (incluindo `gozo_flexivel`, `distribuicao_tipo`, etc.)
+
+**Arquivos**: `src/components/ferias/ferias/FeriasDialog.tsx`, `src/pages/ferias/FeriasFerias.tsx`
+
+---
+
+## 4. Afastamento de colaboradores (funcionalidade nova)
+
+**Problema**: Não existe forma de registrar que um colaborador está afastado (acidente, licença maternidade, etc.).
+
+**Implementação**:
+- Criar tabela `ferias_afastamentos` com: `id`, `colaborador_id`, `motivo` (enum: acidente, licenca_maternidade, licenca_paternidade, doenca, outros), `motivo_descricao`, `data_inicio`, `data_fim`, `observacoes`, `created_at`, `created_by`
+- Adicionar seção no `ColaboradorDialog` ou `ColaboradorViewDialog` para visualizar/gerenciar afastamentos
+- Na geração de folgas, excluir colaboradores afastados no período
+- No cadastro de férias, alertar se o período choca com afastamento ativo
+- Mostrar badge "Afastado" na tabela de colaboradores quando há afastamento ativo
+- Validar: se colaborador já tem férias no período do afastamento, alertar o usuário
+
+**Arquivos novos**: migration SQL, possivelmente `src/components/ferias/colaboradores/AfastamentoDialog.tsx`
+**Arquivos modificados**: `ColaboradorDialog.tsx`, `ColaboradorViewDialog.tsx`, `FeriasDialog.tsx`, `FeriasFolgas.tsx`, `FeriasColaboradores.tsx`
+
+---
+
+## 5. Busca por nome sem tratamento de acentos
+
+**Problema**: Em `FeriasFerias.tsx` (linhas 272, 287), a busca usa `.toLowerCase().includes()` sem normalizar acentos. Pesquisar "vanesia" não encontra "vanésia". O mesmo pode ocorrer em `FeriasFolgas.tsx`, `CalendarioFeriasTab.tsx`, e nos comboboxes de seleção de colaborador.
+
+**Correção**: Substituir todas as ocorrências de `.toLowerCase().includes()` por `normalizeText()` (já existente em `src/lib/textUtils.ts`). Localizar e corrigir em:
+- `src/pages/ferias/FeriasFerias.tsx` — filteredFerias e filteredFormularios
+- `src/pages/ferias/FeriasFolgas.tsx` — qualquer filtro por nome
+- `src/components/ferias/calendario/CalendarioFeriasTab.tsx` — filtro por nome
+- `src/components/ferias/ferias/FeriasDialog.tsx` — combobox de colaborador
+- Qualquer outro local no módulo férias que faça busca textual
+
+**Arquivos**: múltiplos no módulo férias
+
+---
+
+## 6. Controle de envio ao contador (funcionalidade nova)
+
+**Problema**: Não existe forma de marcar que um período de férias foi encaminhado ao contador.
+
+**Implementação**:
+- Adicionar coluna `enviado_contador` (boolean, default false) e `enviado_contador_em` (timestamp) na tabela `ferias_ferias`
+- Na tabela de férias e na aba do contador, adicionar botão/checkbox para marcar como "Enviado ao contador"
+- Ao tentar editar uma férias marcada como enviada, exibir alerta: "Este período já foi encaminhado ao contador. Alterações devem ser feitas apenas internamente."
+- Permitir a edição, mas com confirmação explícita
+
+**Arquivos**: migration SQL, `FeriasFerias.tsx`, `FeriasDialog.tsx`, `ContadorPDFGenerator.tsx`
+
+---
+
+## 7. PDF do Contador — Filtro por meses e períodos
+
+**Problema**: O PDF do contador só filtra por ano e setor. O usuário quer selecionar meses específicos e/ou períodos.
+
+**Correção**:
+- Adicionar multi-select de meses (janeiro a dezembro)
+- Adicionar filtro de período (1º quinzena, 2º quinzena, ambos)
+- Aplicar filtros na query e na geração do PDF
+- Atualizar o preview da tabela com os mesmos filtros
+
+**Arquivo**: `src/components/ferias/relatorios/ContadorPDFGenerator.tsx`
+
+---
+
+## Ordem de implementação sugerida
+
+1. **Busca com acentos** (rápido, impacto amplo)
+2. **ColaboradorDialog — erro em abas** (UX crítico)
+3. **FeriasDialog — editar carrega dados** (bug funcional)
+4. **Card Próximas Férias** (bug recorrente, Taysa)
+5. **PDF Contador — filtros** (melhoria)
+6. **Controle envio ao contador** (funcionalidade nova)
+7. **Afastamentos** (funcionalidade nova, maior escopo)
+
