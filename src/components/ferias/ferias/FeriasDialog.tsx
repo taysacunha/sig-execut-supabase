@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { ExcecaoPeriodosSection, type GozoPeriodo } from "./ExcecaoPeriodosSection";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -228,13 +228,17 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const isVendaExcecao = isVenda && diasVendidos > 10;
   const forceSingleGozo = isVendaExcecao && diasVendidos > 15;
 
+  const isResettingRef = useRef(false);
+
   useEffect(() => {
+    if (isResettingRef.current) return;
     if (forceSingleGozo) {
       form.setValue("gozo_venda_periodos", "1");
     }
   }, [forceSingleGozo]);
 
   useEffect(() => {
+    if (isResettingRef.current) return;
     if (q1Inicio) {
       try {
         const endDate = addDays(parseISO(q1Inicio), 14);
@@ -244,6 +248,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   }, [q1Inicio]);
 
   useEffect(() => {
+    if (isResettingRef.current) return;
     if (q2Inicio) {
       try {
         const endDate = addDays(parseISO(q2Inicio), 14);
@@ -328,6 +333,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   }, [gozoQ2Inicio, isGozoDiferente]);
 
   useEffect(() => {
+    if (isResettingRef.current) return;
     if (isVenda && diasVendidos > 10) {
       form.setValue("is_excecao", true);
       form.setValue("excecao_motivo", "venda_acima_limite");
@@ -335,6 +341,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   }, [isVenda, diasVendidos]);
 
   useEffect(() => {
+    if (isResettingRef.current) return;
     if (!isExcecao && opcaoAdicional === "gozo_diferente") {
       form.setValue("opcao_adicional", "nenhum");
     }
@@ -344,6 +351,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   }, [isExcecao]);
 
   useEffect(() => {
+    if (isResettingRef.current) return;
     if (opcaoAdicional === "nenhum") {
       form.setValue("gozo_quinzena1_inicio", "");
       form.setValue("gozo_quinzena1_fim", "");
@@ -377,6 +385,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   // Reset form when ferias changes or dialog opens
   useEffect(() => {
     if (!open) return;
+    isResettingRef.current = true;
     if (ferias) {
       const hasVenda = ferias.vender_dias && (ferias.dias_vendidos || 0) > 0;
       const hasGozo = ferias.gozo_diferente;
