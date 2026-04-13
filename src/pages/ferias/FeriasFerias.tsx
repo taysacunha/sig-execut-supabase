@@ -207,22 +207,22 @@ export default function FeriasFerias() {
     },
   });
 
-  // Fetch flexible gozo periods for all ferias with gozo_flexivel
-  const flexFeriasIds = useMemo(() => ferias.filter(f => f.gozo_flexivel).map(f => f.id), [ferias]);
+  // Fetch gozo periods for ALL ferias (not just gozo_flexivel) to handle inconsistent flags
+  const allFeriasIds = useMemo(() => ferias.map(f => f.id), [ferias]);
   
   const { data: gozoPeriodos = [] } = useQuery({
-    queryKey: ["ferias-gozo-periodos-table", flexFeriasIds],
+    queryKey: ["ferias-gozo-periodos-table", allFeriasIds],
     queryFn: async () => {
-      if (flexFeriasIds.length === 0) return [];
+      if (allFeriasIds.length === 0) return [];
       const { data, error } = await supabase
         .from("ferias_gozo_periodos" as any)
         .select("id, ferias_id, numero, dias, data_inicio, data_fim, referencia_periodo")
-        .in("ferias_id", flexFeriasIds)
+        .in("ferias_id", allFeriasIds)
         .order("numero");
       if (error) throw error;
       return data as any as GozoPeriodo[];
     },
-    enabled: flexFeriasIds.length > 0,
+    enabled: allFeriasIds.length > 0,
   });
 
   // Group gozo periods by ferias_id
@@ -260,7 +260,7 @@ export default function FeriasFerias() {
       if (colabAfasts.length === 0) continue;
       // Get vacation intervals
       const intervals: { start: string; end: string }[] = [];
-      if (f.gozo_flexivel && gozoPeriodosByFeriasId[f.id]?.length) {
+      if (gozoPeriodosByFeriasId[f.id]?.length) {
         for (const p of gozoPeriodosByFeriasId[f.id]) {
           intervals.push({ start: p.data_inicio, end: p.data_fim });
         }
@@ -458,8 +458,16 @@ export default function FeriasFerias() {
     pdf.text(`Mês: ${mesLabel} | Período: ${periodoLabel}`, pageWidth / 2, 21, { align: "center" });
 
     let yPos = 28;
-    const colWidths = [50, 30, 30, 45, 45, 45, 25];
-    const headers = ["Colaborador", "CPF", "Setor", "Per. Aquisitivo", "1º Período", "2º Período", "Dias V."];
+    const showP1 = contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1";
+    const showP2 = contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2";
+    const colWidths = showP1 && showP2
+      ? [50, 30, 30, 45, 45, 45, 25]
+      : [55, 35, 35, 50, 55, 30];
+    const headers = ["Colaborador", "CPF", "Setor", "Per. Aquisitivo",
+      ...(showP1 ? ["1º Período"] : []),
+      ...(showP2 ? ["2º Período"] : []),
+      "Dias V.",
+    ];
 
     pdf.setFillColor(220, 220, 220);
     pdf.rect(margin, yPos - 5, pageWidth - margin * 2, 8, "F");
@@ -508,10 +516,14 @@ export default function FeriasFerias() {
       xPos += colWidths[2];
       pdf.text(f.periodo_aquisitivo_inicio && f.periodo_aquisitivo_fim ? formatPeriodo(f.periodo_aquisitivo_inicio, f.periodo_aquisitivo_fim) : "—", xPos + 2, yPos);
       xPos += colWidths[3];
-      pdf.text(calcAdjustedPeriodo(f.quinzena1_inicio, f.quinzena1_fim, vendP1), xPos + 2, yPos);
-      xPos += colWidths[4];
-      pdf.text(f.quinzena2_inicio && f.quinzena2_fim ? calcAdjustedPeriodo(f.quinzena2_inicio, f.quinzena2_fim, vendP2) : "—", xPos + 2, yPos);
-      xPos += colWidths[5];
+      if (showP1) {
+        pdf.text(calcAdjustedPeriodo(f.quinzena1_inicio, f.quinzena1_fim, vendP1), xPos + 2, yPos);
+        xPos += colWidths[4];
+      }
+      if (showP2) {
+        pdf.text(f.quinzena2_inicio && f.quinzena2_fim ? calcAdjustedPeriodo(f.quinzena2_inicio, f.quinzena2_fim, vendP2) : "—", xPos + 2, yPos);
+        xPos += colWidths[showP1 ? 5 : 4];
+      }
       pdf.text(diasVend > 0 ? String(diasVend) : "—", xPos + 2, yPos);
 
       yPos += 6;
@@ -607,19 +619,19 @@ export default function FeriasFerias() {
                           <TableCell className="font-medium">{f.colaborador?.nome || "—"}</TableCell>
                           <TableCell>{f.colaborador?.setor_titular?.nome || "—"}</TableCell>
                           <TableCell className="text-sm">
-                            {f.gozo_flexivel && gozoPeriodosByFeriasId[f.id]?.length
+                            {gozoPeriodosByFeriasId[f.id]?.length
                               ? (() => {
                                   const periods = gozoPeriodosByFeriasId[f.id];
-                                  const hasQ2Flex = periods.some(p => p.referencia_periodo === 2);
+                                  const refsUsed = new Set(periods.map(p => p.referencia_periodo));
                                   return (
                                     <>
                                       {periods.map((p) => (
                                         <div key={p.id}>{formatPeriodo(p.data_inicio, p.data_fim)} <span className="text-muted-foreground">({p.dias}d)</span></div>
                                       ))}
-                                      {!hasQ2Flex && f.quinzena2_inicio && f.quinzena2_fim && (
+                                      {!refsUsed.has(2) && f.quinzena2_inicio && f.quinzena2_fim && (
                                         <div>{formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim)}</div>
                                       )}
-                                      {!hasQ2Flex && !f.quinzena2_inicio && (
+                                      {!refsUsed.has(2) && !f.quinzena2_inicio && (
                                         <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 gap-1 text-xs mt-1"><Clock className="h-3 w-3" />2º pendente</Badge>
                                       )}
                                     </>
@@ -834,8 +846,8 @@ export default function FeriasFerias() {
                         <TableHead className="cursor-pointer select-none" onClick={() => handleContadorSort("nome")}>Colaborador <ArrowUpDown className="inline h-3 w-3 ml-1" /></TableHead>
                         <TableHead className="cursor-pointer select-none" onClick={() => handleContadorSort("setor")}>Setor <ArrowUpDown className="inline h-3 w-3 ml-1" /></TableHead>
                         <TableHead>Período Aquisitivo</TableHead>
-                        <TableHead>1º Período</TableHead>
-                        <TableHead>2º Período</TableHead>
+                        {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1") && <TableHead>1º Período</TableHead>}
+                        {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2") && <TableHead>2º Período</TableHead>}
                         <TableHead>Dias Vendidos</TableHead>
                         <TableHead className="text-center">Enviado</TableHead>
                       </TableRow>
@@ -846,8 +858,8 @@ export default function FeriasFerias() {
                           <TableCell className="font-medium">{f.colaborador?.nome || "—"}</TableCell>
                           <TableCell>{f.colaborador?.setor_titular?.nome || "—"}</TableCell>
                           <TableCell className="text-sm">{f.periodo_aquisitivo_inicio && f.periodo_aquisitivo_fim ? formatPeriodo(f.periodo_aquisitivo_inicio, f.periodo_aquisitivo_fim) : "—"}</TableCell>
-                          <TableCell className="text-sm">{formatPeriodo(f.quinzena1_inicio, f.quinzena1_fim)}</TableCell>
-                          <TableCell className="text-sm">{f.quinzena2_inicio && f.quinzena2_fim ? formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim) : "—"}</TableCell>
+                          {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1") && <TableCell className="text-sm">{formatPeriodo(f.quinzena1_inicio, f.quinzena1_fim)}</TableCell>}
+                          {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2") && <TableCell className="text-sm">{f.quinzena2_inicio && f.quinzena2_fim ? formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim) : "—"}</TableCell>}
                           <TableCell>{f.vender_dias && f.dias_vendidos ? <Badge variant="outline" className="text-xs">{Math.min(f.dias_vendidos, 10)} dias</Badge> : <span className="text-muted-foreground text-xs">—</span>}</TableCell>
                           <TableCell className="text-center">
                             {f.enviado_contador ? (

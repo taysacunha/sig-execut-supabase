@@ -476,10 +476,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       setExcDiasVendidos(0);
       setExcPeriodos([]);
       setExcHydrating(false);
-    } else if (ferias.gozo_flexivel) {
-      // Mark hydrating BEFORE setting state so ExcecaoPeriodosSection skips auto-resets
+    } else {
+      // Always try to load gozo_periodos when editing, regardless of gozo_flexivel flag
       setExcHydrating(true);
-      // Load existing gozo_periodos for editing, then infer types from actual data
       (async () => {
         const { data: existingPeriodos } = await supabase
           .from("ferias_gozo_periodos" as any)
@@ -521,22 +520,18 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             data_fim: p.data_fim,
           })));
         } else {
-          form.setValue("is_excecao", !!(ferias.is_excecao || ferias.gozo_flexivel));
-          form.setValue("opcao_adicional", ferias.vender_dias ? "vender" : ferias.gozo_diferente ? "gozo_diferente" : "nenhum");
-          setExcecaoTipo(ferias.vender_dias ? "vender" : ferias.gozo_diferente ? "gozo_diferente" : null);
+          // No gozo_periodos found — use flags from the main record
+          const hasException = !!(ferias.is_excecao || ferias.gozo_flexivel || ferias.vender_dias || ferias.gozo_diferente);
+          form.setValue("is_excecao", hasException);
+          const inferredOpcao = ferias.vender_dias ? "vender" : ferias.gozo_diferente ? "gozo_diferente" : "nenhum";
+          form.setValue("opcao_adicional", inferredOpcao);
+          setExcecaoTipo(inferredOpcao === "nenhum" ? null : inferredOpcao);
           setExcDistribuicaoTipo(ferias.distribuicao_tipo || "");
           setExcDiasVendidos(ferias.dias_vendidos || 0);
           setExcPeriodos([]);
         }
-        // Release hydration lock after all state is set in this tick
         setTimeout(() => setExcHydrating(false), 50);
       })();
-    } else {
-      setExcecaoTipo(null);
-      setExcDistribuicaoTipo("");
-      setExcDiasVendidos(0);
-      setExcPeriodos([]);
-      setExcHydrating(false);
     }
     setTimeout(() => { isResettingRef.current = false; }, 0);
   }, [ferias, open]);
