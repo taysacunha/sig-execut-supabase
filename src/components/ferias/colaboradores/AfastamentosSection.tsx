@@ -81,6 +81,15 @@ export function AfastamentosSection({ colaboradorId, colaboradorNome, canEdit = 
       if (!dataInicio || !dataFim) throw new Error("Datas são obrigatórias");
       if (dataFim < dataInicio) throw new Error("Data fim deve ser após data início");
 
+      // Validate overlap with existing afastamentos
+      const overlapping = afastamentos.find((a: any) => {
+        if (editing && a.id === editing.id) return false;
+        return dataInicio <= a.data_fim && dataFim >= a.data_inicio;
+      });
+      if (overlapping) {
+        throw new Error(`Conflito com afastamento existente (${formatDate(overlapping.data_inicio)} a ${formatDate(overlapping.data_fim)})`);
+      }
+
       const payload = {
         colaborador_id: colaboradorId,
         motivo,
@@ -160,11 +169,11 @@ export function AfastamentosSection({ colaboradorId, colaboradorNome, canEdit = 
     return false;
   }) : [];
 
-  const isActive = (a: any) => {
-    const today = new Date();
-    const start = new Date(a.data_inicio + "T00:00:00");
-    const end = new Date(a.data_fim + "T00:00:00");
-    return today >= start && today <= end;
+  const getStatus = (a: any): "agendado" | "ativo" | "encerrado" => {
+    const today = new Date().toISOString().split("T")[0];
+    if (today < a.data_inicio) return "agendado";
+    if (today <= a.data_fim) return "ativo";
+    return "encerrado";
   };
 
   const formatDate = (d: string) => {
