@@ -116,7 +116,7 @@ const tableLabels: Record<string, string> = {
 };
 
 interface AuditLogsPanelProps {
-  defaultModule?: "escalas" | "vendas" | "estoque" | "sistema" | "all";
+  defaultModule?: "escalas" | "vendas" | "estoque" | "ferias" | "sistema" | "all";
   defaultTab?: "admin" | "modules";
   showAdminTab?: boolean;
 }
@@ -507,6 +507,7 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                     <SelectItem value="all">Todos</SelectItem>
                     <SelectItem value="escalas">Escalas</SelectItem>
                     <SelectItem value="vendas">Vendas</SelectItem>
+                    <SelectItem value="ferias">Férias e Folgas</SelectItem>
                     <SelectItem value="sistema">Sistema</SelectItem>
                   </SelectContent>
                 </Select>
@@ -695,6 +696,7 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                     <SelectItem value="all">Todos</SelectItem>
                     <SelectItem value="escalas">Escalas</SelectItem>
                     <SelectItem value="vendas">Vendas</SelectItem>
+                    <SelectItem value="ferias">Férias e Folgas</SelectItem>
                     <SelectItem value="sistema">Sistema</SelectItem>
                   </SelectContent>
                 </Select>
