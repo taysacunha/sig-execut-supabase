@@ -1,83 +1,67 @@
 
-Objetivo
-- Corrigir de forma visível e confiável 3 frentes: edição dos períodos flexíveis da Taysa, card “Próximas Férias” no dashboard, e conflitos entre férias x afastamentos.
+Objetivo: parar de gastar crédito à toa e corrigir só os 3 pontos que ainda estão realmente quebrados.
 
-O que achei no código
-1. Edição ainda falha por restauração incompleta
-- Em `src/components/ferias/ferias/FeriasDialog.tsx`, os `ferias_gozo_periodos` são buscados.
-- Porém a UI da exceção depende também de `excecaoTipo` e `distribuicaoTipo`.
-- Hoje esses valores vêm só de flags do registro principal (`gozo_flexivel`, `gozo_diferente`, `distribuicao_tipo`, `vender_dias`).
-- Se essas flags estiverem inconsistentes/incompletas, os períodos até entram em `excPeriodos`, mas a seção continua sem renderizar os blocos certos.
-- Isso explica o “não aparece nada” mesmo havendo períodos cadastrados.
+O que está errado de verdade
+1. Edição da Taysa ainda falha porque o carregamento dos subperíodos depende de flags do registro principal (`gozo_flexivel`, `vender_dias`, `gozo_diferente`). Se essas flags estiverem inconsistentes, o dialog não monta a seção certa, mesmo existindo linhas em `ferias_gozo_periodos`.
+2. O dashboard ainda não é confiável para “Próximas Férias” porque continua dependendo de uma combinação de status/flags. Para o seu caso, ele precisa simplesmente olhar as datas reais cadastradas e listar a próxima data futura válida.
+3. O filtro do PDF/tabela do contador que você está usando fica em `src/pages/ferias/FeriasFerias.tsx`, não no componente separado de relatórios. Ou seja: parte da correção anterior foi feita no lugar errado para o fluxo que você está usando em `/ferias/ferias`.
 
-2. O caso da Taysa indica dado inconsistente que a UI hoje aceita
-- Os períodos citados estão fora de ordem cronológica.
-- O sistema atual salva `numero` por ordem do array, não pela ordem real das datas.
-- Não existe validação forte para impedir subperíodos fora de sequência ou cronologicamente incoerentes no fluxo flexível.
+Plano de correção
+1. Corrigir a edição para sempre carregar os períodos reais
+- Arquivo: `src/components/ferias/ferias/FeriasDialog.tsx`
+- Ao editar, buscar `ferias_gozo_periodos` sempre, independentemente de `gozo_flexivel`.
+- Se existirem subperíodos:
+  - forçar abertura do modo exceção;
+  - inferir `excecaoTipo` pelo campo `tipo`;
+  - inferir `distribuicaoTipo` pelos `referencia_periodo`;
+  - popular `excPeriodos` com todos os períodos em ordem cronológica.
+- Resultado esperado: a Taysa abre com os 4 períodos visíveis, sendo 3 no 1º período e 1 no 2º.
 
-3. Dashboard ainda pode falhar no caso de datas flexíveis problemáticas
-- `src/pages/ferias/FeriasDashboard.tsx` já resolve inícios a partir de `ferias_gozo_periodos`.
-- Mas, com períodos inconsistentes, ele pode priorizar uma data errada como “próxima” ou exibir comportamento confuso.
-- Precisa ordenar os subperíodos por data real antes de decidir qual é o próximo início.
+2. Blindar a UI para não esconder os períodos carregados
+- Arquivo: `src/components/ferias/ferias/ExcecaoPeriodosSection.tsx`
+- Manter a proteção de hidratação, mas impedir reinicialização quando já existem períodos carregados da edição.
+- Garantir renderização correta quando houver múltiplos subperíodos no mesmo `referencia_periodo`.
 
-4. Conflitos com afastamentos não estão integrados no fluxo de férias
-- `src/components/ferias/colaboradores/AfastamentosSection.tsx` alerta conflito com férias ao cadastrar afastamento.
-- Mas `src/components/ferias/ferias/FeriasDialog.tsx` não busca afastamentos do colaborador para bloquear/alertar novas férias.
-- `src/pages/ferias/FeriasFerias.tsx` também não mostra sinalização visual para férias já cadastradas que conflitam com afastamento.
+3. Corrigir “Próximas Férias” com base nas datas reais cadastradas
+- Arquivo: `src/pages/ferias/FeriasDashboard.tsx`
+- Montar a lista de inícios futuros a partir de:
+  - todos os `ferias_gozo_periodos.data_inicio`;
+  - fallback para datas oficiais só quando um período não tiver subperíodo correspondente.
+- Ordenar tudo cronologicamente e pegar a menor data futura dentro da janela.
+- Não deixar o card depender de flag inconsistente para decidir se mostra ou não.
+- Resultado esperado: 24/04 da Taysa passa a aparecer.
 
-Implementação proposta
-1. Blindar a restauração dos períodos no editar férias
-- Em `FeriasDialog.tsx`, inferir `excecaoTipo` e `distribuicaoTipo` também a partir dos próprios `ferias_gozo_periodos` carregados, não só dos campos da tabela principal.
-- Regra:
-  - se houver `tipo=gozo_diferente`, abrir a seção correta;
-  - se houver `referencia_periodo` 1 e 2, tratar como `ambos`;
-  - se houver vários subperíodos do mesmo período, continuar mostrando a lista;
-  - se houver `referencia_periodo=0`, tratar como `livre`.
-- Só liberar a UI depois da hidratação completa.
+4. Corrigir a tabela/PDF do contador no lugar certo
+- Arquivo: `src/pages/ferias/FeriasFerias.tsx`
+- Aplicar o filtro de período na tabela da aba “Contador” e no PDF dessa mesma página:
+  - filtro “1” = mostrar/exportar só 1º período;
+  - filtro “2” = mostrar/exportar só 2º período;
+  - “Ambos” = mostrar/exportar os dois.
+- Ajustar cabeçalhos, colunas e conteúdo do PDF para seguirem exatamente a seleção atual.
+- Isso evita o comportamento atual de sempre trazer os dois períodos.
 
-2. Validar e normalizar períodos flexíveis
+5. Impedir repetição do erro de fevereiro depois de março
+- Arquivo: `src/components/ferias/ferias/FeriasDialog.tsx`
 - No salvar:
-  - ordenar subperíodos por `data_inicio`;
-  - impedir datas fora de ordem;
-  - impedir sobreposição entre subperíodos;
-  - impedir sequência “março e depois fevereiro”;
-  - validar coerência com os períodos oficiais.
-- Mostrar erro claro antes de salvar.
+  - ordenar por `data_inicio`;
+  - bloquear subperíodos fora de ordem;
+  - bloquear sobreposição;
+  - bloquear sequência cronológica inválida.
+- Observação importante: eu não vou “adivinhar” a data correta do período errado de fevereiro. O que dá para fazer com segurança é: fazer ele aparecer na edição e impedir que isso volte a ser salvo assim.
 
-3. Ajustar “Próximas Férias”
-- Em `FeriasDashboard.tsx`, ordenar todos os `ferias_gozo_periodos` por `data_inicio` antes de escolher o próximo início.
-- Usar sempre a menor data futura válida dentro da janela.
-- Assim, o 24/04 passa a ser capturado corretamente se estiver nos subperíodos reais e não houver dado anterior inválido atrapalhando a escolha.
-
-4. Mostrar conflitos de férias com afastamentos
-- Em `FeriasDialog.tsx`:
-  - buscar afastamentos do colaborador;
-  - resolver os intervalos reais de férias;
-  - detectar interseção entre férias e afastamentos;
-  - exibir alerta forte com os períodos conflitantes;
-  - exigir ajuste das datas antes de salvar, ou no mínimo exigir exceção explícita se essa for sua regra.
-- Também mostrar todos os afastamentos do colaborador no formulário ao agendar férias.
-
-5. Sinalização na página de férias
-- Em `src/pages/ferias/FeriasFerias.tsx`:
-  - calcular quais registros de férias conflitam com afastamentos;
-  - exibir badge/alerta por linha, algo como “Conflito com afastamento”;
-  - opcionalmente destacar a coluna de períodos.
-- Isso atende ao pedido de “na página de férias deve ter algo que sinalize isso”.
-
-Arquivos a ajustar
+Arquivos exatos
 - `src/components/ferias/ferias/FeriasDialog.tsx`
 - `src/components/ferias/ferias/ExcecaoPeriodosSection.tsx`
 - `src/pages/ferias/FeriasDashboard.tsx`
 - `src/pages/ferias/FeriasFerias.tsx`
 
-Resultado esperado
-- Ao editar a Taysa, os 4 períodos aparecem de fato.
-- O sistema não deixa salvar subperíodos fora da ordem cronológica.
-- O 24/04 aparece no card “Próximas Férias” quando for o próximo início válido.
-- Ao cadastrar ou editar férias, os afastamentos do colaborador aparecem e conflitos são sinalizados.
-- Na tabela de férias, registros em conflito com afastamento ficam marcados visualmente.
+Critérios de aceite
+- Editar Taysa mostra os 4 períodos cadastrados.
+- A seção correta (“Gozo em datas diferentes”/exceção) já abre preenchida.
+- Dashboard mostra Taysa em “Próximas Férias” com 24/04.
+- Na aba Contador em `/ferias/ferias`, escolher 1, 2 ou ambos muda a tabela e o PDF de forma consistente.
+- Não é mais possível salvar subperíodos fora da ordem cronológica.
 
-Detalhe importante
-- Eu não vou corrigir o dado inconsistente da Taysa neste modo de leitura, porque isso exige alteração de dados/código.
-- Na implementação, além da correção da UI, vou deixar o sistema impedir que esse tipo de inconsistência volte a acontecer.
+Sobre os créditos
+- Eu não consigo devolver/refundar créditos por aqui.
+- O que eu consigo fazer agora é evitar mais desperdício: a próxima implementação tem que ser um patch único nesses 4 arquivos, sem mexer em caminhos paralelos.
