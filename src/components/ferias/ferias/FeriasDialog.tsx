@@ -972,6 +972,32 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     return { isValid: errors.length === 0 || data.is_excecao, errors, requiresException, exceptionReason };
   };
 
+  // Check afastamento conflicts with vacation periods
+  const afastamentoConflicts = useMemo(() => {
+    if (afastamentos.length === 0) return [];
+    // Build vacation intervals
+    const vacIntervals: { start: string; end: string }[] = [];
+    if (excecaoTipo && excPeriodos.length > 0) {
+      for (const p of excPeriodos) {
+        if (p.data_inicio && p.data_fim) vacIntervals.push({ start: p.data_inicio, end: p.data_fim });
+      }
+    }
+    if (vacIntervals.length === 0) {
+      if (q1Inicio && q1Fim) vacIntervals.push({ start: q1Inicio, end: q1Fim });
+      if (q2Inicio && q2Fim) vacIntervals.push({ start: q2Inicio, end: q2Fim });
+    }
+    const conflicts: { afastamento: typeof afastamentos[0]; periodo: string }[] = [];
+    for (const af of afastamentos) {
+      for (const vi of vacIntervals) {
+        if (af.data_inicio <= vi.end && af.data_fim >= vi.start) {
+          conflicts.push({ afastamento: af, periodo: `${formatDateBR(vi.start)} a ${formatDateBR(vi.end)}` });
+          break;
+        }
+      }
+    }
+    return conflicts;
+  }, [afastamentos, excecaoTipo, excPeriodos, q1Inicio, q1Fim, q2Inicio, q2Fim]);
+
   const onSubmit = (data: FeriasFormData) => {
     const validation = validateVacation(data);
     if (validation.requiresException && !data.is_excecao) {
@@ -985,6 +1011,21 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     if (gozoDateError) {
       toast.error(gozoDateError);
       return;
+    }
+    // Block save if vacation overlaps afastamento
+    if (afastamentoConflicts.length > 0) {
+      toast.error("Férias conflitam com período de afastamento. Ajuste as datas antes de salvar.");
+      return;
+    }
+    // Validate sub-period chronological order and overlaps
+    if (excecaoTipo && excPeriodos.length > 1) {
+      const sorted = [...excPeriodos].filter(p => p.data_inicio).sort((a, b) => a.data_inicio.localeCompare(b.data_inicio));
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i].data_inicio <= sorted[i - 1].data_fim) {
+          toast.error(`Sub-períodos se sobrepõem: ${formatDateBR(sorted[i - 1].data_inicio)} e ${formatDateBR(sorted[i].data_inicio)}`);
+          return;
+        }
+      }
     }
     mutation.mutate(data);
   };
