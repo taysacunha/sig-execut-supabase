@@ -185,8 +185,9 @@ export function ExcecaoPeriodosSection({
     onPeriodosChange(updated);
   }, [diasGozo, periodos, onPeriodosChange]);
 
-  // Initialize periods when distribuicaoTipo changes
+  // Initialize periods when distribuicaoTipo changes (skip during edit hydration)
   useEffect(() => {
+    if (isHydrating) return;
     if (excecaoTipo === "vender") {
       if (diasGozo <= 0) {
         onPeriodosChange([]);
@@ -218,20 +219,21 @@ export function ExcecaoPeriodosSection({
         ]);
       }
     }
-  }, [distribuicaoTipo, excecaoTipo]);
+  }, [distribuicaoTipo, excecaoTipo, isHydrating]);
 
-  // Reset distribuição when diasVendidos changes in vender mode
+  // Reset distribuição when diasVendidos changes in vender mode (skip during edit hydration)
   useEffect(() => {
+    if (isHydrating) return;
     if (excecaoTipo === "vender" && distribuicaoTipo) {
-      // Re-trigger period init
       const dt = distribuicaoTipo;
       onDistribuicaoTipoChange("");
       setTimeout(() => onDistribuicaoTipoChange(dt), 0);
     }
   }, [diasVendidos]);
 
-  // Reset when tipo changes
+  // Reset when tipo changes (skip during edit hydration)
   useEffect(() => {
+    if (isHydrating) return;
     onDistribuicaoTipoChange("");
     onPeriodosChange([]);
     if (excecaoTipo === "gozo_diferente") {
