@@ -462,18 +462,36 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     } else if (ferias.gozo_flexivel) {
       // Mark hydrating BEFORE setting state so ExcecaoPeriodosSection skips auto-resets
       setExcHydrating(true);
-      setExcecaoTipo(ferias.vender_dias ? "vender" : ferias.gozo_diferente ? "gozo_diferente" : null);
-      setExcDistribuicaoTipo(ferias.distribuicao_tipo || "");
-      setExcDiasVendidos(ferias.dias_vendidos || 0);
-      // Load existing gozo_periodos for editing
+      // Load existing gozo_periodos for editing, then infer types from actual data
       (async () => {
         const { data: existingPeriodos } = await supabase
           .from("ferias_gozo_periodos" as any)
           .select("id, ferias_id, numero, dias, data_inicio, data_fim, referencia_periodo, tipo")
           .eq("ferias_id", ferias.id)
           .order("numero");
-        if (existingPeriodos && existingPeriodos.length > 0) {
-          setExcPeriodos((existingPeriodos as any[]).map((p: any) => ({
+        const loaded = (existingPeriodos as any[]) || [];
+        if (loaded.length > 0) {
+          // Infer excecaoTipo from periodo data
+          const tipos = [...new Set(loaded.map((p: any) => p.tipo))];
+          const inferredTipo: "vender" | "gozo_diferente" | null = 
+            tipos.includes("vender") ? "vender" : 
+            tipos.includes("gozo_diferente") ? "gozo_diferente" : 
+            (ferias.vender_dias ? "vender" : ferias.gozo_diferente ? "gozo_diferente" : null);
+          
+          // Infer distribuicaoTipo from referencia_periodo values
+          const refs = [...new Set(loaded.map((p: any) => p.referencia_periodo))];
+          let inferredDist = ferias.distribuicao_tipo || "";
+          if (!inferredDist) {
+            if (refs.includes(0)) inferredDist = "livre";
+            else if (refs.includes(1) && refs.includes(2)) inferredDist = "ambos";
+            else if (refs.includes(1)) inferredDist = "1";
+            else if (refs.includes(2)) inferredDist = "2";
+          }
+
+          setExcecaoTipo(inferredTipo);
+          setExcDistribuicaoTipo(inferredDist);
+          setExcDiasVendidos(ferias.dias_vendidos || 0);
+          setExcPeriodos(loaded.map((p: any) => ({
             id: p.id || crypto.randomUUID(),
             referencia_periodo: p.referencia_periodo,
             dias: p.dias,
@@ -481,10 +499,13 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             data_fim: p.data_fim,
           })));
         } else {
+          setExcecaoTipo(ferias.vender_dias ? "vender" : ferias.gozo_diferente ? "gozo_diferente" : null);
+          setExcDistribuicaoTipo(ferias.distribuicao_tipo || "");
+          setExcDiasVendidos(ferias.dias_vendidos || 0);
           setExcPeriodos([]);
         }
-        // Release hydration lock after periods are loaded
-        setTimeout(() => setExcHydrating(false), 0);
+        // Release hydration lock after all state is set in this tick
+        setTimeout(() => setExcHydrating(false), 50);
       })();
     } else {
       setExcecaoTipo(null);
