@@ -64,6 +64,8 @@ interface FeriasRecord {
   origem: string | null;
   periodo_aquisitivo_inicio: string | null;
   periodo_aquisitivo_fim: string | null;
+  enviado_contador: boolean | null;
+  enviado_contador_em: string | null;
   created_at: string;
   colaborador: {
     id: string;
@@ -134,6 +136,7 @@ export default function FeriasFerias() {
   const { hasAccess: hasRoleAccess } = useUserRole();
   const canEditFerias = canEdit("ferias");
   const isAdmin = hasRoleAccess(["super_admin", "admin", "manager"]);
+  const [contadorConfirmId, setContadorConfirmId] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState("ferias");
   const [searchTerm, setSearchTerm] = useState("");
