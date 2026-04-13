@@ -337,7 +337,32 @@ export default function FeriasDashboard() {
         }
       }
 
+      // Build gozo periodos map from periodos found in the window
       const gozoPeriodosMap = buildGozoPeriodosMap(periodosNaJanela || []);
+
+      // Also fetch ALL gozo_periodos for ferias that were found (to fully resolve their periods)
+      const allFeriasIds = Array.from(feriasMap.keys());
+      if (allFeriasIds.length > 0) {
+        const { data: allPeriodos } = await supabase
+          .from("ferias_gozo_periodos")
+          .select("ferias_id, data_inicio, data_fim")
+          .in("ferias_id", allFeriasIds)
+          .range(0, 5000);
+        // Merge into map (only add periods not already present)
+        if (allPeriodos) {
+          for (const p of allPeriodos) {
+            if (!gozoPeriodosMap[p.ferias_id]) {
+              gozoPeriodosMap[p.ferias_id] = [];
+            }
+            const exists = gozoPeriodosMap[p.ferias_id].some(
+              (existing) => existing.data_inicio === p.data_inicio && existing.data_fim === p.data_fim
+            );
+            if (!exists) {
+              gozoPeriodosMap[p.ferias_id].push({ data_inicio: p.data_inicio, data_fim: p.data_fim });
+            }
+          }
+        }
+      }
 
       const results: any[] = [];
       
