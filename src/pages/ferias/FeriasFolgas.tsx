@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { normalizeText } from "@/lib/textUtils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format, startOfMonth, endOfMonth, eachWeekendOfInterval, isSaturday } from "date-fns";
