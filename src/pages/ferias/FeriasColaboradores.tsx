@@ -98,6 +98,8 @@ const FeriasColaboradores = () => {
     }
     return map;
   }, [afastamentosAtivos]);
+
+  const { data: setores = [] } = useQuery({
     queryKey: ["ferias-setores-list"],
     queryFn: async () => {
       const { data, error } = await supabase
