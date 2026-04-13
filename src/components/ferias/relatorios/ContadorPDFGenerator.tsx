@@ -29,6 +29,9 @@ export function ContadorPDFGenerator() {
   const [generating, setGenerating] = useState(false);
 
   const years = getYearOptions(3, 3);
+  const showingPeriodo1 = selectedPeriodo === "1";
+  const showingPeriodo2 = selectedPeriodo === "2";
+  const showingAmbos = selectedPeriodo === "_all_";
 
   const { data: setores } = useQuery({
     queryKey: ["ferias-setores-relatorio"],
@@ -109,6 +112,37 @@ export function ContadorPDFGenerator() {
     return dias - vendidosContador;
   };
 
+  const getDiasVendidosSelecionado = (f: any) => {
+    const diasVendidosContador = Math.min(f.dias_vendidos || 0, 10);
+    if (showingPeriodo1) return f.quinzena_venda === 1 ? diasVendidosContador : 0;
+    if (showingPeriodo2) return f.quinzena_venda === 2 ? diasVendidosContador : 0;
+    return diasVendidosContador;
+  };
+
+  const getDiasGozoSelecionado = (f: any) => {
+    if (showingPeriodo1) {
+      return f.quinzena1_inicio && f.quinzena1_fim
+        ? calcularDiasContador(f.quinzena1_inicio, f.quinzena1_fim, f.quinzena_venda === 1 ? getDiasVendidosSelecionado(f) : 0)
+        : 0;
+    }
+
+    if (showingPeriodo2) {
+      return f.quinzena2_inicio && f.quinzena2_fim
+        ? calcularDiasContador(f.quinzena2_inicio, f.quinzena2_fim, f.quinzena_venda === 2 ? getDiasVendidosSelecionado(f) : 0)
+        : 0;
+    }
+
+    const diasVendidosContador = getDiasVendidosSelecionado(f);
+    const diasGozo1 = f.quinzena1_inicio && f.quinzena1_fim
+      ? calcularDiasContador(f.quinzena1_inicio, f.quinzena1_fim, f.quinzena_venda === 1 ? diasVendidosContador : 0)
+      : 0;
+    const diasGozo2 = f.quinzena2_inicio && f.quinzena2_fim
+      ? calcularDiasContador(f.quinzena2_inicio, f.quinzena2_fim, f.quinzena_venda === 2 ? diasVendidosContador : 0)
+      : 0;
+
+    return diasGozo1 + diasGozo2;
+  };
+
   const toggleMonth = (month: number) => {
     setSelectedMonths(prev => 
       prev.includes(month) ? prev.filter(m => m !== month) : [...prev, month].sort((a, b) => a - b)
@@ -145,8 +179,10 @@ export function ContadorPDFGenerator() {
 
       // Table header
       const startY = 50;
-      const colWidths = [50, 35, 28, 28, 28, 28, 25, 25, 25];
-      const headers = ["Colaborador", "CPF", "1ª Quinz. Início", "1ª Quinz. Fim", "2ª Quinz. Início", "2ª Quinz. Fim", "Dias Vend.", "Dias Gozo", "Status"];
+      const colWidths = showingAmbos ? [50, 35, 28, 28, 28, 28, 25, 25, 25] : [58, 38, 34, 34, 24, 24, 28];
+      const headers = showingAmbos
+        ? ["Colaborador", "CPF", "1ª Quinz. Início", "1ª Quinz. Fim", "2ª Quinz. Início", "2ª Quinz. Fim", "Dias Vend.", "Dias Gozo", "Status"]
+        : ["Colaborador", "CPF", `${showingPeriodo1 ? "1ª" : "2ª"} Quinz. Início`, `${showingPeriodo1 ? "1ª" : "2ª"} Quinz. Fim`, "Dias Vend.", "Dias Gozo", "Status"];
 
       pdf.setFillColor(59, 130, 246);
       pdf.rect(margin, startY, pageWidth - margin * 2, 10, "F");
@@ -177,21 +213,27 @@ export function ContadorPDFGenerator() {
         }
 
         xPos = margin + 2;
-        const diasVendidosContador = Math.min(f.dias_vendidos || 0, 10);
-        const diasGozo1 = calcularDiasContador(f.quinzena1_inicio, f.quinzena1_fim, f.quinzena_venda === 1 ? diasVendidosContador : 0);
-        const diasGozo2 = f.quinzena2_inicio && f.quinzena2_fim ? calcularDiasContador(f.quinzena2_inicio, f.quinzena2_fim, f.quinzena_venda === 2 ? diasVendidosContador : 0) : 0;
-
-        const rowData = [
-          (f.colaborador?.nome || "N/A").substring(0, 28),
-          f.colaborador?.cpf || "-",
-          formatDate(f.quinzena1_inicio),
-          formatDate(f.quinzena1_fim),
-          f.quinzena2_inicio ? formatDate(f.quinzena2_inicio) : "-",
-          f.quinzena2_fim ? formatDate(f.quinzena2_fim) : "-",
-          diasVendidosContador.toString(),
-          `${diasGozo1 + diasGozo2}`,
-          f.status === "aprovada" ? "Aprovada" : f.status === "pendente" ? "Pendente" : f.status || "-",
-        ];
+        const rowData = showingAmbos
+          ? [
+              (f.colaborador?.nome || "N/A").substring(0, 28),
+              f.colaborador?.cpf || "-",
+              formatDate(f.quinzena1_inicio),
+              formatDate(f.quinzena1_fim),
+              f.quinzena2_inicio ? formatDate(f.quinzena2_inicio) : "-",
+              f.quinzena2_fim ? formatDate(f.quinzena2_fim) : "-",
+              getDiasVendidosSelecionado(f).toString(),
+              `${getDiasGozoSelecionado(f)}`,
+              f.status === "aprovada" ? "Aprovada" : f.status === "pendente" ? "Pendente" : f.status || "-",
+            ]
+          : [
+              (f.colaborador?.nome || "N/A").substring(0, 32),
+              f.colaborador?.cpf || "-",
+              formatDate(showingPeriodo1 ? f.quinzena1_inicio : f.quinzena2_inicio),
+              formatDate(showingPeriodo1 ? f.quinzena1_fim : f.quinzena2_fim),
+              getDiasVendidosSelecionado(f).toString(),
+              `${getDiasGozoSelecionado(f)}`,
+              f.status === "aprovada" ? "Aprovada" : f.status === "pendente" ? "Pendente" : f.status || "-",
+            ];
 
         rowData.forEach((text, i) => {
           pdf.text(text, xPos, yPos);
@@ -347,9 +389,16 @@ export function ContadorPDFGenerator() {
                   <TableRow>
                     <TableHead>Colaborador</TableHead>
                     <TableHead>CPF</TableHead>
-                    <TableHead>1ª Quinzena</TableHead>
-                    <TableHead>2ª Quinzena</TableHead>
+                    {showingAmbos ? (
+                      <>
+                        <TableHead>1ª Quinzena</TableHead>
+                        <TableHead>2ª Quinzena</TableHead>
+                      </>
+                    ) : (
+                      <TableHead>{showingPeriodo1 ? "1ª Quinzena" : "2ª Quinzena"}</TableHead>
+                    )}
                     <TableHead className="text-center">Dias Vendidos</TableHead>
+                    <TableHead className="text-center">Dias Gozo</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -358,17 +407,32 @@ export function ContadorPDFGenerator() {
                     <TableRow key={f.id}>
                       <TableCell className="font-medium">{f.colaborador?.nome || "N/A"}</TableCell>
                       <TableCell className="text-muted-foreground">{f.colaborador?.cpf || "-"}</TableCell>
-                      <TableCell>
-                        {formatDate(f.quinzena1_inicio)} - {formatDate(f.quinzena1_fim)}
-                      </TableCell>
-                      <TableCell>
-                        {f.quinzena2_inicio ? `${formatDate(f.quinzena2_inicio)} - ${formatDate(f.quinzena2_fim)}` : "-"}
-                      </TableCell>
+                      {showingAmbos ? (
+                        <>
+                          <TableCell>
+                            {formatDate(f.quinzena1_inicio)} - {formatDate(f.quinzena1_fim)}
+                          </TableCell>
+                          <TableCell>
+                            {f.quinzena2_inicio ? `${formatDate(f.quinzena2_inicio)} - ${formatDate(f.quinzena2_fim)}` : "-"}
+                          </TableCell>
+                        </>
+                      ) : (
+                        <TableCell>
+                          {showingPeriodo1
+                            ? `${formatDate(f.quinzena1_inicio)} - ${formatDate(f.quinzena1_fim)}`
+                            : f.quinzena2_inicio
+                              ? `${formatDate(f.quinzena2_inicio)} - ${formatDate(f.quinzena2_fim)}`
+                              : "-"}
+                        </TableCell>
+                      )}
                       <TableCell className="text-center">
                         <Badge variant={f.dias_vendidos && f.dias_vendidos > 10 ? "destructive" : "secondary"}>
-                          {Math.min(f.dias_vendidos || 0, 10)}
+                          {getDiasVendidosSelecionado(f)}
                           {f.dias_vendidos && f.dias_vendidos > 10 && "*"}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline">{getDiasGozoSelecionado(f)}</Badge>
                       </TableCell>
                       <TableCell>
                         <Badge variant={f.status === "aprovada" ? "default" : "outline"}>
