@@ -198,12 +198,18 @@ export function AfastamentosSection({ colaboradorId, colaboradorNome, canEdit = 
       ) : (
         <div className="space-y-2">
           {afastamentos.map((a: any) => (
-            <Card key={a.id} className={isActive(a) ? "border-destructive/30 bg-destructive/5" : ""}>
+            <Card key={a.id} className={
+              getStatus(a) === "ativo" ? "border-destructive/30 bg-destructive/5" :
+              getStatus(a) === "agendado" ? "border-primary/30 bg-primary/5" : ""
+            }>
               <CardContent className="p-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Badge variant={isActive(a) ? "destructive" : "secondary"} className="text-xs">
-                      {isActive(a) ? "Ativo" : "Encerrado"}
+                    <Badge
+                      variant={getStatus(a) === "ativo" ? "destructive" : getStatus(a) === "agendado" ? "outline" : "secondary"}
+                      className="text-xs"
+                    >
+                      {getStatus(a) === "ativo" ? "Ativo" : getStatus(a) === "agendado" ? "Agendado" : "Encerrado"}
                     </Badge>
                     <span className="text-sm font-medium">{MOTIVO_LABELS[a.motivo] || a.motivo}</span>
                   </div>
