@@ -391,7 +391,7 @@ export default function FeriasFerias() {
   };
 
   const generateContadorPDF = useCallback(() => {
-    if (contadorData.length === 0) { toast.error("Nenhum dado para exportar"); return; }
+    if (contadorDataFiltered.length === 0) { toast.error("Nenhum dado para exportar"); return; }
     const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const margin = 15;
@@ -401,7 +401,14 @@ export default function FeriasFerias() {
     pdf.setFont("helvetica", "bold");
     pdf.text(`TABELA DE FÉRIAS - CONTADOR - ${anoFilter}`, pageWidth / 2, 15, { align: "center" });
 
-    let yPos = 25;
+    // Subtitle with filters
+    pdf.setFontSize(9);
+    pdf.setFont("helvetica", "normal");
+    const mesLabel = contadorMesFilter !== "all" ? MONTHS[parseInt(contadorMesFilter) - 1] : "Todos";
+    const periodoLabel = contadorPeriodoFilter === "1" ? "1ª Quinzena" : contadorPeriodoFilter === "2" ? "2ª Quinzena" : "Ambos";
+    pdf.text(`Mês: ${mesLabel} | Período: ${periodoLabel}`, pageWidth / 2, 21, { align: "center" });
+
+    let yPos = 28;
     const colWidths = [50, 30, 30, 45, 45, 45, 25];
     const headers = ["Colaborador", "CPF", "Setor", "Per. Aquisitivo", "1º Período", "2º Período", "Dias V."];
 
@@ -416,7 +423,7 @@ export default function FeriasFerias() {
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(7);
 
-    contadorData.forEach((f, idx) => {
+    contadorDataFiltered.forEach((f, idx) => {
       if (yPos > 190) {
         pdf.addPage();
         yPos = 15;
@@ -463,11 +470,11 @@ export default function FeriasFerias() {
 
     pdf.setFontSize(7);
     pdf.setTextColor(120, 120, 120);
-    pdf.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")} | * Dias vendidos limitados a 10`, pageWidth / 2, pdf.internal.pageSize.getHeight() - 5, { align: "center" });
+    pdf.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")} | * Dias vendidos limitados a 10 | Total: ${contadorDataFiltered.length}`, pageWidth / 2, pdf.internal.pageSize.getHeight() - 5, { align: "center" });
 
     pdf.save(`ferias-contador-${anoFilter}.pdf`);
     toast.success("PDF do contador exportado!");
-  }, [contadorData, anoFilter, formatPeriodo]);
+  }, [contadorDataFiltered, anoFilter, contadorMesFilter, contadorPeriodoFilter, formatPeriodo]);
 
   return (
     <div className="space-y-6">
