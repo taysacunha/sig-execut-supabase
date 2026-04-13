@@ -12,7 +12,8 @@ import {
   Wand2, Search, Calendar, AlertTriangle, CheckCircle2, 
   Loader2, Edit, Eye, Plus, Sparkles, CalendarMinus,
   FileText, Clock, XCircle, Download, ArrowUpDown, Printer,
-  ChevronLeft, ChevronRight, Trash2, ChevronDown, ChevronUp
+  ChevronLeft, ChevronRight, Trash2, ChevronDown, ChevronUp,
+  Send, Undo2
 } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
