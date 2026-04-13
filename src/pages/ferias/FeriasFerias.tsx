@@ -235,6 +235,55 @@ export default function FeriasFerias() {
     return map;
   }, [gozoPeriodos]);
 
+  // Fetch all afastamentos for the year to detect conflicts
+  const feriasColabIds = useMemo(() => [...new Set(ferias.map(f => f.colaborador_id).filter(Boolean))], [ferias]);
+  const { data: allAfastamentos = [] } = useQuery({
+    queryKey: ["ferias-afastamentos-table", anoFilter],
+    queryFn: async () => {
+      if (feriasColabIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from("ferias_afastamentos")
+        .select("id, colaborador_id, data_inicio, data_fim, motivo, motivo_descricao")
+        .in("colaborador_id", feriasColabIds);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: feriasColabIds.length > 0,
+  });
+
+  // Map: ferias_id → has conflict with afastamento
+  const feriasAfastamentoConflicts = useMemo(() => {
+    const conflictSet = new Set<string>();
+    for (const f of ferias) {
+      if (!f.colaborador_id) continue;
+      const colabAfasts = allAfastamentos.filter(a => a.colaborador_id === f.colaborador_id);
+      if (colabAfasts.length === 0) continue;
+      // Get vacation intervals
+      const intervals: { start: string; end: string }[] = [];
+      if (f.gozo_flexivel && gozoPeriodosByFeriasId[f.id]?.length) {
+        for (const p of gozoPeriodosByFeriasId[f.id]) {
+          intervals.push({ start: p.data_inicio, end: p.data_fim });
+        }
+      } else if (f.gozo_diferente && f.gozo_quinzena1_inicio) {
+        intervals.push({ start: f.gozo_quinzena1_inicio, end: f.gozo_quinzena1_fim! });
+        if (f.gozo_quinzena2_inicio) intervals.push({ start: f.gozo_quinzena2_inicio, end: f.gozo_quinzena2_fim! });
+      } else {
+        intervals.push({ start: f.quinzena1_inicio, end: f.quinzena1_fim });
+        if (f.quinzena2_inicio) intervals.push({ start: f.quinzena2_inicio, end: f.quinzena2_fim! });
+      }
+      for (const af of colabAfasts) {
+        for (const iv of intervals) {
+          if (af.data_inicio <= iv.end && af.data_fim >= iv.start) {
+            conflictSet.add(f.id);
+            break;
+          }
+        }
+        if (conflictSet.has(f.id)) break;
+      }
+    }
+    return conflictSet;
+  }, [ferias, allAfastamentos, gozoPeriodosByFeriasId]);
+
   const { data: setores = [] } = useQuery({
     queryKey: ["ferias-setores-filter"],
     queryFn: async () => {
