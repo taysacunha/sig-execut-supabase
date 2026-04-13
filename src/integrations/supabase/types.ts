@@ -1160,6 +1160,8 @@ export type Database = {
           created_by: string | null
           dias_vendidos: number | null
           distribuicao_tipo: string | null
+          enviado_contador: boolean | null
+          enviado_contador_em: string | null
           excecao_justificativa: string | null
           excecao_motivo: string | null
           gozo_diferente: boolean | null
@@ -1188,6 +1190,8 @@ export type Database = {
           created_by?: string | null
           dias_vendidos?: number | null
           distribuicao_tipo?: string | null
+          enviado_contador?: boolean | null
+          enviado_contador_em?: string | null
           excecao_justificativa?: string | null
           excecao_motivo?: string | null
           gozo_diferente?: boolean | null
@@ -1216,6 +1220,8 @@ export type Database = {
           created_by?: string | null
           dias_vendidos?: number | null
           distribuicao_tipo?: string | null
+          enviado_contador?: boolean | null
+          enviado_contador_em?: string | null
           excecao_justificativa?: string | null
           excecao_motivo?: string | null
           gozo_diferente?: boolean | null
