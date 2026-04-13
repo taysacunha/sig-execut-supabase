@@ -209,7 +209,24 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     },
   });
 
-  // Query chefes de setor
+  // Query afastamentos ativos no mês
+  const { data: afastamentos = [] } = useQuery({
+    queryKey: ["ferias-afastamentos-gerador", year, month],
+    queryFn: async () => {
+      const monthStart = format(startOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
+      const monthEnd = format(endOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
+      
+      const { data, error } = await supabase
+        .from("ferias_afastamentos")
+        .select("colaborador_id, motivo, data_inicio, data_fim")
+        .lte("data_inicio", monthEnd)
+        .gte("data_fim", monthStart);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+
   const { data: setorChefes = [] } = useQuery({
     queryKey: ["ferias-setor-chefes-gerador"],
     queryFn: async () => {
@@ -333,6 +350,30 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     return perdas.some(p => p.colaborador_id === colabId);
   };
 
+  const getAfastamentoMotivo = (colabId: string): string | null => {
+    const af = afastamentos.find(a => a.colaborador_id === colabId);
+    if (!af) return null;
+    const motivos: Record<string, string> = {
+      acidente: "Acidente", doenca: "Doença", licenca_maternidade: "Licença maternidade",
+      licenca_paternidade: "Licença paternidade", licenca_medica: "Licença médica", outros: "Outros",
+    };
+    return motivos[af.motivo] || af.motivo;
+  };
+
+  const isAfastadoAllSaturdays = (colabId: string): boolean => {
+    const colabAfastamentos = afastamentos.filter(a => a.colaborador_id === colabId);
+    if (colabAfastamentos.length === 0) return false;
+    return saturdaysOfMonth.every(sat =>
+      colabAfastamentos.some(a => sat >= a.data_inicio && sat <= a.data_fim)
+    );
+  };
+
+  const isColabAfastado = (colabId: string, saturdayDate: string): boolean => {
+    return afastamentos.some(a =>
+      a.colaborador_id === colabId && saturdayDate >= a.data_inicio && saturdayDate <= a.data_fim
+    );
+  };
+
   const isColabOnVacation = (colabId: string, saturdayDate: string): boolean => {
     return feriasAtivas.some(ferias => {
       if (ferias.colaborador_id !== colabId) return false;
@@ -363,7 +404,10 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     // Step 1: Determine exclusions GLOBALLY
     const exclusionReasons = new Map<string, string>();
     colaboradores.forEach(colab => {
-      if (isInExperiencePeriod(colab)) {
+      if (isAfastadoAllSaturdays(colab.id)) {
+        const motivo = getAfastamentoMotivo(colab.id);
+        exclusionReasons.set(colab.id, `Afastado (${motivo})`);
+      } else if (isInExperiencePeriod(colab)) {
         exclusionReasons.set(colab.id, "Período de experiência");
       } else if (hasPerda(colab.id)) {
         exclusionReasons.set(colab.id, "Perda registrada");
@@ -415,7 +459,8 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       if (partner && !processedIds.has(partner.id)) {
         const memberIds = [colab.id, partner.id];
         const availableSats = saturdaysOfMonth.filter(sat => 
-          !isColabOnVacation(colab.id, sat) && !isColabOnVacation(partner.id, sat)
+          !isColabOnVacation(colab.id, sat) && !isColabOnVacation(partner.id, sat) &&
+          !isColabAfastado(colab.id, sat) && !isColabAfastado(partner.id, sat)
         );
         
         units.push({
@@ -430,7 +475,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
         processedIds.add(colab.id);
         processedIds.add(partner.id);
       } else if (!processedIds.has(colab.id)) {
-        const availableSats = saturdaysOfMonth.filter(sat => !isColabOnVacation(colab.id, sat));
+        const availableSats = saturdaysOfMonth.filter(sat => !isColabOnVacation(colab.id, sat) && !isColabAfastado(colab.id, sat));
         
         units.push({
           id: `single-${colab.id}`,
