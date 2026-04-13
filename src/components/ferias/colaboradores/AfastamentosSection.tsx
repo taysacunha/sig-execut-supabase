@@ -81,6 +81,15 @@ export function AfastamentosSection({ colaboradorId, colaboradorNome, canEdit = 
       if (!dataInicio || !dataFim) throw new Error("Datas são obrigatórias");
       if (dataFim < dataInicio) throw new Error("Data fim deve ser após data início");
 
+      // Validate overlap with existing afastamentos
+      const overlapping = afastamentos.find((a: any) => {
+        if (editing && a.id === editing.id) return false;
+        return dataInicio <= a.data_fim && dataFim >= a.data_inicio;
+      });
+      if (overlapping) {
+        throw new Error(`Conflito com afastamento existente (${formatDate(overlapping.data_inicio)} a ${formatDate(overlapping.data_fim)})`);
+      }
+
       const payload = {
         colaborador_id: colaboradorId,
         motivo,
@@ -160,11 +169,11 @@ export function AfastamentosSection({ colaboradorId, colaboradorNome, canEdit = 
     return false;
   }) : [];
 
-  const isActive = (a: any) => {
-    const today = new Date();
-    const start = new Date(a.data_inicio + "T00:00:00");
-    const end = new Date(a.data_fim + "T00:00:00");
-    return today >= start && today <= end;
+  const getStatus = (a: any): "agendado" | "ativo" | "encerrado" => {
+    const today = new Date().toISOString().split("T")[0];
+    if (today < a.data_inicio) return "agendado";
+    if (today <= a.data_fim) return "ativo";
+    return "encerrado";
   };
 
   const formatDate = (d: string) => {
@@ -189,12 +198,18 @@ export function AfastamentosSection({ colaboradorId, colaboradorNome, canEdit = 
       ) : (
         <div className="space-y-2">
           {afastamentos.map((a: any) => (
-            <Card key={a.id} className={isActive(a) ? "border-destructive/30 bg-destructive/5" : ""}>
+            <Card key={a.id} className={
+              getStatus(a) === "ativo" ? "border-destructive/30 bg-destructive/5" :
+              getStatus(a) === "agendado" ? "border-primary/30 bg-primary/5" : ""
+            }>
               <CardContent className="p-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Badge variant={isActive(a) ? "destructive" : "secondary"} className="text-xs">
-                      {isActive(a) ? "Ativo" : "Encerrado"}
+                    <Badge
+                      variant={getStatus(a) === "ativo" ? "destructive" : getStatus(a) === "agendado" ? "outline" : "secondary"}
+                      className="text-xs"
+                    >
+                      {getStatus(a) === "ativo" ? "Ativo" : getStatus(a) === "agendado" ? "Agendado" : "Encerrado"}
                     </Badge>
                     <span className="text-sm font-medium">{MOTIVO_LABELS[a.motivo] || a.motivo}</span>
                   </div>
