@@ -80,6 +80,7 @@ const ColaboradorDialog = ({ open, onOpenChange, colaborador }: ColaboradorDialo
   const isEditing = !!colaborador;
   const [selectedSetoresSubstitutos, setSelectedSetoresSubstitutos] = useState<string[]>([]);
   const [familiarOpen, setFamiliarOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("dados");
 
   // Fetch setores
   const { data: setores = [] } = useQuery({
@@ -243,7 +244,10 @@ const ColaboradorDialog = ({ open, onOpenChange, colaborador }: ColaboradorDialo
 
   // Reset flag when dialog closes
   useEffect(() => {
-    if (!open) setHasLoadedSubstitutos(false);
+    if (!open) {
+      setHasLoadedSubstitutos(false);
+      setActiveTab("dados");
+    }
   }, [open]);
 
   const mutation = useMutation({
@@ -349,6 +353,28 @@ const ColaboradorDialog = ({ open, onOpenChange, colaborador }: ColaboradorDialo
     mutation.mutate(data);
   };
 
+  const onInvalid = (errors: Record<string, any>) => {
+    // Fields by tab
+    const vinculoFields = ["setor_titular_id", "unidade_id", "cargo_id", "equipe_id", "familiar_id"];
+    const outrosFields = ["aviso_previo_inicio", "aviso_previo_fim", "observacoes"];
+    
+    const errorKeys = Object.keys(errors);
+    if (errorKeys.some(k => vinculoFields.includes(k))) {
+      setActiveTab("vinculo");
+      toast.error("Preencha os campos obrigatórios na aba Vínculos");
+    } else if (errorKeys.some(k => outrosFields.includes(k))) {
+      setActiveTab("outros");
+      toast.error("Preencha os campos obrigatórios na aba Outros");
+    } else {
+      setActiveTab("dados");
+      toast.error("Preencha os campos obrigatórios na aba Dados Pessoais");
+    }
+  };
+
+  const formErrors = form.formState.errors;
+  const vinculoHasError = !!(formErrors.setor_titular_id || formErrors.unidade_id || formErrors.cargo_id || formErrors.equipe_id || formErrors.familiar_id);
+  const dadosHasError = !!(formErrors.nome || formErrors.data_nascimento || formErrors.data_admissao || formErrors.cpf || formErrors.status || formErrors.nome_exibicao);
+
   const toggleSetorSubstituto = (setorId: string) => {
     setSelectedSetoresSubstitutos(prev => 
       prev.includes(setorId) 
@@ -372,12 +398,18 @@ const ColaboradorDialog = ({ open, onOpenChange, colaborador }: ColaboradorDialo
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="overflow-hidden">
+          <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="overflow-hidden">
             <ScrollArea className="h-[60vh] pr-4">
-              <Tabs defaultValue="dados" className="w-full">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="dados">Dados Pessoais</TabsTrigger>
-                  <TabsTrigger value="vinculo">Vínculos</TabsTrigger>
+                  <TabsTrigger value="dados" className="relative">
+                    Dados Pessoais
+                    {dadosHasError && <span className="ml-1 inline-block w-2 h-2 rounded-full bg-destructive" />}
+                  </TabsTrigger>
+                  <TabsTrigger value="vinculo" className="relative">
+                    Vínculos
+                    {vinculoHasError && <span className="ml-1 inline-block w-2 h-2 rounded-full bg-destructive" />}
+                  </TabsTrigger>
                   <TabsTrigger value="outros">Outros</TabsTrigger>
                 </TabsList>
 

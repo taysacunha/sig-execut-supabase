@@ -8,16 +8,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Download, Loader2, FileCheck, Calendar, Users } from "lucide-react";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import jsPDF from "jspdf";
 import { toast } from "sonner";
 
+const MONTHS = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+];
+
 export function ContadorPDFGenerator() {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear.toString());
   const [selectedSetor, setSelectedSetor] = useState<string>("_all_");
+  const [selectedMonths, setSelectedMonths] = useState<number[]>([]);
+  const [selectedPeriodo, setSelectedPeriodo] = useState<string>("_all_");
   const [generating, setGenerating] = useState(false);
 
   const years = getYearOptions(3, 3);
@@ -36,7 +44,7 @@ export function ContadorPDFGenerator() {
   });
 
   const { data: ferias, isLoading } = useQuery({
-    queryKey: ["ferias-contador", selectedYear, selectedSetor],
+    queryKey: ["ferias-contador", selectedYear, selectedSetor, selectedMonths, selectedPeriodo],
     queryFn: async () => {
       let query = supabase
         .from("ferias_ferias")
@@ -57,12 +65,33 @@ export function ContadorPDFGenerator() {
 
       let result = data || [];
 
-      // Filtrar por setor se necessário
+      // Filtrar por setor
       if (selectedSetor !== "_all_") {
         result = result.filter((f) => f.colaborador?.setor?.id === selectedSetor);
       }
 
-      // Ordenar por nome como padrão
+      // Filtrar por meses selecionados
+      if (selectedMonths.length > 0) {
+        result = result.filter((f) => {
+          const q1Month = f.quinzena1_inicio ? new Date(f.quinzena1_inicio + "T00:00:00").getMonth() + 1 : null;
+          const q2Month = f.quinzena2_inicio ? new Date(f.quinzena2_inicio + "T00:00:00").getMonth() + 1 : null;
+          
+          if (selectedPeriodo === "1") {
+            return q1Month !== null && selectedMonths.includes(q1Month);
+          } else if (selectedPeriodo === "2") {
+            return q2Month !== null && selectedMonths.includes(q2Month);
+          }
+          return (q1Month !== null && selectedMonths.includes(q1Month)) || 
+                 (q2Month !== null && selectedMonths.includes(q2Month));
+        });
+      }
+
+      // Filtrar por período (quinzena)
+      if (selectedPeriodo === "2") {
+        result = result.filter((f) => f.quinzena2_inicio && f.quinzena2_fim);
+      }
+
+      // Ordenar por nome
       result.sort((a, b) => (a.colaborador?.nome || "").localeCompare(b.colaborador?.nome || ""));
 
       return result;
@@ -76,9 +105,14 @@ export function ContadorPDFGenerator() {
 
   const calcularDiasContador = (inicio: string, fim: string, diasVendidos: number | null) => {
     const dias = differenceInDays(parseISO(fim), parseISO(inicio)) + 1;
-    // Para contador, máximo 10 dias vendidos
     const vendidosContador = Math.min(diasVendidos || 0, 10);
     return dias - vendidosContador;
+  };
+
+  const toggleMonth = (month: number) => {
+    setSelectedMonths(prev => 
+      prev.includes(month) ? prev.filter(m => m !== month) : [...prev, month].sort((a, b) => a - b)
+    );
   };
 
   const generatePDF = async () => {
@@ -103,11 +137,14 @@ export function ContadorPDFGenerator() {
       pdf.setFontSize(12);
       pdf.setFont("helvetica", "normal");
       const setorNome = selectedSetor === "_all_" ? "Todos os Setores" : setores?.find((s) => s.id === selectedSetor)?.nome || "";
+      const mesesLabel = selectedMonths.length === 0 ? "Todos" : selectedMonths.map(m => MONTHS[m - 1]).join(", ");
+      const periodoLabel = selectedPeriodo === "_all_" ? "Ambos" : selectedPeriodo === "1" ? "1ª Quinzena" : "2ª Quinzena";
       pdf.text(`Ano: ${selectedYear} | Setor: ${setorNome}`, pageWidth / 2, 28, { align: "center" });
-      pdf.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`, pageWidth / 2, 34, { align: "center" });
+      pdf.text(`Meses: ${mesesLabel} | Período: ${periodoLabel}`, pageWidth / 2, 34, { align: "center" });
+      pdf.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`, pageWidth / 2, 40, { align: "center" });
 
       // Table header
-      const startY = 45;
+      const startY = 50;
       const colWidths = [50, 35, 28, 28, 28, 28, 25, 25, 25];
       const headers = ["Colaborador", "CPF", "1ª Quinz. Início", "1ª Quinz. Fim", "2ª Quinz. Início", "2ª Quinz. Fim", "Dias Vend.", "Dias Gozo", "Status"];
 
@@ -134,7 +171,6 @@ export function ContadorPDFGenerator() {
           yPos = 25;
         }
 
-        // Zebra striping
         if (index % 2 === 0) {
           pdf.setFillColor(248, 250, 252);
           pdf.rect(margin, yPos - 5, pageWidth - margin * 2, 8, "F");
@@ -229,6 +265,20 @@ export function ContadorPDFGenerator() {
               </Select>
             </div>
 
+            <div className="space-y-2">
+              <Label>Período</Label>
+              <Select value={selectedPeriodo} onValueChange={setSelectedPeriodo}>
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all_">Ambos</SelectItem>
+                  <SelectItem value="1">1ª Quinzena</SelectItem>
+                  <SelectItem value="2">2ª Quinzena</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="flex items-end">
               <Button onClick={generatePDF} disabled={generating || isLoading || !ferias?.length}>
                 {generating ? (
@@ -238,6 +288,30 @@ export function ContadorPDFGenerator() {
                 )}
                 Gerar PDF
               </Button>
+            </div>
+          </div>
+
+          {/* Month filter */}
+          <div className="space-y-2">
+            <Label>Meses {selectedMonths.length > 0 && <span className="text-muted-foreground text-xs">({selectedMonths.length} selecionados)</span>}</Label>
+            <div className="flex flex-wrap gap-2">
+              {MONTHS.map((month, idx) => (
+                <div key={idx} className="flex items-center space-x-1">
+                  <Checkbox
+                    id={`month-${idx}`}
+                    checked={selectedMonths.includes(idx + 1)}
+                    onCheckedChange={() => toggleMonth(idx + 1)}
+                  />
+                  <label htmlFor={`month-${idx}`} className="text-sm cursor-pointer">
+                    {month.substring(0, 3)}
+                  </label>
+                </div>
+              ))}
+              {selectedMonths.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={() => setSelectedMonths([])}>
+                  Limpar
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>

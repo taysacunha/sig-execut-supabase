@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { normalizeText } from "@/lib/textUtils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -83,7 +84,7 @@ const EquipesTab = () => {
   });
 
   const filteredEquipes = equipes.filter((e) =>
-    e.nome.toLowerCase().includes(search.toLowerCase())
+    normalizeText(e.nome).includes(normalizeText(search))
   );
 
   const handleEdit = (equipe: Equipe) => {

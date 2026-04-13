@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { normalizeText } from "@/lib/textUtils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -157,8 +158,8 @@ export function FeriadosTab() {
   // Separate recurrent and unique holidays
   const { recorrentes, unicos } = useMemo(() => {
     const matchesSearch = (f: Feriado) =>
-      f.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      f.tipo?.toLowerCase().includes(searchTerm.toLowerCase());
+      normalizeText(f.nome).includes(normalizeText(searchTerm)) ||
+      normalizeText(f.tipo || "").includes(normalizeText(searchTerm));
 
     const recorrentesFiltered = feriados.filter(
       (f) => f.recorrente && matchesSearch(f)

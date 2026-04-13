@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { normalizeText } from "@/lib/textUtils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -89,7 +90,7 @@ const UnidadesTab = () => {
   });
 
   const filteredUnidades = unidades.filter((u) =>
-    u.nome.toLowerCase().includes(search.toLowerCase())
+    normalizeText(u.nome).includes(normalizeText(search))
   );
 
   const handleEdit = (unidade: Unidade) => {

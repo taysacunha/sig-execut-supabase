@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { normalizeText } from "@/lib/textUtils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -72,7 +73,7 @@ const CargosTab = () => {
   });
 
   const filteredCargos = cargos.filter((c) =>
-    c.nome.toLowerCase().includes(search.toLowerCase())
+    normalizeText(c.nome).includes(normalizeText(search))
   );
 
   const handleSort = (field: SortField) => {

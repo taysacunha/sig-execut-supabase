@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { normalizeText } from "@/lib/textUtils";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -89,7 +90,7 @@ export function ConsultaGeralTab() {
     if (!ferias) return [];
     return ferias
       .filter((f) => {
-        const matchesSearch = !searchTerm || f.colaborador?.nome?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = !searchTerm || normalizeText(f.colaborador?.nome || "").includes(normalizeText(searchTerm));
         const matchesSetor = selectedSetor === "_all_" || f.colaborador?.setor?.id === selectedSetor;
         const matchesStatus = selectedStatus === "_all_" || f.status === selectedStatus;
         const matchesTipo = selectedTipo === "_all_" || 

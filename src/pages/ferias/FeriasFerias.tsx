@@ -37,6 +37,7 @@ import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { useUserRole } from "@/hooks/useUserRole";
 import { usePagination } from "@/hooks/usePagination";
 import { TablePagination } from "@/components/vendas/TableControls";
+import { normalizeText } from "@/lib/textUtils";
 
 // ========== Types ==========
 
@@ -269,7 +270,7 @@ export default function FeriasFerias() {
 
   const filteredFerias = useMemo(() => {
     return ferias.filter((f) => {
-      const matchesSearch = f.colaborador?.nome?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = normalizeText(f.colaborador?.nome || "").includes(normalizeText(searchTerm));
       const matchesStatus = statusFilter === "all" || f.status === statusFilter;
       const matchesSetor = setorFilter === "all" || f.colaborador?.setor_titular?.id === setorFilter;
       return matchesSearch && matchesStatus && matchesSetor;
@@ -284,7 +285,7 @@ export default function FeriasFerias() {
 
   const filteredFormularios = useMemo(() => {
     return formularios.filter((f) => {
-      const matchesSearch = f.colaborador?.nome?.toLowerCase().includes(formSearchTerm.toLowerCase());
+      const matchesSearch = normalizeText(f.colaborador?.nome || "").includes(normalizeText(formSearchTerm));
       return matchesSearch;
     });
   }, [formularios, formSearchTerm]);

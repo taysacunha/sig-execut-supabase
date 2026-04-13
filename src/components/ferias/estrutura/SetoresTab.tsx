@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { normalizeText } from "@/lib/textUtils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -126,7 +127,7 @@ const SetoresTab = () => {
   };
 
   const filteredSetores = setores.filter((s) =>
-    s.nome.toLowerCase().includes(search.toLowerCase())
+    normalizeText(s.nome).includes(normalizeText(search))
   );
 
   const sortedSetores = [...filteredSetores].sort((a, b) => {

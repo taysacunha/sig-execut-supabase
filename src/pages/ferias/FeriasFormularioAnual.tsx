@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { normalizeText } from "@/lib/textUtils";
 import { getYearOptions } from "@/lib/dateUtils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -165,7 +166,7 @@ export default function FeriasFormularioAnual() {
   // Filtered data
   const filteredFormularios = useMemo(() => {
     return formularios.filter((f) => {
-      const matchesSearch = f.colaborador?.nome?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = normalizeText(f.colaborador?.nome || "").includes(normalizeText(searchTerm));
       const matchesStatus = statusFilter === "all" || f.status === statusFilter;
       const matchesSetor = setorFilter === "all" || f.colaborador?.setor_titular?.id === setorFilter;
       return matchesSearch && matchesStatus && matchesSetor;

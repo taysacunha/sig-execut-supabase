@@ -452,7 +452,25 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       setExcecaoTipo(ferias.vender_dias ? "vender" : ferias.gozo_diferente ? "gozo_diferente" : null);
       setExcDistribuicaoTipo(ferias.distribuicao_tipo || "");
       setExcDiasVendidos(ferias.dias_vendidos || 0);
-      setExcPeriodos([]);
+      // Load existing gozo_periodos for editing
+      (async () => {
+        const { data: existingPeriodos } = await supabase
+          .from("ferias_gozo_periodos" as any)
+          .select("id, ferias_id, numero, dias, data_inicio, data_fim, referencia_periodo, tipo")
+          .eq("ferias_id", ferias.id)
+          .order("numero");
+        if (existingPeriodos && existingPeriodos.length > 0) {
+          setExcPeriodos((existingPeriodos as any[]).map((p: any) => ({
+            id: p.id || crypto.randomUUID(),
+            referencia_periodo: p.referencia_periodo,
+            dias: p.dias,
+            data_inicio: p.data_inicio,
+            data_fim: p.data_fim,
+          })));
+        } else {
+          setExcPeriodos([]);
+        }
+      })();
     } else {
       setExcecaoTipo(null);
       setExcDistribuicaoTipo("");
