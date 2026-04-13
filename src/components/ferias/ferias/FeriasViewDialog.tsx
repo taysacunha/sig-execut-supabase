@@ -7,7 +7,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Calendar, User, Building2, AlertTriangle, DollarSign, Layers } from "lucide-react";
+import { Calendar, User, Building2, AlertTriangle, DollarSign, Layers, Send } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useQuery } from "@tanstack/react-query";
@@ -332,6 +332,22 @@ export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialo
                 <p className="text-sm text-muted-foreground">
                   {formatDate(ferias.periodo_aquisitivo_inicio)} a {formatDate(ferias.periodo_aquisitivo_fim)}
                 </p>
+              </div>
+            </>
+          )}
+
+          {/* Enviado ao Contador */}
+          {ferias.enviado_contador && (
+            <>
+              <Separator />
+              <div className="flex items-center gap-3">
+                <Send className="h-5 w-5 text-green-600" />
+                <div>
+                  <p className="font-medium text-green-600">Enviado ao Contador</p>
+                  <p className="text-sm text-muted-foreground">
+                    {ferias.enviado_contador_em ? `Em ${formatDate(ferias.enviado_contador_em)}` : "Data não registrada"}
+                  </p>
+                </div>
               </div>
             </>
           )}

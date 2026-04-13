@@ -12,6 +12,7 @@ import { Colaborador } from "@/pages/ferias/FeriasColaboradores";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Building2, Briefcase, Users, Calendar, FileText, AlertTriangle } from "lucide-react";
+import { AfastamentosSection } from "./AfastamentosSection";
 
 interface ColaboradorViewDialogProps {
   open: boolean;
@@ -152,6 +153,13 @@ const ColaboradorViewDialog = ({ open, onOpenChange, colaborador }: ColaboradorV
               </div>
             </>
           )}
+
+          {/* Afastamentos */}
+          <Separator />
+          <AfastamentosSection
+            colaboradorId={colaborador.id}
+            colaboradorNome={colaborador.nome}
+          />
 
           {/* Observações */}
           {colaborador.observacoes && (

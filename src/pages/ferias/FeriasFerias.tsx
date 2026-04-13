@@ -12,7 +12,8 @@ import {
   Wand2, Search, Calendar, AlertTriangle, CheckCircle2, 
   Loader2, Edit, Eye, Plus, Sparkles, CalendarMinus,
   FileText, Clock, XCircle, Download, ArrowUpDown, Printer,
-  ChevronLeft, ChevronRight, Trash2, ChevronDown, ChevronUp
+  ChevronLeft, ChevronRight, Trash2, ChevronDown, ChevronUp,
+  Send, Undo2
 } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -64,6 +65,8 @@ interface FeriasRecord {
   origem: string | null;
   periodo_aquisitivo_inicio: string | null;
   periodo_aquisitivo_fim: string | null;
+  enviado_contador: boolean | null;
+  enviado_contador_em: string | null;
   created_at: string;
   colaborador: {
     id: string;
@@ -134,6 +137,7 @@ export default function FeriasFerias() {
   const { hasAccess: hasRoleAccess } = useUserRole();
   const canEditFerias = canEdit("ferias");
   const isAdmin = hasRoleAccess(["super_admin", "admin", "manager"]);
+  const [contadorConfirmId, setContadorConfirmId] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState("ferias");
   const [searchTerm, setSearchTerm] = useState("");
@@ -251,6 +255,22 @@ export default function FeriasFerias() {
       toast.success("Férias excluída com sucesso!");
     },
     onError: () => toast.error("Erro ao excluir férias"),
+  });
+
+  const toggleEnviadoContadorMutation = useMutation({
+    mutationFn: async ({ id, value }: { id: string; value: boolean }) => {
+      const { error } = await supabase.from("ferias_ferias").update({
+        enviado_contador: value,
+        enviado_contador_em: value ? new Date().toISOString() : null,
+      }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["ferias-ferias"] });
+      toast.success(vars.value ? "Marcado como enviado ao contador" : "Desmarcado do envio ao contador");
+      setContadorConfirmId(null);
+    },
+    onError: () => toast.error("Erro ao atualizar status de envio"),
   });
 
   const deleteFormularioMutation = useMutation({
@@ -728,6 +748,7 @@ export default function FeriasFerias() {
                         <TableHead>1º Período</TableHead>
                         <TableHead>2º Período</TableHead>
                         <TableHead>Dias Vendidos</TableHead>
+                        <TableHead className="text-center">Enviado</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -739,6 +760,29 @@ export default function FeriasFerias() {
                           <TableCell className="text-sm">{formatPeriodo(f.quinzena1_inicio, f.quinzena1_fim)}</TableCell>
                           <TableCell className="text-sm">{f.quinzena2_inicio && f.quinzena2_fim ? formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim) : "—"}</TableCell>
                           <TableCell>{f.vender_dias && f.dias_vendidos ? <Badge variant="outline" className="text-xs">{Math.min(f.dias_vendidos, 10)} dias</Badge> : <span className="text-muted-foreground text-xs">—</span>}</TableCell>
+                          <TableCell className="text-center">
+                            {f.enviado_contador ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-green-600 hover:text-orange-600 gap-1"
+                                title={`Enviado em ${f.enviado_contador_em ? formatDate(f.enviado_contador_em) : "—"}. Clique para desmarcar.`}
+                                onClick={() => setContadorConfirmId(f.id)}
+                              >
+                                <CheckCircle2 className="h-4 w-4" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-muted-foreground hover:text-primary gap-1"
+                                title="Marcar como enviado ao contador"
+                                onClick={() => toggleEnviadoContadorMutation.mutate({ id: f.id, value: true })}
+                              >
+                                <Send className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -765,6 +809,24 @@ export default function FeriasFerias() {
       <ReducaoFeriasDialog open={reducaoDialogOpen} onOpenChange={setReducaoDialogOpen} ferias={reducaoFerias} colaboradorNome={reducaoFerias?.colaborador?.nome || ""} onSuccess={() => queryClient.invalidateQueries({ queryKey: ["ferias-ferias"] })} />
       <FormularioAnualDialog open={formDialogOpen} onOpenChange={setFormDialogOpen} formulario={selectedFormulario} anoReferencia={parseInt(formAnoFilter)} onSuccess={() => { queryClient.invalidateQueries({ queryKey: ["ferias-formularios"] }); queryClient.invalidateQueries({ queryKey: ["ferias-colaboradores-com-formulario"] }); setFormDialogOpen(false); }} />
       <FormularioAnualViewDialog open={formViewDialogOpen} onOpenChange={setFormViewDialogOpen} formulario={selectedFormulario} />
+
+      {/* Confirm dialog for unmarking enviado_contador */}
+      <AlertDialog open={!!contadorConfirmId} onOpenChange={(open) => { if (!open) setContadorConfirmId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desmarcar envio ao contador</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este período já foi marcado como enviado ao contador. Tem certeza que deseja desmarcar? Alterações após o envio devem ser comunicadas ao contador separadamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { if (contadorConfirmId) toggleEnviadoContadorMutation.mutate({ id: contadorConfirmId, value: false }); }}>
+              Desmarcar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

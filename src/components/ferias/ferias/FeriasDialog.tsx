@@ -949,6 +949,16 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           </DialogTitle>
         </DialogHeader>
 
+        {isEditing && ferias?.enviado_contador && (
+          <Alert variant="destructive" className="border-orange-500/50 bg-orange-500/10">
+            <ShieldAlert className="h-4 w-4" />
+            <AlertTitle>Férias já enviada ao contador</AlertTitle>
+            <AlertDescription>
+              Este registro foi encaminhado ao contador{ferias.enviado_contador_em ? ` em ${format(parseISO(ferias.enviado_contador_em), "dd/MM/yyyy", { locale: ptBR })}` : ""}. Alterações aqui ficarão apenas no sistema interno — comunique o contador separadamente se necessário.
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
 
