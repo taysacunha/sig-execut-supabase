@@ -70,7 +70,9 @@ export default function FeriasDashboard() {
   const getResolvedVacationStarts = (
     ferias: any,
     gozoPeriodosMap: Record<string, Array<{ data_inicio: string; data_fim: string }>>,
-  ) => getResolvedVacationPeriods(ferias, gozoPeriodosMap).map((periodo) => periodo.data_inicio);
+  ) => getResolvedVacationPeriods(ferias, gozoPeriodosMap)
+    .map((periodo) => periodo.data_inicio)
+    .sort();
 
   // Colaboradores ativos
   const { data: colaboradoresAtivos = 0, isLoading: loadingColaboradores } = useQuery({
