@@ -458,8 +458,16 @@ export default function FeriasFerias() {
     pdf.text(`Mês: ${mesLabel} | Período: ${periodoLabel}`, pageWidth / 2, 21, { align: "center" });
 
     let yPos = 28;
-    const colWidths = [50, 30, 30, 45, 45, 45, 25];
-    const headers = ["Colaborador", "CPF", "Setor", "Per. Aquisitivo", "1º Período", "2º Período", "Dias V."];
+    const showP1 = contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1";
+    const showP2 = contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2";
+    const colWidths = showP1 && showP2
+      ? [50, 30, 30, 45, 45, 45, 25]
+      : [55, 35, 35, 50, 55, 30];
+    const headers = ["Colaborador", "CPF", "Setor", "Per. Aquisitivo",
+      ...(showP1 ? ["1º Período"] : []),
+      ...(showP2 ? ["2º Período"] : []),
+      "Dias V.",
+    ];
 
     pdf.setFillColor(220, 220, 220);
     pdf.rect(margin, yPos - 5, pageWidth - margin * 2, 8, "F");
@@ -508,10 +516,14 @@ export default function FeriasFerias() {
       xPos += colWidths[2];
       pdf.text(f.periodo_aquisitivo_inicio && f.periodo_aquisitivo_fim ? formatPeriodo(f.periodo_aquisitivo_inicio, f.periodo_aquisitivo_fim) : "—", xPos + 2, yPos);
       xPos += colWidths[3];
-      pdf.text(calcAdjustedPeriodo(f.quinzena1_inicio, f.quinzena1_fim, vendP1), xPos + 2, yPos);
-      xPos += colWidths[4];
-      pdf.text(f.quinzena2_inicio && f.quinzena2_fim ? calcAdjustedPeriodo(f.quinzena2_inicio, f.quinzena2_fim, vendP2) : "—", xPos + 2, yPos);
-      xPos += colWidths[5];
+      if (showP1) {
+        pdf.text(calcAdjustedPeriodo(f.quinzena1_inicio, f.quinzena1_fim, vendP1), xPos + 2, yPos);
+        xPos += colWidths[4];
+      }
+      if (showP2) {
+        pdf.text(f.quinzena2_inicio && f.quinzena2_fim ? calcAdjustedPeriodo(f.quinzena2_inicio, f.quinzena2_fim, vendP2) : "—", xPos + 2, yPos);
+        xPos += colWidths[showP1 ? 5 : 4];
+      }
       pdf.text(diasVend > 0 ? String(diasVend) : "—", xPos + 2, yPos);
 
       yPos += 6;
