@@ -1,31 +1,77 @@
 
+Diagnóstico do porquê isso ainda não aparece
 
-## Problemas identificados
+O problema não está mais só no carregamento da `FeriasDialog`. O código realmente busca os `ferias_gozo_periodos` da férias editada, inclusive no bloco de edição de férias flexíveis.
 
-1. **Status "Encerrado" incorreto**: A função `isActive` compara com `new Date()` — se hoje está antes do período, retorna `false`, e o código mostra "Encerrado". Falta distinguir 3 estados: **Futuro** (ainda não começou), **Ativo** (em andamento), **Encerrado** (já terminou).
+O ponto que quebra a exibição é outro:
 
-2. **Sem validação de conflito entre afastamentos**: Ao registrar um novo afastamento, não há verificação se o período se sobrepõe a outro afastamento já existente do mesmo colaborador.
+1. Em `FeriasDialog.tsx`, ao abrir uma férias com `gozo_flexivel`, o código faz:
+- `setExcecaoTipo(...)`
+- `setExcDistribuicaoTipo(...)`
+- `setExcDiasVendidos(...)`
+- busca os períodos em `ferias_gozo_periodos`
+- faz `setExcPeriodos(...)`
 
-## Correções
+2. Porém, em `ExcecaoPeriodosSection.tsx`, existem `useEffect`s que reinicializam a interface quando `excecaoTipo`, `distribuicaoTipo` ou `diasVendidos` mudam.
 
-**Arquivo**: `src/components/ferias/colaboradores/AfastamentosSection.tsx`
+3. Esses efeitos:
+- limpam `periodos`
+- resetam `distribuicaoTipo`
+- recriam períodos vazios
+- sobrescrevem os períodos que vieram do banco
 
-### 1. Corrigir lógica de status
+Resultado prático:
+- os 4 períodos da Taysa até chegam a ser carregados
+- mas a própria UI os apaga/reinicializa logo depois
+- por isso você não vê nada ao editar
 
-Substituir a função `isActive` por uma função `getStatus` que retorna 3 estados:
+O que precisa ser corrigido
 
-```
-Se hoje < data_inicio → "futuro" (badge azul/outline "Agendado")
-Se hoje >= data_inicio E hoje <= data_fim → "ativo" (badge destructive "Ativo")  
-Se hoje > data_fim → "encerrado" (badge secondary "Encerrado")
-```
+1. Preservar os períodos carregados do banco no modo edição
+- adicionar uma proteção em `ExcecaoPeriodosSection.tsx` para não executar os efeitos de reset/inicialização enquanto a tela estiver carregando dados existentes
+- a seção não pode recriar períodos automáticos quando já existem `periodos` vindos da edição
 
-Atualizar o card para usar o novo status (cor do border, badge).
+2. Separar “inicialização de cadastro novo” de “restauração de edição”
+- hoje a seção trata ambos do mesmo jeito
+- no modo edição, se já houver:
+  - `distribuicaoTipo`
+  - `excecaoTipo`
+  - `periodos`
+  ela deve apenas renderizar, não resetar
 
-### 2. Validação de conflito entre períodos
+3. Ajustar a ordem de hidratação em `FeriasDialog.tsx`
+- manter o carregamento dos `ferias_gozo_periodos`
+- só liberar a UI reativa depois que:
+  - `excecaoTipo`
+  - `excDistribuicaoTipo`
+  - `excDiasVendidos`
+  - `excPeriodos`
+  estiverem todos sincronizados
 
-Antes de salvar, verificar se o novo período se sobrepõe a algum afastamento existente (excluindo o próprio registro se for edição). Usar a lista `afastamentos` já carregada:
+Arquivos a ajustar
+- `src/components/ferias/ferias/FeriasDialog.tsx`
+- `src/components/ferias/ferias/ExcecaoPeriodosSection.tsx`
 
-- Para cada afastamento existente, checar se `novoInicio <= existenteFim && novoFim >= existenteInicio`
-- Se houver conflito, mostrar erro e bloquear o salvamento
+Abordagem de implementação
+- introduzir uma flag de hidratação/restauração da edição
+- bloquear os `useEffect`s automáticos de:
+  - reset por `excecaoTipo`
+  - reset por `diasVendidos`
+  - geração automática por `distribuicaoTipo`
+  quando os dados já vierem do banco
+- garantir que a inicialização automática continue funcionando apenas para cadastro novo ou quando o usuário realmente mudar a configuração manualmente
 
+Critério de aceite
+- ao clicar em editar a férias da Taysa, os 4 períodos já cadastrados aparecem na tela
+- os períodos não somem após alguns milissegundos
+- continua funcionando para cadastro novo sem quebrar a lógica automática de distribuição
+- editar e salvar novamente mantém os períodos corretos
+
+Detalhe técnico
+O bug atual é consistente com um conflito entre estes pontos:
+- carregamento assíncrono dos `ferias_gozo_periodos` em `FeriasDialog.tsx`
+- `useEffect(() => onDistribuicaoTipoChange(""); onPeriodosChange([]), [excecaoTipo])`
+- `useEffect(..., [distribuicaoTipo, excecaoTipo])`
+- `useEffect(..., [diasVendidos])`
+
+Esses efeitos tornam a seção “auto-reinicializável” demais e acabam apagando justamente os períodos restaurados da edição.
