@@ -1093,6 +1093,8 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
                   <li className="font-medium text-primary">• Distribuição GLOBAL equilibrada entre sábados</li>
                   <li className="font-medium text-primary">• Chefes do mesmo setor não folgam juntos</li>
                   {configMap.FOLGAS_DISTRIBUICAO_JUSTA && <li>• Distribuição equilibrada dentro de cada setor</li>}
+                  <li>• <strong>Perda de folga</strong>: bloqueia o mês inteiro (usar quando atestado cobre sábado)</li>
+                  <li>• <strong>Afastamento</strong>: remove apenas os sábados específicos da disponibilidade</li>
                 </ul>
               </div>
             </div>
