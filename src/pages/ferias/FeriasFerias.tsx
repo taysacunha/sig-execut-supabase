@@ -24,6 +24,11 @@ import {
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import { format, parseISO, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -68,6 +73,8 @@ interface FeriasRecord {
   periodo_aquisitivo_fim: string | null;
   enviado_contador: boolean | null;
   enviado_contador_em: string | null;
+  enviado_contador_q1: boolean | null;
+  enviado_contador_q2: boolean | null;
   created_at: string;
   colaborador: {
     id: string;
@@ -139,6 +146,8 @@ export default function FeriasFerias() {
   const canEditFerias = canEdit("ferias");
   const isAdmin = hasRoleAccess(["super_admin", "admin", "manager"]);
   const [contadorConfirmId, setContadorConfirmId] = useState<string | null>(null);
+  const [contadorConfirmAction, setContadorConfirmAction] = useState<"mark" | "unmark">("mark");
+  const [contadorSelectedPeriodo, setContadorSelectedPeriodo] = useState<string>("ambos");
   const [contadorMesFilter, setContadorMesFilter] = useState<string>("all");
   const [contadorPeriodoFilter, setContadorPeriodoFilter] = useState<string>("all");
 
@@ -310,16 +319,19 @@ export default function FeriasFerias() {
   });
 
   const toggleEnviadoContadorMutation = useMutation({
-    mutationFn: async ({ id, value }: { id: string; value: boolean }) => {
+    mutationFn: async ({ id, q1, q2 }: { id: string; q1: boolean; q2: boolean }) => {
+      const enviado = q1 || q2;
       const { error } = await supabase.from("ferias_ferias").update({
-        enviado_contador: value,
-        enviado_contador_em: value ? new Date().toISOString() : null,
-      }).eq("id", id);
+        enviado_contador: enviado,
+        enviado_contador_em: enviado ? new Date().toISOString() : null,
+        enviado_contador_q1: q1,
+        enviado_contador_q2: q2,
+      } as any).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: (_, vars) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ferias-ferias"] });
-      toast.success(vars.value ? "Marcado como enviado ao contador" : "Desmarcado do envio ao contador");
+      toast.success("Status de envio ao contador atualizado");
       setContadorConfirmId(null);
     },
     onError: () => toast.error("Erro ao atualizar status de envio"),
