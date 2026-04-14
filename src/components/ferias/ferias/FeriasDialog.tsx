@@ -1284,13 +1284,31 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                 </Alert>
               )}
 
-              {periodoAquisitivo && (
+              {selectedColabId && periodosAquisitivos.length > 0 && (
                 <Card className="border-primary/20 bg-primary/5">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2"><Info className="h-4 w-4 text-primary" />Período Aquisitivo (automático)</CardTitle>
+                    <CardTitle className="text-sm flex items-center gap-2"><Info className="h-4 w-4 text-primary" />Período Aquisitivo</CardTitle>
                   </CardHeader>
-                  <CardContent><p className="text-sm">{formatDateBR(periodoAquisitivo.inicio)} a {formatDateBR(periodoAquisitivo.fim)}</p></CardContent>
-               </Card>
+                  <CardContent>
+                    <Select value={selectedPeriodoKey} onValueChange={setSelectedPeriodoKey}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o período aquisitivo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {periodosAquisitivos.map(p => (
+                          <SelectItem key={`${p.inicio}|${p.fim}`} value={`${p.inicio}|${p.fim}`}>
+                            {p.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {periodoAquisitivo && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        O saldo exibido já desconta férias cadastradas e quitações manuais.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
               )}
 
               {/* Afastamentos alert */}
