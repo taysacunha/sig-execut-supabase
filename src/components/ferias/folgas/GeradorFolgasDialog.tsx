@@ -111,15 +111,28 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [generating, setGenerating] = useState(false);
   const [diagnosticMessage, setDiagnosticMessage] = useState<string | null>(null);
-  const [creditsToUse, setCreditsToUse] = useState<Set<string>>(new Set()); // credit IDs to use
+  const [creditsToUse, setCreditsToUse] = useState<Set<string>>(new Set());
+  const [selectedSaturdays, setSelectedSaturdays] = useState<Set<string>>(new Set());
 
-  // Get saturdays of the month
-  const saturdaysOfMonth = useMemo(() => {
+  // Get ALL saturdays of the month
+  const allSaturdaysOfMonth = useMemo(() => {
     const start = startOfMonth(new Date(year, month - 1));
     const end = endOfMonth(new Date(year, month - 1));
     const weekends = eachWeekendOfInterval({ start, end });
     return weekends.filter(d => isSaturday(d)).map(d => format(d, "yyyy-MM-dd"));
   }, [year, month]);
+
+  // Initialize selected saturdays when dialog opens
+  useMemo(() => {
+    if (open && selectedSaturdays.size === 0) {
+      setSelectedSaturdays(new Set(allSaturdaysOfMonth));
+    }
+  }, [open, allSaturdaysOfMonth]);
+
+  // Active saturdays (only selected ones used in generation)
+  const saturdaysOfMonth = useMemo(() => {
+    return allSaturdaysOfMonth.filter(s => selectedSaturdays.has(s));
+  }, [allSaturdaysOfMonth, selectedSaturdays]);
 
   // Query configurações
   const { data: configs = [] } = useQuery({
