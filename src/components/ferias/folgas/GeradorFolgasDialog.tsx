@@ -289,10 +289,6 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
         ? ferias.gozo_quinzena1_inicio : ferias.quinzena1_inicio);
       const q1End = parseISO(ferias.gozo_diferente && ferias.gozo_quinzena1_fim 
         ? ferias.gozo_quinzena1_fim : ferias.quinzena1_fim);
-      const q2Start = parseISO(ferias.gozo_diferente && ferias.gozo_quinzena2_inicio 
-        ? ferias.gozo_quinzena2_inicio : ferias.quinzena2_inicio);
-      const q2End = parseISO(ferias.gozo_diferente && ferias.gozo_quinzena2_fim 
-        ? ferias.gozo_quinzena2_fim : ferias.quinzena2_fim);
 
       const q1OverlapStart = q1Start > monthStart ? q1Start : monthStart;
       const q1OverlapEnd = q1End < monthEnd ? q1End : monthEnd;
@@ -300,10 +296,19 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
         totalDays += differenceInDays(q1OverlapEnd, q1OverlapStart) + 1;
       }
 
-      const q2OverlapStart = q2Start > monthStart ? q2Start : monthStart;
-      const q2OverlapEnd = q2End < monthEnd ? q2End : monthEnd;
-      if (q2OverlapStart <= q2OverlapEnd) {
-        totalDays += differenceInDays(q2OverlapEnd, q2OverlapStart) + 1;
+      const q2Raw = ferias.gozo_diferente && ferias.gozo_quinzena2_inicio 
+        ? ferias.gozo_quinzena2_inicio : ferias.quinzena2_inicio;
+      const q2EndRaw = ferias.gozo_diferente && ferias.gozo_quinzena2_fim 
+        ? ferias.gozo_quinzena2_fim : ferias.quinzena2_fim;
+
+      if (q2Raw && q2EndRaw) {
+        const q2Start = parseISO(q2Raw);
+        const q2End = parseISO(q2EndRaw);
+        const q2OverlapStart = q2Start > monthStart ? q2Start : monthStart;
+        const q2OverlapEnd = q2End < monthEnd ? q2End : monthEnd;
+        if (q2OverlapStart <= q2OverlapEnd) {
+          totalDays += differenceInDays(q2OverlapEnd, q2OverlapStart) + 1;
+        }
       }
     });
 
@@ -323,8 +328,10 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
 
       const q1Start = parseISO(ferias.gozo_diferente && ferias.gozo_quinzena1_inicio 
         ? ferias.gozo_quinzena1_inicio : ferias.quinzena1_inicio);
-      const q2End = parseISO(ferias.gozo_diferente && ferias.gozo_quinzena2_fim 
-        ? ferias.gozo_quinzena2_fim : ferias.quinzena2_fim);
+      const q2EndRaw = ferias.gozo_diferente && ferias.gozo_quinzena2_fim 
+        ? ferias.gozo_quinzena2_fim : ferias.quinzena2_fim;
+      const q2End = q2EndRaw ? parseISO(q2EndRaw) : parseISO(ferias.gozo_diferente && ferias.gozo_quinzena1_fim 
+        ? ferias.gozo_quinzena1_fim : ferias.quinzena1_fim);
 
       const startMonth = q1Start.getMonth() + 1;
       const endMonth = q2End.getMonth() + 1;
