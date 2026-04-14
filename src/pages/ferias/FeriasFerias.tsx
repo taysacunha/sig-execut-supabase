@@ -200,7 +200,7 @@ export default function FeriasFerias() {
         .lte("quinzena1_inicio", `${anoFilter}-12-31`)
         .order("quinzena1_inicio", { ascending: false });
       if (error) throw error;
-      return data as FeriasRecord[];
+      return data as unknown as FeriasRecord[];
     },
   });
 
@@ -888,7 +888,11 @@ export default function FeriasFerias() {
                                   size="sm"
                                   className="text-green-600 hover:text-orange-600 gap-1"
                                   title={`Enviado em ${f.enviado_contador_em ? formatDate(f.enviado_contador_em) : "—"}. Clique para desmarcar.`}
-                                  onClick={() => setContadorConfirmId(f.id)}
+                                  onClick={() => {
+                                    setContadorConfirmId(f.id);
+                                    setContadorConfirmAction("unmark");
+                                    setContadorSelectedPeriodo(f.quinzena2_inicio ? "ambos" : "q1");
+                                  }}
                                 >
                                   <CheckCircle2 className="h-4 w-4" />
                                   <span className="text-xs">Enviado</span>
@@ -899,7 +903,11 @@ export default function FeriasFerias() {
                                   size="sm"
                                   className="text-muted-foreground hover:text-primary gap-1"
                                   title="Marcar como enviado ao contador"
-                                  onClick={() => toggleEnviadoContadorMutation.mutate({ id: f.id, value: true })}
+                                  onClick={() => {
+                                    setContadorConfirmId(f.id);
+                                    setContadorConfirmAction("mark");
+                                    setContadorSelectedPeriodo(f.quinzena2_inicio ? "ambos" : "q1");
+                                  }}
                                 >
                                   <Send className="h-4 w-4" />
                                   <span className="text-xs">Pendente</span>
@@ -907,12 +915,12 @@ export default function FeriasFerias() {
                               )}
                               {/* Show which periods exist */}
                               <div className="flex gap-1">
-                                <Badge variant="outline" className={`text-[10px] px-1 py-0 ${f.enviado_contador ? "bg-green-500/10 text-green-600 border-green-500/20" : "bg-yellow-500/10 text-yellow-600 border-yellow-500/20"}`}>
-                                  1ª {f.enviado_contador ? "✓" : "○"}
+                                <Badge variant="outline" className={`text-[10px] px-1 py-0 ${f.enviado_contador_q1 ? "bg-green-500/10 text-green-600 border-green-500/20" : "bg-yellow-500/10 text-yellow-600 border-yellow-500/20"}`}>
+                                  1ª {f.enviado_contador_q1 ? "✓" : "○"}
                                 </Badge>
                                 {f.quinzena2_inicio ? (
-                                  <Badge variant="outline" className={`text-[10px] px-1 py-0 ${f.enviado_contador ? "bg-green-500/10 text-green-600 border-green-500/20" : "bg-yellow-500/10 text-yellow-600 border-yellow-500/20"}`}>
-                                    2ª {f.enviado_contador ? "✓" : "○"}
+                                  <Badge variant="outline" className={`text-[10px] px-1 py-0 ${f.enviado_contador_q2 ? "bg-green-500/10 text-green-600 border-green-500/20" : "bg-yellow-500/10 text-yellow-600 border-yellow-500/20"}`}>
+                                    2ª {f.enviado_contador_q2 ? "✓" : "○"}
                                   </Badge>
                                 ) : (
                                   <Badge variant="outline" className="text-[10px] px-1 py-0 text-muted-foreground">
@@ -949,23 +957,81 @@ export default function FeriasFerias() {
       <FormularioAnualDialog open={formDialogOpen} onOpenChange={setFormDialogOpen} formulario={selectedFormulario} anoReferencia={parseInt(formAnoFilter)} onSuccess={() => { queryClient.invalidateQueries({ queryKey: ["ferias-formularios"] }); queryClient.invalidateQueries({ queryKey: ["ferias-colaboradores-com-formulario"] }); setFormDialogOpen(false); }} />
       <FormularioAnualViewDialog open={formViewDialogOpen} onOpenChange={setFormViewDialogOpen} formulario={selectedFormulario} />
 
-      {/* Confirm dialog for unmarking enviado_contador */}
-      <AlertDialog open={!!contadorConfirmId} onOpenChange={(open) => { if (!open) setContadorConfirmId(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Desmarcar envio ao contador</AlertDialogTitle>
-            <AlertDialogDescription>
-              Este período já foi marcado como enviado ao contador. Tem certeza que deseja desmarcar? Alterações após o envio devem ser comunicadas ao contador separadamente.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { if (contadorConfirmId) toggleEnviadoContadorMutation.mutate({ id: contadorConfirmId, value: false }); }}>
-              Desmarcar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Confirm dialog for marking/unmarking enviado_contador */}
+      {(() => {
+        const confirmFerias = contadorConfirmId ? contadorDataFiltered.find(f => f.id === contadorConfirmId) || ferias.find(f => f.id === contadorConfirmId) : null;
+        const hasQ2 = !!confirmFerias?.quinzena2_inicio;
+        const isMarking = contadorConfirmAction === "mark";
+
+        const handleConfirm = () => {
+          if (!contadorConfirmId || !confirmFerias) return;
+          if (isMarking) {
+            const q1 = contadorSelectedPeriodo === "q1" || contadorSelectedPeriodo === "ambos";
+            const q2 = contadorSelectedPeriodo === "q2" || contadorSelectedPeriodo === "ambos";
+            toggleEnviadoContadorMutation.mutate({
+              id: contadorConfirmId,
+              q1: q1 || !!confirmFerias.enviado_contador_q1,
+              q2: q2 || !!confirmFerias.enviado_contador_q2,
+            });
+          } else {
+            const q1 = contadorSelectedPeriodo === "q1" || contadorSelectedPeriodo === "ambos"
+              ? false : !!confirmFerias.enviado_contador_q1;
+            const q2 = contadorSelectedPeriodo === "q2" || contadorSelectedPeriodo === "ambos"
+              ? false : !!confirmFerias.enviado_contador_q2;
+            toggleEnviadoContadorMutation.mutate({ id: contadorConfirmId, q1, q2 });
+          }
+        };
+
+        return (
+          <Dialog open={!!contadorConfirmId} onOpenChange={(open) => { if (!open) setContadorConfirmId(null); }}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>{isMarking ? "Confirmar envio ao contador" : "Desmarcar envio ao contador"}</DialogTitle>
+                <DialogDescription>
+                  {confirmFerias?.colaborador?.nome && (
+                    <span className="font-medium text-foreground">{confirmFerias.colaborador.nome}</span>
+                  )}
+                  {confirmFerias?.periodo_aquisitivo_inicio && confirmFerias?.periodo_aquisitivo_fim && (
+                    <span className="block text-xs mt-1">
+                      Período aquisitivo: {formatDate(confirmFerias.periodo_aquisitivo_inicio)} a {formatDate(confirmFerias.periodo_aquisitivo_fim)}
+                    </span>
+                  )}
+                  <span className="block mt-2">
+                    {isMarking
+                      ? "Qual período foi encaminhado ao contador?"
+                      : "Qual período deseja desmarcar?"}
+                  </span>
+                </DialogDescription>
+              </DialogHeader>
+              <RadioGroup value={contadorSelectedPeriodo} onValueChange={setContadorSelectedPeriodo} className="gap-3 py-2">
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="q1" id="periodo-q1" />
+                  <Label htmlFor="periodo-q1">1ª Quinzena — {confirmFerias ? formatPeriodo(confirmFerias.quinzena1_inicio, confirmFerias.quinzena1_fim) : ""}</Label>
+                </div>
+                {hasQ2 && (
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="q2" id="periodo-q2" />
+                    <Label htmlFor="periodo-q2">2ª Quinzena — {confirmFerias?.quinzena2_inicio && confirmFerias?.quinzena2_fim ? formatPeriodo(confirmFerias.quinzena2_inicio, confirmFerias.quinzena2_fim) : ""}</Label>
+                  </div>
+                )}
+                {hasQ2 && (
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="ambos" id="periodo-ambos" />
+                    <Label htmlFor="periodo-ambos">Ambos os períodos</Label>
+                  </div>
+                )}
+              </RadioGroup>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setContadorConfirmId(null)}>Cancelar</Button>
+                <Button onClick={handleConfirm} disabled={toggleEnviadoContadorMutation.isPending}>
+                  {toggleEnviadoContadorMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  {isMarking ? "Confirmar Envio" : "Desmarcar"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
     </div>
   );
 }
