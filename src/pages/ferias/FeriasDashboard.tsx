@@ -237,6 +237,15 @@ export default function FeriasDashboard() {
         }
       }
 
+      // Get manual quitações
+      const { data: quitacoes } = await supabase
+        .from("ferias_periodos_quitados" as any)
+        .select("colaborador_id, periodo_inicio, dias_quitados");
+      const quitMap: Record<string, number> = {};
+      for (const q of (quitacoes as any[] || [])) {
+        quitMap[`${q.colaborador_id}-${q.periodo_inicio}`] = q.dias_quitados || 0;
+      }
+
       const alertas: { id: string; nome: string; diasRestantes: number; dataLimite: string; tipo: "vencendo" | "vencido"; diasPendentes: number }[] = [];
 
       for (const colab of colaboradores || []) {
@@ -285,7 +294,8 @@ export default function FeriasDashboard() {
             diasVendidos += f.dias_vendidos || 0;
           }
 
-          const saldo = 30 - diasGozados - diasVendidos;
+          const diasQuitados = quitMap[`${colab.id}-${periodoInicioStr}`] || 0;
+          const saldo = 30 - diasGozados - diasVendidos - diasQuitados;
           if (saldo <= 0) continue; // Period is settled
 
           alertas.push({
