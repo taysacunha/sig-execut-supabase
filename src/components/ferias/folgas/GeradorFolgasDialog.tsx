@@ -1020,6 +1020,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     setShowPreview(false);
     setSelectedRows(new Set());
     setCreditsToUse(new Set());
+    setSelectedSaturdays(new Set());
     setDiagnosticMessage(null);
     onOpenChange(false);
   };
@@ -1077,7 +1078,8 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
               </div>
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Calendar className="h-4 w-4" />
-                {saturdaysOfMonth.length} sábados no mês
+                {saturdaysOfMonth.length} de {allSaturdaysOfMonth.length} sábados selecionados
+              </div>
               </div>
               
               <div className="border-t pt-3 mt-3">
