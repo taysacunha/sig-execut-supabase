@@ -1,37 +1,35 @@
 
 
-## Correção de Segurança RLS
+## Diálogo de confirmação ao marcar "Enviado ao Contador"
 
-### Situação atual
+### Problema atual
+Ao clicar em "Pendente" para marcar como enviado, a ação executa imediatamente sem confirmação e sem perguntar qual período foi encaminhado. O diálogo de confirmação só existe para **desmarcar**.
 
-O erro **"RLS Disabled in Public"** que você viu era um **finding antigo** (de 8 de março). Ao rodar o scan agora, ele **não aparece mais** — todas as 65 tabelas têm RLS habilitado. Esse erro pode ser descartado.
+### Solução
 
-O scan atualizado encontrou **1 problema real** que precisa de correção:
+#### 1. Nova migração — colunas por período
+Adicionar `enviado_contador_q1` e `enviado_contador_q2` (boolean, default false) à tabela `ferias_ferias`, permitindo rastrear envio independente de cada quinzena.
 
-### Problema: `ferias_afastamentos` com policies permissivas
+**Arquivo**: `.lovable/enviado_contador_periodos_migration.sql`
 
-A tabela `ferias_afastamentos` tem 4 policies com `USING (true)` e `WITH CHECK (true)`, o que significa que **qualquer usuário autenticado** pode ler, criar, editar e deletar registros de afastamento de qualquer colaborador. Isso deveria seguir o padrão do módulo férias (`can_view_system / can_edit_system`).
+#### 2. Diálogo de confirmação ao marcar envio
+Quando o usuário clicar em "Pendente", abrir um `Dialog` com:
+- Nome do colaborador e período aquisitivo
+- RadioGroup: "1ª Quinzena", "2ª Quinzena" (só se existir), "Ambos"
+- Botões Cancelar / Confirmar Envio
 
-### Correção (migração SQL)
+Ao confirmar, a mutation atualiza `enviado_contador = true`, `enviado_contador_em`, e os campos `_q1` / `_q2` conforme seleção.
 
-Remover as 4 policies permissivas e criar novas policies restritivas:
+#### 3. Badges granulares
+Os badges "1ª ✓/○" e "2ª ✓/○" passam a refletir `enviado_contador_q1` e `enviado_contador_q2` independentemente, em vez do campo booleano único.
 
-```text
-DROP POLICY "Authenticated users can read afastamentos"    → SELECT com can_view_system('ferias')
-DROP POLICY "Authenticated users can insert afastamentos"  → INSERT com can_edit_system('ferias')
-DROP POLICY "Authenticated users can update afastamentos"  → UPDATE com can_edit_system('ferias')
-DROP POLICY "Authenticated users can delete afastamentos"  → DELETE com can_edit_system('ferias')
-```
+#### 4. Desmarcar granular
+O diálogo de desmarcar também perguntará qual período desmarcar. Se ambos forem desmarcados, `enviado_contador` volta a `false`.
 
-### Warnings que podem ser ignorados
+### Arquivos modificados
 
-1. **`module_audit_logs` INSERT true** — intencional, o trigger de auditoria precisa inserir logs para qualquer usuário que faça alterações. Será marcado como ignorado no scanner.
-2. **`SUPA_security_definer_view`** — já ignorado (funções SECURITY DEFINER são o padrão recomendado para evitar recursão RLS).
-
-### Ações
-
-1. Criar migração SQL para corrigir `ferias_afastamentos`
-2. Marcar o finding antigo `SUPA_rls_disabled_in_public` como resolvido
-3. Marcar `module_audit_logs` INSERT true como ignorado (intencional)
-4. Atualizar os 3 warnings de `rls_policy_always_true` (2 são de `ferias_afastamentos`, 1 é de `module_audit_logs`)
+| Arquivo | Alteração |
+|---------|-----------|
+| `.lovable/enviado_contador_periodos_migration.sql` | Nova migração com colunas q1/q2 |
+| `src/pages/ferias/FeriasFerias.tsx` | Diálogo de confirmação ao marcar, badges granulares, mutation atualizada |
 
