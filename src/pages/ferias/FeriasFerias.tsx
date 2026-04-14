@@ -34,6 +34,7 @@ import { ReducaoFeriasDialog } from "@/components/ferias/ferias/ReducaoFeriasDia
 import { FormularioAnualDialog } from "@/components/ferias/formulario/FormularioAnualDialog";
 import { FormularioAnualViewDialog } from "@/components/ferias/formulario/FormularioAnualViewDialog";
 import { FormularioPDFGenerator } from "@/components/ferias/relatorios/FormularioPDFGenerator";
+import { PeriodosAquisitivosTab } from "@/components/ferias/ferias/PeriodosAquisitivosTab";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { useUserRole } from "@/hooks/useUserRole";
 import { usePagination } from "@/hooks/usePagination";
@@ -550,8 +551,9 @@ export default function FeriasFerias() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
+        <TabsList className="grid w-full grid-cols-3 lg:w-[600px]">
           <TabsTrigger value="ferias" className="flex items-center gap-2"><Calendar className="h-4 w-4" />Tabela de Férias</TabsTrigger>
+          <TabsTrigger value="periodos" className="flex items-center gap-2"><Clock className="h-4 w-4" />Períodos Aquisitivos</TabsTrigger>
           <TabsTrigger value="contador" className="flex items-center gap-2"><Download className="h-4 w-4" />Tabela do Contador</TabsTrigger>
         </TabsList>
 
