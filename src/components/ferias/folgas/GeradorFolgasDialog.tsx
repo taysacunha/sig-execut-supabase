@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format, startOfMonth, endOfMonth, eachWeekendOfInterval, isSaturday, differenceInDays, parseISO, getDaysInMonth } from "date-fns";
@@ -123,8 +123,8 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
   }, [year, month]);
 
   // Initialize selected saturdays when dialog opens
-  useMemo(() => {
-    if (open && selectedSaturdays.size === 0) {
+  useEffect(() => {
+    if (open) {
       setSelectedSaturdays(new Set(allSaturdaysOfMonth));
     }
   }, [open, allSaturdaysOfMonth]);
