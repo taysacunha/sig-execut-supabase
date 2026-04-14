@@ -1,36 +1,52 @@
 
 
-## Problema
+## Gestão de Períodos Aquisitivos
 
-O `GeradorFolgasDialog` não consulta a tabela `ferias_afastamentos`. Na etapa de exclusões (linhas 363-375), ele verifica apenas:
-- Período de experiência
-- Perda registrada
-- Férias no mês
-- Férias dividida em dois meses
+### Situação atual
+- O campo `periodo_aquisitivo_inicio/fim` já existe em `ferias_ferias`, mas é calculado automaticamente pela data de admissão + ano de referência
+- O dashboard alerta períodos vencendo/vencidos, mas verifica apenas se o colaborador tem **qualquer** férias ativa — não calcula saldo real (dias gozados vs. devidos)
+- Não é possível vincular férias a um período aquisitivo específico quando há mais de um pendente
+- Não existe visão consolidada de "todos os períodos aquisitivos de um colaborador com saldo"
 
-**Não verifica afastamentos.** Resultado: colaboradores afastados (licença médica, maternidade, etc.) entram na escala normalmente.
+### O que será implementado
 
-## Correção
+**1. Nova aba "Períodos Aquisitivos" na página de Férias** (`src/pages/ferias/FeriasFerias.tsx`)
+- Terceira aba ao lado de "Tabela de Férias" e "Tabela do Contador"
+- Lista todos os colaboradores ativos com seus períodos aquisitivos calculados pela data de admissão
+- Para cada período mostra:
+  - Período aquisitivo (ex: 01/03/2024 a 28/02/2025)
+  - Período concessivo (12 meses seguintes ao aquisitivo)
+  - Dias de direito: 30
+  - Dias gozados: soma dos dias de férias vinculadas a esse período
+  - Dias vendidos: soma dos dias vendidos nesse período
+  - Saldo: 30 - gozados - vendidos
+  - Status: **Quitado** (saldo = 0), **Parcial** (saldo > 0, dentro do prazo), **Pendente** (sem férias), **Vencido** (prazo concessivo expirado com saldo > 0)
+- Filtros: ano, setor, status do período, busca por nome
+- Badges coloridos por status
 
-**Arquivo:** `src/components/ferias/folgas/GeradorFolgasDialog.tsx`
+**2. Melhorar alerta no Dashboard** (`src/pages/ferias/FeriasDashboard.tsx`)
+- Ao invés de apenas verificar se "tem alguma férias", calcular o saldo real de cada período aquisitivo
+- Alertar quando um período tem saldo > 0 e está próximo de vencer ou já venceu
+- Mostrar quantos dias ainda estão pendentes no alerta
 
-**1. Adicionar query de afastamentos ativos no mês** (após a query de perdas, ~linha 210)
-- Buscar `ferias_afastamentos` onde `data_inicio <= fim_do_mês` E `data_fim >= início_do_mês`
-- Retornar `colaborador_id`, `motivo`, `data_inicio`, `data_fim`
+**3. Vincular férias ao período aquisitivo no cadastro** (`src/components/ferias/ferias/FeriasDialog.tsx`)
+- Adicionar seletor de período aquisitivo ao cadastrar/editar férias
+- Listar os períodos aquisitivos do colaborador selecionado com o saldo disponível
+- Permitir selecionar qual período está sendo quitado (útil quando há mais de um pendente)
+- Validar que não se ultrapasse os 30 dias do período
 
-**2. Adicionar função helper `isAfastado`** (junto com os outros helpers, ~linha 332)
-- Verificar se o colaborador tem algum afastamento que cubra **todos os sábados do mês** → excluir completamente
-- Se cobre apenas **alguns sábados** → remover esses sábados da lista de disponíveis (igual já faz com férias via `isColabOnVacation`)
+### Lógica de cálculo (client-side, sem nova tabela)
+Os períodos são calculados dinamicamente a partir da `data_admissao`:
+- Cada aniversário gera um período aquisitivo de 12 meses
+- As férias existentes em `ferias_ferias` são vinculadas ao período cujo `periodo_aquisitivo_inicio/fim` corresponde
+- Dias gozados = soma das quinzenas (ou gozo_periodos flexíveis) dessa férias
+- Dias vendidos = `dias_vendidos` da férias
 
-**3. Adicionar exclusão no Step 1** (linha 363-375)
-- Antes das outras verificações, checar se o colaborador está afastado durante todo o mês → adicionar razão "Afastado (licença médica)" ou similar
-- Para afastamentos parciais, filtrar os sábados disponíveis no Step 4 (igual já filtra férias)
+### Arquivos modificados
+- `src/pages/ferias/FeriasFerias.tsx` — nova aba "Períodos Aquisitivos"
+- `src/pages/ferias/FeriasDashboard.tsx` — alerta com saldo real
+- `src/components/ferias/ferias/FeriasDialog.tsx` — seletor de período aquisitivo
 
-**4. Filtrar sábados por afastamento no Step 4** (linhas 417-433)
-- Ao calcular `availableSats`, além de `isColabOnVacation`, verificar também se o sábado cai dentro de um período de afastamento
-
-### Resultado
-- Juliana (licença médica + maternidade) não aparecerá na escala de folgas
-- Qualquer colaborador com afastamento registrado cobrindo sábados do mês será excluído ou terá esses sábados removidos
-- A lógica segue o mesmo padrão das outras regras já existentes
+### Nenhuma migração necessária
+Todos os dados necessários já existem: `data_admissao` dos colaboradores e `periodo_aquisitivo_inicio/fim` + `dias_vendidos` das férias.
 
