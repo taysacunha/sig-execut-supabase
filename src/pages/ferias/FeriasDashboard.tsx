@@ -520,7 +520,7 @@ export default function FeriasDashboard() {
                           {alerta.tipo === "vencido" ? "VENCIDO" : `${alerta.diasRestantes} dias`}
                         </Badge>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Limite: {alerta.dataLimite}
+                          {alerta.diasPendentes} dias pendentes • Limite: {alerta.dataLimite}
                         </p>
                       </div>
                     </div>
