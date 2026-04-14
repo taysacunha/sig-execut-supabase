@@ -106,6 +106,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const [excDiasVendidos, setExcDiasVendidos] = useState(0);
   const [excPeriodos, setExcPeriodos] = useState<GozoPeriodo[]>([]);
   const [excHydrating, setExcHydrating] = useState(false);
+  const [selectedPeriodoKey, setSelectedPeriodoKey] = useState<string>("");
 
   const form = useForm<FeriasFormData>({
     resolver: zodResolver(feriasSchema),
