@@ -869,27 +869,46 @@ export default function FeriasFerias() {
                           {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2") && <TableCell className="text-sm">{f.quinzena2_inicio && f.quinzena2_fim ? formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim) : "—"}</TableCell>}
                           <TableCell>{f.vender_dias && f.dias_vendidos ? <Badge variant="outline" className="text-xs">{Math.min(f.dias_vendidos, 10)} dias</Badge> : <span className="text-muted-foreground text-xs">—</span>}</TableCell>
                           <TableCell className="text-center">
-                            {f.enviado_contador ? (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-green-600 hover:text-orange-600 gap-1"
-                                title={`Enviado em ${f.enviado_contador_em ? formatDate(f.enviado_contador_em) : "—"}. Clique para desmarcar.`}
-                                onClick={() => setContadorConfirmId(f.id)}
-                              >
-                                <CheckCircle2 className="h-4 w-4" />
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-muted-foreground hover:text-primary gap-1"
-                                title="Marcar como enviado ao contador"
-                                onClick={() => toggleEnviadoContadorMutation.mutate({ id: f.id, value: true })}
-                              >
-                                <Send className="h-4 w-4" />
-                              </Button>
-                            )}
+                            <div className="flex flex-col items-center gap-1">
+                              {f.enviado_contador ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-green-600 hover:text-orange-600 gap-1"
+                                  title={`Enviado em ${f.enviado_contador_em ? formatDate(f.enviado_contador_em) : "—"}. Clique para desmarcar.`}
+                                  onClick={() => setContadorConfirmId(f.id)}
+                                >
+                                  <CheckCircle2 className="h-4 w-4" />
+                                  <span className="text-xs">Enviado</span>
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-muted-foreground hover:text-primary gap-1"
+                                  title="Marcar como enviado ao contador"
+                                  onClick={() => toggleEnviadoContadorMutation.mutate({ id: f.id, value: true })}
+                                >
+                                  <Send className="h-4 w-4" />
+                                  <span className="text-xs">Pendente</span>
+                                </Button>
+                              )}
+                              {/* Show which periods exist */}
+                              <div className="flex gap-1">
+                                <Badge variant="outline" className={`text-[10px] px-1 py-0 ${f.enviado_contador ? "bg-green-500/10 text-green-600 border-green-500/20" : "bg-yellow-500/10 text-yellow-600 border-yellow-500/20"}`}>
+                                  1ª {f.enviado_contador ? "✓" : "○"}
+                                </Badge>
+                                {f.quinzena2_inicio ? (
+                                  <Badge variant="outline" className={`text-[10px] px-1 py-0 ${f.enviado_contador ? "bg-green-500/10 text-green-600 border-green-500/20" : "bg-yellow-500/10 text-yellow-600 border-yellow-500/20"}`}>
+                                    2ª {f.enviado_contador ? "✓" : "○"}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-[10px] px-1 py-0 text-muted-foreground">
+                                    2ª —
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}

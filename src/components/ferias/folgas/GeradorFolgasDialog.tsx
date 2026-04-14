@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format, startOfMonth, endOfMonth, eachWeekendOfInterval, isSaturday, differenceInDays, parseISO, getDaysInMonth } from "date-fns";
@@ -111,15 +111,28 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [generating, setGenerating] = useState(false);
   const [diagnosticMessage, setDiagnosticMessage] = useState<string | null>(null);
-  const [creditsToUse, setCreditsToUse] = useState<Set<string>>(new Set()); // credit IDs to use
+  const [creditsToUse, setCreditsToUse] = useState<Set<string>>(new Set());
+  const [selectedSaturdays, setSelectedSaturdays] = useState<Set<string>>(new Set());
 
-  // Get saturdays of the month
-  const saturdaysOfMonth = useMemo(() => {
+  // Get ALL saturdays of the month
+  const allSaturdaysOfMonth = useMemo(() => {
     const start = startOfMonth(new Date(year, month - 1));
     const end = endOfMonth(new Date(year, month - 1));
     const weekends = eachWeekendOfInterval({ start, end });
     return weekends.filter(d => isSaturday(d)).map(d => format(d, "yyyy-MM-dd"));
   }, [year, month]);
+
+  // Initialize selected saturdays when dialog opens
+  useEffect(() => {
+    if (open) {
+      setSelectedSaturdays(new Set(allSaturdaysOfMonth));
+    }
+  }, [open, allSaturdaysOfMonth]);
+
+  // Active saturdays (only selected ones used in generation)
+  const saturdaysOfMonth = useMemo(() => {
+    return allSaturdaysOfMonth.filter(s => selectedSaturdays.has(s));
+  }, [allSaturdaysOfMonth, selectedSaturdays]);
 
   // Query configurações
   const { data: configs = [] } = useQuery({
@@ -1007,6 +1020,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     setShowPreview(false);
     setSelectedRows(new Set());
     setCreditsToUse(new Set());
+    setSelectedSaturdays(new Set());
     setDiagnosticMessage(null);
     onOpenChange(false);
   };
@@ -1064,7 +1078,8 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
               </div>
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Calendar className="h-4 w-4" />
-                {saturdaysOfMonth.length} sábados no mês
+                {saturdaysOfMonth.length} de {allSaturdaysOfMonth.length} sábados selecionados
+              </div>
               </div>
               
               <div className="border-t pt-3 mt-3">
@@ -1078,7 +1093,47 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
                   <li className="font-medium text-primary">• Distribuição GLOBAL equilibrada entre sábados</li>
                   <li className="font-medium text-primary">• Chefes do mesmo setor não folgam juntos</li>
                   {configMap.FOLGAS_DISTRIBUICAO_JUSTA && <li>• Distribuição equilibrada dentro de cada setor</li>}
+                  <li>• <strong>Perda de folga</strong>: bloqueia o mês inteiro (usar quando atestado cobre sábado)</li>
+                  <li>• <strong>Afastamento</strong>: remove apenas os sábados específicos da disponibilidade</li>
                 </ul>
+              </div>
+            </div>
+
+            {/* Saturday selector */}
+            <div className="p-4 bg-muted/50 rounded-lg space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">Selecionar sábados para distribuição</p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedSaturdays(new Set(allSaturdaysOfMonth))}>
+                    Todos
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedSaturdays(new Set())}>
+                    Nenhum
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Desmarque sábados com feriados ou que não devem ter folga distribuída.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {allSaturdaysOfMonth.map(sat => (
+                  <label key={sat} className={cn(
+                    "flex items-center gap-2 px-3 py-2 rounded-md border cursor-pointer transition-colors",
+                    selectedSaturdays.has(sat) ? "bg-primary/10 border-primary/30" : "bg-muted/30 border-border opacity-60"
+                  )}>
+                    <Checkbox
+                      checked={selectedSaturdays.has(sat)}
+                      onCheckedChange={(checked) => {
+                        const newSet = new Set(selectedSaturdays);
+                        if (checked) newSet.add(sat); else newSet.delete(sat);
+                        setSelectedSaturdays(newSet);
+                      }}
+                    />
+                    <span className="text-sm font-medium">
+                      {format(new Date(sat + "T12:00:00"), "dd/MM", { locale: ptBR })}
+                    </span>
+                  </label>
+                ))}
               </div>
             </div>
 
