@@ -207,52 +207,95 @@ export default function FeriasDashboard() {
     },
   });
 
-  // Alertas de período aquisitivo (colaboradores com mais de 11 meses de admissão sem férias agendadas)
+  // Alertas de período aquisitivo — calcula saldo real (dias gozados + vendidos vs 30)
   const { data: alertasPeriodo = [], isLoading: loadingAlertas } = useQuery({
     queryKey: ["ferias-dashboard-alertas"],
     queryFn: async () => {
-      // Get collaborators and their vacations
       const { data: colaboradores, error } = await supabase
         .from("ferias_colaboradores")
         .select("id, nome, data_admissao")
         .eq("status", "ativo");
       if (error) throw error;
 
-      // Get all active vacations
-      const { data: feriasAtivas } = await supabase
+      // Get ALL non-cancelled vacations with period info
+      const { data: todasFerias } = await supabase
         .from("ferias_ferias")
-        .select("colaborador_id, quinzena1_inicio")
-        .in("status", feriasDashboardStatuses.filter((status) => status !== "concluida"))
+        .select("id, colaborador_id, quinzena1_inicio, quinzena1_fim, quinzena2_inicio, quinzena2_fim, dias_vendidos, periodo_aquisitivo_inicio, periodo_aquisitivo_fim, status")
+        .neq("status", "cancelada")
         .range(0, 5000);
 
-      const colaboradoresComFerias = new Set((feriasAtivas || []).map((f) => f.colaborador_id));
+      // Get gozo_periodos for accurate day counting
+      const fIds = (todasFerias || []).map(f => f.id);
+      let gozoMap: Record<string, number> = {};
+      if (fIds.length > 0) {
+        const { data: gozoPeriodos } = await supabase
+          .from("ferias_gozo_periodos")
+          .select("ferias_id, dias")
+          .in("ferias_id", fIds);
+        for (const p of (gozoPeriodos || []) as any[]) {
+          gozoMap[p.ferias_id] = (gozoMap[p.ferias_id] || 0) + (p.dias || 0);
+        }
+      }
 
-      const alertas: { id: string; nome: string; diasRestantes: number; dataLimite: string; tipo: "vencendo" | "vencido" }[] = [];
+      const alertas: { id: string; nome: string; diasRestantes: number; dataLimite: string; tipo: "vencendo" | "vencido"; diasPendentes: number }[] = [];
 
       for (const colab of colaboradores || []) {
-        // Skip if already has scheduled vacations
-        if (colaboradoresComFerias.has(colab.id)) continue;
-
         const admissao = parseISO(colab.data_admissao);
         const anosDesdeAdmissao = Math.floor(differenceInDays(today, admissao) / 365);
 
-        if (anosDesdeAdmissao >= 1) {
-          // Calculate next acquisition period limit (12 months after last anniversary)
-          const ultimoAniversario = addYears(admissao, anosDesdeAdmissao);
-          const proximoVencimento = addYears(ultimoAniversario, 1);
+        if (anosDesdeAdmissao < 1) continue;
 
-          const diasRestantes = differenceInDays(proximoVencimento, today);
+        // Check each acquisition period
+        for (let i = 0; i < anosDesdeAdmissao; i++) {
+          const periodoInicio = addYears(admissao, i);
+          const periodoFim = addYears(admissao, i + 1);
+          const concessivoFim = addYears(periodoFim, 1);
+          const periodoInicioStr = format(periodoInicio, "yyyy-MM-dd");
+          const periodoFimStr = format(periodoFim, "yyyy-MM-dd");
+          const concessivoFimStr = format(concessivoFim, "yyyy-MM-dd");
 
-          // Alert if less than 90 days to expire or already expired
-          if (diasRestantes <= 90) {
-            alertas.push({
-              id: colab.id,
-              nome: colab.nome,
-              diasRestantes: Math.max(0, diasRestantes),
-              dataLimite: format(proximoVencimento, "dd/MM/yyyy"),
-              tipo: diasRestantes <= 0 ? "vencido" : "vencendo",
-            });
+          const diasRestantes = differenceInDays(concessivoFim, today);
+
+          // Only alert for periods expiring within 90 days or already expired
+          if (diasRestantes > 90) continue;
+
+          // Find vacations linked to this period
+          const colabFerias = (todasFerias || []).filter(f => {
+            if (f.colaborador_id !== colab.id) return false;
+            if (f.periodo_aquisitivo_inicio && f.periodo_aquisitivo_fim) {
+              return f.periodo_aquisitivo_inicio === periodoInicioStr && f.periodo_aquisitivo_fim === periodoFimStr;
+            }
+            const q1 = f.quinzena1_inicio;
+            return q1 >= periodoInicioStr && q1 < concessivoFimStr;
+          });
+
+          let diasGozados = 0;
+          let diasVendidos = 0;
+          for (const f of colabFerias) {
+            if (gozoMap[f.id]) {
+              diasGozados += gozoMap[f.id];
+            } else if (f.quinzena1_inicio && f.quinzena1_fim) {
+              let d = differenceInDays(parseISO(f.quinzena1_fim), parseISO(f.quinzena1_inicio)) + 1;
+              if (f.quinzena2_inicio && f.quinzena2_fim) {
+                d += differenceInDays(parseISO(f.quinzena2_fim), parseISO(f.quinzena2_inicio)) + 1;
+              }
+              d -= (f.dias_vendidos || 0);
+              diasGozados += Math.max(0, d);
+            }
+            diasVendidos += f.dias_vendidos || 0;
           }
+
+          const saldo = 30 - diasGozados - diasVendidos;
+          if (saldo <= 0) continue; // Period is settled
+
+          alertas.push({
+            id: `${colab.id}-${i}`,
+            nome: colab.nome,
+            diasRestantes: Math.max(0, diasRestantes),
+            dataLimite: format(concessivoFim, "dd/MM/yyyy"),
+            tipo: diasRestantes <= 0 ? "vencido" : "vencendo",
+            diasPendentes: saldo,
+          });
         }
       }
 
