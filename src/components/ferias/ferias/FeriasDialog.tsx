@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { ExcecaoPeriodosSection, type GozoPeriodo } from "./ExcecaoPeriodosSection";
 import { zodResolver } from "@hookform/resolvers/zod";
