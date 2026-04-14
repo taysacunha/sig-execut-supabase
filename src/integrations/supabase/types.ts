@@ -1602,6 +1602,47 @@ export type Database = {
           },
         ]
       }
+      ferias_periodos_quitados: {
+        Row: {
+          colaborador_id: string
+          created_at: string | null
+          created_by: string | null
+          dias_quitados: number
+          id: string
+          observacoes: string | null
+          periodo_fim: string
+          periodo_inicio: string
+        }
+        Insert: {
+          colaborador_id: string
+          created_at?: string | null
+          created_by?: string | null
+          dias_quitados?: number
+          id?: string
+          observacoes?: string | null
+          periodo_fim: string
+          periodo_inicio: string
+        }
+        Update: {
+          colaborador_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          dias_quitados?: number
+          id?: string
+          observacoes?: string | null
+          periodo_fim?: string
+          periodo_inicio?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ferias_periodos_quitados_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "ferias_colaboradores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ferias_quinzenas: {
         Row: {
           ano: number
