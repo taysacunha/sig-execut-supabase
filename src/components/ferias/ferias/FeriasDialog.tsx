@@ -47,7 +47,7 @@ import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Loader2, AlertTriangle, Calendar, Check, ChevronsUpDown, Users, Info, ShieldAlert } from "lucide-react";
-import { format, parseISO, addDays } from "date-fns";
+import { format, parseISO, addDays, addYears, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
