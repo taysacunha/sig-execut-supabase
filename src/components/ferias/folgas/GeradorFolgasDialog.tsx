@@ -1080,8 +1080,8 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
                 <Calendar className="h-4 w-4" />
                 {saturdaysOfMonth.length} de {allSaturdaysOfMonth.length} sábados selecionados
               </div>
-              </div>
-              
+
+
               <div className="border-t pt-3 mt-3">
                 <p className="text-xs font-medium mb-2">Regras aplicadas:</p>
                 <ul className="text-xs text-muted-foreground space-y-1">
