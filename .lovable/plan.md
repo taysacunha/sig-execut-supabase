@@ -1,20 +1,16 @@
 
 
-## Correção: erro ao gerar preview de folgas
+## Correção das vulnerabilidades do jsPDF
 
 ### Problema
-O erro `Cannot read properties of null (reading 'split')` ocorre na função `countVacationDaysInMonth` (linha 292-295) e em `shouldSkipDueToTwoMonthVacation` (linha 326-327). O campo `quinzena2_inicio` e `quinzena2_fim` pode ser `null` no banco de dados, mas o código chama `parseISO()` sem verificar isso, causando o crash que trava o preview.
+O projeto usa `jspdf@^3.0.4` que tem múltiplas vulnerabilidades conhecidas (path traversal, PDF injection, DoS, XSS). A versão 4.1.0 corrige todas elas.
 
-### Correção
+### Solução
+Atualizar `jspdf` de `^3.0.4` para `^4.1.0` no `package.json`. A v4.0.0 corrigiu o path traversal crítico e a v4.1.0 corrigiu todas as demais (AcroForm injection, BMP DoS, XMP metadata injection, race condition). O changelog oficial confirma que **não há breaking changes** além da restrição de acesso ao filesystem no Node.js (que não afeta este projeto, pois usa jsPDF apenas no browser).
 
-**Arquivo**: `src/components/ferias/folgas/GeradorFolgasDialog.tsx`
+### Arquivo modificado
+- `package.json` — alterar `"jspdf": "^3.0.4"` para `"jspdf": "^4.1.0"`
 
-1. Na função `countVacationDaysInMonth` (linhas 292-307): Adicionar verificação de nulidade antes de parsear quinzena2. Só calcular overlap da quinzena2 se os campos existirem.
-
-2. Na função `shouldSkipDueToTwoMonthVacation` (linhas 324-327): Mesma verificação — se quinzena2 for null, usar apenas quinzena1 para determinar o fim do período.
-
-3. Verificar todas as outras ocorrências de `parseISO` no arquivo que acessam `quinzena2_inicio/fim` e aplicar a mesma proteção contra null.
-
-### Resultado
-O gerador de preview funcionará normalmente mesmo quando colaboradores têm férias com apenas 1 período (quinzena2 nula).
+### Após a atualização
+Marcar as findings de segurança como resolvidas no scanner.
 
