@@ -1,22 +1,28 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Search, Loader2, ArrowUpDown, CheckCircle2, Clock, AlertTriangle, XCircle } from "lucide-react";
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Search, Loader2, ArrowUpDown, CheckCircle2, Clock, AlertTriangle, XCircle, Undo2, CheckCheck } from "lucide-react";
 import { format, parseISO, addYears, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { usePagination } from "@/hooks/usePagination";
 import { TablePagination } from "@/components/vendas/TableControls";
 import { normalizeText } from "@/lib/textUtils";
-import { getYearOptions } from "@/lib/dateUtils";
+import { toast } from "@/hooks/use-toast";
+import { QuitarPeriodoDialog } from "./QuitarPeriodoDialog";
 
 // ========== Types ==========
 
@@ -33,33 +39,24 @@ interface PeriodoAquisitivo {
   diasDireito: number;
   diasGozados: number;
   diasVendidos: number;
+  diasQuitados: number;
   saldo: number;
   status: "quitado" | "parcial" | "pendente" | "vencido";
+  quitacaoManualId?: string;
 }
 
 // ========== Helpers ==========
 
 function calcDiasGozo(ferias: any): number {
-  // Calculate actual vacation days from the vacation record
-  // Use gozo_periodos if available, otherwise calculate from quinzenas
   let dias = 0;
-  
-  // Count days from quinzena1
   if (ferias.quinzena1_inicio && ferias.quinzena1_fim) {
-    const diff = differenceInDays(parseISO(ferias.quinzena1_fim), parseISO(ferias.quinzena1_inicio)) + 1;
-    dias += diff;
+    dias += differenceInDays(parseISO(ferias.quinzena1_fim), parseISO(ferias.quinzena1_inicio)) + 1;
   }
-  
-  // Count days from quinzena2
   if (ferias.quinzena2_inicio && ferias.quinzena2_fim) {
-    const diff = differenceInDays(parseISO(ferias.quinzena2_fim), parseISO(ferias.quinzena2_inicio)) + 1;
-    dias += diff;
+    dias += differenceInDays(parseISO(ferias.quinzena2_fim), parseISO(ferias.quinzena2_inicio)) + 1;
   }
-
-  // Subtract sold days since they are included in quinzena periods
   const vendidos = ferias.dias_vendidos || 0;
   dias -= vendidos;
-
   return Math.max(0, dias);
 }
 
@@ -67,45 +64,45 @@ function buildPeriodosAquisitivos(
   colaboradores: any[],
   feriasRecords: any[],
   gozoPeriodos: any[],
+  quitacoes: any[],
   today: Date,
 ): PeriodoAquisitivo[] {
   const result: PeriodoAquisitivo[] = [];
 
-  // Build gozo periods map
   const gozoMap: Record<string, any[]> = {};
   for (const p of gozoPeriodos) {
     if (!gozoMap[p.ferias_id]) gozoMap[p.ferias_id] = [];
     gozoMap[p.ferias_id].push(p);
   }
 
+  // Build quitacao map: key = `${colaborador_id}-${periodo_inicio}`
+  const quitMap: Record<string, any> = {};
+  for (const q of quitacoes) {
+    quitMap[`${q.colaborador_id}-${q.periodo_inicio}`] = q;
+  }
+
   for (const colab of colaboradores) {
     const admissao = parseISO(colab.data_admissao);
     const anosDesde = Math.floor(differenceInDays(today, admissao) / 365);
-    
-    // Generate periods from admission up to current + 1
     const maxPeriodos = Math.max(anosDesde + 1, 1);
-    
+
     for (let i = 0; i < maxPeriodos; i++) {
       const periodoInicio = addYears(admissao, i);
       const periodoFim = addYears(admissao, i + 1);
       const concessivoInicio = periodoFim;
       const concessivoFim = addYears(periodoFim, 1);
-      
-      // Don't show periods that haven't started yet
+
       if (periodoInicio > today) continue;
 
       const periodoInicioStr = format(periodoInicio, "yyyy-MM-dd");
       const periodoFimStr = format(periodoFim, "yyyy-MM-dd");
 
-      // Find ferias linked to this periodo
       const colabFerias = feriasRecords.filter(f => {
         if (f.colaborador_id !== colab.id) return false;
         if (f.status === "cancelada") return false;
-        // Match by periodo_aquisitivo fields if available
         if (f.periodo_aquisitivo_inicio && f.periodo_aquisitivo_fim) {
           return f.periodo_aquisitivo_inicio === periodoInicioStr && f.periodo_aquisitivo_fim === periodoFimStr;
         }
-        // Fallback: match by quinzena1_inicio falling within concessivo period
         const q1 = f.quinzena1_inicio;
         return q1 >= periodoInicioStr && q1 < format(concessivoFim, "yyyy-MM-dd");
       });
@@ -114,7 +111,6 @@ function buildPeriodosAquisitivos(
       let diasVendidos = 0;
 
       for (const f of colabFerias) {
-        // Check if gozo_periodos exist for this ferias
         const periodos = gozoMap[f.id];
         if (periodos && periodos.length > 0) {
           diasGozados += periodos.reduce((sum: number, p: any) => sum + (p.dias || 0), 0);
@@ -124,14 +120,18 @@ function buildPeriodosAquisitivos(
         diasVendidos += f.dias_vendidos || 0;
       }
 
-      const saldo = 30 - diasGozados - diasVendidos;
-      
+      // Check manual quitação
+      const quitacao = quitMap[`${colab.id}-${periodoInicioStr}`];
+      const diasQuitados = quitacao?.dias_quitados || 0;
+
+      const saldo = 30 - diasGozados - diasVendidos - diasQuitados;
+
       let status: PeriodoAquisitivo["status"];
       if (saldo <= 0) {
         status = "quitado";
       } else if (concessivoFim <= today && saldo > 0) {
         status = "vencido";
-      } else if (diasGozados > 0 || diasVendidos > 0) {
+      } else if (diasGozados > 0 || diasVendidos > 0 || diasQuitados > 0) {
         status = "parcial";
       } else {
         status = "pendente";
@@ -150,8 +150,10 @@ function buildPeriodosAquisitivos(
         diasDireito: 30,
         diasGozados: Math.min(diasGozados, 30),
         diasVendidos: Math.min(diasVendidos, 30),
+        diasQuitados,
         saldo: Math.max(saldo, 0),
         status,
+        quitacaoManualId: quitacao?.id,
       });
     }
   }
@@ -170,12 +172,17 @@ const statusConfig: Record<string, { label: string; color: string; icon: React.R
 
 export function PeriodosAquisitivosTab() {
   const today = new Date();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [setorFilter, setSetorFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState("all");
   const [perPage, setPerPage] = useState(25);
   const [sortField, setSortField] = useState<"nome" | "periodo" | "saldo" | "status">("nome");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [quitarDialogOpen, setQuitarDialogOpen] = useState(false);
+  const [quitarTarget, setQuitarTarget] = useState<PeriodoAquisitivo[]>([]);
 
   const { data: colaboradores = [], isLoading: loadingColabs } = useQuery({
     queryKey: ["periodos-aquisitivos-colabs"],
@@ -219,6 +226,17 @@ export function PeriodosAquisitivosTab() {
     enabled: feriasIds.length > 0,
   });
 
+  const { data: quitacoes = [] } = useQuery({
+    queryKey: ["periodos-aquisitivos-quitacoes"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ferias_periodos_quitados" as any)
+        .select("id, colaborador_id, periodo_inicio, periodo_fim, dias_quitados, observacoes");
+      if (error) throw error;
+      return (data as any[]) || [];
+    },
+  });
+
   const { data: setores = [] } = useQuery({
     queryKey: ["periodos-aquisitivos-setores"],
     queryFn: async () => {
@@ -230,8 +248,15 @@ export function PeriodosAquisitivosTab() {
 
   const periodos = useMemo(() => {
     if (colaboradores.length === 0) return [];
-    return buildPeriodosAquisitivos(colaboradores, feriasRecords, gozoPeriodos, today);
-  }, [colaboradores, feriasRecords, gozoPeriodos]);
+    return buildPeriodosAquisitivos(colaboradores, feriasRecords, gozoPeriodos, quitacoes, today);
+  }, [colaboradores, feriasRecords, gozoPeriodos, quitacoes]);
+
+  // Get unique years from periodos for year filter
+  const yearOptions = useMemo(() => {
+    const years = new Set<number>();
+    periodos.forEach(p => years.add(parseInt(p.periodoInicio.substring(0, 4))));
+    return Array.from(years).sort((a, b) => b - a);
+  }, [periodos]);
 
   const filtered = useMemo(() => {
     return periodos
@@ -239,7 +264,8 @@ export function PeriodosAquisitivosTab() {
         const matchSearch = normalizeText(p.colaboradorNome).includes(normalizeText(searchTerm));
         const matchSetor = setorFilter === "all" || p.setorId === setorFilter;
         const matchStatus = statusFilter === "all" || p.status === statusFilter;
-        return matchSearch && matchSetor && matchStatus;
+        const matchYear = yearFilter === "all" || p.periodoInicio.startsWith(yearFilter);
+        return matchSearch && matchSetor && matchStatus && matchYear;
       })
       .sort((a, b) => {
         let cmp = 0;
@@ -252,7 +278,7 @@ export function PeriodosAquisitivosTab() {
         }
         return sortDir === "asc" ? cmp : -cmp;
       });
-  }, [periodos, searchTerm, setorFilter, statusFilter, sortField, sortDir]);
+  }, [periodos, searchTerm, setorFilter, statusFilter, yearFilter, sortField, sortDir]);
 
   const pagination = usePagination(filtered, perPage);
 
@@ -275,6 +301,92 @@ export function PeriodosAquisitivosTab() {
 
   const isLoading = loadingColabs || loadingFerias;
 
+  // Quitação mutations
+  const invalidateQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ["periodos-aquisitivos-quitacoes"] });
+  };
+
+  const quitarMutation = useMutation({
+    mutationFn: async ({ items, dias, obs }: { items: PeriodoAquisitivo[]; dias: number; obs: string }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const rows = items.map(p => ({
+        colaborador_id: p.colaboradorId,
+        periodo_inicio: p.periodoInicio,
+        periodo_fim: p.periodoFim,
+        dias_quitados: dias,
+        observacoes: obs,
+        created_by: user?.id,
+      }));
+      const { error } = await (supabase.from("ferias_periodos_quitados" as any) as any).upsert(rows, { onConflict: "colaborador_id,periodo_inicio" });
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      invalidateQueries();
+      setSelected(new Set());
+      setQuitarDialogOpen(false);
+      toast({ title: `${vars.items.length} período(s) quitado(s) com sucesso` });
+    },
+    onError: (err: any) => {
+      toast({ title: "Erro ao quitar", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const desfazerMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase.from("ferias_periodos_quitados" as any) as any).delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateQueries();
+      toast({ title: "Quitação desfeita" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Erro ao desfazer", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // Selection helpers
+  const periodoKey = (p: PeriodoAquisitivo) => `${p.colaboradorId}-${p.periodoInicio}`;
+  const selectableItems = filtered.filter(p => p.status === "vencido" || p.status === "pendente");
+
+  const toggleSelect = (p: PeriodoAquisitivo) => {
+    const key = periodoKey(p);
+    const next = new Set(selected);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    setSelected(next);
+  };
+
+  const toggleSelectAll = () => {
+    if (selected.size === selectableItems.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(selectableItems.map(periodoKey)));
+    }
+  };
+
+  const handleQuitarSelecionados = () => {
+    const items = filtered.filter(p => selected.has(periodoKey(p)));
+    if (items.length === 0) return;
+    setQuitarTarget(items);
+    setQuitarDialogOpen(true);
+  };
+
+  const handleQuitarTodosVencidos = () => {
+    const vencidos = filtered.filter(p => p.status === "vencido");
+    if (vencidos.length === 0) return;
+    setQuitarTarget(vencidos);
+    setQuitarDialogOpen(true);
+  };
+
+  const handleQuitarIndividual = (p: PeriodoAquisitivo) => {
+    setQuitarTarget([p]);
+    setQuitarDialogOpen(true);
+  };
+
+  const handleConfirmQuitar = (dias: number, obs: string) => {
+    quitarMutation.mutate({ items: quitarTarget, dias, obs });
+  };
+
   return (
     <div className="space-y-6">
       {/* Stats */}
@@ -289,7 +401,7 @@ export function PeriodosAquisitivosTab() {
       {/* Filters */}
       <Card>
         <CardContent className="pt-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Buscar colaborador..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10" />
@@ -311,6 +423,29 @@ export function PeriodosAquisitivosTab() {
                 <SelectItem value="vencido">Vencido</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={yearFilter} onValueChange={setYearFilter}>
+              <SelectTrigger><SelectValue placeholder="Ano" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os anos</SelectItem>
+                {yearOptions.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Batch actions */}
+          <div className="flex flex-wrap gap-2 mt-4">
+            {selected.size > 0 && (
+              <Button size="sm" onClick={handleQuitarSelecionados}>
+                <CheckCheck className="h-4 w-4 mr-1" />
+                Quitar {selected.size} selecionado(s)
+              </Button>
+            )}
+            {stats.vencido > 0 && (
+              <Button size="sm" variant="outline" onClick={handleQuitarTodosVencidos}>
+                <CheckCheck className="h-4 w-4 mr-1" />
+                Quitar todos vencidos ({stats.vencido})
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -330,6 +465,12 @@ export function PeriodosAquisitivosTab() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={selectableItems.length > 0 && selected.size === selectableItems.length}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </TableHead>
                     <TableHead className="cursor-pointer select-none" onClick={() => handleSort("nome")}>
                       Colaborador <ArrowUpDown className="inline h-3 w-3 ml-1" />
                     </TableHead>
@@ -347,25 +488,85 @@ export function PeriodosAquisitivosTab() {
                     <TableHead className="cursor-pointer select-none" onClick={() => handleSort("status")}>
                       Status <ArrowUpDown className="inline h-3 w-3 ml-1" />
                     </TableHead>
+                    <TableHead className="text-center">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {pagination.paginatedItems.map((p, idx) => {
                     const st = statusConfig[p.status];
+                    const key = periodoKey(p);
+                    const isSelectable = p.status === "vencido" || p.status === "pendente";
+                    const hasManualQuit = !!p.quitacaoManualId;
+
                     return (
-                      <TableRow key={`${p.colaboradorId}-${p.periodoInicio}-${idx}`}>
+                      <TableRow key={`${key}-${idx}`}>
+                        <TableCell>
+                          {isSelectable ? (
+                            <Checkbox
+                              checked={selected.has(key)}
+                              onCheckedChange={() => toggleSelect(p)}
+                            />
+                          ) : null}
+                        </TableCell>
                         <TableCell className="font-medium">{p.colaboradorNome}</TableCell>
                         <TableCell>{p.setorNome}</TableCell>
                         <TableCell className="text-sm">{formatDate(p.periodoInicio)} a {formatDate(p.periodoFim)}</TableCell>
                         <TableCell className="text-sm">{formatDate(p.concessivoInicio)} a {formatDate(p.concessivoFim)}</TableCell>
                         <TableCell className="text-center font-medium">{p.diasDireito}</TableCell>
-                        <TableCell className="text-center">{p.diasGozados > 0 ? p.diasGozados : "—"}</TableCell>
+                        <TableCell className="text-center">
+                          {(p.diasGozados > 0 || p.diasQuitados > 0) ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  {p.diasGozados + p.diasQuitados}
+                                  {hasManualQuit && <span className="text-xs text-muted-foreground ml-0.5">*</span>}
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {p.diasGozados > 0 && <div>Sistema: {p.diasGozados} dias</div>}
+                                  {p.diasQuitados > 0 && <div>Quitação manual: {p.diasQuitados} dias</div>}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : "—"}
+                        </TableCell>
                         <TableCell className="text-center">{p.diasVendidos > 0 ? p.diasVendidos : "—"}</TableCell>
                         <TableCell className="text-center font-bold">{p.saldo}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={`${st.color} gap-1`}>
                             {st.icon}{st.label}
                           </Badge>
+                          {hasManualQuit && (
+                            <span className="text-xs text-muted-foreground ml-1">(manual)</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {hasManualQuit ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0"
+                                    onClick={() => desfazerMutation.mutate(p.quitacaoManualId!)}
+                                    disabled={desfazerMutation.isPending}
+                                  >
+                                    <Undo2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Desfazer quitação manual</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : isSelectable ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs"
+                              onClick={() => handleQuitarIndividual(p)}
+                            >
+                              Quitar
+                            </Button>
+                          ) : null}
                         </TableCell>
                       </TableRow>
                     );
@@ -384,6 +585,15 @@ export function PeriodosAquisitivosTab() {
           )}
         </CardContent>
       </Card>
+
+      {/* Quitar Dialog */}
+      <QuitarPeriodoDialog
+        open={quitarDialogOpen}
+        onOpenChange={setQuitarDialogOpen}
+        periodos={quitarTarget}
+        onConfirm={handleConfirmQuitar}
+        isLoading={quitarMutation.isPending}
+      />
     </div>
   );
 }
