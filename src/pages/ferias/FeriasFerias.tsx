@@ -822,6 +822,11 @@ export default function FeriasFerias() {
           </Collapsible>
         </TabsContent>
 
+        {/* ========== ABA: PERÍODOS AQUISITIVOS ========== */}
+        <TabsContent value="periodos" className="mt-6">
+          <PeriodosAquisitivosTab />
+        </TabsContent>
+
         {/* ========== ABA: TABELA DO CONTADOR ========== */}
         <TabsContent value="contador" className="mt-6 space-y-6">
           <div className="flex flex-wrap gap-4 items-end justify-between">
