@@ -772,23 +772,129 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     }
   }, [watchedFields, excecaoTipo, excPeriodos]);
 
-  const periodoAquisitivo = (() => {
-    if (!selectedColab?.data_admissao || !q1Inicio) return null;
+  // Fetch all ferias for selected collaborator to calculate period balances
+  const { data: colabAllFerias = [] } = useQuery({
+    queryKey: ["ferias-colab-periodos", selectedColabId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ferias_ferias")
+        .select("id, colaborador_id, quinzena1_inicio, quinzena1_fim, quinzena2_inicio, quinzena2_fim, dias_vendidos, status, periodo_aquisitivo_inicio, periodo_aquisitivo_fim")
+        .eq("colaborador_id", selectedColabId!)
+        .neq("status", "cancelada");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!selectedColabId,
+  });
+
+  const { data: colabQuitacoes = [] } = useQuery({
+    queryKey: ["ferias-colab-quitacoes", selectedColabId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ferias_periodos_quitados" as any)
+        .select("id, colaborador_id, periodo_inicio, dias_quitados")
+        .eq("colaborador_id", selectedColabId!);
+      if (error) throw error;
+      return (data as any[]) || [];
+    },
+    enabled: !!selectedColabId,
+  });
+
+  // Build acquisition periods for selected collaborator
+  const periodosAquisitivos = useMemo(() => {
+    if (!selectedColab?.data_admissao) return [];
+    const today = new Date();
+    const admissao = parseISO(selectedColab.data_admissao);
+    const anosDesde = Math.floor(differenceInDays(today, admissao) / 365);
+    const maxP = Math.max(anosDesde + 1, 1);
+    const result: Array<{ inicio: string; fim: string; saldo: number; label: string }> = [];
+
+    for (let i = 0; i < maxP; i++) {
+      const pInicio = addYears(admissao, i);
+      const pFim = addYears(admissao, i + 1);
+      if (pInicio > today) continue;
+      const inicioStr = format(pInicio, "yyyy-MM-dd");
+      const fimStr = format(pFim, "yyyy-MM-dd");
+      const concessivoFim = addYears(pFim, 1);
+
+      // Calculate days used
+      const linked = colabAllFerias.filter(f => {
+        // Exclude current ferias being edited
+        if (ferias && f.id === ferias.id) return false;
+        if (f.periodo_aquisitivo_inicio && f.periodo_aquisitivo_fim) {
+          return f.periodo_aquisitivo_inicio === inicioStr && f.periodo_aquisitivo_fim === fimStr;
+        }
+        const q1 = f.quinzena1_inicio;
+        return q1 >= inicioStr && q1 < format(concessivoFim, "yyyy-MM-dd");
+      });
+
+      let diasUsados = 0;
+      for (const f of linked) {
+        let dias = 0;
+        if (f.quinzena1_inicio && f.quinzena1_fim) {
+          dias += differenceInDays(parseISO(f.quinzena1_fim), parseISO(f.quinzena1_inicio)) + 1;
+        }
+        if (f.quinzena2_inicio && f.quinzena2_fim) {
+          dias += differenceInDays(parseISO(f.quinzena2_fim), parseISO(f.quinzena2_inicio)) + 1;
+        }
+        dias -= (f.dias_vendidos || 0);
+        diasUsados += Math.max(0, dias) + (f.dias_vendidos || 0);
+      }
+
+      // Add manual quitações
+      const quit = colabQuitacoes.find((q: any) => q.periodo_inicio === inicioStr);
+      if (quit) diasUsados += (quit as any).dias_quitados || 0;
+
+      const saldo = Math.max(0, 30 - diasUsados);
+      const inicioFmt = format(pInicio, "dd/MM/yyyy");
+      const fimFmt = format(pFim, "dd/MM/yyyy");
+      const statusLabel = saldo === 0 ? "✓ Quitado" : concessivoFim <= today ? `⚠ Vencido (${saldo}d)` : `${saldo}d disponíveis`;
+
+      result.push({
+        inicio: inicioStr,
+        fim: fimStr,
+        saldo,
+        label: `${inicioFmt} a ${fimFmt} — ${statusLabel}`,
+      });
+    }
+    return result;
+  }, [selectedColab, colabAllFerias, colabQuitacoes, ferias]);
+
+  // Auto-select period when collaborator or q1 changes
+  useEffect(() => {
+    if (isResettingRef.current) return;
+    if (ferias?.periodo_aquisitivo_inicio && ferias?.periodo_aquisitivo_fim) {
+      setSelectedPeriodoKey(`${ferias.periodo_aquisitivo_inicio}|${ferias.periodo_aquisitivo_fim}`);
+      return;
+    }
+    if (!selectedColab?.data_admissao || !q1Inicio || periodosAquisitivos.length === 0) {
+      setSelectedPeriodoKey("");
+      return;
+    }
+    // Auto-detect based on q1Inicio
     try {
       const admissao = parseISO(selectedColab.data_admissao);
-      const feriasYear = parseISO(q1Inicio).getFullYear();
+      const feriasDate = parseISO(q1Inicio);
+      const feriasYear = feriasDate.getFullYear();
       const admDay = admissao.getDate();
       const admMonth = admissao.getMonth();
       let startYear = feriasYear;
       const cycleStart = new Date(startYear, admMonth, admDay);
-      if (cycleStart > parseISO(q1Inicio)) startYear--;
+      if (cycleStart > feriasDate) startYear--;
       const inicio = format(new Date(startYear, admMonth, admDay), "yyyy-MM-dd");
       const fimDate = new Date(startYear + 1, admMonth, admDay);
-      fimDate.setDate(fimDate.getDate() - 1);
       const fim = format(fimDate, "yyyy-MM-dd");
-      return { inicio, fim };
-    } catch { return null; }
-  })();
+      const match = periodosAquisitivos.find(p => p.inicio === inicio && p.fim === fim);
+      if (match) setSelectedPeriodoKey(`${match.inicio}|${match.fim}`);
+    } catch { /* ignore */ }
+  }, [q1Inicio, selectedColab, periodosAquisitivos]);
+
+  const periodoAquisitivo = useMemo(() => {
+    if (!selectedPeriodoKey) return null;
+    const [inicio, fim] = selectedPeriodoKey.split("|");
+    if (!inicio || !fim) return null;
+    return { inicio, fim };
+  }, [selectedPeriodoKey]);
 
   const formatDateBR = (dateStr: string) => {
     try { return format(parseISO(dateStr), "dd/MM/yyyy", { locale: ptBR }); } catch { return dateStr; }
