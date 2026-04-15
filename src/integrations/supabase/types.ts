@@ -1209,6 +1209,8 @@ export type Database = {
           distribuicao_tipo: string | null
           enviado_contador: boolean | null
           enviado_contador_em: string | null
+          enviado_contador_q1: boolean | null
+          enviado_contador_q2: boolean | null
           excecao_justificativa: string | null
           excecao_motivo: string | null
           gozo_diferente: boolean | null
@@ -1239,6 +1241,8 @@ export type Database = {
           distribuicao_tipo?: string | null
           enviado_contador?: boolean | null
           enviado_contador_em?: string | null
+          enviado_contador_q1?: boolean | null
+          enviado_contador_q2?: boolean | null
           excecao_justificativa?: string | null
           excecao_motivo?: string | null
           gozo_diferente?: boolean | null
@@ -1269,6 +1273,8 @@ export type Database = {
           distribuicao_tipo?: string | null
           enviado_contador?: boolean | null
           enviado_contador_em?: string | null
+          enviado_contador_q1?: boolean | null
+          enviado_contador_q2?: boolean | null
           excecao_justificativa?: string | null
           excecao_motivo?: string | null
           gozo_diferente?: boolean | null
