@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -8,9 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Loader2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, AlertTriangle } from "lucide-react";
 
-// Motivos padronizados
 const MOTIVOS_PERDA = [
   { value: "falta_injustificada", label: "Falta injustificada" },
   { value: "atestado_medico", label: "Atestado médico" },
@@ -24,6 +24,13 @@ interface Colaborador {
   nome: string;
 }
 
+interface Afastamento {
+  colaborador_id: string;
+  data_inicio: string;
+  data_fim: string;
+  motivo: string;
+}
+
 interface PerdaFolgaDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -32,13 +39,28 @@ interface PerdaFolgaDialogProps {
   selectedSetor?: string;
 }
 
+// Get all saturdays of a given month
+function getSaturdaysOfMonth(year: number, month: number): string[] {
+  const saturdays: string[] = [];
+  const date = new Date(year, month - 1, 1);
+  while (date.getMonth() === month - 1) {
+    if (date.getDay() === 6) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      const d = String(date.getDate()).padStart(2, "0");
+      saturdays.push(`${y}-${m}-${d}`);
+    }
+    date.setDate(date.getDate() + 1);
+  }
+  return saturdays;
+}
+
 export function PerdaFolgaDialog({ open, onOpenChange, year, month, selectedSetor }: PerdaFolgaDialogProps) {
   const queryClient = useQueryClient();
   const [colaboradorId, setColaboradorId] = useState("");
   const [motivoKey, setMotivoKey] = useState("");
   const [observacoes, setObservacoes] = useState("");
 
-  // Query colaboradores
   const { data: colaboradores = [] } = useQuery({
     queryKey: ["ferias-colaboradores-perda", selectedSetor],
     queryFn: async () => {
@@ -46,18 +68,15 @@ export function PerdaFolgaDialog({ open, onOpenChange, year, month, selectedSeto
         .from("ferias_colaboradores")
         .select("id, nome")
         .eq("status", "ativo");
-      
       if (selectedSetor) {
         query = query.eq("setor_titular_id", selectedSetor);
       }
-      
       const { data, error } = await query.order("nome");
       if (error) throw error;
       return data as Colaborador[];
     },
   });
 
-  // Query existing perdas to avoid duplicates
   const { data: existingPerdas = [] } = useQuery({
     queryKey: ["ferias-perdas-check", year, month],
     queryFn: async () => {
@@ -71,11 +90,42 @@ export function PerdaFolgaDialog({ open, onOpenChange, year, month, selectedSeto
     },
   });
 
+  // Query afastamentos that overlap the selected month
+  const { data: afastamentos = [] } = useQuery({
+    queryKey: ["ferias-afastamentos-perda", year, month],
+    queryFn: async () => {
+      const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      const monthEnd = `${year}-${String(month).padStart(2, "0")}-${lastDay}`;
+      const { data, error } = await supabase
+        .from("ferias_afastamentos")
+        .select("colaborador_id, data_inicio, data_fim, motivo")
+        .lte("data_inicio", monthEnd)
+        .gte("data_fim", monthStart);
+      if (error) throw error;
+      return data as Afastamento[];
+    },
+  });
+
+  const saturdaysOfMonth = useMemo(() => getSaturdaysOfMonth(year, month), [year, month]);
+
+  // Check if a collaborator has an afastamento covering ANY saturday of the month
+  const getAfastamentoForColab = (colabId: string): Afastamento | null => {
+    const colabAfastamentos = afastamentos.filter(a => a.colaborador_id === colabId);
+    if (colabAfastamentos.length === 0) return null;
+    const coversAnySaturday = saturdaysOfMonth.some(sat =>
+      colabAfastamentos.some(a => sat >= a.data_inicio && sat <= a.data_fim)
+    );
+    return coversAnySaturday ? colabAfastamentos[0] : null;
+  };
+
+  const selectedAfastamento = colaboradorId ? getAfastamentoForColab(colaboradorId) : null;
+  const isAfastado = !!selectedAfastamento;
+
   const addPerdaMutation = useMutation({
     mutationFn: async () => {
       const { data: user } = await supabase.auth.getUser();
       const motivo = MOTIVOS_PERDA.find(m => m.value === motivoKey)?.label || motivoKey;
-      
       const { error } = await supabase
         .from("ferias_folgas_perdas")
         .insert({
@@ -94,7 +144,10 @@ export function PerdaFolgaDialog({ open, onOpenChange, year, month, selectedSeto
       queryClient.invalidateQueries({ queryKey: ["ferias-perdas-check"] });
       handleClose();
     },
-    onError: () => toast.error("Erro ao registrar perda"),
+    onError: (err: any) => {
+      const msg = err?.message || "Erro desconhecido";
+      toast.error(`Erro ao registrar perda: ${msg}`);
+    },
   });
 
   const handleClose = () => {
@@ -104,18 +157,20 @@ export function PerdaFolgaDialog({ open, onOpenChange, year, month, selectedSeto
     onOpenChange(false);
   };
 
-  // Filter out colaboradores that already have perda
   const availableColaboradores = colaboradores.filter(c => !existingPerdas.includes(c.id));
 
-  const isFormValid = colaboradorId && motivoKey && (motivoKey !== "outro" || observacoes.trim());
+  const isFormValid = colaboradorId && motivoKey && (motivoKey !== "outro" || observacoes.trim()) && !isAfastado;
+
+  const formatDate = (d: string) => {
+    const [y, m, day] = d.split("-");
+    return `${day}/${m}/${y}`;
+  };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            Registrar Perda de Folga
-          </DialogTitle>
+          <DialogTitle>Registrar Perda de Folga</DialogTitle>
           <DialogDescription>
             Registre quando um colaborador perde o direito à folga de sábado do mês.
           </DialogDescription>
@@ -142,6 +197,18 @@ export function PerdaFolgaDialog({ open, onOpenChange, year, month, selectedSeto
             </Select>
           </div>
 
+          {isAfastado && selectedAfastamento && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Este colaborador está afastado de{" "}
+                <strong>{formatDate(selectedAfastamento.data_inicio)}</strong> a{" "}
+                <strong>{formatDate(selectedAfastamento.data_fim)}</strong> e já não entra na escala de folgas de{" "}
+                {String(month).padStart(2, "0")}/{year}. Não é necessário registrar perda.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="space-y-3">
             <Label>Motivo *</Label>
             <RadioGroup value={motivoKey} onValueChange={setMotivoKey} className="space-y-2">
@@ -160,9 +227,9 @@ export function PerdaFolgaDialog({ open, onOpenChange, year, month, selectedSeto
             <Label>
               Observações {motivoKey === "outro" && "*"}
             </Label>
-            <Textarea 
-              value={observacoes} 
-              onChange={(e) => setObservacoes(e.target.value)} 
+            <Textarea
+              value={observacoes}
+              onChange={(e) => setObservacoes(e.target.value)}
               placeholder={motivoKey === "outro" ? "Descreva o motivo..." : "Detalhes adicionais (opcional)"}
               rows={3}
             />
@@ -171,8 +238,8 @@ export function PerdaFolgaDialog({ open, onOpenChange, year, month, selectedSeto
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose}>Cancelar</Button>
-          <Button 
-            onClick={() => addPerdaMutation.mutate()} 
+          <Button
+            onClick={() => addPerdaMutation.mutate()}
             disabled={!isFormValid || addPerdaMutation.isPending}
           >
             {addPerdaMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

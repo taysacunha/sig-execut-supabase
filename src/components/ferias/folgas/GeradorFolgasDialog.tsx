@@ -380,10 +380,10 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     return motivos[af.motivo] || af.motivo;
   };
 
-  const isAfastadoAllSaturdays = (colabId: string): boolean => {
+  const isAfastadoAnySaturday = (colabId: string): boolean => {
     const colabAfastamentos = afastamentos.filter(a => a.colaborador_id === colabId);
     if (colabAfastamentos.length === 0) return false;
-    return saturdaysOfMonth.every(sat =>
+    return saturdaysOfMonth.some(sat =>
       colabAfastamentos.some(a => sat >= a.data_inicio && sat <= a.data_fim)
     );
   };
@@ -424,7 +424,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     // Step 1: Determine exclusions GLOBALLY
     const exclusionReasons = new Map<string, string>();
     colaboradores.forEach(colab => {
-      if (isAfastadoAllSaturdays(colab.id)) {
+      if (isAfastadoAnySaturday(colab.id)) {
         const motivo = getAfastamentoMotivo(colab.id);
         exclusionReasons.set(colab.id, `Afastado (${motivo})`);
       } else if (isInExperiencePeriod(colab)) {
