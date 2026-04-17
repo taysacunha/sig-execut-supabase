@@ -98,6 +98,7 @@ const FeriasFolgas = () => {
   const [manualExcecao, setManualExcecao] = useState(false);
   const [manualMotivo, setManualMotivo] = useState("");
   const [manualJustificativa, setManualJustificativa] = useState("");
+  const [manualUseCredit, setManualUseCredit] = useState(false);
   
   // Delete confirmation states
   const [folgaToDelete, setFolgaToDelete] = useState<any | null>(null);
@@ -257,18 +258,43 @@ const FeriasFolgas = () => {
     onError: () => toast.error("Erro ao remover perda"),
   });
 
+  // Query available 'folga' credits for the manual-selected colaborador
+  const { data: manualCreditos = [] } = useQuery({
+    queryKey: ["ferias-creditos-manual-folga", manualColaborador],
+    queryFn: async () => {
+      if (!manualColaborador) return [];
+      const { data, error } = await supabase
+        .from("ferias_folgas_creditos")
+        .select("id, dias, origem_data")
+        .eq("colaborador_id", manualColaborador)
+        .eq("tipo", "folga")
+        .eq("status", "disponivel")
+        .order("origem_data", { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!manualColaborador && manualOpen,
+  });
+
+  const totalManualCreditos = manualCreditos.reduce((s: number, c: any) => s + (c.dias || 0), 0);
+
   const addManualFolgaMutation = useMutation({
     mutationFn: async () => {
       const existingFolga = folgas.find(f => f.colaborador_id === manualColaborador);
-      
+      const isExcecaoFinal = manualUseCredit ? true : (existingFolga ? true : manualExcecao);
+      const motivoFinal = manualUseCredit ? "credito_folga" : (manualMotivo || (existingFolga ? "Ajuste manual" : null));
+      const justificativaFinal = manualUseCredit
+        ? `Crédito de folga utilizado em ${manualData}`
+        : (manualJustificativa || null);
+
       if (existingFolga) {
         const { error } = await supabase
           .from("ferias_folgas")
           .update({
             data_sabado: manualData,
-            is_excecao: true,
-            excecao_motivo: manualMotivo || "Ajuste manual",
-            excecao_justificativa: manualJustificativa || null,
+            is_excecao: isExcecaoFinal,
+            excecao_motivo: motivoFinal,
+            excecao_justificativa: justificativaFinal,
           })
           .eq("id", existingFolga.id);
         if (error) throw error;
@@ -278,26 +304,42 @@ const FeriasFolgas = () => {
           .insert({
             colaborador_id: manualColaborador,
             data_sabado: manualData,
-            is_excecao: manualExcecao,
-            excecao_motivo: manualExcecao ? manualMotivo : null,
-            excecao_justificativa: manualExcecao ? manualJustificativa : null,
+            is_excecao: isExcecaoFinal,
+            excecao_motivo: isExcecaoFinal ? motivoFinal : null,
+            excecao_justificativa: isExcecaoFinal ? justificativaFinal : null,
           });
         if (error) throw error;
       }
+
+      // Consume oldest credit if requested
+      if (manualUseCredit && manualCreditos.length > 0) {
+        const oldest = manualCreditos[0];
+        const { error: credErr } = await supabase
+          .from("ferias_folgas_creditos")
+          .update({
+            status: "utilizado",
+            utilizado_em: new Date().toISOString().split("T")[0],
+            utilizado_referencia: `Folga em ${manualData}`,
+          })
+          .eq("id", oldest.id);
+        if (credErr) throw credErr;
+      }
     },
     onSuccess: () => {
-      toast.success("Folga salva!");
+      toast.success(manualUseCredit ? "Folga salva e crédito consumido!" : "Folga salva!");
       queryClient.invalidateQueries({ queryKey: ["ferias-folgas"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-folgas-table"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-folgas-pdf"] });
+      queryClient.invalidateQueries({ queryKey: ["ferias-creditos"] });
       setManualOpen(false);
       setManualColaborador("");
       setManualData("");
       setManualExcecao(false);
       setManualMotivo("");
       setManualJustificativa("");
+      setManualUseCredit(false);
     },
-    onError: () => toast.error("Erro ao salvar folga"),
+    onError: (err: any) => toast.error(`Erro ao salvar folga: ${err?.message || "Erro desconhecido"}`),
   });
 
   const loading = loadingFolgas || loadingPerdas;
