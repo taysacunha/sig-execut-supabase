@@ -228,8 +228,17 @@ export function PerdaFolgaDialog({ open, onOpenChange, year, month, selectedSeto
             </Alert>
           )}
 
-          <div className="space-y-3">
-            <Label>Motivo *</Label>
+          {colaboradorId && !isAfastado && totalCreditosDias > 0 && (
+            <Alert>
+              <CreditCard className="h-4 w-4" />
+              <AlertDescription>
+                Este colaborador possui <strong>{creditosDisponiveis.length} crédito(s)</strong> de folga
+                disponível(is) (<strong>{totalCreditosDias} dia(s)</strong>). A perda será registrada normalmente;
+                os créditos permanecem disponíveis para uso futuro.
+              </AlertDescription>
+            </Alert>
+          )}
+
             <RadioGroup value={motivoKey} onValueChange={setMotivoKey} className="space-y-2">
               {MOTIVOS_PERDA.map(motivo => (
                 <div key={motivo.value} className="flex items-center space-x-2">
