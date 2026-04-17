@@ -205,6 +205,26 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     enabled: !!selectedColabId,
   });
 
+  // Fetch available credits for selected collaborator
+  const { data: creditosDisponiveis = [] } = useQuery({
+    queryKey: ["ferias-creditos-dialog", selectedColabId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ferias_folgas_creditos")
+        .select("id, dias, tipo")
+        .eq("colaborador_id", selectedColabId!)
+        .eq("status", "disponivel");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!selectedColabId,
+  });
+
+  const creditosFolga = creditosDisponiveis.filter((c: any) => c.tipo === "folga");
+  const creditosFerias = creditosDisponiveis.filter((c: any) => c.tipo === "ferias");
+  const totalDiasFolga = creditosFolga.reduce((s: number, c: any) => s + (c.dias || 0), 0);
+  const totalDiasFerias = creditosFerias.reduce((s: number, c: any) => s + (c.dias || 0), 0);
+
   const { data: feriasFamiliar } = useQuery({
     queryKey: ["ferias-familiar", familiarId],
     queryFn: async () => {
