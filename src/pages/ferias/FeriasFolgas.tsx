@@ -25,7 +25,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CalendarDays, Calendar, CheckCircle, AlertCircle, Plus, Trash2, RefreshCw, Loader2, ArrowRight, ArrowLeftRight, Grid3X3, Search, Users } from "lucide-react";
+import { CalendarDays, Calendar, CheckCircle, AlertCircle, Plus, Trash2, RefreshCw, Loader2, ArrowRight, ArrowLeftRight, Grid3X3, Search, Users, CreditCard } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { Checkbox } from "@/components/ui/checkbox";
 import { GeradorFolgasDialog } from "@/components/ferias/folgas/GeradorFolgasDialog";
@@ -489,13 +490,33 @@ const FeriasFolgas = () => {
                           </SelectContent>
                         </Select>
                       </div>
+
+                      {manualColaborador && totalManualCreditos > 0 && (
+                        <Alert>
+                          <CreditCard className="h-4 w-4" />
+                          <AlertDescription className="space-y-2">
+                            <div>
+                              Este colaborador tem <strong>{manualCreditos.length} crédito(s)</strong> de folga
+                              disponível(is) (<strong>{totalManualCreditos} dia(s)</strong>).
+                            </div>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <Checkbox
+                                checked={manualUseCredit}
+                                onCheckedChange={(v) => setManualUseCredit(!!v)}
+                              />
+                              <span className="text-sm">Utilizar crédito de folga neste ajuste</span>
+                            </label>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
                       <div className="space-y-2">
                         <Label>Motivo (opcional)</Label>
-                        <Input value={manualMotivo} onChange={(e) => setManualMotivo(e.target.value)} placeholder="Ex: Troca entre colaboradores" />
+                        <Input value={manualMotivo} onChange={(e) => setManualMotivo(e.target.value)} placeholder="Ex: Troca entre colaboradores" disabled={manualUseCredit} />
                       </div>
                       <div className="space-y-2">
                         <Label>Justificativa (opcional)</Label>
-                        <Textarea value={manualJustificativa} onChange={(e) => setManualJustificativa(e.target.value)} placeholder="Detalhes adicionais..." />
+                        <Textarea value={manualJustificativa} onChange={(e) => setManualJustificativa(e.target.value)} placeholder="Detalhes adicionais..." disabled={manualUseCredit} />
                       </div>
                     </div>
                     <DialogFooter>
