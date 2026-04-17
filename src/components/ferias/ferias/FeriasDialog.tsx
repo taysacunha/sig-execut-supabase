@@ -1304,7 +1304,21 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                 </Alert>
               )}
 
-              {selectedColabId && periodosAquisitivos.length > 0 && (
+              {selectedColabId && creditosDisponiveis.length > 0 && (
+                <Alert className="border-amber-500/30 bg-amber-50 dark:bg-amber-950/20">
+                  <Info className="h-4 w-4" />
+                  <AlertTitle>Créditos disponíveis</AlertTitle>
+                  <AlertDescription className="text-sm">
+                    Este colaborador possui <strong>{creditosDisponiveis.length} crédito(s)</strong> disponível(is)
+                    {totalDiasFolga > 0 && ` (${totalDiasFolga} dia(s) de folga`}
+                    {totalDiasFolga > 0 && totalDiasFerias > 0 && `, `}
+                    {totalDiasFerias > 0 && `${totalDiasFolga > 0 ? "" : "("}${totalDiasFerias} dia(s) de férias`}
+                    {(totalDiasFolga > 0 || totalDiasFerias > 0) && `)`}.
+                    Para utilizá-los corretamente, vá para a página <strong>Créditos</strong> e clique em "Usar".
+                  </AlertDescription>
+                </Alert>
+              )}
+
                 <Card className="border-primary/20 bg-primary/5">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2"><Info className="h-4 w-4 text-primary" />Período Aquisitivo</CardTitle>
