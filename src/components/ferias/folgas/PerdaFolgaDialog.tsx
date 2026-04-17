@@ -239,6 +239,8 @@ export function PerdaFolgaDialog({ open, onOpenChange, year, month, selectedSeto
             </Alert>
           )}
 
+          <div className="space-y-3">
+            <Label>Motivo *</Label>
             <RadioGroup value={motivoKey} onValueChange={setMotivoKey} className="space-y-2">
               {MOTIVOS_PERDA.map(motivo => (
                 <div key={motivo.value} className="flex items-center space-x-2">
