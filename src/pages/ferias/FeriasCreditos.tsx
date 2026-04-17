@@ -17,6 +17,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { CreditCard, Search, Loader2, CheckCircle, Clock, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
+import { UtilizarCreditoFolgaDialog } from "@/components/ferias/creditos/UtilizarCreditoFolgaDialog";
+import { UtilizarCreditoFeriasDialog } from "@/components/ferias/creditos/UtilizarCreditoFeriasDialog";
 
 const FeriasCreditos = () => {
   const queryClient = useQueryClient();
@@ -27,9 +29,13 @@ const FeriasCreditos = () => {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
   
-  // Dialog state for using/paying credit
-  const [actionDialog, setActionDialog] = useState<{ credit: any; action: "utilizado" | "pago" } | null>(null);
-  const [actionRef, setActionRef] = useState("");
+  // Dialog state for paying credit (manual reference)
+  const [payDialog, setPayDialog] = useState<any | null>(null);
+  const [payRef, setPayRef] = useState("");
+
+  // Smart consume dialogs
+  const [consumeFolga, setConsumeFolga] = useState<any | null>(null);
+  const [consumeFerias, setConsumeFerias] = useState<any | null>(null);
 
   const { data: creditos = [], isLoading } = useQuery({
     queryKey: ["ferias-creditos", filterTipo, filterStatus],
@@ -83,8 +89,8 @@ const FeriasCreditos = () => {
     onSuccess: () => {
       toast.success("Crédito atualizado!");
       queryClient.invalidateQueries({ queryKey: ["ferias-creditos"] });
-      setActionDialog(null);
-      setActionRef("");
+      setPayDialog(null);
+      setPayRef("");
     },
     onError: () => toast.error("Erro ao atualizar crédito"),
   });
@@ -260,14 +266,17 @@ const FeriasCreditos = () => {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => setActionDialog({ credit: credito, action: "utilizado" })}
+                              onClick={() => {
+                                if (credito.tipo === "folga") setConsumeFolga(credito);
+                                else setConsumeFerias(credito);
+                              }}
                             >
                               Usar
                             </Button>
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => setActionDialog({ credit: credito, action: "pago" })}
+                              onClick={() => setPayDialog(credito)}
                             >
                               Pagar
                             </Button>
@@ -283,39 +292,48 @@ const FeriasCreditos = () => {
         </CardContent>
       </Card>
 
-      {/* Action Dialog */}
-      <Dialog open={!!actionDialog} onOpenChange={() => { setActionDialog(null); setActionRef(""); }}>
+      {/* Smart consumption dialogs */}
+      <UtilizarCreditoFolgaDialog
+        open={!!consumeFolga}
+        onOpenChange={(o) => !o && setConsumeFolga(null)}
+        credito={consumeFolga}
+      />
+      <UtilizarCreditoFeriasDialog
+        open={!!consumeFerias}
+        onOpenChange={(o) => !o && setConsumeFerias(null)}
+        credito={consumeFerias}
+        allCredits={creditos.filter((c: any) => c.status === "disponivel" && c.tipo === "ferias")}
+      />
+
+      {/* Pay Dialog (manual reference) */}
+      <Dialog open={!!payDialog} onOpenChange={() => { setPayDialog(null); setPayRef(""); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              {actionDialog?.action === "utilizado" ? "Marcar como Utilizado" : "Marcar como Pago"}
-            </DialogTitle>
+            <DialogTitle>Marcar como Pago</DialogTitle>
             <DialogDescription>
-              {actionDialog?.action === "utilizado"
-                ? "Informe onde este crédito foi utilizado (ex: Folga 07/03/2026, Férias Q1 2026)"
-                : "Confirme o pagamento deste crédito"}
+              Confirme o pagamento deste crédito (ex: pago na folha de fevereiro/2026).
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Referência</Label>
               <Textarea
-                value={actionRef}
-                onChange={(e) => setActionRef(e.target.value)}
-                placeholder={actionDialog?.action === "utilizado" ? "Ex: Folga extra em 07/03/2026" : "Ex: Pago na folha de fevereiro/2026"}
+                value={payRef}
+                onChange={(e) => setPayRef(e.target.value)}
+                placeholder="Ex: Pago na folha de fevereiro/2026"
                 rows={2}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setActionDialog(null); setActionRef(""); }}>
+            <Button variant="outline" onClick={() => { setPayDialog(null); setPayRef(""); }}>
               Cancelar
             </Button>
             <Button
-              onClick={() => actionDialog && updateMutation.mutate({
-                id: actionDialog.credit.id,
-                status: actionDialog.action,
-                referencia: actionRef,
+              onClick={() => payDialog && updateMutation.mutate({
+                id: payDialog.id,
+                status: "pago",
+                referencia: payRef,
               })}
               disabled={updateMutation.isPending}
             >

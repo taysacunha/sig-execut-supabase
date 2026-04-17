@@ -205,6 +205,26 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     enabled: !!selectedColabId,
   });
 
+  // Fetch available credits for selected collaborator
+  const { data: creditosDisponiveis = [] } = useQuery({
+    queryKey: ["ferias-creditos-dialog", selectedColabId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ferias_folgas_creditos")
+        .select("id, dias, tipo")
+        .eq("colaborador_id", selectedColabId!)
+        .eq("status", "disponivel");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!selectedColabId,
+  });
+
+  const creditosFolga = creditosDisponiveis.filter((c: any) => c.tipo === "folga");
+  const creditosFerias = creditosDisponiveis.filter((c: any) => c.tipo === "ferias");
+  const totalDiasFolga = creditosFolga.reduce((s: number, c: any) => s + (c.dias || 0), 0);
+  const totalDiasFerias = creditosFerias.reduce((s: number, c: any) => s + (c.dias || 0), 0);
+
   const { data: feriasFamiliar } = useQuery({
     queryKey: ["ferias-familiar", familiarId],
     queryFn: async () => {
@@ -1281,6 +1301,21 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                   <Users className="h-4 w-4" />
                   <AlertTitle>Familiar vinculado: {familiarNome || "—"}</AlertTitle>
                   <AlertDescription className="text-sm text-muted-foreground">Nenhuma férias cadastrada para o familiar ainda.</AlertDescription>
+                </Alert>
+              )}
+
+              {selectedColabId && creditosDisponiveis.length > 0 && (
+                <Alert className="border-amber-500/30 bg-amber-50 dark:bg-amber-950/20">
+                  <Info className="h-4 w-4" />
+                  <AlertTitle>Créditos disponíveis</AlertTitle>
+                  <AlertDescription className="text-sm">
+                    Este colaborador possui <strong>{creditosDisponiveis.length} crédito(s)</strong> disponível(is)
+                    {totalDiasFolga > 0 && ` (${totalDiasFolga} dia(s) de folga`}
+                    {totalDiasFolga > 0 && totalDiasFerias > 0 && `, `}
+                    {totalDiasFerias > 0 && `${totalDiasFolga > 0 ? "" : "("}${totalDiasFerias} dia(s) de férias`}
+                    {(totalDiasFolga > 0 || totalDiasFerias > 0) && `)`}.
+                    Para utilizá-los corretamente, vá para a página <strong>Créditos</strong> e clique em "Usar".
+                  </AlertDescription>
                 </Alert>
               )}
 

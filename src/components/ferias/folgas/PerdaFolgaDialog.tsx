@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, AlertTriangle } from "lucide-react";
+import { Loader2, AlertTriangle, CreditCard } from "lucide-react";
 
 const MOTIVOS_PERDA = [
   { value: "falta_injustificada", label: "Falta injustificada" },
@@ -106,6 +106,25 @@ export function PerdaFolgaDialog({ open, onOpenChange, year, month, selectedSeto
       return data as Afastamento[];
     },
   });
+
+  // Query available 'folga' credits for selected colaborador
+  const { data: creditosDisponiveis = [] } = useQuery({
+    queryKey: ["ferias-creditos-perda-check", colaboradorId],
+    queryFn: async () => {
+      if (!colaboradorId) return [];
+      const { data, error } = await supabase
+        .from("ferias_folgas_creditos")
+        .select("id, dias")
+        .eq("colaborador_id", colaboradorId)
+        .eq("tipo", "folga")
+        .eq("status", "disponivel");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!colaboradorId,
+  });
+
+  const totalCreditosDias = creditosDisponiveis.reduce((s: number, c: any) => s + (c.dias || 0), 0);
 
   const saturdaysOfMonth = useMemo(() => getSaturdaysOfMonth(year, month), [year, month]);
 
@@ -205,6 +224,17 @@ export function PerdaFolgaDialog({ open, onOpenChange, year, month, selectedSeto
                 <strong>{formatDate(selectedAfastamento.data_inicio)}</strong> a{" "}
                 <strong>{formatDate(selectedAfastamento.data_fim)}</strong> e já não entra na escala de folgas de{" "}
                 {String(month).padStart(2, "0")}/{year}. Não é necessário registrar perda.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {colaboradorId && !isAfastado && totalCreditosDias > 0 && (
+            <Alert>
+              <CreditCard className="h-4 w-4" />
+              <AlertDescription>
+                Este colaborador possui <strong>{creditosDisponiveis.length} crédito(s)</strong> de folga
+                disponível(is) (<strong>{totalCreditosDias} dia(s)</strong>). A perda será registrada normalmente;
+                os créditos permanecem disponíveis para uso futuro.
               </AlertDescription>
             </Alert>
           )}
