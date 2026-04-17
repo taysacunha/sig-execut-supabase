@@ -17,6 +17,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { CreditCard, Search, Loader2, CheckCircle, Clock, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
+import { UtilizarCreditoFolgaDialog } from "@/components/ferias/creditos/UtilizarCreditoFolgaDialog";
+import { UtilizarCreditoFeriasDialog } from "@/components/ferias/creditos/UtilizarCreditoFeriasDialog";
 
 const FeriasCreditos = () => {
   const queryClient = useQueryClient();
@@ -27,9 +29,13 @@ const FeriasCreditos = () => {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
   
-  // Dialog state for using/paying credit
-  const [actionDialog, setActionDialog] = useState<{ credit: any; action: "utilizado" | "pago" } | null>(null);
-  const [actionRef, setActionRef] = useState("");
+  // Dialog state for paying credit (manual reference)
+  const [payDialog, setPayDialog] = useState<any | null>(null);
+  const [payRef, setPayRef] = useState("");
+
+  // Smart consume dialogs
+  const [consumeFolga, setConsumeFolga] = useState<any | null>(null);
+  const [consumeFerias, setConsumeFerias] = useState<any | null>(null);
 
   const { data: creditos = [], isLoading } = useQuery({
     queryKey: ["ferias-creditos", filterTipo, filterStatus],
