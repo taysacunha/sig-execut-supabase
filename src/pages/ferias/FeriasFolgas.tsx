@@ -858,21 +858,55 @@ const FeriasFolgas = () => {
       />
 
       {/* Delete All Folgas Confirmation */}
-      <AlertDialog open={showDeleteAllConfirm} onOpenChange={setShowDeleteAllConfirm}>
+      <AlertDialog open={showDeleteAllConfirm} onOpenChange={(o) => { setShowDeleteAllConfirm(o); if (!o) setDeleteAllJustif(""); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Apagar toda a escala do mês</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja apagar TODAS as folgas de {format(new Date(year, month - 1), "MMMM yyyy", { locale: ptBR })}? 
-              Esta ação não pode ser desfeita e removerá {totalFolgas} folga(s).
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  Tem certeza que deseja apagar TODAS as folgas de {format(new Date(year, month - 1), "MMMM yyyy", { locale: ptBR })}?
+                  Esta ação não pode ser desfeita e removerá {totalFolgas} folga(s).
+                </p>
+                {monthCredits.length > 0 && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      Existem <strong>{monthCredits.length} crédito(s) de folga</strong> originados deste mês. Eles também serão excluídos em cascata:
+                      <ul className="list-disc pl-5 mt-1 text-xs">
+                        {monthCredits.slice(0, 5).map((c: any) => (
+                          <li key={c.id}>
+                            {c.colaborador?.nome_exibicao || c.colaborador?.nome || "—"} — {c.dias} dia(s) (origem {format(new Date(c.origem_data + "T12:00:00"), "dd/MM/yyyy")})
+                          </li>
+                        ))}
+                        {monthCredits.length > 5 && <li>… e mais {monthCredits.length - 5}</li>}
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {monthCredits.length > 0 && (
+            <div className="space-y-2 py-2">
+              <Label>Justificativa *</Label>
+              <Textarea
+                value={deleteAllJustif}
+                onChange={(e) => setDeleteAllJustif(e.target.value)}
+                placeholder="Explique o motivo da exclusão (será registrada na auditoria)..."
+                rows={3}
+              />
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteAllFolgasMutation.mutate()}
+              onClick={(e) => {
+                e.preventDefault();
+                deleteAllFolgasMutation.mutate(deleteAllJustif);
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={deleteAllFolgasMutation.isPending}
+              disabled={deleteAllFolgasMutation.isPending || (monthCredits.length > 0 && !deleteAllJustif.trim())}
             >
               {deleteAllFolgasMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Apagar Tudo
