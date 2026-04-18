@@ -105,6 +105,7 @@ const FeriasFolgas = () => {
   const [folgaToDelete, setFolgaToDelete] = useState<any | null>(null);
   const [perdaToDelete, setPerdaToDelete] = useState<string | null>(null);
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [deleteAllJustif, setDeleteAllJustif] = useState("");
   
   // Move/Swap dialogs
   const [folgaToMove, setFolgaToMove] = useState<Folga | null>(null);
@@ -216,11 +217,54 @@ const FeriasFolgas = () => {
   // Mutations
   // deleteFolgaMutation is now handled by RemoverFolgaDialog
 
-  const deleteAllFolgasMutation = useMutation({
-    mutationFn: async () => {
+  // Credits originating from folgas of the selected month (would be cascaded if escala is deleted)
+  const { data: monthCredits = [] } = useQuery({
+    queryKey: ["ferias-creditos-mes", year, month],
+    queryFn: async () => {
       const monthStart = format(startOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
       const monthEnd = format(endOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
-      
+      const { data, error } = await supabase
+        .from("ferias_folgas_creditos")
+        .select("id, colaborador_id, dias, origem_data, justificativa, status, colaborador:ferias_colaboradores!ferias_folgas_creditos_colaborador_id_fkey(nome, nome_exibicao)")
+        .eq("tipo", "folga")
+        .gte("origem_data", monthStart)
+        .lte("origem_data", monthEnd);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const deleteAllFolgasMutation = useMutation({
+    mutationFn: async (justificativa: string) => {
+      const monthStart = format(startOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
+      const monthEnd = format(endOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // If there are credits to be cascaded, log + delete them
+      if (monthCredits.length > 0) {
+        if (!justificativa.trim()) throw new Error("Justificativa é obrigatória quando há créditos a apagar");
+
+        const { error: logError } = await supabase
+          .from("ferias_audit_logs")
+          .insert({
+            action: "delete_credito_cascata",
+            entity_type: "ferias_folgas_escala_mes",
+            entity_id: null,
+            old_data: { creditos: monthCredits },
+            new_data: { ano: year, mes: month, creditos_apagados: monthCredits.map((c: any) => c.id) },
+            details: justificativa.trim(),
+            user_id: user?.id || null,
+            user_email: user?.email || null,
+          });
+        if (logError) throw logError;
+
+        const { error: credError } = await supabase
+          .from("ferias_folgas_creditos")
+          .delete()
+          .in("id", monthCredits.map((c: any) => c.id));
+        if (credError) throw credError;
+      }
+
       const { error: escalaError } = await supabase
         .from("ferias_folgas_escala")
         .delete()
@@ -241,9 +285,12 @@ const FeriasFolgas = () => {
       queryClient.invalidateQueries({ queryKey: ["ferias-folgas-table"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-folgas-pdf"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-escalas"] });
+      queryClient.invalidateQueries({ queryKey: ["ferias-creditos"] });
+      queryClient.invalidateQueries({ queryKey: ["ferias-creditos-mes"] });
       setShowDeleteAllConfirm(false);
+      setDeleteAllJustif("");
     },
-    onError: () => toast.error("Erro ao apagar escala"),
+    onError: (e: any) => toast.error(e?.message || "Erro ao apagar escala"),
   });
 
   const deletePerdaMutation = useMutation({
