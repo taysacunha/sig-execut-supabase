@@ -400,6 +400,44 @@ const FeriasCreditos = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Credit Dialog */}
+      <AlertDialog open={!!deleteCredito} onOpenChange={(o) => { if (!o) { setDeleteCredito(null); setDeleteJustif(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir crédito</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. O crédito de <strong>{deleteCredito?.dias} dia(s)</strong> de{" "}
+              <strong>{deleteCredito?.tipo === "folga" ? "folga" : "férias"}</strong> de{" "}
+              <strong>{getDisplayName(deleteCredito?.colaborador)}</strong> será removido.
+              Informe a justificativa (será registrada na auditoria).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <Label>Justificativa *</Label>
+            <Textarea
+              value={deleteJustif}
+              onChange={(e) => setDeleteJustif(e.target.value)}
+              placeholder="Motivo da exclusão deste crédito..."
+              rows={3}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (deleteCredito) deleteMutation.mutate({ credito: deleteCredito, justificativa: deleteJustif });
+              }}
+              disabled={!deleteJustif.trim() || deleteMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
