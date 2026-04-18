@@ -355,7 +355,10 @@ export default function FeriasFerias() {
   const filteredFerias = useMemo(() => {
     return ferias.filter((f) => {
       const matchesSearch = normalizeText(f.colaborador?.nome || "").includes(normalizeText(searchTerm));
-      const matchesStatus = statusFilter === "all" || f.status === statusFilter;
+      const matchesStatus =
+        statusFilter === "all" ||
+        f.status === statusFilter ||
+        (statusFilter === "em_gozo" && ["em_gozo_q1", "em_gozo_q2", "em_gozo"].includes(f.status));
       const matchesSetor = setorFilter === "all" || f.colaborador?.setor_titular?.id === setorFilter;
       return matchesSearch && matchesStatus && matchesSetor;
     }).sort((a, b) => {
@@ -690,7 +693,7 @@ export default function FeriasFerias() {
                               {canEditFerias && (
                                 <>
                                   <Button variant="ghost" size="sm" onClick={() => { setSelectedFerias(f); setDialogOpen(true); }}><Edit className="h-4 w-4" /></Button>
-                                  {(f.status === "aprovada" || isFeriasEmGozo(f.status)) && (
+                                  {f.status !== "concluida" && f.status !== "cancelada" && (
                                     <Button variant="ghost" size="sm" title="Reduzir dias" onClick={() => { setReducaoFerias(f); setReducaoDialogOpen(true); }}><CalendarMinus className="h-4 w-4 text-warning" /></Button>
                                   )}
                                   <AlertDialog>
