@@ -72,6 +72,8 @@ const actionLabels: Record<string, string> = {
   INSERT: "Inserir",
   UPDATE: "Atualizar",
   DELETE: "Remover",
+  DELETE_CASCADE_NOTE: "Justificativa de cascata",
+  DELETE_NOTE: "Justificativa de exclusão",
 };
 
 const actionColors: Record<string, string> = {
@@ -83,12 +85,15 @@ const actionColors: Record<string, string> = {
   INSERT: "bg-green-500 text-white",
   UPDATE: "bg-blue-500 text-white",
   DELETE: "bg-destructive text-destructive-foreground",
+  DELETE_CASCADE_NOTE: "bg-orange-500 text-white",
+  DELETE_NOTE: "bg-orange-500 text-white",
 };
 
 const moduleLabels: Record<string, string> = {
   escalas: "Escalas",
   vendas: "Vendas",
   estoque: "Estoques",
+  ferias: "Férias e Folgas",
   sistema: "Sistema",
 };
 
@@ -113,6 +118,25 @@ const tableLabels: Record<string, string> = {
   estoque_solicitacao_itens: "Itens de Solicitação",
   estoque_movimentacoes: "Movimentações",
   estoque_notificacoes: "Notificações",
+  // Férias
+  ferias_colaboradores: "Colaboradores",
+  ferias_ferias: "Períodos de Férias",
+  ferias_folgas: "Folgas de Sábado",
+  ferias_folgas_escala: "Escalas de Folga",
+  ferias_folgas_creditos: "Créditos de Folga/Férias",
+  ferias_folgas_perdas: "Perdas de Folga",
+  ferias_afastamentos: "Afastamentos",
+  ferias_setores: "Setores",
+  ferias_equipes: "Equipes (Férias)",
+  ferias_cargos: "Cargos",
+  ferias_unidades: "Unidades",
+  ferias_feriados: "Feriados",
+  ferias_formulario_anual: "Formulário Anual",
+  ferias_gozo_periodos: "Períodos de Gozo",
+  ferias_periodos_quitados: "Períodos Quitados",
+  ferias_setor_chefes: "Chefes de Setor",
+  ferias_colaborador_setores_substitutos: "Setores Substitutos",
+  ferias_folgas_escala_mes: "Escala do Mês (Cascata)",
 };
 
 interface AuditLogsPanelProps {
