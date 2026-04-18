@@ -105,6 +105,7 @@ const FeriasFolgas = () => {
   const [folgaToDelete, setFolgaToDelete] = useState<any | null>(null);
   const [perdaToDelete, setPerdaToDelete] = useState<string | null>(null);
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [deleteAllJustif, setDeleteAllJustif] = useState("");
   
   // Move/Swap dialogs
   const [folgaToMove, setFolgaToMove] = useState<Folga | null>(null);
@@ -216,11 +217,54 @@ const FeriasFolgas = () => {
   // Mutations
   // deleteFolgaMutation is now handled by RemoverFolgaDialog
 
-  const deleteAllFolgasMutation = useMutation({
-    mutationFn: async () => {
+  // Credits originating from folgas of the selected month (would be cascaded if escala is deleted)
+  const { data: monthCredits = [] } = useQuery({
+    queryKey: ["ferias-creditos-mes", year, month],
+    queryFn: async () => {
       const monthStart = format(startOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
       const monthEnd = format(endOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
-      
+      const { data, error } = await supabase
+        .from("ferias_folgas_creditos")
+        .select("id, colaborador_id, dias, origem_data, justificativa, status, colaborador:ferias_colaboradores!ferias_folgas_creditos_colaborador_id_fkey(nome, nome_exibicao)")
+        .eq("tipo", "folga")
+        .gte("origem_data", monthStart)
+        .lte("origem_data", monthEnd);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const deleteAllFolgasMutation = useMutation({
+    mutationFn: async (justificativa: string) => {
+      const monthStart = format(startOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
+      const monthEnd = format(endOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // If there are credits to be cascaded, log + delete them
+      if (monthCredits.length > 0) {
+        if (!justificativa.trim()) throw new Error("Justificativa é obrigatória quando há créditos a apagar");
+
+        const { error: logError } = await supabase
+          .from("ferias_audit_logs")
+          .insert({
+            action: "delete_credito_cascata",
+            entity_type: "ferias_folgas_escala_mes",
+            entity_id: null,
+            old_data: { creditos: monthCredits },
+            new_data: { ano: year, mes: month, creditos_apagados: monthCredits.map((c: any) => c.id) },
+            details: justificativa.trim(),
+            user_id: user?.id || null,
+            user_email: user?.email || null,
+          });
+        if (logError) throw logError;
+
+        const { error: credError } = await supabase
+          .from("ferias_folgas_creditos")
+          .delete()
+          .in("id", monthCredits.map((c: any) => c.id));
+        if (credError) throw credError;
+      }
+
       const { error: escalaError } = await supabase
         .from("ferias_folgas_escala")
         .delete()
@@ -241,9 +285,12 @@ const FeriasFolgas = () => {
       queryClient.invalidateQueries({ queryKey: ["ferias-folgas-table"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-folgas-pdf"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-escalas"] });
+      queryClient.invalidateQueries({ queryKey: ["ferias-creditos"] });
+      queryClient.invalidateQueries({ queryKey: ["ferias-creditos-mes"] });
       setShowDeleteAllConfirm(false);
+      setDeleteAllJustif("");
     },
-    onError: () => toast.error("Erro ao apagar escala"),
+    onError: (e: any) => toast.error(e?.message || "Erro ao apagar escala"),
   });
 
   const deletePerdaMutation = useMutation({
@@ -811,21 +858,55 @@ const FeriasFolgas = () => {
       />
 
       {/* Delete All Folgas Confirmation */}
-      <AlertDialog open={showDeleteAllConfirm} onOpenChange={setShowDeleteAllConfirm}>
+      <AlertDialog open={showDeleteAllConfirm} onOpenChange={(o) => { setShowDeleteAllConfirm(o); if (!o) setDeleteAllJustif(""); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Apagar toda a escala do mês</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja apagar TODAS as folgas de {format(new Date(year, month - 1), "MMMM yyyy", { locale: ptBR })}? 
-              Esta ação não pode ser desfeita e removerá {totalFolgas} folga(s).
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  Tem certeza que deseja apagar TODAS as folgas de {format(new Date(year, month - 1), "MMMM yyyy", { locale: ptBR })}?
+                  Esta ação não pode ser desfeita e removerá {totalFolgas} folga(s).
+                </p>
+                {monthCredits.length > 0 && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      Existem <strong>{monthCredits.length} crédito(s) de folga</strong> originados deste mês. Eles também serão excluídos em cascata:
+                      <ul className="list-disc pl-5 mt-1 text-xs">
+                        {monthCredits.slice(0, 5).map((c: any) => (
+                          <li key={c.id}>
+                            {c.colaborador?.nome_exibicao || c.colaborador?.nome || "—"} — {c.dias} dia(s) (origem {format(new Date(c.origem_data + "T12:00:00"), "dd/MM/yyyy")})
+                          </li>
+                        ))}
+                        {monthCredits.length > 5 && <li>… e mais {monthCredits.length - 5}</li>}
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {monthCredits.length > 0 && (
+            <div className="space-y-2 py-2">
+              <Label>Justificativa *</Label>
+              <Textarea
+                value={deleteAllJustif}
+                onChange={(e) => setDeleteAllJustif(e.target.value)}
+                placeholder="Explique o motivo da exclusão (será registrada na auditoria)..."
+                rows={3}
+              />
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteAllFolgasMutation.mutate()}
+              onClick={(e) => {
+                e.preventDefault();
+                deleteAllFolgasMutation.mutate(deleteAllJustif);
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={deleteAllFolgasMutation.isPending}
+              disabled={deleteAllFolgasMutation.isPending || (monthCredits.length > 0 && !deleteAllJustif.trim())}
             >
               {deleteAllFolgasMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Apagar Tudo
