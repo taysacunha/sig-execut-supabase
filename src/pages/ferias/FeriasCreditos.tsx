@@ -13,8 +13,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { CreditCard, Search, Loader2, CheckCircle, Clock, DollarSign } from "lucide-react";
+import { CreditCard, Search, Loader2, CheckCircle, Clock, DollarSign, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { UtilizarCreditoFolgaDialog } from "@/components/ferias/creditos/UtilizarCreditoFolgaDialog";
@@ -36,6 +46,10 @@ const FeriasCreditos = () => {
   // Smart consume dialogs
   const [consumeFolga, setConsumeFolga] = useState<any | null>(null);
   const [consumeFerias, setConsumeFerias] = useState<any | null>(null);
+
+  // Delete dialog
+  const [deleteCredito, setDeleteCredito] = useState<any | null>(null);
+  const [deleteJustif, setDeleteJustif] = useState("");
 
   const { data: creditos = [], isLoading } = useQuery({
     queryKey: ["ferias-creditos", filterTipo, filterStatus],
@@ -93,6 +107,40 @@ const FeriasCreditos = () => {
       setPayRef("");
     },
     onError: () => toast.error("Erro ao atualizar crédito"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async ({ credito, justificativa }: { credito: any; justificativa: string }) => {
+      if (!justificativa.trim()) throw new Error("Justificativa é obrigatória");
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Audit log first
+      const { error: logError } = await supabase
+        .from("ferias_audit_logs")
+        .insert({
+          action: "delete_credito",
+          entity_type: "ferias_folgas_creditos",
+          entity_id: credito.id,
+          old_data: credito,
+          details: justificativa.trim(),
+          user_id: user?.id || null,
+          user_email: user?.email || null,
+        });
+      if (logError) throw logError;
+
+      const { error } = await supabase
+        .from("ferias_folgas_creditos")
+        .delete()
+        .eq("id", credito.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Crédito excluído!");
+      queryClient.invalidateQueries({ queryKey: ["ferias-creditos"] });
+      setDeleteCredito(null);
+      setDeleteJustif("");
+    },
+    onError: (e: Error) => toast.error(e.message || "Erro ao excluir crédito"),
   });
 
   const getDisplayName = (colab: any) => {
