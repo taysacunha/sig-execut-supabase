@@ -218,20 +218,26 @@ const FeriasFolgas = () => {
   // deleteFolgaMutation is now handled by RemoverFolgaDialog
 
   // Credits originating from folgas of the selected month (would be cascaded if escala is deleted)
-  const { data: monthCredits = [] } = useQuery({
+  const { data: monthCredits = [], refetch: refetchMonthCredits } = useQuery({
     queryKey: ["ferias-creditos-mes", year, month],
     queryFn: async () => {
       const monthStart = format(startOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
       const monthEnd = format(endOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
+      const monthLabel = format(new Date(year, month - 1), "MMMM yyyy", { locale: ptBR });
+      const monthLabelShort = format(new Date(year, month - 1), "MM/yyyy");
+      // Defesa em profundidade: pegar por origem_data dentro do mês OU por utilizado_referencia que mencione o mês
       const { data, error } = await supabase
         .from("ferias_folgas_creditos")
-        .select("id, colaborador_id, dias, origem_data, justificativa, status, colaborador:ferias_colaboradores!ferias_folgas_creditos_colaborador_id_fkey(nome, nome_exibicao)")
+        .select("id, colaborador_id, dias, origem_data, justificativa, status, utilizado_referencia, colaborador:ferias_colaboradores!ferias_folgas_creditos_colaborador_id_fkey(nome, nome_exibicao)")
         .eq("tipo", "folga")
-        .gte("origem_data", monthStart)
-        .lte("origem_data", monthEnd);
+        .or(
+          `and(origem_data.gte.${monthStart},origem_data.lte.${monthEnd}),utilizado_referencia.ilike.%${monthLabel}%,utilizado_referencia.ilike.%${monthLabelShort}%`
+        );
       if (error) throw error;
       return data || [];
     },
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const deleteAllFolgasMutation = useMutation({
@@ -240,28 +246,52 @@ const FeriasFolgas = () => {
       const monthEnd = format(endOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
       const { data: { user } } = await supabase.auth.getUser();
 
-      // If there are credits to be cascaded, log + delete them
-      if (monthCredits.length > 0) {
-        if (!justificativa.trim()) throw new Error("Justificativa é obrigatória quando há créditos a apagar");
+      // Releitura final dos créditos imediatamente antes de apagar (defesa contra cache)
+      const monthLabel = format(new Date(year, month - 1), "MMMM yyyy", { locale: ptBR });
+      const monthLabelShort = format(new Date(year, month - 1), "MM/yyyy");
+      const { data: freshCredits, error: freshErr } = await supabase
+        .from("ferias_folgas_creditos")
+        .select("id, colaborador_id, dias, origem_data, justificativa, status, utilizado_referencia")
+        .eq("tipo", "folga")
+        .or(
+          `and(origem_data.gte.${monthStart},origem_data.lte.${monthEnd}),utilizado_referencia.ilike.%${monthLabel}%,utilizado_referencia.ilike.%${monthLabelShort}%`
+        );
+      if (freshErr) throw freshErr;
+      const credits = freshCredits || [];
 
+      if (credits.length > 0 && !justificativa.trim()) {
+        throw new Error("Justificativa é obrigatória quando há créditos a apagar");
+      }
+
+      // Registrar nota de justificativa em module_audit_logs (os DELETEs em si serão
+      // registrados automaticamente pelos triggers do banco)
+      if (justificativa.trim()) {
         const { error: logError } = await supabase
-          .from("ferias_audit_logs")
+          .from("module_audit_logs")
           .insert({
-            action: "delete_credito_cascata",
-            entity_type: "ferias_folgas_escala_mes",
-            entity_id: null,
-            old_data: { creditos: monthCredits },
-            new_data: { ano: year, mes: month, creditos_apagados: monthCredits.map((c: any) => c.id) },
-            details: justificativa.trim(),
-            user_id: user?.id || null,
-            user_email: user?.email || null,
+            module_name: "ferias",
+            table_name: "ferias_folgas_escala_mes",
+            record_id: null,
+            action: credits.length > 0 ? "DELETE_CASCADE_NOTE" : "DELETE_NOTE",
+            old_data: { creditos: credits },
+            new_data: {
+              ano: year,
+              mes: month,
+              creditos_apagados: credits.map((c: any) => c.id),
+              total_folgas: totalFolgas,
+              justificativa: justificativa.trim(),
+            },
+            changed_by: user?.id || null,
+            changed_by_email: user?.email || "sistema@interno",
           });
         if (logError) throw logError;
+      }
 
+      if (credits.length > 0) {
         const { error: credError } = await supabase
           .from("ferias_folgas_creditos")
           .delete()
-          .in("id", monthCredits.map((c: any) => c.id));
+          .in("id", credits.map((c: any) => c.id));
         if (credError) throw credError;
       }
 
@@ -480,7 +510,14 @@ const FeriasFolgas = () => {
                 </Button>
 
                 {folgas.length > 0 && (
-                  <Button variant="destructive" onClick={() => setShowDeleteAllConfirm(true)}>
+                  <Button
+                    variant="destructive"
+                    onClick={async () => {
+                      // Garantir leitura fresca dos créditos antes de abrir o diálogo
+                      await refetchMonthCredits();
+                      setShowDeleteAllConfirm(true);
+                    }}
+                  >
                     <Trash2 className="h-4 w-4 mr-2" />
                     Apagar Escala
                   </Button>
