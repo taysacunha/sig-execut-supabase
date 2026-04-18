@@ -1,80 +1,60 @@
 
 
-## Plano: exclusão de créditos com justificativa, cascata ao apagar escala, correção de status e do botão "Reduzir dias"
+## Plano: Auditoria de férias + cascata de créditos confiável
 
-### Problemas identificados
+### Problemas confirmados
 
-1. **Não há como excluir um crédito** (folga ou férias) na tela de Créditos.
-2. **Apagar a escala do mês** (`FeriasFolgas` → "Apagar Escala") deleta as folgas do mês mas **não toca nos créditos** já gerados a partir delas — ficam órfãos. Também não pede justificativa.
-3. **Filtro de status "Em Gozo"** em `FeriasFerias` filtra por `f.status === "em_gozo"` (status legado), mas o sistema hoje usa `em_gozo_q1` / `em_gozo_q2` → retorna vazio mesmo havendo períodos em gozo.
-4. **Botão "Reduzir dias"** só aparece para `aprovada` ou em-gozo. Não aparece para `q1_concluida` (que ainda tem o 2º período) — deveria. E não deve aparecer apenas quando `concluida` ou `cancelada`.
-5. **Cálculo de dias máximos a reduzir** está fixo em 15 e ignora `dias_vendidos` e o tipo (padrão x exceção). Quem vendeu 30 dias tem 0 disponíveis; é preciso calcular dias restantes reais com base no período correto (oficial p/ padrão; gozo/exceção p/ exceções).
+**1. Auditoria não mostra nada do módulo de férias**
+- A página `FeriasAuditLogs` usa `AuditLogsPanel`, que lê apenas de `admin_audit_logs` e `module_audit_logs`.
+- O código de férias grava em `ferias_audit_logs` (tabela separada que nunca é exibida).
+- Vendas/Escalas/Estoque não gravam manualmente — usam **triggers de banco** (`audit_module_changes`) que populam `module_audit_logs` automaticamente em qualquer INSERT/UPDATE/DELETE. As tabelas de férias **não têm esses triggers**.
+- Resultado: nada do módulo de férias aparece na auditoria, mesmo quando o código tenta logar.
+
+**2. Cascata do crédito da Taysa não disparou**
+- A query `monthCredits` busca `tipo='folga'` com `origem_data` entre o início e fim do mês selecionado.
+- A causa mais provável é que a query estava **stale/em cache** ou ainda não havia retornado quando o usuário abriu o diálogo (não há `enabled` guard nem `refetchOnMount`). Em alguns cenários a query nem rodou (chave dependente de `[year, month]` que não mudaram desde a última visita).
+- Secundariamente: o aviso só aparece se `monthCredits.length > 0` no momento do render — sem revalidação ao abrir o diálogo, dados desatualizados causam silêncio total.
 
 ### Solução
 
-#### 1. Excluir crédito com justificativa (`FeriasCreditos.tsx`)
+#### 1. Trigger no banco para auditoria automática (espelha o padrão de Escalas/Vendas)
 
-- Novo botão **"Excluir"** ao lado de "Usar"/"Pagar" para qualquer crédito (independente do status).
-- Abre `AlertDialog` solicitando **justificativa obrigatória** (Textarea).
-- Ao confirmar: registra entrada em `ferias_audit_logs` (`action: "delete_credito"`, `entity_type: "ferias_folgas_creditos"`, `entity_id: credito.id`, `old_data: credito`, `details: justificativa`) e em seguida deleta o registro.
-- Toast de sucesso e invalidação de `["ferias-creditos"]`.
+Criar migração que:
+- Estende `audit_module_changes` para mapear tabelas `ferias_*` ao módulo `'ferias'`.
+- Anexa o trigger `AFTER INSERT OR UPDATE OR DELETE` nas tabelas principais:
+  `ferias_colaboradores`, `ferias_ferias`, `ferias_folgas`, `ferias_folgas_escala`, `ferias_folgas_creditos`, `ferias_folgas_perdas`, `ferias_afastamentos`, `ferias_setores`, `ferias_equipes`, `ferias_cargos`, `ferias_unidades`, `ferias_feriados`.
+- A partir daí, **toda** alteração em férias entra em `module_audit_logs` automaticamente, igual aos demais módulos. Sem código manual, sem chance de esquecer log.
 
-#### 2. Cascata ao apagar escala de folgas (`FeriasFolgas.tsx`)
+#### 2. Atualizar `AuditLogsPanel` para reconhecer férias
 
-- Antes de "Apagar Escala", buscar créditos cujo `tipo='folga'` e `origem_data` está dentro do mês selecionado.
-- Se existirem, expandir o `AlertDialog` atual para:
-  - Mostrar quantos créditos serão afetados e de quais colaboradores.
-  - **Solicitar justificativa obrigatória** (Textarea) — agora exigida sempre que houver créditos a apagar (no caso sem créditos, o diálogo continua simples).
-- Mutation `deleteAllFolgasMutation`:
-  1. Registrar log em `ferias_audit_logs` para cada crédito afetado (action `delete_credito_cascata`, com a justificativa).
-  2. Deletar os créditos do mês.
-  3. Deletar `ferias_folgas_escala` e `ferias_folgas` do mês (como hoje).
-- Invalidar `["ferias-creditos"]` adicionalmente.
+- Adicionar `ferias: "Férias e Folgas"` em `moduleLabels`.
+- Adicionar rótulos amigáveis em `tableLabels` para as principais tabelas (`ferias_colaboradores: "Colaboradores"`, `ferias_ferias: "Períodos de Férias"`, `ferias_folgas: "Folgas de Sábado"`, `ferias_folgas_creditos: "Créditos"`, `ferias_folgas_perdas: "Perdas de Folga"`, etc.).
+- Incluir `"ferias"` no filtro de módulos (já é aceito no tipo `defaultModule`, só precisa aparecer no select).
 
-#### 3. Correção do filtro "Em Gozo" (`FeriasFerias.tsx`)
+#### 3. Cascata confiável + justificativa visível mesmo sem créditos
 
-- Trocar a comparação direta `f.status === statusFilter` por uma lógica que, quando `statusFilter === "em_gozo"`, casa qualquer status em `FERIAS_EM_GOZO_STATUSES` (`em_gozo_q1`, `em_gozo_q2`, `em_gozo`).
-- Alternativa equivalente: adicionar um item agregado "Em Gozo (qualquer)" mantendo os granulares também. Vou usar a primeira opção por simplicidade.
+Em `FeriasFolgas.tsx`:
+- Adicionar `refetchOnMount: "always"` + `staleTime: 0` na query `ferias-creditos-mes` para garantir dados frescos.
+- Antes de abrir o `AlertDialog` "Apagar Escala", chamar `queryClient.refetchQueries(["ferias-creditos-mes", year, month])` e aguardar — só então abrir o diálogo (botão `onClick` async).
+- Tornar a busca mais ampla: além de `origem_data` no mês, também buscar créditos cujo `utilizado_referencia` aponte para o mês (defesa em profundidade contra origem_data divergente).
+- Manter o pedido de justificativa quando há créditos a cascatear (já implementado).
+- A mutation continuará deletando créditos, escala e folgas; com o trigger do passo 1, cada DELETE individual em `ferias_folgas_creditos` / `ferias_folgas` / `ferias_folgas_escala` registra automaticamente em `module_audit_logs`. O insert manual em `ferias_audit_logs` pode ser removido (passa a ser redundante) ou mantido como nota explicativa de cascata — vou **remover** para evitar duplicidade e ruído.
 
-#### 4. Botão "Reduzir dias" — disponibilidade e cálculo
+#### 4. Limpeza dos logs manuais redundantes
 
-**Quando aparece:**
+Após o trigger entrar em vigor, os `INSERT INTO ferias_audit_logs` espalhados pelo código (em `FeriasCreditos.delete` e `FeriasFolgas.deleteAllFolgasMutation`) ficam redundantes — o trigger já registra cada DELETE/UPDATE automaticamente em `module_audit_logs`. Vou **remover** esses inserts manuais para o sistema convergir num único ponto de verdade.
 
-- Mostrar para qualquer status que **não** seja `concluida` nem `cancelada`. Ou seja: `pendente`, `aprovada`, `em_gozo_q1`, `q1_concluida`, `em_gozo_q2`, `em_gozo` (legado).
-
-**Cálculo de dias disponíveis (`ReducaoFeriasDialog.tsx`):**
-
-Receber `ferias` completo e calcular:
-
-```
-totalDias = (q1Fim - q1Inicio + 1) + (q2Fim - q2Inicio + 1)   // do bloco apropriado
-diasJaGozados = soma dos períodos cujo data_fim < hoje
-diasDisponiveis = totalDias - diasJaGozados
-```
-
-Usando o **bloco correto** conforme o tipo:
-- **Padrão** (`is_excecao = false` e `gozo_diferente = false`): usa `quinzena1_*` e `quinzena2_*`.
-- **Exceção / gozo diferente**: usa `gozo_quinzena1_*` e `gozo_quinzena2_*` (quando preenchidos), caindo de volta nos campos oficiais quando vazios.
-- Considerar `dias_vendidos`: já está embutido nos campos, mas reforçar `max = diasDisponiveis` (que naturalmente será menor).
-
-**Ajustes na UI:**
-- Substituir `max={15}` por `max={diasDisponiveis}`.
-- Mostrar texto auxiliar: "Disponível para reduzir: X dia(s) (Y vendidos, Z já gozados)".
-- Se `diasDisponiveis === 0`: bloquear botão e mostrar alert "Não há dias restantes para reduzir".
-- A redução continua subtraindo do **fim do último período não totalmente gozado** (lógica atual já faz isso pelo `endDateField`, mas precisa escolher entre `gozo_*` e oficiais corretamente).
+A justificativa do usuário (motivo da exclusão) continua importante: vou armazená-la em `module_audit_logs.new_data` como `{ justificativa: "..." }` num INSERT manual complementar **uma única vez** na ação de cascata, ou alternativamente passá-la via uma coluna `details` no log automático (não existe hoje em `module_audit_logs`, então vou usar a primeira opção: depois do delete, inserir manualmente um log de "justificativa de cascata" no `module_audit_logs` com `action='DELETE_CASCADE_NOTE'`, `table_name='ferias_folgas_escala'`, `new_data={ justificativa, ano, mes, creditos_apagados: [...] }`).
 
 ### Arquivos modificados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/ferias/FeriasCreditos.tsx` | Botão "Excluir" + AlertDialog com justificativa + log de auditoria |
-| `src/pages/ferias/FeriasFolgas.tsx` | Query de créditos do mês; AlertDialog "Apagar Escala" expandido com justificativa quando há créditos; mutation faz cascata + log |
-| `src/pages/ferias/FeriasFerias.tsx` | Filtro `statusFilter` agregando estados `em_gozo_*`; condição do botão "Reduzir dias" aceita `q1_concluida` (todos exceto `concluida`/`cancelada`) |
-| `src/components/ferias/ferias/ReducaoFeriasDialog.tsx` | Calcular `diasDisponiveis` por tipo (padrão x exceção), considerar dias já gozados e vendidos; ajustar `max`, mensagem e bloqueio quando 0 |
+| **Nova migração SQL** | Estender `audit_module_changes` para mapear tabelas `ferias_*`; criar triggers `AFTER INSERT OR UPDATE OR DELETE` em todas as tabelas de férias |
+| `src/components/AuditLogsPanel.tsx` | `moduleLabels` + `tableLabels` recebem entradas de férias; opção "Férias" no filtro de módulos |
+| `src/pages/ferias/FeriasFolgas.tsx` | Query `ferias-creditos-mes` com `staleTime: 0` + `refetchOnMount: "always"`; botão "Apagar Escala" faz `await queryClient.refetchQueries(...)` antes de abrir o diálogo; busca também por `utilizado_referencia`; remover insert manual em `ferias_audit_logs` (substituído pelo trigger + log de justificativa em `module_audit_logs`) |
+| `src/pages/ferias/FeriasCreditos.tsx` | Remover insert manual em `ferias_audit_logs` (trigger cobre); manter o pedido de justificativa via `module_audit_logs` complementar com `action='DELETE_NOTE'` carregando o motivo |
 
-### Detalhes técnicos
-
-- Auditoria: usar `ferias_audit_logs` (já existe) com `user_id`/`user_email` do `supabase.auth.getUser()`. Para cascata múltipla, um único log com `entity_type="ferias_folgas_escala_mes"`, `details=justificativa`, `new_data={ creditos_apagados: [...ids], ano, mes }` (mais leve que N logs).
-- Filtro de status: `matchesStatus = statusFilter === "all" || f.status === statusFilter || (statusFilter === "em_gozo" && FERIAS_EM_GOZO_STATUSES.includes(f.status))`.
-- Reduzir dias: novo helper local `calcDiasRestantes(ferias)` retornando `{ total, gozados, vendidos, disponiveis, endField }`; `endField` indica qual campo de data atualizar (`gozo_quinzena2_fim` ou `quinzena2_fim`, com fallback para q1 se q2 não existir).
+### Observação ao usuário
+O crédito da Taysa que ficou órfão precisa ser **excluído manualmente** depois desta correção — o sistema só passará a fazer cascata e auditar a partir das próximas operações. Posso deixar isso para você fazer pela tela de Créditos (botão Excluir) com a justificativa apropriada.
 
