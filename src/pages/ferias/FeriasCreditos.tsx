@@ -114,17 +114,19 @@ const FeriasCreditos = () => {
       if (!justificativa.trim()) throw new Error("Justificativa é obrigatória");
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Audit log first
+      // Nota de justificativa em module_audit_logs (o DELETE em si será registrado
+      // automaticamente pelo trigger do banco em module_audit_logs)
       const { error: logError } = await supabase
-        .from("ferias_audit_logs")
+        .from("module_audit_logs")
         .insert({
-          action: "delete_credito",
-          entity_type: "ferias_folgas_creditos",
-          entity_id: credito.id,
+          module_name: "ferias",
+          table_name: "ferias_folgas_creditos",
+          record_id: credito.id,
+          action: "DELETE_NOTE",
           old_data: credito,
-          details: justificativa.trim(),
-          user_id: user?.id || null,
-          user_email: user?.email || null,
+          new_data: { justificativa: justificativa.trim() },
+          changed_by: user?.id || null,
+          changed_by_email: user?.email || "sistema@interno",
         });
       if (logError) throw logError;
 
