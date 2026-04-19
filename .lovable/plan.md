@@ -1,25 +1,29 @@
 
 
-## Plano: corrigir RLS de `ferias_afastamentos` e tratar warnings
+O erro indica que a policy `"Ferias users can view afastamentos"` já existe na tabela. Isso significa que parte do SQL já foi executada anteriormente — provavelmente a versão antiga do arquivo `.lovable/ferias_afastamentos_rls_fix.sql` rodou em algum momento, criando as novas policies, mas as antigas (permissivas) podem ter ficado também.
 
-### Findings analisados
+## Diagnóstico
 
-**1. ERROR — `ferias_afastamentos` com policies permissivas (`USING true`)**
-- **Real.** A correção foi escrita em `.lovable/ferias_afastamentos_rls_fix.sql` mas nunca foi aplicada como migration — ficou só como SQL de referência. Por isso o scanner ainda vê as policies antigas no banco.
-- **Ação:** criar migration aplicando exatamente o conteúdo do arquivo: drop das 4 policies permissivas e criar 4 novas usando `can_view_system` / `can_edit_system` para `'ferias'`, no padrão dos demais módulos.
+O `DROP POLICY IF EXISTS` cobre apenas os nomes antigos listados. Como as novas policies (`"Ferias users can view afastamentos"`, etc.) já existem, o `CREATE POLICY` falha no primeiro conflito.
 
-**2. WARN — `module_audit_logs` INSERT permite qualquer authenticated**
-- **Falso positivo intencional.** A policy existe para que os triggers `audit_module_changes` (que rodam no contexto da transação do usuário) possam gravar logs em INSERT/UPDATE/DELETE de qualquer tabela auditada. Restringir quebraria toda a auditoria de Escalas, Vendas, Estoque e Férias.
-- O próprio scanner Supabase oficial classificou como "intentional". O risco residual (usuário injetar log falso via SQL direto) é baixo: precisaria de acesso ao SQL bruto, e o `changed_by_email` é resolvido pelo trigger via `auth.uid()` quando vem do trigger normal.
-- **Ação:** marcar como ignorado no scanner com justificativa.
+## Correção
 
-**3. WARN — `SUPA_rls_policy_always_true`**
-- Mesmo finding do #1 + #2 agrupado pelo linter Supabase. Será resolvido automaticamente quando o #1 for aplicado e o #2 for ignorado.
+Adicionar `DROP POLICY IF EXISTS` também para os **novos** nomes de policy antes do `CREATE POLICY`. Assim o script vira idempotente e pode ser rodado múltiplas vezes sem erro.
 
-### Mudanças
+### Mudança no arquivo `.lovable/ferias_afastamentos_rls_fix.sql`
+
+Incluir 4 linhas adicionais de drop antes dos creates:
+
+```sql
+DROP POLICY IF EXISTS "Ferias users can view afastamentos" ON public.ferias_afastamentos;
+DROP POLICY IF EXISTS "Ferias editors can insert afastamentos" ON public.ferias_afastamentos;
+DROP POLICY IF EXISTS "Ferias editors can update afastamentos" ON public.ferias_afastamentos;
+DROP POLICY IF EXISTS "Ferias editors can delete afastamentos" ON public.ferias_afastamentos;
+```
+
+Depois execute o arquivo novamente no SQL Editor. Vai derrubar tudo (antigas + novas) e recriar limpo.
 
 | Arquivo | Alteração |
 |---------|-----------|
-| **Nova migration SQL** | Drop das 4 policies permissivas em `ferias_afastamentos`; criar 4 novas com `can_view_system`/`can_edit_system` para `'ferias'` |
-| Scanner — finding `module_audit_logs_unrestricted_insert` | Marcar como ignorado: necessário para triggers de auditoria automática funcionarem em todos os módulos |
+| `.lovable/ferias_afastamentos_rls_fix.sql` | Adicionar `DROP POLICY IF EXISTS` para os 4 novos nomes antes dos `CREATE POLICY`, tornando o script idempotente |
 
