@@ -15,6 +15,12 @@ DROP POLICY IF EXISTS "Enable insert for authenticated users" ON public.ferias_a
 DROP POLICY IF EXISTS "Enable update for authenticated users" ON public.ferias_afastamentos;
 DROP POLICY IF EXISTS "Enable delete for authenticated users" ON public.ferias_afastamentos;
 
+-- Drop também os nomes novos para tornar o script idempotente
+DROP POLICY IF EXISTS "Ferias users can view afastamentos" ON public.ferias_afastamentos;
+DROP POLICY IF EXISTS "Ferias editors can insert afastamentos" ON public.ferias_afastamentos;
+DROP POLICY IF EXISTS "Ferias editors can update afastamentos" ON public.ferias_afastamentos;
+DROP POLICY IF EXISTS "Ferias editors can delete afastamentos" ON public.ferias_afastamentos;
+
 -- Garantir RLS ativo
 ALTER TABLE public.ferias_afastamentos ENABLE ROW LEVEL SECURITY;
 
