@@ -1,45 +1,64 @@
 
 
-## Plano: evitar folga no mesmo sábado para mesmo setor + setores substitutos
+## Plano: corrigir conflito falso no diálogo de férias (Lidiane × Camily)
 
 ### Causa raiz
 
-No `GeradorFolgasDialog.tsx`:
+Em `src/components/ferias/ferias/FeriasDialog.tsx` (`checkConflicts`, linhas 569–678), a verificação usa `allSectorIds = [setor_titular do selecionado, ...setores onde o selecionado é substituto]` e busca colegas cujo **setor titular** esteja nesse conjunto. Isso considera apenas um lado da relação de substituição.
 
-1. **Setores substitutos são carregados mas nunca usados.** A query `setoresSubstitutos` (linhas 254–264) traz `ferias_colaborador_setores_substitutos`, mas o array nunca aparece no algoritmo. Resultado: se Jesus é titular do Setor A e Gabriella é substituta do Setor A (titular em outro setor), o algoritmo não os enxerga como "mesmo setor" e pode colocá-los no mesmo sábado.
-2. **Setores grandes (units > nº de sábados) não evitam empilhar pessoas do mesmo setor no mesmo sábado quando há alternativa melhor.** A ordenação dos sábados candidatos só usa `globalPersonCount`; não considera quantas pessoas daquele setor já estão alocadas naquele sábado.
-3. **Rebalanceamento (linha 714–718) só protege `setoresRestritos`.** Para setores grandes ele aceita mover criando concentração no mesmo setor.
+Resultado: se em algum momento existiu um vínculo (mesmo já removido) ou se há sujeira em `ferias_colaborador_setores_substitutos`, o filtro pode trazer colegas sem nenhuma relação atual de cobertura. Pior: a regra ideal — "conflito existe quando, se ambos saírem, o setor de algum dos dois fica descoberto" — não está implementada de forma simétrica nem rigorosa.
+
+A regra correta acordada com o usuário:
+
+> Conflito existe se **(a)** ambos têm o mesmo setor titular, **OU (b)** o selecionado é substituto do setor titular do colega, **OU (c)** o colega é substituto do setor titular do selecionado.
 
 ### Mudanças
 
-**Arquivo único**: `src/components/ferias/folgas/GeradorFolgasDialog.tsx`
+**Arquivo principal**: `src/components/ferias/ferias/FeriasDialog.tsx`
 
-#### 1. Incluir setores substitutos no `allSetorIds` de cada `AllocationUnit`
-Construir um mapa `colabId -> Set<setorId>` que une `setor_titular_id` + todos os `setor_id` de `ferias_colaborador_setores_substitutos`. Ao criar units (linhas 480–510), preencher `allSetorIds` com a união de **todos os setores (titular + substitutos)** de **todos os membros**. Isso faz o `sectorSaturdayCount` rastrear cada colaborador em todos os setores onde ele atua, então o filtro `satsSemSetor` passa a evitar conflitos com colegas substitutos.
+#### 1. Recarregar substitutos dos dois lados antes do filtro
 
-#### 2. Adicionar tiebreaker de sector-density em todos os ordenamentos de candidatos
-Onde hoje há `.sort((a, b) => globalPersonCount[a] - globalPersonCount[b])` (passos 6A, 6B, 7 e 8), passar a usar critério composto:
-- 1º: somatório de `sectorSaturdayCount[sid][sat]` para todos os `sid` em `unit.allSetorIds` (menor primeiro — evita empilhar mesmo setor)
-- 2º: `globalPersonCount[sat]` (menor primeiro)
-- 3º: data (estabilidade)
+Em `checkConflicts`, substituir o bloco atual (linhas 569–584) por:
 
-Assim, mesmo em setores grandes, o algoritmo prefere um sábado sem ninguém do mesmo setor quando existe um.
+- Buscar `mySubstituteSectors = setor_id[]` onde `colaborador_id = selecionado` (já existe).
+- Buscar `colabsThatCoverMySector = colaborador_id[]` onde `setor_id = selectedColab.setor_titular_id` em `ferias_colaborador_setores_substitutos` (novo — descobre quem é substituto do setor do selecionado).
+- Construir `relevantColabIds` por união:
+  - colegas com `setor_titular_id = selectedColab.setor_titular_id` (mesmo setor) — caso (a)
+  - colegas com `setor_titular_id IN mySubstituteSectors` (eu cubro o setor titular deles) — caso (b)
+  - colegas em `colabsThatCoverMySector` (eles cobrem meu setor titular) — caso (c)
+- Substituir a query `sameSetorColabs` por uma query que filtra por `id IN relevantColabIds` e `status = 'ativo'`, excluindo o próprio.
 
-#### 3. Estender a proteção do rebalanceamento (linhas 714–718) a TODOS os setores
-Trocar `if (setoresRestritos.includes(sid))` por uma checagem que também bloqueia mover para um sábado quando isso aumentaria a densidade do setor além do mínimo necessário — exceto quando a origem do movimento já tinha o mesmo setor duplicado (mover para corrigir desbalanço continua permitido).
+Isso garante que apenas colegas com relação real de cobertura sejam avaliados.
 
-#### 4. Diagnóstico
-Adicionar à `diagnostics` um aviso quando uma alocação teve que ser feita em sábado que já tinha alguém do mesmo setor (porque não havia alternativa). Isso aparece em `diagnosticMessage` no preview, sinalizando ao usuário onde o algoritmo foi forçado a aceitar empilhamento.
+#### 2. Rotular o tipo de conflito corretamente
+
+No bloco que monta `foundConflicts` (linhas 665–675), substituir o `isSubstitute` simples por classificação explícita usando os três sets (`mesmoSetor`, `euCubro`, `eleCobre`):
+- `tipo: "Mesmo setor"` se `colega.setor_titular_id === selectedColab.setor_titular_id`
+- `tipo: "Setor substituto (você cobre)"` se o colega é titular num setor onde eu sou substituto
+- `tipo: "Setor substituto (ele cobre)"` se o colega é substituto do meu setor titular
+- (se cair em mais de um, prioriza "Mesmo setor")
+
+Isso ajuda o usuário a entender de onde vem o conflito e descobrir vínculos errados no cadastro.
+
+#### 3. Aplicar a mesma correção no gerador automático
+
+`src/lib/vacationGenerator.ts` (`checkWindowConflicts`, linhas 167–227 e função `fetchSubstituteSectors` linhas 128–141): hoje carrega só substitutos do colaborador iterado e filtra `allocSetorId IN allSectorIds` (mesmo padrão unidirecional). Mudanças:
+
+- Em `fetchSubstituteSectors`, retornar dois mapas: `colabToSectors` (já existe) e o **inverso** `sectorToColabs` (`Record<setor_id, colaborador_id[]>`).
+- Em `checkWindowConflicts`, receber também `sectorToCovers` e o `setorTitularDeCadaColab` (já calculável via `forms`/`existingVacations`); a regra de conflito passa a ser a tripla (a)/(b)/(c) acima, simétrica.
 
 ### Notas técnicas
-- A tabela `ferias_colaborador_setores_substitutos` tem `colaborador_id` e `setor_id` (já visto na useful-context). Construo `Map<string, Set<string>>` colabId → setIds substitutos uma vez no início de `handleGeneratePreview`.
-- `unitsBySetorId` (linha 514) já itera `unit.allSetorIds`, então automaticamente passa a indexar a unit em todos os setores substitutos sem outras mudanças.
-- A classificação `setoresRestritos` vs `setoresGrandes` continua válida: passa a contar a unit também nos setores onde ela é apenas substituta (mais conservador, é o comportamento esperado).
-- Não há mudanças de schema, RLS ou query — apenas lógica do gerador.
+
+- Não há mudança de schema nem de RLS.
+- `ferias_conflitos` (conflitos familiares manuais) continua intacta.
+- A correção não toca em `afastamentos` nem na regra "familiar deve coincidir".
+- Edge case: se `mySubstituteSectors` estiver vazio E `colabsThatCoverMySector` estiver vazio, `relevantColabIds` colapsa para "mesmo setor titular apenas" — comportamento correto e mínimo.
+- Após o deploy, o caso Lidiane × Camily deixa de aparecer (assumindo que de fato nenhuma é substituta da outra). Se ainda aparecer, o usuário verá a label "Mesmo setor" e poderá investigar o cadastro de setor titular.
 
 ### Arquivos alterados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/ferias/folgas/GeradorFolgasDialog.tsx` | Incluir substitutos em `allSetorIds`; reordenar candidatos por densidade-de-setor + global; estender proteção do rebalanceamento; diagnóstico de empilhamento |
+| `src/components/ferias/ferias/FeriasDialog.tsx` | Reescrever `checkConflicts` para considerar relação simétrica (3 casos) e rotular o tipo corretamente |
+| `src/lib/vacationGenerator.ts` | Tornar `checkWindowConflicts` simétrico (mesmo critério) e expor mapa inverso de substitutos |
 
