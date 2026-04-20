@@ -124,20 +124,26 @@ export async function fetchRules(): Promise<Record<string, string>> {
   return rules;
 }
 
-// Fetch substitute sectors for collaborators
-async function fetchSubstituteSectors(): Promise<Record<string, string[]>> {
+// Fetch substitute sectors for collaborators (returns both directions)
+async function fetchSubstituteSectors(): Promise<{
+  colabToSectors: Record<string, string[]>;
+  sectorToColabs: Record<string, string[]>;
+}> {
   const { data, error } = await supabase
     .from("ferias_colaborador_setores_substitutos")
     .select("colaborador_id, setor_id");
   if (error) throw error;
-  const map: Record<string, string[]> = {};
+  const colabToSectors: Record<string, string[]> = {};
+  const sectorToColabs: Record<string, string[]> = {};
   (data || []).forEach(item => {
     if (item.colaborador_id && item.setor_id) {
-      if (!map[item.colaborador_id]) map[item.colaborador_id] = [];
-      map[item.colaborador_id].push(item.setor_id);
+      if (!colabToSectors[item.colaborador_id]) colabToSectors[item.colaborador_id] = [];
+      colabToSectors[item.colaborador_id].push(item.setor_id);
+      if (!sectorToColabs[item.setor_id]) sectorToColabs[item.setor_id] = [];
+      sectorToColabs[item.setor_id].push(item.colaborador_id);
     }
   });
-  return map;
+  return { colabToSectors, sectorToColabs };
 }
 
 // Check if two date ranges overlap
@@ -172,16 +178,23 @@ function checkWindowConflicts(
   allocatedVacations: GeneratedVacation[],
   existingVacations: any[],
   forms: FormularioAnual[],
+  sectorToColabs: Record<string, string[]>,
 ): ConflictInfo[] {
   const conflicts: ConflictInfo[] = [];
   const wStart = parseISO(window.start);
   const wEnd = parseISO(window.end);
-  const allSectorIds = [setorId, ...substituteSectorIds];
+  // Symmetric rule:
+  // (a) same titular sector, (b) I cover their titular sector, (c) they cover my titular sector
+  const titularSectorsToMatch = new Set<string>([setorId, ...substituteSectorIds]);
+  const colabsThatCoverMe = new Set<string>(sectorToColabs[setorId] || []);
 
   // Check allocated vacations
   for (const alloc of allocatedVacations) {
     const allocSetorId = forms.find(f => f.colaborador_id === alloc.colaborador_id)?.colaborador?.setor_titular_id;
-    if (!allocSetorId || !allSectorIds.includes(allocSetorId)) continue;
+    const matches =
+      (allocSetorId && titularSectorsToMatch.has(allocSetorId)) ||
+      colabsThatCoverMe.has(alloc.colaborador_id);
+    if (!matches) continue;
 
     const aQ1S = parseISO(alloc.quinzena1_inicio), aQ1E = parseISO(alloc.quinzena1_fim);
     const aQ2S = alloc.quinzena2_inicio ? parseISO(alloc.quinzena2_inicio) : null;
@@ -204,7 +217,10 @@ function checkWindowConflicts(
   for (const existing of existingVacations) {
     if (existing.colaborador_id === colaboradorId) continue;
     const existSetorId = existing.colaborador?.setor_titular_id;
-    if (!existSetorId || !allSectorIds.includes(existSetorId)) continue;
+    const matches =
+      (existSetorId && titularSectorsToMatch.has(existSetorId)) ||
+      colabsThatCoverMe.has(existing.colaborador_id);
+    if (!matches) continue;
 
     const eQ1S = parseISO(existing.quinzena1_inicio), eQ1E = parseISO(existing.quinzena1_fim);
     const eQ2S = existing.quinzena2_inicio ? parseISO(existing.quinzena2_inicio) : null;
@@ -234,12 +250,14 @@ export async function generateVacations(
 ): Promise<GenerationResult> {
   const result: GenerationResult = { success: [], conflicts: [], unprocessed: [] };
 
-  const [forms, existingVacations, rules, substituteSectors] = await Promise.all([
+  const [forms, existingVacations, rules, substituteData] = await Promise.all([
     fetchForms(ano),
     fetchExistingVacations(ano),
     fetchRules(),
     fetchSubstituteSectors(),
   ]);
+  const substituteSectors = substituteData.colabToSectors;
+  const sectorToColabs = substituteData.sectorToColabs;
 
   // Filter by setor if provided
   const filteredForms = setorFilter && setorFilter !== "all"
@@ -307,7 +325,7 @@ export async function generateVacations(
       let bestQ1Conflicts: ConflictInfo[] = [];
 
       for (const window of candidateWindows) {
-        const windowConflicts = checkWindowConflicts(window, setorId, subSectors, form.colaborador_id, allocatedVacations, existingVacations, forms);
+        const windowConflicts = checkWindowConflicts(window, setorId, subSectors, form.colaborador_id, allocatedVacations, existingVacations, forms, sectorToColabs);
         if (windowConflicts.length === 0) {
           bestQ1 = window;
           bestQ1Conflicts = [];
@@ -332,7 +350,7 @@ export async function generateVacations(
         q2Conflicts = [];
 
         for (const window of q2Windows) {
-          const windowConflicts = checkWindowConflicts(window, setorId, subSectors, form.colaborador_id, allocatedVacations, existingVacations, forms);
+          const windowConflicts = checkWindowConflicts(window, setorId, subSectors, form.colaborador_id, allocatedVacations, existingVacations, forms, sectorToColabs);
           if (windowConflicts.length === 0) {
             bestQ2 = window;
             q2Conflicts = [];
@@ -352,7 +370,7 @@ export async function generateVacations(
           const wStart = parseISO(window.start), wEnd = parseISO(window.end);
           const q1Start = parseISO(bestQ1.start), q1End = parseISO(bestQ1.end);
           if (!datesOverlap(wStart, wEnd, q1Start, q1End)) {
-            const windowConflicts = checkWindowConflicts(window, setorId, subSectors, form.colaborador_id, allocatedVacations, existingVacations, forms);
+            const windowConflicts = checkWindowConflicts(window, setorId, subSectors, form.colaborador_id, allocatedVacations, existingVacations, forms, sectorToColabs);
             if (windowConflicts.length === 0) {
               bestQ2 = window;
               q2Conflicts = [];
