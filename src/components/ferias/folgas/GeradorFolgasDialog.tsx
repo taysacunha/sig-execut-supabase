@@ -776,11 +776,12 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
               if (unitAssignments.get(u.id) !== overSat) return false;
               if (!u.availableSaturdays.includes(underSat)) return false;
               if (hasChefeConflict(u, underSat)) return false;
-              // Don't move units from restricted sectors if destination already has someone from that sector
+              // Don't move if destination already has someone from any of the unit's sectors,
+              // UNLESS the source already has duplicate of the same sector (move would reduce stacking)
               for (const sid of u.allSetorIds) {
-                if (setoresRestritos.includes(sid)) {
-                  if ((sectorSaturdayCount[sid]?.[underSat] || 0) > 0) return false;
-                }
+                const destCount = sectorSaturdayCount[sid]?.[underSat] || 0;
+                const srcCount = sectorSaturdayCount[sid]?.[overSat] || 0;
+                if (destCount > 0 && srcCount <= 1) return false;
               }
               return true;
             })
