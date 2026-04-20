@@ -250,12 +250,14 @@ export async function generateVacations(
 ): Promise<GenerationResult> {
   const result: GenerationResult = { success: [], conflicts: [], unprocessed: [] };
 
-  const [forms, existingVacations, rules, substituteSectors] = await Promise.all([
+  const [forms, existingVacations, rules, substituteData] = await Promise.all([
     fetchForms(ano),
     fetchExistingVacations(ano),
     fetchRules(),
     fetchSubstituteSectors(),
   ]);
+  const substituteSectors = substituteData.colabToSectors;
+  const sectorToColabs = substituteData.sectorToColabs;
 
   // Filter by setor if provided
   const filteredForms = setorFilter && setorFilter !== "all"
@@ -323,7 +325,7 @@ export async function generateVacations(
       let bestQ1Conflicts: ConflictInfo[] = [];
 
       for (const window of candidateWindows) {
-        const windowConflicts = checkWindowConflicts(window, setorId, subSectors, form.colaborador_id, allocatedVacations, existingVacations, forms);
+        const windowConflicts = checkWindowConflicts(window, setorId, subSectors, form.colaborador_id, allocatedVacations, existingVacations, forms, sectorToColabs);
         if (windowConflicts.length === 0) {
           bestQ1 = window;
           bestQ1Conflicts = [];
@@ -348,7 +350,7 @@ export async function generateVacations(
         q2Conflicts = [];
 
         for (const window of q2Windows) {
-          const windowConflicts = checkWindowConflicts(window, setorId, subSectors, form.colaborador_id, allocatedVacations, existingVacations, forms);
+          const windowConflicts = checkWindowConflicts(window, setorId, subSectors, form.colaborador_id, allocatedVacations, existingVacations, forms, sectorToColabs);
           if (windowConflicts.length === 0) {
             bestQ2 = window;
             q2Conflicts = [];
@@ -368,7 +370,7 @@ export async function generateVacations(
           const wStart = parseISO(window.start), wEnd = parseISO(window.end);
           const q1Start = parseISO(bestQ1.start), q1End = parseISO(bestQ1.end);
           if (!datesOverlap(wStart, wEnd, q1Start, q1End)) {
-            const windowConflicts = checkWindowConflicts(window, setorId, subSectors, form.colaborador_id, allocatedVacations, existingVacations, forms);
+            const windowConflicts = checkWindowConflicts(window, setorId, subSectors, form.colaborador_id, allocatedVacations, existingVacations, forms, sectorToColabs);
             if (windowConflicts.length === 0) {
               bestQ2 = window;
               q2Conflicts = [];
