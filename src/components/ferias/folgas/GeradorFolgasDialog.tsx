@@ -461,6 +461,25 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       return sectors;
     };
 
+    // Build map of substitute sectors per collaborator (colabId -> Set<setorId>)
+    const substituteSectorsByColab = new Map<string, Set<string>>();
+    setoresSubstitutos.forEach(ss => {
+      if (!ss.colaborador_id || !ss.setor_id) return;
+      if (!substituteSectorsByColab.has(ss.colaborador_id)) {
+        substituteSectorsByColab.set(ss.colaborador_id, new Set());
+      }
+      substituteSectorsByColab.get(ss.colaborador_id)!.add(ss.setor_id);
+    });
+
+    // Helper: get all sectors (titular + substitutes) for a collaborator
+    const getAllSectorsForColab = (colabId: string, titularSetorId: string): string[] => {
+      const set = new Set<string>();
+      set.add(titularSetorId);
+      const subs = substituteSectorsByColab.get(colabId);
+      if (subs) subs.forEach(s => set.add(s));
+      return [...set];
+    };
+
     // Step 4: Build GLOBAL units (family pairs + singles)
     const processedIds = new Set<string>();
     const units: AllocationUnit[] = [];
@@ -489,7 +508,10 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
           type: "family",
           availableSaturdays: availableSats,
           primarySetorId: colab.setor_titular_id,
-          allSetorIds: [...new Set([colab.setor_titular_id, partner.setor_titular_id])],
+          allSetorIds: [...new Set([
+            ...getAllSectorsForColab(colab.id, colab.setor_titular_id),
+            ...getAllSectorsForColab(partner.id, partner.setor_titular_id),
+          ])],
         });
         
         processedIds.add(colab.id);
@@ -503,7 +525,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
           type: "single",
           availableSaturdays: availableSats,
           primarySetorId: colab.setor_titular_id,
-          allSetorIds: [colab.setor_titular_id],
+          allSetorIds: getAllSectorsForColab(colab.id, colab.setor_titular_id),
         });
         
         processedIds.add(colab.id);
@@ -606,6 +628,44 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       return false;
     };
 
+    // Helper: how many people from any of this unit's sectors are already on `sat`
+    const getUnitSectorDensity = (unit: AllocationUnit, sat: string): number => {
+      let total = 0;
+      for (const sid of unit.allSetorIds) {
+        total += sectorSaturdayCount[sid]?.[sat] || 0;
+      }
+      return total;
+    };
+
+    // Comparator: sector-density first, then global count, then date (stable)
+    const compareCandidates = (unit: AllocationUnit) => (a: string, b: string) => {
+      const da = getUnitSectorDensity(unit, a);
+      const db = getUnitSectorDensity(unit, b);
+      if (da !== db) return da - db;
+      const ga = globalPersonCount[a];
+      const gb = globalPersonCount[b];
+      if (ga !== gb) return ga - gb;
+      return a.localeCompare(b);
+    };
+
+    // Helper: log when a unit had to overlap with same-sector colleague
+    const logStackingIfAny = (unit: AllocationUnit, sat: string) => {
+      const overlapSectors: string[] = [];
+      for (const sid of unit.allSetorIds) {
+        // count BEFORE this unit was added (assignUnit already ran, so subtract 1)
+        const cnt = (sectorSaturdayCount[sid]?.[sat] || 0) - 1;
+        if (cnt > 0) {
+          const setorNome = setorById.get(sid)?.nome || sid;
+          overlapSectors.push(setorNome);
+        }
+      }
+      if (overlapSectors.length > 0) {
+        const nomes = unit.memberIds.map(id => colabById.get(id)?.nome).join(", ");
+        const dataFmt = format(new Date(sat + "T12:00:00"), "dd/MM");
+        diagnostics.push(`Empilhamento de setor (${overlapSectors.join(", ")}) em ${dataFmt} para ${nomes} — sem alternativa`);
+      }
+    };
+
     // Step 6A: Allocate restricted sectors (units <= saturdays) — 1 per saturday, spread out
     for (const setorId of setoresRestritos) {
       const sectorUnits = [...(unitsBySetorId.get(setorId) || [])];
@@ -620,15 +680,17 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
         const satsSemSetor = unit.availableSaturdays
           .filter(sat => (sectorSaturdayCount[setorId]?.[sat] || 0) === 0);
 
-        // Sort candidates: prefer saturdays without this sector, then by global count
+        // Sort candidates: prefer saturdays without this sector, then by sector-density + global count
+        const cmp = compareCandidates(unit);
         const candidates = satsSemSetor.length > 0
-          ? satsSemSetor.sort((a, b) => globalPersonCount[a] - globalPersonCount[b])
-          : [...unit.availableSaturdays].sort((a, b) => globalPersonCount[a] - globalPersonCount[b]);
+          ? satsSemSetor.sort(cmp)
+          : [...unit.availableSaturdays].sort(cmp);
 
         let assigned = false;
         for (const candidateSat of candidates) {
           if (!hasChefeConflict(unit, candidateSat)) {
             assignUnit(unit, candidateSat);
+            logStackingIfAny(unit, candidateSat);
             assigned = true;
             break;
           }
@@ -639,6 +701,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
           const bestSat = candidates[0];
           if (bestSat) {
             assignUnit(unit, bestSat);
+            logStackingIfAny(unit, bestSat);
             diagnostics.push(`Conflito de chefes ignorado para ${unit.memberIds.map(id => colabById.get(id)?.nome).join(", ")}`);
           }
         }
@@ -659,19 +722,21 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
         const satsSemSetor = unit.availableSaturdays
           .filter(sat => (sectorSaturdayCount[setorId]?.[sat] || 0) === 0);
 
+        const cmp = compareCandidates(unit);
         let candidates: string[];
         if (satsSemSetor.length > 0) {
-          // Prioritize uncovered saturdays, sorted by global count
-          candidates = satsSemSetor.sort((a, b) => globalPersonCount[a] - globalPersonCount[b]);
+          // Prioritize uncovered saturdays, sorted by sector-density + global count
+          candidates = satsSemSetor.sort(cmp);
         } else {
-          // All saturdays have coverage, just use global count
-          candidates = [...unit.availableSaturdays].sort((a, b) => globalPersonCount[a] - globalPersonCount[b]);
+          // All saturdays have coverage, sort by sector-density + global count
+          candidates = [...unit.availableSaturdays].sort(cmp);
         }
 
         let assigned = false;
         for (const candidateSat of candidates) {
           if (!hasChefeConflict(unit, candidateSat)) {
             assignUnit(unit, candidateSat);
+            logStackingIfAny(unit, candidateSat);
             assigned = true;
             break;
           }
@@ -682,6 +747,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
           const bestSat = candidates[0];
           if (bestSat) {
             assignUnit(unit, bestSat);
+            logStackingIfAny(unit, bestSat);
             diagnostics.push(`Conflito de chefes ignorado para ${unit.memberIds.map(id => colabById.get(id)?.nome).join(", ")}`);
           }
         }
@@ -710,11 +776,12 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
               if (unitAssignments.get(u.id) !== overSat) return false;
               if (!u.availableSaturdays.includes(underSat)) return false;
               if (hasChefeConflict(u, underSat)) return false;
-              // Don't move units from restricted sectors if destination already has someone from that sector
+              // Don't move if destination already has someone from any of the unit's sectors,
+              // UNLESS the source already has duplicate of the same sector (move would reduce stacking)
               for (const sid of u.allSetorIds) {
-                if (setoresRestritos.includes(sid)) {
-                  if ((sectorSaturdayCount[sid]?.[underSat] || 0) > 0) return false;
-                }
+                const destCount = sectorSaturdayCount[sid]?.[underSat] || 0;
+                const srcCount = sectorSaturdayCount[sid]?.[overSat] || 0;
+                if (destCount > 0 && srcCount <= 1) return false;
               }
               return true;
             })
@@ -766,7 +833,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       
       const availableForSecond = unit.availableSaturdays
         .filter(s => s !== firstSat)
-        .sort((a, b) => globalPersonCount[a] - globalPersonCount[b]);
+        .sort(compareCandidates(unit));
       
       if (availableForSecond.length > 0) {
         unitSecondAssignments.set(unit.id, availableForSecond[0]);
