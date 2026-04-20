@@ -124,20 +124,26 @@ export async function fetchRules(): Promise<Record<string, string>> {
   return rules;
 }
 
-// Fetch substitute sectors for collaborators
-async function fetchSubstituteSectors(): Promise<Record<string, string[]>> {
+// Fetch substitute sectors for collaborators (returns both directions)
+async function fetchSubstituteSectors(): Promise<{
+  colabToSectors: Record<string, string[]>;
+  sectorToColabs: Record<string, string[]>;
+}> {
   const { data, error } = await supabase
     .from("ferias_colaborador_setores_substitutos")
     .select("colaborador_id, setor_id");
   if (error) throw error;
-  const map: Record<string, string[]> = {};
+  const colabToSectors: Record<string, string[]> = {};
+  const sectorToColabs: Record<string, string[]> = {};
   (data || []).forEach(item => {
     if (item.colaborador_id && item.setor_id) {
-      if (!map[item.colaborador_id]) map[item.colaborador_id] = [];
-      map[item.colaborador_id].push(item.setor_id);
+      if (!colabToSectors[item.colaborador_id]) colabToSectors[item.colaborador_id] = [];
+      colabToSectors[item.colaborador_id].push(item.setor_id);
+      if (!sectorToColabs[item.setor_id]) sectorToColabs[item.setor_id] = [];
+      sectorToColabs[item.setor_id].push(item.colaborador_id);
     }
   });
-  return map;
+  return { colabToSectors, sectorToColabs };
 }
 
 // Check if two date ranges overlap
