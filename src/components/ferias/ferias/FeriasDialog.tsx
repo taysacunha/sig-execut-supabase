@@ -566,22 +566,60 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       const selectedColab = colaboradores.find((c) => c.id === data.colaborador_id);
       if (!selectedColab) return;
 
-      const { data: substituteSectors } = await supabase
-        .from("ferias_colaborador_setores_substitutos")
-        .select("setor_id")
-        .eq("colaborador_id", data.colaborador_id);
-      
-      const allSectorIds = [selectedColab.setor_titular_id];
-      if (substituteSectors) {
-        substituteSectors.forEach(s => { if (s.setor_id) allSectorIds.push(s.setor_id); });
-      }
+      // (a) mesmo setor titular; (b) eu cubro o setor titular dele; (c) ele cobre meu setor titular
+      const [{ data: mySubsRows }, { data: coversMyRows }] = await Promise.all([
+        supabase
+          .from("ferias_colaborador_setores_substitutos")
+          .select("setor_id")
+          .eq("colaborador_id", data.colaborador_id),
+        supabase
+          .from("ferias_colaborador_setores_substitutos")
+          .select("colaborador_id")
+          .eq("setor_id", selectedColab.setor_titular_id),
+      ]);
 
-      const { data: sameSetorColabs } = await supabase
+      const mySubstituteSectors = (mySubsRows || [])
+        .map((s: any) => s.setor_id)
+        .filter(Boolean) as string[];
+      const colabsThatCoverMySector = (coversMyRows || [])
+        .map((c: any) => c.colaborador_id)
+        .filter((id: string | null) => id && id !== data.colaborador_id) as string[];
+
+      // Caso (a) + (b): por setor titular
+      const setorIdsForTitular = [selectedColab.setor_titular_id, ...mySubstituteSectors];
+      const { data: byTitular } = await supabase
         .from("ferias_colaboradores")
         .select("id, nome, setor_titular_id")
-        .in("setor_titular_id", allSectorIds)
+        .in("setor_titular_id", setorIdsForTitular)
         .eq("status", "ativo")
         .neq("id", data.colaborador_id);
+
+      // Caso (c): por id (quem cobre meu setor)
+      let byCoverage: { id: string; nome: string; setor_titular_id: string }[] = [];
+      if (colabsThatCoverMySector.length > 0) {
+        const { data } = await supabase
+          .from("ferias_colaboradores")
+          .select("id, nome, setor_titular_id")
+          .in("id", colabsThatCoverMySector)
+          .eq("status", "ativo");
+        byCoverage = (data as any) || [];
+      }
+
+      const sameSetorMap = new Map<string, { id: string; nome: string; setor_titular_id: string }>();
+      [...(byTitular || []), ...byCoverage].forEach((c: any) => sameSetorMap.set(c.id, c));
+      const sameSetorColabs = Array.from(sameSetorMap.values());
+
+      const mesmoSetorIds = new Set(
+        (byTitular || [])
+          .filter((c: any) => c.setor_titular_id === selectedColab.setor_titular_id)
+          .map((c: any) => c.id)
+      );
+      const euCubroIds = new Set(
+        (byTitular || [])
+          .filter((c: any) => c.setor_titular_id !== selectedColab.setor_titular_id)
+          .map((c: any) => c.id)
+      );
+      const eleCobreIds = new Set(colabsThatCoverMySector);
 
       if (sameSetorColabs && sameSetorColabs.length > 0) {
         const colabIds = sameSetorColabs.map((c) => c.id);
@@ -663,13 +701,17 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             }
 
             if (overlap) {
-              const isSubstitute = (ef.colaborador as any)?.setor_titular_id !== selectedColab.setor_titular_id;
+              const colabId = (ef as any).colaborador_id;
+              let tipo = "Mesmo setor";
+              if (mesmoSetorIds.has(colabId)) tipo = "Mesmo setor";
+              else if (euCubroIds.has(colabId)) tipo = "Setor substituto (você cobre)";
+              else if (eleCobreIds.has(colabId)) tipo = "Setor substituto (ele cobre)";
               const periodoStr = efIntervals
                 .map(i => `${format(i.start, "dd/MM")} - ${format(i.end, "dd/MM")}`)
                 .join(" / ");
               foundConflicts.push({
                 colaborador_nome: (ef.colaborador as any)?.nome || "Desconhecido",
-                tipo: isSubstitute ? "Setor substituto" : "Mesmo setor",
+                tipo,
                 periodo: periodoStr,
               });
             }
