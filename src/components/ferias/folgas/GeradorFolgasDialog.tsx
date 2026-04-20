@@ -680,15 +680,17 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
         const satsSemSetor = unit.availableSaturdays
           .filter(sat => (sectorSaturdayCount[setorId]?.[sat] || 0) === 0);
 
-        // Sort candidates: prefer saturdays without this sector, then by global count
+        // Sort candidates: prefer saturdays without this sector, then by sector-density + global count
+        const cmp = compareCandidates(unit);
         const candidates = satsSemSetor.length > 0
-          ? satsSemSetor.sort((a, b) => globalPersonCount[a] - globalPersonCount[b])
-          : [...unit.availableSaturdays].sort((a, b) => globalPersonCount[a] - globalPersonCount[b]);
+          ? satsSemSetor.sort(cmp)
+          : [...unit.availableSaturdays].sort(cmp);
 
         let assigned = false;
         for (const candidateSat of candidates) {
           if (!hasChefeConflict(unit, candidateSat)) {
             assignUnit(unit, candidateSat);
+            logStackingIfAny(unit, candidateSat);
             assigned = true;
             break;
           }
@@ -699,6 +701,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
           const bestSat = candidates[0];
           if (bestSat) {
             assignUnit(unit, bestSat);
+            logStackingIfAny(unit, bestSat);
             diagnostics.push(`Conflito de chefes ignorado para ${unit.memberIds.map(id => colabById.get(id)?.nome).join(", ")}`);
           }
         }
