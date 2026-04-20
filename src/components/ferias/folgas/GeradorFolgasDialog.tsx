@@ -628,6 +628,44 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       return false;
     };
 
+    // Helper: how many people from any of this unit's sectors are already on `sat`
+    const getUnitSectorDensity = (unit: AllocationUnit, sat: string): number => {
+      let total = 0;
+      for (const sid of unit.allSetorIds) {
+        total += sectorSaturdayCount[sid]?.[sat] || 0;
+      }
+      return total;
+    };
+
+    // Comparator: sector-density first, then global count, then date (stable)
+    const compareCandidates = (unit: AllocationUnit) => (a: string, b: string) => {
+      const da = getUnitSectorDensity(unit, a);
+      const db = getUnitSectorDensity(unit, b);
+      if (da !== db) return da - db;
+      const ga = globalPersonCount[a];
+      const gb = globalPersonCount[b];
+      if (ga !== gb) return ga - gb;
+      return a.localeCompare(b);
+    };
+
+    // Helper: log when a unit had to overlap with same-sector colleague
+    const logStackingIfAny = (unit: AllocationUnit, sat: string) => {
+      const overlapSectors: string[] = [];
+      for (const sid of unit.allSetorIds) {
+        // count BEFORE this unit was added (assignUnit already ran, so subtract 1)
+        const cnt = (sectorSaturdayCount[sid]?.[sat] || 0) - 1;
+        if (cnt > 0) {
+          const setorNome = setorById.get(sid)?.nome || sid;
+          overlapSectors.push(setorNome);
+        }
+      }
+      if (overlapSectors.length > 0) {
+        const nomes = unit.memberIds.map(id => colabById.get(id)?.nome).join(", ");
+        const dataFmt = format(new Date(sat + "T12:00:00"), "dd/MM");
+        diagnostics.push(`Empilhamento de setor (${overlapSectors.join(", ")}) em ${dataFmt} para ${nomes} — sem alternativa`);
+      }
+    };
+
     // Step 6A: Allocate restricted sectors (units <= saturdays) — 1 per saturday, spread out
     for (const setorId of setoresRestritos) {
       const sectorUnits = [...(unitsBySetorId.get(setorId) || [])];
