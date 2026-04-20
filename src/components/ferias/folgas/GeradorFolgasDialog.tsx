@@ -508,7 +508,10 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
           type: "family",
           availableSaturdays: availableSats,
           primarySetorId: colab.setor_titular_id,
-          allSetorIds: [...new Set([colab.setor_titular_id, partner.setor_titular_id])],
+          allSetorIds: [...new Set([
+            ...getAllSectorsForColab(colab.id, colab.setor_titular_id),
+            ...getAllSectorsForColab(partner.id, partner.setor_titular_id),
+          ])],
         });
         
         processedIds.add(colab.id);
@@ -522,7 +525,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
           type: "single",
           availableSaturdays: availableSats,
           primarySetorId: colab.setor_titular_id,
-          allSetorIds: [colab.setor_titular_id],
+          allSetorIds: getAllSectorsForColab(colab.id, colab.setor_titular_id),
         });
         
         processedIds.add(colab.id);
