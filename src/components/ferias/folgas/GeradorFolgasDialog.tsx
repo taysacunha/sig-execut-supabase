@@ -833,7 +833,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       
       const availableForSecond = unit.availableSaturdays
         .filter(s => s !== firstSat)
-        .sort((a, b) => globalPersonCount[a] - globalPersonCount[b]);
+        .sort(compareCandidates(unit));
       
       if (availableForSecond.length > 0) {
         unitSecondAssignments.set(unit.id, availableForSecond[0]);
