@@ -461,6 +461,25 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       return sectors;
     };
 
+    // Build map of substitute sectors per collaborator (colabId -> Set<setorId>)
+    const substituteSectorsByColab = new Map<string, Set<string>>();
+    setoresSubstitutos.forEach(ss => {
+      if (!ss.colaborador_id || !ss.setor_id) return;
+      if (!substituteSectorsByColab.has(ss.colaborador_id)) {
+        substituteSectorsByColab.set(ss.colaborador_id, new Set());
+      }
+      substituteSectorsByColab.get(ss.colaborador_id)!.add(ss.setor_id);
+    });
+
+    // Helper: get all sectors (titular + substitutes) for a collaborator
+    const getAllSectorsForColab = (colabId: string, titularSetorId: string): string[] => {
+      const set = new Set<string>();
+      set.add(titularSetorId);
+      const subs = substituteSectorsByColab.get(colabId);
+      if (subs) subs.forEach(s => set.add(s));
+      return [...set];
+    };
+
     // Step 4: Build GLOBAL units (family pairs + singles)
     const processedIds = new Set<string>();
     const units: AllocationUnit[] = [];
