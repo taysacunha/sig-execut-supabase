@@ -178,16 +178,23 @@ function checkWindowConflicts(
   allocatedVacations: GeneratedVacation[],
   existingVacations: any[],
   forms: FormularioAnual[],
+  sectorToColabs: Record<string, string[]>,
 ): ConflictInfo[] {
   const conflicts: ConflictInfo[] = [];
   const wStart = parseISO(window.start);
   const wEnd = parseISO(window.end);
-  const allSectorIds = [setorId, ...substituteSectorIds];
+  // Symmetric rule:
+  // (a) same titular sector, (b) I cover their titular sector, (c) they cover my titular sector
+  const titularSectorsToMatch = new Set<string>([setorId, ...substituteSectorIds]);
+  const colabsThatCoverMe = new Set<string>(sectorToColabs[setorId] || []);
 
   // Check allocated vacations
   for (const alloc of allocatedVacations) {
     const allocSetorId = forms.find(f => f.colaborador_id === alloc.colaborador_id)?.colaborador?.setor_titular_id;
-    if (!allocSetorId || !allSectorIds.includes(allocSetorId)) continue;
+    const matches =
+      (allocSetorId && titularSectorsToMatch.has(allocSetorId)) ||
+      colabsThatCoverMe.has(alloc.colaborador_id);
+    if (!matches) continue;
 
     const aQ1S = parseISO(alloc.quinzena1_inicio), aQ1E = parseISO(alloc.quinzena1_fim);
     const aQ2S = alloc.quinzena2_inicio ? parseISO(alloc.quinzena2_inicio) : null;
@@ -210,7 +217,10 @@ function checkWindowConflicts(
   for (const existing of existingVacations) {
     if (existing.colaborador_id === colaboradorId) continue;
     const existSetorId = existing.colaborador?.setor_titular_id;
-    if (!existSetorId || !allSectorIds.includes(existSetorId)) continue;
+    const matches =
+      (existSetorId && titularSectorsToMatch.has(existSetorId)) ||
+      colabsThatCoverMe.has(existing.colaborador_id);
+    if (!matches) continue;
 
     const eQ1S = parseISO(existing.quinzena1_inicio), eQ1E = parseISO(existing.quinzena1_fim);
     const eQ2S = existing.quinzena2_inicio ? parseISO(existing.quinzena2_inicio) : null;
