@@ -41,6 +41,8 @@ interface FeriasAtivas {
   gozo_quinzena1_fim: string | null;
   gozo_quinzena2_inicio: string | null;
   gozo_quinzena2_fim: string | null;
+  is_excecao: boolean | null;
+  status: string | null;
 }
 
 interface Perda {
@@ -199,9 +201,11 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       
       const { data, error } = await supabase
         .from("ferias_ferias")
-        .select("colaborador_id, quinzena1_inicio, quinzena1_fim, quinzena2_inicio, quinzena2_fim, gozo_diferente, gozo_quinzena1_inicio, gozo_quinzena1_fim, gozo_quinzena2_inicio, gozo_quinzena2_fim")
+        .select("colaborador_id, quinzena1_inicio, quinzena1_fim, quinzena2_inicio, quinzena2_fim, gozo_diferente, gozo_quinzena1_inicio, gozo_quinzena1_fim, gozo_quinzena2_inicio, gozo_quinzena2_fim, is_excecao, status")
         .or(`quinzena1_inicio.lte.${monthEnd},quinzena2_fim.gte.${monthStart}`)
-        .in("status", ["aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_andamento", "em_gozo"]);
+        // Bloqueia folga para QUALQUER férias agendada/em curso (incluindo "pendente" e exceções).
+        // Só liberamos quando a férias está em estado terminal: cancelada, reprovada ou concluída.
+        .not("status", "in", '("cancelada","reprovada","concluida")');
       
       if (error) throw error;
       return data as FeriasAtivas[];
@@ -432,7 +436,8 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       } else if (hasPerda(colab.id)) {
         exclusionReasons.set(colab.id, "Perda registrada");
       } else if (hasFullMonthVacation(colab.id)) {
-        exclusionReasons.set(colab.id, "Férias no mês");
+        const isExcecao = feriasAtivas.some(f => f.colaborador_id === colab.id && f.is_excecao);
+        exclusionReasons.set(colab.id, isExcecao ? "Férias no mês (exceção)" : "Férias no mês");
       } else if (shouldSkipDueToTwoMonthVacation(colab.id)) {
         exclusionReasons.set(colab.id, "Folga no outro mês (férias dividida)");
       }
