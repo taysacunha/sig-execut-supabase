@@ -436,7 +436,8 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       } else if (hasPerda(colab.id)) {
         exclusionReasons.set(colab.id, "Perda registrada");
       } else if (hasFullMonthVacation(colab.id)) {
-        exclusionReasons.set(colab.id, "Férias no mês");
+        const isExcecao = feriasAtivas.some(f => f.colaborador_id === colab.id && f.is_excecao);
+        exclusionReasons.set(colab.id, isExcecao ? "Férias no mês (exceção)" : "Férias no mês");
       } else if (shouldSkipDueToTwoMonthVacation(colab.id)) {
         exclusionReasons.set(colab.id, "Folga no outro mês (férias dividida)");
       }
