@@ -1,64 +1,55 @@
-
-
-## Plano: corrigir conflito falso no diálogo de férias (Lidiane × Camily)
+## Plano: incluir todas as férias (não só "aprovada") no bloqueio do gerador de folgas
 
 ### Causa raiz
 
-Em `src/components/ferias/ferias/FeriasDialog.tsx` (`checkConflicts`, linhas 569–678), a verificação usa `allSectorIds = [setor_titular do selecionado, ...setores onde o selecionado é substituto]` e busca colegas cujo **setor titular** esteja nesse conjunto. Isso considera apenas um lado da relação de substituição.
+Em `src/components/ferias/folgas/GeradorFolgasDialog.tsx`, a query `feriasAtivas` (linhas 194–209) busca férias do mês mas filtra por uma lista fechada de status:
 
-Resultado: se em algum momento existiu um vínculo (mesmo já removido) ou se há sujeira em `ferias_colaborador_setores_substitutos`, o filtro pode trazer colegas sem nenhuma relação atual de cobertura. Pior: a regra ideal — "conflito existe quando, se ambos saírem, o setor de algum dos dois fica descoberto" — não está implementada de forma simétrica nem rigorosa.
+```ts
+.in("status", ["aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_andamento", "em_gozo"])
+```
 
-A regra correta acordada com o usuário:
+Qualquer férias com status fora dessa lista — em especial **`"pendente"`** (usado em vários pontos do sistema, como `ConsultaGeralTab`, `ContadorPDFGenerator`, `PeriodosAquisitivosTab`) — é simplesmente ignorada pelo gerador de folgas. Resultado:
 
-> Conflito existe se **(a)** ambos têm o mesmo setor titular, **OU (b)** o selecionado é substituto do setor titular do colega, **OU (c)** o colega é substituto do setor titular do selecionado.
+- Lidianne tem férias em maio, mas a férias dela está com status `"pendente"` (ou outro status fora da lista) → o gerador não vê e a inclui na escala de folgas.
+- Luccian tem férias **com `is_excecao = true`** em maio. O `is_excecao` é uma flag separada e independente do `status`. Se o status dela for `"pendente"` (ou qualquer um fora da whitelist), o filtro também a descarta — exatamente o comportamento descrito ("está pegando o período de férias do contador e não verificando o período de exceção").
 
-### Mudanças
+Importante: o campo `is_excecao` NÃO é considerado em lugar nenhum dessa query. As férias-exceção só "valem" para o gerador de folgas se o status delas estiver dentro da whitelist — o que não acontece quando ficam `"pendente"`.
 
-**Arquivo principal**: `src/components/ferias/ferias/FeriasDialog.tsx`
+### Correção
 
-#### 1. Recarregar substitutos dos dois lados antes do filtro
+**Arquivo único alterado**: `src/components/ferias/folgas/GeradorFolgasDialog.tsx`
 
-Em `checkConflicts`, substituir o bloco atual (linhas 569–584) por:
+#### 1. Remover o filtro de status restritivo (linhas 194–209)
 
-- Buscar `mySubstituteSectors = setor_id[]` onde `colaborador_id = selecionado` (já existe).
-- Buscar `colabsThatCoverMySector = colaborador_id[]` onde `setor_id = selectedColab.setor_titular_id` em `ferias_colaborador_setores_substitutos` (novo — descobre quem é substituto do setor do selecionado).
-- Construir `relevantColabIds` por união:
-  - colegas com `setor_titular_id = selectedColab.setor_titular_id` (mesmo setor) — caso (a)
-  - colegas com `setor_titular_id IN mySubstituteSectors` (eu cubro o setor titular deles) — caso (b)
-  - colegas em `colabsThatCoverMySector` (eles cobrem meu setor titular) — caso (c)
-- Substituir a query `sameSetorColabs` por uma query que filtra por `id IN relevantColabIds` e `status = 'ativo'`, excluindo o próprio.
+Trocar o `.in("status", [...])` por uma lista que inclua **todos** os status que representam férias agendadas/em curso, e excluir apenas os terminais que realmente liberam o colaborador:
 
-Isso garante que apenas colegas com relação real de cobertura sejam avaliados.
+- Manter: `aprovada`, `pendente`, `em_gozo_q1`, `q1_concluida`, `em_gozo_q2`, `em_andamento`, `em_gozo`
+- Excluir explicitamente os terminais via `.not("status", "in", "(cancelada,reprovada,concluida)")` em vez de whitelist.
 
-#### 2. Rotular o tipo de conflito corretamente
+Critério: se existe um registro em `ferias_ferias` cobrindo o mês e o status NÃO é cancelado/reprovado/concluído, ele BLOQUEIA folga. É a regra mais segura e cobre exatamente o cenário relatado (status `"pendente"`).
 
-No bloco que monta `foundConflicts` (linhas 665–675), substituir o `isSubstitute` simples por classificação explícita usando os três sets (`mesmoSetor`, `euCubro`, `eleCobre`):
-- `tipo: "Mesmo setor"` se `colega.setor_titular_id === selectedColab.setor_titular_id`
-- `tipo: "Setor substituto (você cobre)"` se o colega é titular num setor onde eu sou substituto
-- `tipo: "Setor substituto (ele cobre)"` se o colega é substituto do meu setor titular
-- (se cair em mais de um, prioriza "Mesmo setor")
+#### 2. Adicionar `is_excecao` e `status` ao SELECT (para diagnóstico)
 
-Isso ajuda o usuário a entender de onde vem o conflito e descobrir vínculos errados no cadastro.
+Incluir `id, is_excecao, status, excecao_motivo` no `.select(...)` da query e expandir a interface `FeriasAtivas` para refletir isso. Não muda a lógica de bloqueio (qualquer férias do mês bloqueia, exceção ou não — exatamente o que o usuário quer), mas permite mostrar no diagnóstico "Férias no mês (exceção)" quando aplicável, ajudando a entender o motivo da exclusão.
 
-#### 3. Aplicar a mesma correção no gerador automático
+#### 3. Ajuste cosmético no diagnóstico
 
-`src/lib/vacationGenerator.ts` (`checkWindowConflicts`, linhas 167–227 e função `fetchSubstituteSectors` linhas 128–141): hoje carrega só substitutos do colaborador iterado e filtra `allocSetorId IN allSectorIds` (mesmo padrão unidirecional). Mudanças:
+Em `exclusionReasons` (linha ~434), quando o motivo é "Férias no mês", anexar "(exceção)" se a férias correspondente tiver `is_excecao = true`. Pequeno, mas evita confusão futura.
 
-- Em `fetchSubstituteSectors`, retornar dois mapas: `colabToSectors` (já existe) e o **inverso** `sectorToColabs` (`Record<setor_id, colaborador_id[]>`).
-- Em `checkWindowConflicts`, receber também `sectorToCovers` e o `setorTitularDeCadaColab` (já calculável via `forms`/`existingVacations`); a regra de conflito passa a ser a tripla (a)/(b)/(c) acima, simétrica.
+### Verificações que NÃO precisam mudar
 
-### Notas técnicas
+- `countVacationDaysInMonth`, `shouldSkipDueToTwoMonthVacation`, `hasFullMonthVacation`, `isColabOnVacation` — todas iteram sobre o array `feriasAtivas`. Uma vez que a query traga os registros corretos, todas elas funcionam automaticamente, incluindo para férias-exceção.
+- Outras queries do arquivo (afastamentos, perdas, etc.) — não têm relação com este bug.
+- `vacationGenerator.ts` e `FeriasDialog.tsx` — não precisam ser tocados. A criação de férias continua igual.
 
-- Não há mudança de schema nem de RLS.
-- `ferias_conflitos` (conflitos familiares manuais) continua intacta.
-- A correção não toca em `afastamentos` nem na regra "familiar deve coincidir".
-- Edge case: se `mySubstituteSectors` estiver vazio E `colabsThatCoverMySector` estiver vazio, `relevantColabIds` colapsa para "mesmo setor titular apenas" — comportamento correto e mínimo.
-- Após o deploy, o caso Lidiane × Camily deixa de aparecer (assumindo que de fato nenhuma é substituta da outra). Se ainda aparecer, o usuário verá a label "Mesmo setor" e poderá investigar o cadastro de setor titular.
+### Resultado esperado após o deploy
+
+- Lidianne (férias `"pendente"` em maio) → detectada → excluída da escala de folgas com motivo "Férias no mês".
+- Luccian (férias-exceção em maio, qualquer status não-terminal) → detectada → excluída com motivo "Férias no mês (exceção)".
+- Comportamento idêntico para qualquer outro colaborador com férias agendadas, independente do status (exceto cancelada/reprovada/concluída).
 
 ### Arquivos alterados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/ferias/ferias/FeriasDialog.tsx` | Reescrever `checkConflicts` para considerar relação simétrica (3 casos) e rotular o tipo corretamente |
-| `src/lib/vacationGenerator.ts` | Tornar `checkWindowConflicts` simétrico (mesmo critério) e expor mapa inverso de substitutos |
-
+| `src/components/ferias/folgas/GeradorFolgasDialog.tsx` | Trocar whitelist de status por blacklist (excluir só cancelada/reprovada/concluída); incluir `is_excecao` e `status` no SELECT; rotular diagnóstico de exceção |
