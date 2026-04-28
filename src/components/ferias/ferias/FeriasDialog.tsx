@@ -327,7 +327,6 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   }, [forceSingleGozo]);
 
   useEffect(() => {
-    if (isResettingRef.current) return;
     if (q1JaGozada && isVenda && quinzenaVenda !== 2) {
       form.setValue("quinzena_venda", 2);
       form.setValue("gozo_venda_inicio", "");
