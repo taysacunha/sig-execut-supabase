@@ -457,9 +457,21 @@ export function ExcecaoPeriodosSection({
             <Card className="border-muted bg-muted/30">
               <CardContent className="pt-4 space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>Dias totais de férias:</span>
+                  <span>Dias totais do período aquisitivo:</span>
                   <span className="font-semibold">30 dias</span>
                 </div>
+                {q1JaGozada && (
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Já gozados (1º período):</span>
+                    <span className="font-semibold">-15 dias</span>
+                  </div>
+                )}
+                {q1JaGozada && (
+                  <div className="flex justify-between text-sm">
+                    <span>Disponíveis:</span>
+                    <span className="font-semibold">{diasDisponiveis} dias</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm text-destructive">
                   <span>Dias vendidos:</span>
                   <span className="font-semibold">-{diasVendidos} dias</span>
