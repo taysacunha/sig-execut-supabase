@@ -1561,9 +1561,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                           <CardTitle className="text-sm text-primary">
                             Gozo do {periodoVendaLabel} período — {diasGozoNoPeriodoVenda} dia{diasGozoNoPeriodoVenda !== 1 ? "s" : ""}
                           </CardTitle>
-                          {((quinzenaVenda === 1 && q1Inicio && q1Fim) || (quinzenaVenda === 2 && q2Inicio && q2Fim)) && (
+                          {((quinzenaVendaEfetiva === 1 && q1Inicio && q1Fim) || (quinzenaVendaEfetiva === 2 && q2Inicio && q2Fim)) && (
                             <p className="text-xs text-muted-foreground">
-                              Período oficial: {formatDateBR(quinzenaVenda === 1 ? q1Inicio : q2Inicio)} a {formatDateBR(quinzenaVenda === 1 ? q1Fim : q2Fim)}
+                              Período oficial: {formatDateBR(quinzenaVendaEfetiva === 1 ? q1Inicio : q2Inicio)} a {formatDateBR(quinzenaVendaEfetiva === 1 ? q1Fim : q2Fim)}
                             </p>
                           )}
                         </CardHeader>
