@@ -244,6 +244,58 @@ export function ExcecaoPeriodosSection({
     }
   }, [distribuicaoTipo, excecaoTipo, diasGozo, isHydrating, onPeriodosChange]);
 
+  // Reconciliação pós-hidratação: se distribuicaoTipo veio definido (ex.: forçado para "2"
+  // por q1JaGozada, ou herdado do registro) mas `periodos` está vazio ou tem referência
+  // inconsistente com a distribuição escolhida, gerar a estrutura inicial. Sem isso, os
+  // campos de data ficam ocultos até o usuário alternar manualmente a distribuição.
+  useEffect(() => {
+    if (isHydrating) return;
+    if (!excecaoTipo || !distribuicaoTipo) return;
+
+    const refsAtual = periodos.map(p => p.referencia_periodo);
+    const refEsperadaSingle =
+      distribuicaoTipo === "1" ? 1 :
+      distribuicaoTipo === "2" ? 2 :
+      distribuicaoTipo === "livre" ? 0 : null;
+
+    let inconsistente = false;
+    if (refEsperadaSingle !== null) {
+      inconsistente = periodos.length === 0 || !refsAtual.includes(refEsperadaSingle);
+    } else if (distribuicaoTipo === "ambos") {
+      inconsistente = periodos.length === 0 || !refsAtual.includes(1) || !refsAtual.includes(2);
+    }
+    if (!inconsistente) return;
+
+    if (excecaoTipo === "vender") {
+      if (diasGozo <= 0) return;
+      if (distribuicaoTipo === "1") {
+        onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 1 }]);
+      } else if (distribuicaoTipo === "2") {
+        onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 2 }]);
+      } else if (distribuicaoTipo === "ambos") {
+        const d1 = Math.ceil(diasGozo / 2);
+        const d2 = diasGozo - d1;
+        onPeriodosChange([
+          { id: genId(), dias: d1, data_inicio: "", data_fim: "", referencia_periodo: 1 },
+          { id: genId(), dias: d2, data_inicio: "", data_fim: "", referencia_periodo: 2 },
+        ]);
+      } else if (distribuicaoTipo === "livre") {
+        onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 0 }]);
+      }
+    } else if (excecaoTipo === "gozo_diferente") {
+      if (distribuicaoTipo === "1") {
+        onPeriodosChange([{ id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 1 }]);
+      } else if (distribuicaoTipo === "2") {
+        onPeriodosChange([{ id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 2 }]);
+      } else if (distribuicaoTipo === "ambos") {
+        onPeriodosChange([
+          { id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 1 },
+          { id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 2 },
+        ]);
+      }
+    }
+  }, [isHydrating, excecaoTipo, distribuicaoTipo, periodos, diasGozo, onPeriodosChange]);
+
   // Reset distribuição when diasVendidos changes in vender mode (skip during edit hydration)
   useEffect(() => {
     if (isHydrating) return;
