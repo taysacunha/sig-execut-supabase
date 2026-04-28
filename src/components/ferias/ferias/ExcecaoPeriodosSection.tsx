@@ -179,7 +179,7 @@ export function ExcecaoPeriodosSection({
     if (q1JaGozada && (distribuicaoTipo === "1" || distribuicaoTipo === "ambos")) {
       onDistribuicaoTipoChange("2");
     }
-  }, [q1JaGozada]);
+  }, [q1JaGozada, distribuicaoTipo, isHydrating, onDistribuicaoTipoChange]);
 
   // Se diasVendidos exceder os disponíveis (ex.: q1JaGozada virou true), reduzir.
   useEffect(() => {
@@ -187,7 +187,7 @@ export function ExcecaoPeriodosSection({
     if (diasVendidos > diasDisponiveis) {
       onDiasVendidosChange(diasDisponiveis);
     }
-  }, [diasDisponiveis]);
+  }, [diasDisponiveis, diasVendidos, isHydrating, onDiasVendidosChange]);
 
   // Auto-balance for "ambos" in vender mode
   const handleAmbosVendaDiasChange = useCallback((periodo: 1 | 2, dias: number) => {
@@ -242,7 +242,7 @@ export function ExcecaoPeriodosSection({
         ]);
       }
     }
-  }, [distribuicaoTipo, excecaoTipo]);
+  }, [distribuicaoTipo, excecaoTipo, diasGozo, isHydrating, onPeriodosChange]);
 
   // Reset distribuição when diasVendidos changes in vender mode (skip during edit hydration)
   useEffect(() => {
@@ -252,7 +252,7 @@ export function ExcecaoPeriodosSection({
       onDistribuicaoTipoChange("");
       setTimeout(() => onDistribuicaoTipoChange(dt), 0);
     }
-  }, [diasVendidos]);
+  }, [diasVendidos, excecaoTipo, distribuicaoTipo, isHydrating, onDistribuicaoTipoChange]);
 
   // Reset when tipo changes (skip during edit hydration)
   useEffect(() => {
@@ -262,7 +262,7 @@ export function ExcecaoPeriodosSection({
     if (excecaoTipo === "gozo_diferente") {
       onDiasVendidosChange(0);
     }
-  }, [excecaoTipo]);
+  }, [excecaoTipo, isHydrating, onDiasVendidosChange, onDistribuicaoTipoChange, onPeriodosChange]);
 
   return (
     <div className="space-y-4">
