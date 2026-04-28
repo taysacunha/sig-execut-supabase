@@ -327,6 +327,16 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
 
   useEffect(() => {
     if (isResettingRef.current) return;
+    if (q1JaGozada && isVenda && quinzenaVenda !== 2) {
+      form.setValue("quinzena_venda", 2);
+      form.setValue("gozo_venda_inicio", "");
+      form.setValue("gozo_venda_fim", "");
+      setGozoDateError(null);
+    }
+  }, [q1JaGozada, isVenda, quinzenaVenda]);
+
+  useEffect(() => {
+    if (isResettingRef.current) return;
     if (q1Inicio) {
       try {
         const endDate = addDays(parseISO(q1Inicio), 14);
