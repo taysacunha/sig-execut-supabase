@@ -250,20 +250,73 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const quinzenaVenda = form.watch("quinzena_venda") || 1;
   const gozoPeriodos = form.watch("gozo_periodos");
   const gozoVendaInicio = form.watch("gozo_venda_inicio");
+  const gozoVendaFim = form.watch("gozo_venda_fim");
   const gozoVendaPeriodos = form.watch("gozo_venda_periodos");
   const gozoVendaQ1Inicio = form.watch("gozo_venda_q1_inicio");
   const gozoVendaQ2Inicio = form.watch("gozo_venda_q2_inicio");
   const gozoQ1Inicio = form.watch("gozo_quinzena1_inicio");
   const gozoQ2Inicio = form.watch("gozo_quinzena2_inicio");
 
+  // Q1 considerada "já gozada": editando um registro em que o 1º período oficial
+  // permanece igual ao banco e já terminou, ou está em status posterior ao Q1.
+  const q1JaGozada = useMemo(() => {
+    if (!isEditing || !ferias) return false;
+    const q1Unchanged = q1Inicio === ferias.quinzena1_inicio && q1Fim === ferias.quinzena1_fim;
+    if (!q1Unchanged || !ferias.quinzena1_fim) return false;
+
+    const statusConsumido = ["q1_concluida", "em_gozo_q2", "em_gozo", "concluida"].includes(ferias.status);
+    const fimQ1JaPassou = parseISO(ferias.quinzena1_fim) < new Date();
+    return statusConsumido || fimQ1JaPassou;
+  }, [isEditing, ferias, q1Inicio, q1Fim]);
+
   const isVenda = opcaoAdicional === "vender";
   const isGozoDiferente = opcaoAdicional === "gozo_diferente";
-  const maxDiasVenda = isExcecao ? 30 : 10;
-  const diasGozo = 30 - diasVendidos;
-  const diasGozoNoPeriodoVenda = 15 - diasVendidos;
+  const quinzenaVendaEfetiva = q1JaGozada ? 2 : quinzenaVenda;
+  const diasDisponiveisPadrao = q1JaGozada ? 15 : 30;
+  const diasGozo = Math.max(0, diasDisponiveisPadrao - diasVendidos);
+  const diasGozoNoPeriodoVenda = Math.max(0, 15 - diasVendidos);
   const isVendaPadrao = isVenda && diasVendidos <= 10 && diasVendidos >= 1;
   const isVendaExcecao = isVenda && diasVendidos > 10;
   const forceSingleGozo = isVendaExcecao && diasVendidos > 15;
+
+  const buildNewVacationIntervals = useCallback((data: FeriasFormData): { start: Date; end: Date }[] => {
+    const intervals: { start: Date; end: Date }[] = [];
+    const shouldSkipConsumedQ1 = q1JaGozada;
+
+    if (data.is_excecao && excecaoTipo && excPeriodos.length > 0) {
+      for (const p of excPeriodos) {
+        if (shouldSkipConsumedQ1 && p.referencia_periodo === 1) continue;
+        if (p.data_inicio && p.data_fim) intervals.push({ start: parseISO(p.data_inicio), end: parseISO(p.data_fim) });
+      }
+      return intervals;
+    }
+
+    if (data.opcao_adicional === "vender" && (data.dias_vendidos || 0) > 0) {
+      const vendaPeriodo = shouldSkipConsumedQ1 ? 2 : (data.quinzena_venda || 1);
+      if (vendaPeriodo === 1) {
+        if (data.gozo_venda_inicio && data.gozo_venda_fim) intervals.push({ start: parseISO(data.gozo_venda_inicio), end: parseISO(data.gozo_venda_fim) });
+        if (data.quinzena2_inicio && data.quinzena2_fim) intervals.push({ start: parseISO(data.quinzena2_inicio), end: parseISO(data.quinzena2_fim) });
+      } else {
+        if (!shouldSkipConsumedQ1 && data.quinzena1_inicio && data.quinzena1_fim) intervals.push({ start: parseISO(data.quinzena1_inicio), end: parseISO(data.quinzena1_fim) });
+        if (data.gozo_venda_inicio && data.gozo_venda_fim) intervals.push({ start: parseISO(data.gozo_venda_inicio), end: parseISO(data.gozo_venda_fim) });
+      }
+      return intervals;
+    }
+
+    if (data.opcao_adicional === "gozo_diferente") {
+      if (!shouldSkipConsumedQ1 && (data.gozo_periodos === "1" || data.gozo_periodos === "ambos") && data.gozo_quinzena1_inicio && data.gozo_quinzena1_fim) {
+        intervals.push({ start: parseISO(data.gozo_quinzena1_inicio), end: parseISO(data.gozo_quinzena1_fim) });
+      }
+      if ((data.gozo_periodos === "2" || data.gozo_periodos === "ambos") && data.gozo_quinzena2_inicio && data.gozo_quinzena2_fim) {
+        intervals.push({ start: parseISO(data.gozo_quinzena2_inicio), end: parseISO(data.gozo_quinzena2_fim) });
+      }
+      return intervals;
+    }
+
+    if (!shouldSkipConsumedQ1 && data.quinzena1_inicio && data.quinzena1_fim) intervals.push({ start: parseISO(data.quinzena1_inicio), end: parseISO(data.quinzena1_fim) });
+    if (data.quinzena2_inicio && data.quinzena2_fim) intervals.push({ start: parseISO(data.quinzena2_inicio), end: parseISO(data.quinzena2_fim) });
+    return intervals;
+  }, [q1JaGozada, excecaoTipo, excPeriodos]);
 
   const isResettingRef = useRef(false);
 
@@ -273,6 +326,15 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       form.setValue("gozo_venda_periodos", "1");
     }
   }, [forceSingleGozo]);
+
+  useEffect(() => {
+    if (q1JaGozada && isVenda && quinzenaVenda !== 2) {
+      form.setValue("quinzena_venda", 2);
+      form.setValue("gozo_venda_inicio", "");
+      form.setValue("gozo_venda_fim", "");
+      setGozoDateError(null);
+    }
+  }, [q1JaGozada, isVenda, quinzenaVenda]);
 
   useEffect(() => {
     if (isResettingRef.current) return;
@@ -309,8 +371,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       return;
     }
     try {
-      const periodoInicio = quinzenaVenda === 1 ? q1Inicio : q2Inicio;
-      const periodoFim = quinzenaVenda === 1 ? q1Fim : q2Fim;
+      const periodoInicio = quinzenaVendaEfetiva === 1 ? q1Inicio : q2Inicio;
+      const periodoFim = quinzenaVendaEfetiva === 1 ? q1Fim : q2Fim;
       if (!periodoInicio || !periodoFim) { setGozoDateError(null); return; }
       const gozoStart = parseISO(gozoVendaInicio);
       const gozoEnd = addDays(gozoStart, diasGozoNoPeriodoVenda - 1);
@@ -324,7 +386,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         setGozoDateError(null);
       }
     } catch { setGozoDateError(null); }
-  }, [gozoVendaInicio, isVendaPadrao, quinzenaVenda, q1Inicio, q1Fim, q2Inicio, q2Fim, diasGozoNoPeriodoVenda]);
+  }, [gozoVendaInicio, isVendaPadrao, quinzenaVendaEfetiva, q1Inicio, q1Fim, q2Inicio, q2Fim, diasGozoNoPeriodoVenda]);
 
   useEffect(() => {
     if (gozoVendaQ1Inicio && isVendaExcecao && diasVendidos >= 1) {
@@ -630,23 +692,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           .in("status", ["pendente", "aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo"]);
 
         if (existingFerias && existingFerias.length > 0) {
-          // Build new vacation's real absence intervals
-          const newIntervals: { start: Date; end: Date }[] = [];
-          if (excecaoTipo && excPeriodos.length > 0) {
-            // Flexible gozo: use the sub-periods from the form
-            for (const p of excPeriodos) {
-              if (p.data_inicio && p.data_fim) {
-                newIntervals.push({ start: parseISO(p.data_inicio), end: parseISO(p.data_fim) });
-              }
-            }
-          }
-          if (newIntervals.length === 0) {
-            // Default: use official periods
-            newIntervals.push({ start: parseISO(data.quinzena1_inicio), end: parseISO(data.quinzena1_fim) });
-            if (data.quinzena2_inicio && data.quinzena2_fim) {
-              newIntervals.push({ start: parseISO(data.quinzena2_inicio), end: parseISO(data.quinzena2_fim) });
-            }
-          }
+          const newIntervals = buildNewVacationIntervals(data);
 
           // Batch-fetch gozo_periodos for existing ferias with gozo_flexivel
           const flexivelIds = existingFerias
@@ -736,21 +782,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             .in("status", ["pendente", "aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo"]);
 
           if (relatedFerias) {
-            // Build new vacation's real intervals (reuse logic)
-            const newIntervals: { start: Date; end: Date }[] = [];
-            if (excecaoTipo && excPeriodos.length > 0) {
-              for (const p of excPeriodos) {
-                if (p.data_inicio && p.data_fim) {
-                  newIntervals.push({ start: parseISO(p.data_inicio), end: parseISO(p.data_fim) });
-                }
-              }
-            }
-            if (newIntervals.length === 0) {
-              newIntervals.push({ start: parseISO(data.quinzena1_inicio), end: parseISO(data.quinzena1_fim) });
-              if (data.quinzena2_inicio && data.quinzena2_fim) {
-                newIntervals.push({ start: parseISO(data.quinzena2_inicio), end: parseISO(data.quinzena2_fim) });
-              }
-            }
+            const newIntervals = buildNewVacationIntervals(data);
 
             // Fetch gozo_periodos for flexible related ferias
             const flexRelIds = relatedFerias.filter(rf => rf.gozo_flexivel).map(rf => rf.id);
@@ -832,7 +864,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       const debounce = setTimeout(() => checkConflicts(values), 500);
       return () => clearTimeout(debounce);
     }
-  }, [watchedFields, excecaoTipo, excPeriodos]);
+  }, [watchedFields, excecaoTipo, excPeriodos, opcaoAdicional, diasVendidos, quinzenaVendaEfetiva, gozoVendaInicio, gozoVendaFim, q1JaGozada]);
 
   // Fetch all ferias for selected collaborator to calculate period balances
   const { data: colabAllFerias = [] } = useQuery({
@@ -985,12 +1017,21 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           diasVend = excDiasVendidos;
           quinzenaVendaVal = excDistribuicaoTipo === "2" ? 2 : 1;
           if (excPeriodos.length > 0) {
-            gozoQ1Inicio = excPeriodos[0].data_inicio || null;
-            gozoQ1Fim = excPeriodos[0].data_fim || null;
-          }
-          if (excPeriodos.length > 1) {
-            gozoQ2Inicio = excPeriodos[1].data_inicio || null;
-            gozoQ2Fim = excPeriodos[1].data_fim || null;
+            const p1 = excPeriodos.filter(p => p.referencia_periodo === 1);
+            const p2 = excPeriodos.filter(p => p.referencia_periodo === 2);
+            const livres = excPeriodos.filter(p => p.referencia_periodo === 0);
+            if (p1.length > 0) {
+              gozoQ1Inicio = p1[0].data_inicio || null;
+              gozoQ1Fim = p1[p1.length - 1].data_fim || null;
+            }
+            if (p2.length > 0) {
+              gozoQ2Inicio = p2[0].data_inicio || null;
+              gozoQ2Fim = p2[p2.length - 1].data_fim || null;
+            }
+            if (livres.length > 0 && !gozoQ1Inicio && !gozoQ2Inicio) {
+              gozoQ1Inicio = livres[0].data_inicio || null;
+              gozoQ1Fim = livres[livres.length - 1].data_fim || null;
+            }
           }
         } else if (excecaoTipo === "gozo_diferente") {
           gozoDiferente = true;
@@ -1009,7 +1050,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         if (data.opcao_adicional === "vender" && (data.dias_vendidos || 0) > 0) {
           venderDias = true;
           diasVend = data.dias_vendidos || 0;
-          quinzenaVendaVal = data.quinzena_venda || 1;
+          quinzenaVendaVal = q1JaGozada ? 2 : (data.quinzena_venda || 1);
 
           if (diasVend <= 10) {
             if (quinzenaVendaVal === 1) {
@@ -1116,12 +1157,13 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     let requiresException = false;
     let exceptionReason = "";
 
+    const q1ShouldValidateMonth = !q1JaGozada || data.quinzena1_inicio !== ferias?.quinzena1_inicio || data.quinzena1_fim !== ferias?.quinzena1_fim;
     const q1Start = parseISO(data.quinzena1_inicio);
     const q1Month = q1Start.getMonth() + 1;
-    if (q1Month === 1 || q1Month === 12) {
+    if (q1ShouldValidateMonth && (q1Month === 1 || q1Month === 12)) {
       requiresException = true;
       exceptionReason = "mes_bloqueado";
-      errors.push("Férias em janeiro ou dezembro requerem exceção");
+      errors.push("Férias em janeiro ou dezembro no 1º período requerem exceção");
     }
 
     if (data.quinzena2_inicio) {
@@ -1130,7 +1172,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       if (q2Month === 1 || q2Month === 12) {
         requiresException = true;
         exceptionReason = "mes_bloqueado";
-        errors.push("Férias em janeiro ou dezembro requerem exceção");
+        errors.push("Férias em janeiro ou dezembro no 2º período requerem exceção");
       }
     }
 
@@ -1142,6 +1184,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     if (conflicts.length > 0 && !data.is_excecao) {
       requiresException = true;
       exceptionReason = "conflito_setor";
+      errors.push(`Conflito de setor: ${conflicts.map(c => c.colaborador_nome).join(", ")}`);
     }
     return { isValid: errors.length === 0 || data.is_excecao, errors, requiresException, exceptionReason };
   };
@@ -1149,17 +1192,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   // Check afastamento conflicts with vacation periods
   const afastamentoConflicts = useMemo(() => {
     if (afastamentos.length === 0) return [];
-    // Build vacation intervals
-    const vacIntervals: { start: string; end: string }[] = [];
-    if (excecaoTipo && excPeriodos.length > 0) {
-      for (const p of excPeriodos) {
-        if (p.data_inicio && p.data_fim) vacIntervals.push({ start: p.data_inicio, end: p.data_fim });
-      }
-    }
-    if (vacIntervals.length === 0) {
-      if (q1Inicio && q1Fim) vacIntervals.push({ start: q1Inicio, end: q1Fim });
-      if (q2Inicio && q2Fim) vacIntervals.push({ start: q2Inicio, end: q2Fim });
-    }
+    const vacIntervals = buildNewVacationIntervals(form.getValues())
+      .map((periodo) => ({ start: format(periodo.start, "yyyy-MM-dd"), end: format(periodo.end, "yyyy-MM-dd") }));
     const conflicts: { afastamento: typeof afastamentos[0]; periodo: string }[] = [];
     for (const af of afastamentos) {
       for (const vi of vacIntervals) {
@@ -1170,7 +1204,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       }
     }
     return conflicts;
-  }, [afastamentos, excecaoTipo, excPeriodos, q1Inicio, q1Fim, q2Inicio, q2Fim]);
+  }, [afastamentos, buildNewVacationIntervals, q1Inicio, q1Fim, q2Inicio, q2Fim, opcaoAdicional, diasVendidos, quinzenaVendaEfetiva, gozoVendaInicio, gozoVendaFim, form]);
 
   const onSubmit = (data: FeriasFormData) => {
     const validation = validateVacation(data);
@@ -1181,8 +1215,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         conflito_setor: "Conflito de setor",
       };
       const label = motivoLabel[validation.exceptionReason] || "Esta operação";
+      const detalhes = validation.errors.length > 0 ? ` Motivo: ${validation.errors.join("; ")}.` : "";
       toast.error(
-        `${label} exige cadastro como exceção. Clique em "Exceção" no topo do formulário e preencha motivo + justificativa.`,
+        `${label} exige cadastro como exceção.${detalhes} Clique em "Exceção" no topo do formulário e preencha motivo + justificativa.`,
         { duration: 6000 }
       );
       return;
@@ -1220,21 +1255,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     mutation.mutate(data);
   };
 
-  const outroPeriodoLabel = quinzenaVenda === 1 ? "2º" : "1º";
-  const periodoVendaLabel = quinzenaVenda === 1 ? "1º" : "2º";
-
-  // Q1 considerada "já gozada": editando um registro com status terminal de Q1
-  // E as datas atuais do form para Q1 não foram alteradas em relação ao banco.
-  // Se o usuário alterar q1Inicio/q1Fim para datas novas, deixa de ser "consumida".
-  const q1JaGozada = useMemo(() => {
-    if (!isEditing || !ferias) return false;
-    const q1Unchanged =
-      q1Inicio === ferias.quinzena1_inicio &&
-      q1Fim === ferias.quinzena1_fim;
-    const statusConsumido = ["q1_concluida", "em_gozo_q2", "em_gozo", "concluida"]
-      .includes(ferias.status);
-    return q1Unchanged && statusConsumido;
-  }, [isEditing, ferias, q1Inicio, q1Fim]);
+  const outroPeriodoLabel = quinzenaVendaEfetiva === 1 ? "2º" : "1º";
+  const periodoVendaLabel = quinzenaVendaEfetiva === 1 ? "1º" : "2º";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1515,7 +1537,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                         <Select onValueChange={(v) => { field.onChange(parseInt(v)); form.setValue("gozo_venda_inicio", ""); form.setValue("gozo_venda_fim", ""); setGozoDateError(null); }} value={String(field.value || 1)}>
                           <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                           <SelectContent>
-                            <SelectItem value="1">1º Período</SelectItem>
+                            {!q1JaGozada && <SelectItem value="1">1º Período</SelectItem>}
                             <SelectItem value="2">2º Período</SelectItem>
                           </SelectContent>
                         </Select>
@@ -1523,10 +1545,22 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                       </FormItem>
                     )} />
 
+                    {q1JaGozada && (
+                      <Alert className="border-amber-500/40 bg-amber-500/10">
+                        <Info className="h-4 w-4" />
+                        <AlertTitle className="text-sm">1º período já gozado</AlertTitle>
+                        <AlertDescription className="text-sm">
+                          A venda padrão será aplicada somente ao 2º período. O 1º período permanece histórico e não será recalculado nem validado contra conflitos.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
                     <Alert className="border-primary/30 bg-primary/5">
                       <Info className="h-4 w-4 text-primary" />
                       <AlertDescription className="text-sm">
-                        O {outroPeriodoLabel} período será gozado integralmente (15 dias). No {periodoVendaLabel} período, serão gozados {diasGozoNoPeriodoVenda} dia{diasGozoNoPeriodoVenda !== 1 ? "s" : ""}.
+                        {q1JaGozada
+                          ? `No ${periodoVendaLabel} período, serão gozados ${diasGozoNoPeriodoVenda} dia${diasGozoNoPeriodoVenda !== 1 ? "s" : ""}.`
+                          : `O ${outroPeriodoLabel} período será gozado integralmente (15 dias). No ${periodoVendaLabel} período, serão gozados ${diasGozoNoPeriodoVenda} dia${diasGozoNoPeriodoVenda !== 1 ? "s" : ""}.`}
                       </AlertDescription>
                     </Alert>
 
@@ -1536,9 +1570,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                           <CardTitle className="text-sm text-primary">
                             Gozo do {periodoVendaLabel} período — {diasGozoNoPeriodoVenda} dia{diasGozoNoPeriodoVenda !== 1 ? "s" : ""}
                           </CardTitle>
-                          {((quinzenaVenda === 1 && q1Inicio && q1Fim) || (quinzenaVenda === 2 && q2Inicio && q2Fim)) && (
+                          {((quinzenaVendaEfetiva === 1 && q1Inicio && q1Fim) || (quinzenaVendaEfetiva === 2 && q2Inicio && q2Fim)) && (
                             <p className="text-xs text-muted-foreground">
-                              Período oficial: {formatDateBR(quinzenaVenda === 1 ? q1Inicio : q2Inicio)} a {formatDateBR(quinzenaVenda === 1 ? q1Fim : q2Fim)}
+                              Período oficial: {formatDateBR(quinzenaVendaEfetiva === 1 ? q1Inicio : q2Inicio)} a {formatDateBR(quinzenaVendaEfetiva === 1 ? q1Fim : q2Fim)}
                             </p>
                           )}
                         </CardHeader>
@@ -1561,9 +1595,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
 
                     <Card className="border-muted bg-muted/30">
                       <CardContent className="pt-4 space-y-2">
-                        <div className="flex justify-between text-sm"><span>Dias totais de férias:</span><span className="font-semibold">30 dias</span></div>
+                        <div className="flex justify-between text-sm"><span>Dias totais do período aquisitivo:</span><span className="font-semibold">30 dias</span></div>
+                        {q1JaGozada && <div className="flex justify-between text-sm text-muted-foreground"><span>Já gozados (1º período):</span><span className="font-semibold">-15 dias</span></div>}
+                        {q1JaGozada && <div className="flex justify-between text-sm"><span>Disponíveis para ajuste:</span><span className="font-semibold">15 dias</span></div>}
                         <div className="flex justify-between text-sm text-destructive"><span>Dias vendidos ({periodoVendaLabel} período):</span><span className="font-semibold">-{diasVendidos} dias</span></div>
-                        <div className="border-t pt-2 flex justify-between text-sm font-bold"><span>Dias de gozo:</span><span>{diasGozo} dias ({outroPeriodoLabel}: 15 + {periodoVendaLabel}: {diasGozoNoPeriodoVenda})</span></div>
+                        <div className="border-t pt-2 flex justify-between text-sm font-bold"><span>Dias de gozo:</span><span>{q1JaGozada ? `${diasGozo} dias` : `${diasGozo} dias (${outroPeriodoLabel}: 15 + ${periodoVendaLabel}: ${diasGozoNoPeriodoVenda})`}</span></div>
                       </CardContent>
                     </Card>
                   </div>
