@@ -1017,12 +1017,21 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           diasVend = excDiasVendidos;
           quinzenaVendaVal = excDistribuicaoTipo === "2" ? 2 : 1;
           if (excPeriodos.length > 0) {
-            gozoQ1Inicio = excPeriodos[0].data_inicio || null;
-            gozoQ1Fim = excPeriodos[0].data_fim || null;
-          }
-          if (excPeriodos.length > 1) {
-            gozoQ2Inicio = excPeriodos[1].data_inicio || null;
-            gozoQ2Fim = excPeriodos[1].data_fim || null;
+            const p1 = excPeriodos.filter(p => p.referencia_periodo === 1);
+            const p2 = excPeriodos.filter(p => p.referencia_periodo === 2);
+            const livres = excPeriodos.filter(p => p.referencia_periodo === 0);
+            if (p1.length > 0) {
+              gozoQ1Inicio = p1[0].data_inicio || null;
+              gozoQ1Fim = p1[p1.length - 1].data_fim || null;
+            }
+            if (p2.length > 0) {
+              gozoQ2Inicio = p2[0].data_inicio || null;
+              gozoQ2Fim = p2[p2.length - 1].data_fim || null;
+            }
+            if (livres.length > 0 && !gozoQ1Inicio && !gozoQ2Inicio) {
+              gozoQ1Inicio = livres[0].data_inicio || null;
+              gozoQ1Fim = livres[livres.length - 1].data_fim || null;
+            }
           }
         } else if (excecaoTipo === "gozo_diferente") {
           gozoDiferente = true;
