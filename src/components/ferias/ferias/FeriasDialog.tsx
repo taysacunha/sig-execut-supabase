@@ -1193,7 +1193,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       }
     }
     return conflicts;
-  }, [afastamentos, buildNewVacationIntervals, q1Inicio, q1Fim, q2Inicio, q2Fim, opcaoAdicional, diasVendidos, quinzenaVenda, gozoVendaInicio, form]);
+  }, [afastamentos, buildNewVacationIntervals, q1Inicio, q1Fim, q2Inicio, q2Fim, opcaoAdicional, diasVendidos, quinzenaVenda, gozoVendaInicio, gozoVendaFim, form]);
 
   const onSubmit = (data: FeriasFormData) => {
     const validation = validateVacation(data);
