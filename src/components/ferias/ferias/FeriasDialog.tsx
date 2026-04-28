@@ -1416,11 +1416,18 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                         <SelectValue placeholder="Selecione o período aquisitivo" />
                       </SelectTrigger>
                       <SelectContent>
-                        {periodosAquisitivos.map(p => (
-                          <SelectItem key={`${p.inicio}|${p.fim}`} value={`${p.inicio}|${p.fim}`}>
-                            {p.label}
-                          </SelectItem>
-                        ))}
+                       {periodosAquisitivos
+                         .filter(p => {
+                           // Keep the currently selected period visible even if quitado (when editing)
+                           const key = `${p.inicio}|${p.fim}`;
+                           if (key === selectedPeriodoKey) return true;
+                           return p.saldo > 0;
+                         })
+                         .map(p => (
+                           <SelectItem key={`${p.inicio}|${p.fim}`} value={`${p.inicio}|${p.fim}`}>
+                             {p.label}
+                           </SelectItem>
+                         ))}
                       </SelectContent>
                     </Select>
                     {periodoAquisitivo && (
