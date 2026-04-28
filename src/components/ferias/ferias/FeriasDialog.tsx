@@ -691,23 +691,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           .in("status", ["pendente", "aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo"]);
 
         if (existingFerias && existingFerias.length > 0) {
-          // Build new vacation's real absence intervals
-          const newIntervals: { start: Date; end: Date }[] = [];
-          if (excecaoTipo && excPeriodos.length > 0) {
-            // Flexible gozo: use the sub-periods from the form
-            for (const p of excPeriodos) {
-              if (p.data_inicio && p.data_fim) {
-                newIntervals.push({ start: parseISO(p.data_inicio), end: parseISO(p.data_fim) });
-              }
-            }
-          }
-          if (newIntervals.length === 0) {
-            // Default: use official periods
-            newIntervals.push({ start: parseISO(data.quinzena1_inicio), end: parseISO(data.quinzena1_fim) });
-            if (data.quinzena2_inicio && data.quinzena2_fim) {
-              newIntervals.push({ start: parseISO(data.quinzena2_inicio), end: parseISO(data.quinzena2_fim) });
-            }
-          }
+          const newIntervals = buildNewVacationIntervals(data);
 
           // Batch-fetch gozo_periodos for existing ferias with gozo_flexivel
           const flexivelIds = existingFerias
@@ -797,21 +781,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             .in("status", ["pendente", "aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_gozo"]);
 
           if (relatedFerias) {
-            // Build new vacation's real intervals (reuse logic)
-            const newIntervals: { start: Date; end: Date }[] = [];
-            if (excecaoTipo && excPeriodos.length > 0) {
-              for (const p of excPeriodos) {
-                if (p.data_inicio && p.data_fim) {
-                  newIntervals.push({ start: parseISO(p.data_inicio), end: parseISO(p.data_fim) });
-                }
-              }
-            }
-            if (newIntervals.length === 0) {
-              newIntervals.push({ start: parseISO(data.quinzena1_inicio), end: parseISO(data.quinzena1_fim) });
-              if (data.quinzena2_inicio && data.quinzena2_fim) {
-                newIntervals.push({ start: parseISO(data.quinzena2_inicio), end: parseISO(data.quinzena2_fim) });
-              }
-            }
+            const newIntervals = buildNewVacationIntervals(data);
 
             // Fetch gozo_periodos for flexible related ferias
             const flexRelIds = relatedFerias.filter(rf => rf.gozo_flexivel).map(rf => rf.id);
