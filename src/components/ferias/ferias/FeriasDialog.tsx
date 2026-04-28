@@ -1528,7 +1528,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                         <Select onValueChange={(v) => { field.onChange(parseInt(v)); form.setValue("gozo_venda_inicio", ""); form.setValue("gozo_venda_fim", ""); setGozoDateError(null); }} value={String(field.value || 1)}>
                           <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                           <SelectContent>
-                            <SelectItem value="1">1º Período</SelectItem>
+                            {!q1JaGozada && <SelectItem value="1">1º Período</SelectItem>}
                             <SelectItem value="2">2º Período</SelectItem>
                           </SelectContent>
                         </Select>
@@ -1536,10 +1536,22 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                       </FormItem>
                     )} />
 
+                    {q1JaGozada && (
+                      <Alert className="border-amber-500/40 bg-amber-500/10">
+                        <Info className="h-4 w-4" />
+                        <AlertTitle className="text-sm">1º período já gozado</AlertTitle>
+                        <AlertDescription className="text-sm">
+                          A venda padrão será aplicada somente ao 2º período. O 1º período permanece histórico e não será recalculado nem validado contra conflitos.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
                     <Alert className="border-primary/30 bg-primary/5">
                       <Info className="h-4 w-4 text-primary" />
                       <AlertDescription className="text-sm">
-                        O {outroPeriodoLabel} período será gozado integralmente (15 dias). No {periodoVendaLabel} período, serão gozados {diasGozoNoPeriodoVenda} dia{diasGozoNoPeriodoVenda !== 1 ? "s" : ""}.
+                        {q1JaGozada
+                          ? `No ${periodoVendaLabel} período, serão gozados ${diasGozoNoPeriodoVenda} dia${diasGozoNoPeriodoVenda !== 1 ? "s" : ""}.`
+                          : `O ${outroPeriodoLabel} período será gozado integralmente (15 dias). No ${periodoVendaLabel} período, serão gozados ${diasGozoNoPeriodoVenda} dia${diasGozoNoPeriodoVenda !== 1 ? "s" : ""}.`}
                       </AlertDescription>
                     </Alert>
 
@@ -1574,9 +1586,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
 
                     <Card className="border-muted bg-muted/30">
                       <CardContent className="pt-4 space-y-2">
-                        <div className="flex justify-between text-sm"><span>Dias totais de férias:</span><span className="font-semibold">30 dias</span></div>
+                        <div className="flex justify-between text-sm"><span>Dias totais do período aquisitivo:</span><span className="font-semibold">30 dias</span></div>
+                        {q1JaGozada && <div className="flex justify-between text-sm text-muted-foreground"><span>Já gozados (1º período):</span><span className="font-semibold">-15 dias</span></div>}
+                        {q1JaGozada && <div className="flex justify-between text-sm"><span>Disponíveis para ajuste:</span><span className="font-semibold">15 dias</span></div>}
                         <div className="flex justify-between text-sm text-destructive"><span>Dias vendidos ({periodoVendaLabel} período):</span><span className="font-semibold">-{diasVendidos} dias</span></div>
-                        <div className="border-t pt-2 flex justify-between text-sm font-bold"><span>Dias de gozo:</span><span>{diasGozo} dias ({outroPeriodoLabel}: 15 + {periodoVendaLabel}: {diasGozoNoPeriodoVenda})</span></div>
+                        <div className="border-t pt-2 flex justify-between text-sm font-bold"><span>Dias de gozo:</span><span>{q1JaGozada ? `${diasGozo} dias` : `${diasGozo} dias (${outroPeriodoLabel}: 15 + ${periodoVendaLabel}: ${diasGozoNoPeriodoVenda})`}</span></div>
                       </CardContent>
                     </Card>
                   </div>
