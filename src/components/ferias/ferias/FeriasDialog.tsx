@@ -1180,17 +1180,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   // Check afastamento conflicts with vacation periods
   const afastamentoConflicts = useMemo(() => {
     if (afastamentos.length === 0) return [];
-    // Build vacation intervals
-    const vacIntervals: { start: string; end: string }[] = [];
-    if (excecaoTipo && excPeriodos.length > 0) {
-      for (const p of excPeriodos) {
-        if (p.data_inicio && p.data_fim) vacIntervals.push({ start: p.data_inicio, end: p.data_fim });
-      }
-    }
-    if (vacIntervals.length === 0) {
-      if (q1Inicio && q1Fim) vacIntervals.push({ start: q1Inicio, end: q1Fim });
-      if (q2Inicio && q2Fim) vacIntervals.push({ start: q2Inicio, end: q2Fim });
-    }
+    const vacIntervals = buildNewVacationIntervals(form.getValues())
+      .map((periodo) => ({ start: format(periodo.start, "yyyy-MM-dd"), end: format(periodo.end, "yyyy-MM-dd") }));
     const conflicts: { afastamento: typeof afastamentos[0]; periodo: string }[] = [];
     for (const af of afastamentos) {
       for (const vi of vacIntervals) {
@@ -1201,7 +1192,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       }
     }
     return conflicts;
-  }, [afastamentos, excecaoTipo, excPeriodos, q1Inicio, q1Fim, q2Inicio, q2Fim]);
+  }, [afastamentos, buildNewVacationIntervals, q1Inicio, q1Fim, q2Inicio, q2Fim, opcaoAdicional, diasVendidos, quinzenaVenda, gozoVendaInicio, form]);
 
   const onSubmit = (data: FeriasFormData) => {
     const validation = validateVacation(data);
