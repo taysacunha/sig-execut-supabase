@@ -1041,7 +1041,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         if (data.opcao_adicional === "vender" && (data.dias_vendidos || 0) > 0) {
           venderDias = true;
           diasVend = data.dias_vendidos || 0;
-          quinzenaVendaVal = data.quinzena_venda || 1;
+          quinzenaVendaVal = q1JaGozada ? 2 : (data.quinzena_venda || 1);
 
           if (diasVend <= 10) {
             if (quinzenaVendaVal === 1) {
