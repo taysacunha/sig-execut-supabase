@@ -32,6 +32,9 @@ interface ExcecaoPeriodosSectionProps {
   q2Fim: string;
   /** When true, skip all auto-reset/init useEffects (edit hydration in progress) */
   isHydrating?: boolean;
+  /** True quando o 1º período oficial já foi gozado (status terminal e datas inalteradas).
+   *  Quando true: limita disponibilidade a 15 dias e oculta opções "1º Período" e "Ambos". */
+  q1JaGozada?: boolean;
 }
 
 const formatDateBR = (dateStr: string) => {
@@ -163,8 +166,27 @@ export function ExcecaoPeriodosSection({
   q2Inicio,
   q2Fim,
   isHydrating = false,
+  q1JaGozada = false,
 }: ExcecaoPeriodosSectionProps) {
-  const diasGozo = 30 - diasVendidos;
+  const diasDisponiveis = q1JaGozada ? 15 : 30;
+  const diasGozo = Math.max(0, diasDisponiveis - diasVendidos);
+  const opcoesDistribuicao = q1JaGozada ? ["2", "livre"] : ["1", "2", "ambos", "livre"];
+
+  // Se Q1 ficou "consumida" e a distribuição atual era "1" ou "ambos", forçar "2".
+  useEffect(() => {
+    if (isHydrating) return;
+    if (q1JaGozada && (distribuicaoTipo === "1" || distribuicaoTipo === "ambos")) {
+      onDistribuicaoTipoChange("2");
+    }
+  }, [q1JaGozada]);
+
+  // Se diasVendidos exceder os disponíveis (ex.: q1JaGozada virou true), reduzir.
+  useEffect(() => {
+    if (isHydrating) return;
+    if (diasVendidos > diasDisponiveis) {
+      onDiasVendidosChange(diasDisponiveis);
+    }
+  }, [diasDisponiveis]);
 
   // Auto-balance for "ambos" in vender mode
   const handleAmbosVendaDiasChange = useCallback((periodo: 1 | 2, dias: number) => {
