@@ -171,6 +171,7 @@ export function ExcecaoPeriodosSection({
   const diasDisponiveis: number = q1JaGozada ? 15 : 30;
   const diasGozo = Math.max(0, diasDisponiveis - diasVendidos);
   const opcoesDistribuicao = q1JaGozada ? ["2", "livre"] : ["1", "2", "ambos", "livre"];
+  const opcoesGozoDiferente = q1JaGozada ? ["2"] : ["1", "2", "ambos"];
 
   // Se Q1 ficou "consumida" e a distribuição atual era "1" ou "ambos", forçar "2".
   useEffect(() => {
@@ -502,7 +503,7 @@ export function ExcecaoPeriodosSection({
           <div className="space-y-2">
             <Label>Período com gozo diferente</Label>
             <div className="flex gap-2">
-              {["1", "2", "ambos"].map((tipo) => (
+              {opcoesGozoDiferente.map((tipo) => (
                 <Button
                   key={tipo}
                   type="button"
@@ -517,7 +518,7 @@ export function ExcecaoPeriodosSection({
           </div>
 
           {/* Sub-periods for selected period(s) */}
-          {(distribuicaoTipo === "1" || distribuicaoTipo === "ambos") && (
+          {!q1JaGozada && (distribuicaoTipo === "1" || distribuicaoTipo === "ambos") && (
             <SubPeriodosList
               periodos={periodos.filter(p => p.referencia_periodo === 1)}
               onChange={(updated) => {
