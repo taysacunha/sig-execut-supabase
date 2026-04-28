@@ -1206,8 +1206,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         conflito_setor: "Conflito de setor",
       };
       const label = motivoLabel[validation.exceptionReason] || "Esta operação";
+      const detalhes = validation.errors.length > 0 ? ` Motivo: ${validation.errors.join("; ")}.` : "";
       toast.error(
-        `${label} exige cadastro como exceção. Clique em "Exceção" no topo do formulário e preencha motivo + justificativa.`,
+        `${label} exige cadastro como exceção.${detalhes} Clique em "Exceção" no topo do formulário e preencha motivo + justificativa.`,
         { duration: 6000 }
       );
       return;
