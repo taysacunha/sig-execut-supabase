@@ -1214,6 +1214,19 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const outroPeriodoLabel = quinzenaVenda === 1 ? "2º" : "1º";
   const periodoVendaLabel = quinzenaVenda === 1 ? "1º" : "2º";
 
+  // Q1 considerada "já gozada": editando um registro com status terminal de Q1
+  // E as datas atuais do form para Q1 não foram alteradas em relação ao banco.
+  // Se o usuário alterar q1Inicio/q1Fim para datas novas, deixa de ser "consumida".
+  const q1JaGozada = useMemo(() => {
+    if (!isEditing || !ferias) return false;
+    const q1Unchanged =
+      q1Inicio === ferias.quinzena1_inicio &&
+      q1Fim === ferias.quinzena1_fim;
+    const statusConsumido = ["q1_concluida", "em_gozo_q2", "em_gozo", "concluida"]
+      .includes(ferias.status);
+    return q1Unchanged && statusConsumido;
+  }, [isEditing, ferias, q1Inicio, q1Fim]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
