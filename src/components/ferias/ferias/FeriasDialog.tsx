@@ -256,14 +256,65 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const gozoQ1Inicio = form.watch("gozo_quinzena1_inicio");
   const gozoQ2Inicio = form.watch("gozo_quinzena2_inicio");
 
+  // Q1 considerada "já gozada": editando um registro em que o 1º período oficial
+  // permanece igual ao banco e já terminou, ou está em status posterior ao Q1.
+  const q1JaGozada = useMemo(() => {
+    if (!isEditing || !ferias) return false;
+    const q1Unchanged = q1Inicio === ferias.quinzena1_inicio && q1Fim === ferias.quinzena1_fim;
+    if (!q1Unchanged || !ferias.quinzena1_fim) return false;
+
+    const statusConsumido = ["q1_concluida", "em_gozo_q2", "em_gozo", "concluida"].includes(ferias.status);
+    const fimQ1JaPassou = parseISO(ferias.quinzena1_fim) < new Date();
+    return statusConsumido || fimQ1JaPassou;
+  }, [isEditing, ferias, q1Inicio, q1Fim]);
+
   const isVenda = opcaoAdicional === "vender";
   const isGozoDiferente = opcaoAdicional === "gozo_diferente";
-  const maxDiasVenda = isExcecao ? 30 : 10;
-  const diasGozo = 30 - diasVendidos;
-  const diasGozoNoPeriodoVenda = 15 - diasVendidos;
+  const diasDisponiveisPadrao = q1JaGozada ? 15 : 30;
+  const diasGozo = Math.max(0, diasDisponiveisPadrao - diasVendidos);
+  const diasGozoNoPeriodoVenda = Math.max(0, 15 - diasVendidos);
   const isVendaPadrao = isVenda && diasVendidos <= 10 && diasVendidos >= 1;
   const isVendaExcecao = isVenda && diasVendidos > 10;
   const forceSingleGozo = isVendaExcecao && diasVendidos > 15;
+
+  const buildNewVacationIntervals = useCallback((data: FeriasFormData): { start: Date; end: Date }[] => {
+    const intervals: { start: Date; end: Date }[] = [];
+    const shouldSkipConsumedQ1 = q1JaGozada;
+
+    if (data.is_excecao && excecaoTipo && excPeriodos.length > 0) {
+      for (const p of excPeriodos) {
+        if (shouldSkipConsumedQ1 && p.referencia_periodo === 1) continue;
+        if (p.data_inicio && p.data_fim) intervals.push({ start: parseISO(p.data_inicio), end: parseISO(p.data_fim) });
+      }
+      return intervals;
+    }
+
+    if (data.opcao_adicional === "vender" && (data.dias_vendidos || 0) > 0) {
+      const vendaPeriodo = shouldSkipConsumedQ1 ? 2 : (data.quinzena_venda || 1);
+      if (vendaPeriodo === 1) {
+        if (data.gozo_venda_inicio && data.gozo_venda_fim) intervals.push({ start: parseISO(data.gozo_venda_inicio), end: parseISO(data.gozo_venda_fim) });
+        if (data.quinzena2_inicio && data.quinzena2_fim) intervals.push({ start: parseISO(data.quinzena2_inicio), end: parseISO(data.quinzena2_fim) });
+      } else {
+        if (!shouldSkipConsumedQ1 && data.quinzena1_inicio && data.quinzena1_fim) intervals.push({ start: parseISO(data.quinzena1_inicio), end: parseISO(data.quinzena1_fim) });
+        if (data.gozo_venda_inicio && data.gozo_venda_fim) intervals.push({ start: parseISO(data.gozo_venda_inicio), end: parseISO(data.gozo_venda_fim) });
+      }
+      return intervals;
+    }
+
+    if (data.opcao_adicional === "gozo_diferente") {
+      if (!shouldSkipConsumedQ1 && (data.gozo_periodos === "1" || data.gozo_periodos === "ambos") && data.gozo_quinzena1_inicio && data.gozo_quinzena1_fim) {
+        intervals.push({ start: parseISO(data.gozo_quinzena1_inicio), end: parseISO(data.gozo_quinzena1_fim) });
+      }
+      if ((data.gozo_periodos === "2" || data.gozo_periodos === "ambos") && data.gozo_quinzena2_inicio && data.gozo_quinzena2_fim) {
+        intervals.push({ start: parseISO(data.gozo_quinzena2_inicio), end: parseISO(data.gozo_quinzena2_fim) });
+      }
+      return intervals;
+    }
+
+    if (!shouldSkipConsumedQ1 && data.quinzena1_inicio && data.quinzena1_fim) intervals.push({ start: parseISO(data.quinzena1_inicio), end: parseISO(data.quinzena1_fim) });
+    if (data.quinzena2_inicio && data.quinzena2_fim) intervals.push({ start: parseISO(data.quinzena2_inicio), end: parseISO(data.quinzena2_fim) });
+    return intervals;
+  }, [q1JaGozada, excecaoTipo, excPeriodos]);
 
   const isResettingRef = useRef(false);
 
