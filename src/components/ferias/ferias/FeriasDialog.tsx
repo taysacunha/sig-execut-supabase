@@ -1148,12 +1148,13 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     let requiresException = false;
     let exceptionReason = "";
 
+    const q1ShouldValidateMonth = !q1JaGozada || data.quinzena1_inicio !== ferias?.quinzena1_inicio || data.quinzena1_fim !== ferias?.quinzena1_fim;
     const q1Start = parseISO(data.quinzena1_inicio);
     const q1Month = q1Start.getMonth() + 1;
-    if (q1Month === 1 || q1Month === 12) {
+    if (q1ShouldValidateMonth && (q1Month === 1 || q1Month === 12)) {
       requiresException = true;
       exceptionReason = "mes_bloqueado";
-      errors.push("Férias em janeiro ou dezembro requerem exceção");
+      errors.push("Férias em janeiro ou dezembro no 1º período requerem exceção");
     }
 
     if (data.quinzena2_inicio) {
@@ -1162,7 +1163,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       if (q2Month === 1 || q2Month === 12) {
         requiresException = true;
         exceptionReason = "mes_bloqueado";
-        errors.push("Férias em janeiro ou dezembro requerem exceção");
+        errors.push("Férias em janeiro ou dezembro no 2º período requerem exceção");
       }
     }
 
@@ -1174,6 +1175,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     if (conflicts.length > 0 && !data.is_excecao) {
       requiresException = true;
       exceptionReason = "conflito_setor";
+      errors.push(`Conflito de setor: ${conflicts.map(c => c.colaborador_nome).join(", ")}`);
     }
     return { isValid: errors.length === 0 || data.is_excecao, errors, requiresException, exceptionReason };
   };
