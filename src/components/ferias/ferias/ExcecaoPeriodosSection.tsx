@@ -32,6 +32,9 @@ interface ExcecaoPeriodosSectionProps {
   q2Fim: string;
   /** When true, skip all auto-reset/init useEffects (edit hydration in progress) */
   isHydrating?: boolean;
+  /** True quando o 1º período oficial já foi gozado (status terminal e datas inalteradas).
+   *  Quando true: limita disponibilidade a 15 dias e oculta opções "1º Período" e "Ambos". */
+  q1JaGozada?: boolean;
 }
 
 const formatDateBR = (dateStr: string) => {
@@ -163,8 +166,27 @@ export function ExcecaoPeriodosSection({
   q2Inicio,
   q2Fim,
   isHydrating = false,
+  q1JaGozada = false,
 }: ExcecaoPeriodosSectionProps) {
-  const diasGozo = 30 - diasVendidos;
+  const diasDisponiveis: number = q1JaGozada ? 15 : 30;
+  const diasGozo = Math.max(0, diasDisponiveis - diasVendidos);
+  const opcoesDistribuicao = q1JaGozada ? ["2", "livre"] : ["1", "2", "ambos", "livre"];
+
+  // Se Q1 ficou "consumida" e a distribuição atual era "1" ou "ambos", forçar "2".
+  useEffect(() => {
+    if (isHydrating) return;
+    if (q1JaGozada && (distribuicaoTipo === "1" || distribuicaoTipo === "ambos")) {
+      onDistribuicaoTipoChange("2");
+    }
+  }, [q1JaGozada]);
+
+  // Se diasVendidos exceder os disponíveis (ex.: q1JaGozada virou true), reduzir.
+  useEffect(() => {
+    if (isHydrating) return;
+    if (diasVendidos > diasDisponiveis) {
+      onDiasVendidosChange(diasDisponiveis);
+    }
+  }, [diasDisponiveis]);
 
   // Auto-balance for "ambos" in vender mode
   const handleAmbosVendaDiasChange = useCallback((periodo: 1 | 2, dias: number) => {
@@ -277,39 +299,53 @@ export function ExcecaoPeriodosSection({
         </Alert>
       )}
 
+      {/* Aviso de Q1 já gozada */}
+      {(excecaoTipo === "vender" || excecaoTipo === "gozo_diferente") && q1JaGozada && (
+        <Alert className="border-amber-500/40 bg-amber-500/10">
+          <Info className="h-4 w-4" />
+          <AlertTitle className="text-sm">1º período já gozado</AlertTitle>
+          <AlertDescription className="text-xs">
+            O 1º período ({formatDateBR(q1Inicio)} a {formatDateBR(q1Fim)}) já foi gozado — restam apenas
+            <strong> 15 dias</strong> do período aquisitivo (referente ao 2º período).
+            As opções "1º Período" e "Ambos" foram ocultadas. Para reativá-las, altere a data
+            de início do 1º período no formulário acima para uma data ainda não gozada.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* ===== VENDER DIAS ===== */}
       {excecaoTipo === "vender" && (
         <div className="space-y-4 pl-4 border-l-2 border-primary/20">
           {/* Days input */}
           <div>
-            <Label>Quantidade de dias a vender (1-30)</Label>
+            <Label>Quantidade de dias a vender (1-{diasDisponiveis})</Label>
             <Input
               type="number"
               min={1}
-              max={30}
+              max={diasDisponiveis}
               value={diasVendidos || ""}
-              onChange={(e) => onDiasVendidosChange(Math.min(30, Math.max(0, parseInt(e.target.value) || 0)))}
+              onChange={(e) => onDiasVendidosChange(Math.min(diasDisponiveis, Math.max(0, parseInt(e.target.value) || 0)))}
               className="mt-1 max-w-[200px]"
             />
           </div>
 
-          {diasVendidos === 30 && (
+          {diasVendidos === diasDisponiveis && diasVendidos > 0 && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Venda integral — sem período de gozo</AlertTitle>
+              <AlertTitle>Venda integral dos dias disponíveis — sem gozo</AlertTitle>
               <AlertDescription className="text-sm">
-                Todos os 30 dias serão vendidos. Exige justificativa obrigatória.
+                Todos os {diasDisponiveis} dia{diasDisponiveis !== 1 ? "s" : ""} disponíveis serão vendidos. Exige justificativa obrigatória.
               </AlertDescription>
             </Alert>
           )}
 
-          {diasVendidos >= 1 && diasVendidos <= 29 && (
+          {diasVendidos >= 1 && diasVendidos < diasDisponiveis && (
             <>
               {/* Distribuição selector */}
               <div className="space-y-2">
                 <Label>Distribuição do gozo ({diasGozo} dias)</Label>
                 <div className="flex flex-wrap gap-2">
-                  {["1", "2", "ambos", "livre"].map((tipo) => (
+                  {opcoesDistribuicao.map((tipo) => (
                     <Button
                       key={tipo}
                       type="button"
@@ -421,9 +457,21 @@ export function ExcecaoPeriodosSection({
             <Card className="border-muted bg-muted/30">
               <CardContent className="pt-4 space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>Dias totais de férias:</span>
+                  <span>Dias totais do período aquisitivo:</span>
                   <span className="font-semibold">30 dias</span>
                 </div>
+                {q1JaGozada && (
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Já gozados (1º período):</span>
+                    <span className="font-semibold">-15 dias</span>
+                  </div>
+                )}
+                {q1JaGozada && (
+                  <div className="flex justify-between text-sm">
+                    <span>Disponíveis:</span>
+                    <span className="font-semibold">{diasDisponiveis} dias</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm text-destructive">
                   <span>Dias vendidos:</span>
                   <span className="font-semibold">-{diasVendidos} dias</span>

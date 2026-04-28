@@ -1,55 +1,174 @@
-## Plano: incluir todas as férias (não só "aprovada") no bloqueio do gerador de folgas
+## Plano: edição de férias com Q1 já gozado (caso Maria de Lourdes)
 
-### Causa raiz
+### Comportamento desejado (confirmado pelo usuário)
 
-Em `src/components/ferias/folgas/GeradorFolgasDialog.tsx`, a query `feriasAtivas` (linhas 194–209) busca férias do mês mas filtra por uma lista fechada de status:
+1. **Modo Padrão** ao tentar salvar com Q1 em dez/jan já gozado: continuar bloqueando, mas a mensagem de erro deve **explicar o motivo** ("Esta férias está em janeiro/dezembro — exige cadastro como exceção"). A regra de exceção em si está certa.
+2. **Modo Exceção** ao vender dias com Q1 já gozado: o componente deve detectar que **o 1º período já foi consumido** e:
+   - Não oferecer mais "1º Período" nem "Ambos" na distribuição (só "2º Período" e "Livre").
+   - Calcular `diasGozo` com base apenas nos **dias restantes** (15 − vendidos), não 30 − vendidos.
+   - Se o usuário **alterar** as datas oficiais do 1º período para datas ainda não gozadas, voltar a oferecer todas as opções (porque deixa de ser "Q1 já consumido").
+
+### Causas raiz
+
+**Problema 1 — mensagem de erro pouco clara em `validateVacation`** (`src/components/ferias/ferias/FeriasDialog.tsx`, linhas 1175–1180):
 
 ```ts
-.in("status", ["aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "em_andamento", "em_gozo"])
+if (validation.requiresException && !data.is_excecao) {
+  toast.error(validation.errors[0] || "Esta operação requer marcar como exceção");
+  return;
+}
 ```
 
-Qualquer férias com status fora dessa lista — em especial **`"pendente"`** (usado em vários pontos do sistema, como `ConsultaGeralTab`, `ContadorPDFGenerator`, `PeriodosAquisitivosTab`) — é simplesmente ignorada pelo gerador de folgas. Resultado:
+`validation.errors[0]` para o caso `mes_bloqueado` é "Férias em janeiro ou dezembro requerem exceção" — está ok, mas a UX precisa ficar evidente: tipo + ação requerida no toast.
 
-- Lidianne tem férias em maio, mas a férias dela está com status `"pendente"` (ou outro status fora da lista) → o gerador não vê e a inclui na escala de folgas.
-- Luccian tem férias **com `is_excecao = true`** em maio. O `is_excecao` é uma flag separada e independente do `status`. Se o status dela for `"pendente"` (ou qualquer um fora da whitelist), o filtro também a descarta — exatamente o comportamento descrito ("está pegando o período de férias do contador e não verificando o período de exceção").
+**Problema 2 — `ExcecaoPeriodosSection` ignora dias já gozados** (linhas 167, 189–222, 296–304):
 
-Importante: o campo `is_excecao` NÃO é considerado em lugar nenhum dessa query. As férias-exceção só "valem" para o gerador de folgas se o status delas estiver dentro da whitelist — o que não acontece quando ficam `"pendente"`.
+```ts
+const diasGozo = 30 - diasVendidos;       // ← assume sempre 30 disponíveis
+if (distribuicaoTipo === "ambos") {
+  const d1 = Math.ceil(diasGozo / 2);     // ← cria slot para Q1 que já foi gozada
+  const d2 = diasGozo - d1;
+  ...
+}
+```
 
-### Correção
+Quando Maria de Lourdes (Q1 22/12/2025–05/01/2026 já gozada) escolhe "vender 5", o componente oferece distribuir 25 dias em "Ambos", obrigando o usuário a inventar datas no 1º período → conflito falso com Iasmin (13/07–27/07).
 
-**Arquivo único alterado**: `src/components/ferias/folgas/GeradorFolgasDialog.tsx`
+### Correções
 
-#### 1. Remover o filtro de status restritivo (linhas 194–209)
+#### A. `FeriasDialog.tsx` — mensagem de erro detalhada
 
-Trocar o `.in("status", [...])` por uma lista que inclua **todos** os status que representam férias agendadas/em curso, e excluir apenas os terminais que realmente liberam o colaborador:
+Em `onSubmit` (linha 1175), montar mensagem explícita por motivo:
 
-- Manter: `aprovada`, `pendente`, `em_gozo_q1`, `q1_concluida`, `em_gozo_q2`, `em_andamento`, `em_gozo`
-- Excluir explicitamente os terminais via `.not("status", "in", "(cancelada,reprovada,concluida)")` em vez de whitelist.
+```ts
+if (validation.requiresException && !data.is_excecao) {
+  const motivoLabel = {
+    mes_bloqueado: "Férias em janeiro ou dezembro",
+    venda_acima_limite: "Venda acima de 10 dias",
+    conflito_setor: "Conflito de setor",
+  }[validation.exceptionReason] || "Esta operação";
+  toast.error(`${motivoLabel} exige cadastro como exceção. Clique em "Exceção" no topo do formulário.`, {
+    duration: 6000,
+  });
+  return;
+}
+```
 
-Critério: se existe um registro em `ferias_ferias` cobrindo o mês e o status NÃO é cancelado/reprovado/concluído, ele BLOQUEIA folga. É a regra mais segura e cobre exatamente o cenário relatado (status `"pendente"`).
+Mantém a regra original (Q1 em dez/jan **sempre** vai para exceção, mesmo já gozada).
 
-#### 2. Adicionar `is_excecao` e `status` ao SELECT (para diagnóstico)
+#### B. `FeriasDialog.tsx` — calcular `q1JaGozada` e propagar
 
-Incluir `id, is_excecao, status, excecao_motivo` no `.select(...)` da query e expandir a interface `FeriasAtivas` para refletir isso. Não muda a lógica de bloqueio (qualquer férias do mês bloqueia, exceção ou não — exatamente o que o usuário quer), mas permite mostrar no diagnóstico "Férias no mês (exceção)" quando aplicável, ajudando a entender o motivo da exclusão.
+Adicionar lógica que detecta se o 1º período oficial **no formulário** corresponde a uma quinzena que já foi gozada anteriormente:
 
-#### 3. Ajuste cosmético no diagnóstico
+```ts
+// Q1 considerada "já gozada" se:
+//   - estamos editando E
+//   - as datas atuais do form para Q1 são iguais às salvas no banco E
+//   - o status é q1_concluida / em_gozo_q2 / em_gozo / concluida
+const q1JaGozada = useMemo(() => {
+  if (!isEditing || !ferias) return false;
+  const q1Unchanged =
+    q1Inicio === ferias.quinzena1_inicio &&
+    q1Fim === ferias.quinzena1_fim;
+  const statusConsumido = ["q1_concluida", "em_gozo_q2", "em_gozo", "concluida"]
+    .includes(ferias.status);
+  return q1Unchanged && statusConsumido;
+}, [isEditing, ferias, q1Inicio, q1Fim]);
+```
 
-Em `exclusionReasons` (linha ~434), quando o motivo é "Férias no mês", anexar "(exceção)" se a férias correspondente tiver `is_excecao = true`. Pequeno, mas evita confusão futura.
+Passar para `<ExcecaoPeriodosSection>` como nova prop `q1JaGozada`.
 
-### Verificações que NÃO precisam mudar
+> Observação importante: se o usuário alterar a data de início do Q1 no formulário (`q1Inicio` muda), `q1JaGozada` automaticamente vira `false` — exatamente o comportamento que você pediu ("a não ser que esse primeiro período seja modificado para uma data que não foi gozada ainda").
 
-- `countVacationDaysInMonth`, `shouldSkipDueToTwoMonthVacation`, `hasFullMonthVacation`, `isColabOnVacation` — todas iteram sobre o array `feriasAtivas`. Uma vez que a query traga os registros corretos, todas elas funcionam automaticamente, incluindo para férias-exceção.
-- Outras queries do arquivo (afastamentos, perdas, etc.) — não têm relação com este bug.
-- `vacationGenerator.ts` e `FeriasDialog.tsx` — não precisam ser tocados. A criação de férias continua igual.
+#### C. `ExcecaoPeriodosSection.tsx` — respeitar `q1JaGozada`
 
-### Resultado esperado após o deploy
+Acrescentar prop opcional:
 
-- Lidianne (férias `"pendente"` em maio) → detectada → excluída da escala de folgas com motivo "Férias no mês".
-- Luccian (férias-exceção em maio, qualquer status não-terminal) → detectada → excluída com motivo "Férias no mês (exceção)".
-- Comportamento idêntico para qualquer outro colaborador com férias agendadas, independente do status (exceto cancelada/reprovada/concluída).
+```ts
+interface ExcecaoPeriodosSectionProps {
+  ...
+  q1JaGozada?: boolean; // default false
+}
+```
+
+Aplicar três efeitos:
+
+**1. Recalcular `diasGozo`:**
+```ts
+const diasDisponiveis = q1JaGozada ? 15 : 30;
+const diasGozo = Math.max(0, diasDisponiveis - diasVendidos);
+```
+
+**2. Filtrar opções de distribuição:**
+```ts
+const opcoesDistribuicao = q1JaGozada
+  ? ["2", "livre"]                    // só 2º Período ou Livre
+  : ["1", "2", "ambos", "livre"];     // todas as opções
+```
+Renderizar apenas essas opções nos botões (linha 312).
+
+**3. Limitar input "dias a vender":**
+```ts
+<Input
+  type="number"
+  min={1}
+  max={diasDisponiveis}              // 15 quando Q1 já gozada
+  ...
+/>
+```
+
+**4. Se `distribuicaoTipo` atual era "1" ou "ambos" e `q1JaGozada` ficou `true`** (ex.: usuário voltou a colocar a data original do Q1): resetar para `"2"` automaticamente:
+```ts
+useEffect(() => {
+  if (isHydrating) return;
+  if (q1JaGozada && (distribuicaoTipo === "1" || distribuicaoTipo === "ambos")) {
+    onDistribuicaoTipoChange("2");
+  }
+}, [q1JaGozada]);
+```
+
+**5. Atualizar Cartão Resumo:**
+```
+Dias do período aquisitivo: 30
+Já gozados (Q1): -15        ← só aparece se q1JaGozada
+Disponíveis: 15
+Vendidos: -5
+Gozo: 10
+```
+
+**6. Alerta informativo** quando `q1JaGozada`:
+```
+ℹ O 1º período já foi gozado (22/12/2025 a 05/01/2026).
+   Apenas o 2º período pode ser distribuído. Para alterar o 1º,
+   modifique sua data de início no formulário acima.
+```
+
+### Comportamento esperado após correção (caso Maria de Lourdes)
+
+**Cenário 1 — tentar salvar no Padrão com venda de 5 dias do Q2:**
+- Toast detalhado: *"Férias em janeiro ou dezembro exige cadastro como exceção. Clique em 'Exceção' no topo do formulário."*
+
+**Cenário 2 — Exceção, vender 5 dias:**
+- Detecta `q1JaGozada = true`.
+- Input "dias a vender" limitado a 15.
+- Distribuição mostra apenas "2º Período" e "Livre".
+- Selecionando "2º Período": cria 1 slot com 10 dias de gozo (15 − 5).
+- Sem conflito falso com Iasmin.
+- Resumo mostra "Já gozados: −15", "Disponíveis: 15", "Vendidos: −5", "Gozo: 10".
+
+**Cenário 3 — usuário muda Q1 para data nova (não gozada):**
+- `q1JaGozada` automaticamente vira `false`.
+- Volta a oferecer 30 dias, todas as 4 opções de distribuição.
 
 ### Arquivos alterados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/ferias/folgas/GeradorFolgasDialog.tsx` | Trocar whitelist de status por blacklist (excluir só cancelada/reprovada/concluída); incluir `is_excecao` e `status` no SELECT; rotular diagnóstico de exceção |
+| `src/components/ferias/ferias/FeriasDialog.tsx` | Toast com motivo explícito quando bloqueia salvar; calcular `q1JaGozada` e passar para `ExcecaoPeriodosSection` |
+| `src/components/ferias/ferias/ExcecaoPeriodosSection.tsx` | Nova prop `q1JaGozada`; `diasGozo = (q1JaGozada ? 15 : 30) − diasVendidos`; ocultar opções "1º"/"Ambos" e ajustar max do input quando `q1JaGozada`; alerta informativo; reset automático de `distribuicaoTipo` |
+
+### Notas
+
+- Sem mudanças em schema, RLS, queries do gerador ou regras de exceção em si.
+- A regra "jan/dez = sempre exceção" continua intocada — apenas a mensagem fica mais clara.
+- A detecção de `q1JaGozada` se baseia em status + datas inalteradas; se o usuário modificar Q1 para datas novas, o sistema trata como reescrita do período e libera todas as opções.

@@ -1175,7 +1175,16 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const onSubmit = (data: FeriasFormData) => {
     const validation = validateVacation(data);
     if (validation.requiresException && !data.is_excecao) {
-      toast.error(validation.errors[0] || "Esta operação requer marcar como exceção");
+      const motivoLabel: Record<string, string> = {
+        mes_bloqueado: "Férias em janeiro ou dezembro",
+        venda_acima_limite: "Venda acima de 10 dias",
+        conflito_setor: "Conflito de setor",
+      };
+      const label = motivoLabel[validation.exceptionReason] || "Esta operação";
+      toast.error(
+        `${label} exige cadastro como exceção. Clique em "Exceção" no topo do formulário e preencha motivo + justificativa.`,
+        { duration: 6000 }
+      );
       return;
     }
     if (data.is_excecao && (!data.excecao_motivo || !data.excecao_justificativa)) {
@@ -1213,6 +1222,19 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
 
   const outroPeriodoLabel = quinzenaVenda === 1 ? "2º" : "1º";
   const periodoVendaLabel = quinzenaVenda === 1 ? "1º" : "2º";
+
+  // Q1 considerada "já gozada": editando um registro com status terminal de Q1
+  // E as datas atuais do form para Q1 não foram alteradas em relação ao banco.
+  // Se o usuário alterar q1Inicio/q1Fim para datas novas, deixa de ser "consumida".
+  const q1JaGozada = useMemo(() => {
+    if (!isEditing || !ferias) return false;
+    const q1Unchanged =
+      q1Inicio === ferias.quinzena1_inicio &&
+      q1Fim === ferias.quinzena1_fim;
+    const statusConsumido = ["q1_concluida", "em_gozo_q2", "em_gozo", "concluida"]
+      .includes(ferias.status);
+    return q1Unchanged && statusConsumido;
+  }, [isEditing, ferias, q1Inicio, q1Fim]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1457,6 +1479,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                   q2Inicio={q2Inicio}
                   q2Fim={q2Fim}
                   isHydrating={excHydrating}
+                  q1JaGozada={q1JaGozada}
                 />
               </div>
             ) : (
