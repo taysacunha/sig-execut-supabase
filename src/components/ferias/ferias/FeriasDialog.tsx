@@ -1246,8 +1246,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     mutation.mutate(data);
   };
 
-  const outroPeriodoLabel = quinzenaVenda === 1 ? "2º" : "1º";
-  const periodoVendaLabel = quinzenaVenda === 1 ? "1º" : "2º";
+  const outroPeriodoLabel = quinzenaVendaEfetiva === 1 ? "2º" : "1º";
+  const periodoVendaLabel = quinzenaVendaEfetiva === 1 ? "1º" : "2º";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
