@@ -1175,7 +1175,16 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const onSubmit = (data: FeriasFormData) => {
     const validation = validateVacation(data);
     if (validation.requiresException && !data.is_excecao) {
-      toast.error(validation.errors[0] || "Esta operação requer marcar como exceção");
+      const motivoLabel: Record<string, string> = {
+        mes_bloqueado: "Férias em janeiro ou dezembro",
+        venda_acima_limite: "Venda acima de 10 dias",
+        conflito_setor: "Conflito de setor",
+      };
+      const label = motivoLabel[validation.exceptionReason] || "Esta operação";
+      toast.error(
+        `${label} exige cadastro como exceção. Clique em "Exceção" no topo do formulário e preencha motivo + justificativa.`,
+        { duration: 6000 }
+      );
       return;
     }
     if (data.is_excecao && (!data.excecao_motivo || !data.excecao_justificativa)) {
