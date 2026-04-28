@@ -250,6 +250,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const quinzenaVenda = form.watch("quinzena_venda") || 1;
   const gozoPeriodos = form.watch("gozo_periodos");
   const gozoVendaInicio = form.watch("gozo_venda_inicio");
+  const gozoVendaFim = form.watch("gozo_venda_fim");
   const gozoVendaPeriodos = form.watch("gozo_venda_periodos");
   const gozoVendaQ1Inicio = form.watch("gozo_venda_q1_inicio");
   const gozoVendaQ2Inicio = form.watch("gozo_venda_q2_inicio");
