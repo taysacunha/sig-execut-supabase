@@ -271,6 +271,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
 
   const isVenda = opcaoAdicional === "vender";
   const isGozoDiferente = opcaoAdicional === "gozo_diferente";
+  const quinzenaVendaEfetiva = q1JaGozada ? 2 : quinzenaVenda;
   const diasDisponiveisPadrao = q1JaGozada ? 15 : 30;
   const diasGozo = Math.max(0, diasDisponiveisPadrao - diasVendidos);
   const diasGozoNoPeriodoVenda = Math.max(0, 15 - diasVendidos);
@@ -370,8 +371,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       return;
     }
     try {
-      const periodoInicio = quinzenaVenda === 1 ? q1Inicio : q2Inicio;
-      const periodoFim = quinzenaVenda === 1 ? q1Fim : q2Fim;
+      const periodoInicio = quinzenaVendaEfetiva === 1 ? q1Inicio : q2Inicio;
+      const periodoFim = quinzenaVendaEfetiva === 1 ? q1Fim : q2Fim;
       if (!periodoInicio || !periodoFim) { setGozoDateError(null); return; }
       const gozoStart = parseISO(gozoVendaInicio);
       const gozoEnd = addDays(gozoStart, diasGozoNoPeriodoVenda - 1);
@@ -385,7 +386,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         setGozoDateError(null);
       }
     } catch { setGozoDateError(null); }
-  }, [gozoVendaInicio, isVendaPadrao, quinzenaVenda, q1Inicio, q1Fim, q2Inicio, q2Fim, diasGozoNoPeriodoVenda]);
+  }, [gozoVendaInicio, isVendaPadrao, quinzenaVendaEfetiva, q1Inicio, q1Fim, q2Inicio, q2Fim, diasGozoNoPeriodoVenda]);
 
   useEffect(() => {
     if (gozoVendaQ1Inicio && isVendaExcecao && diasVendidos >= 1) {
