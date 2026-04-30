@@ -1125,7 +1125,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           .sort((a, b) => a.data_inicio.localeCompare(b.data_inicio))
           .map((p, idx) => ({
             ferias_id: feriasId,
-            tipo: excecaoTipo,
+            tipo: p.tipo || excecaoTipo,
             referencia_periodo: p.referencia_periodo ?? 1,
             numero: idx + 1,
             dias: p.dias,
