@@ -423,8 +423,8 @@ export function ExcecaoPeriodosSection({
                 </div>
               </div>
 
-              {/* 1º ou 2º Período: single period */}
-              {(distribuicaoTipo === "1" || distribuicaoTipo === "2") && periodos.length === 1 && (
+              {/* 1º ou 2º Período: single period (ignora linhas paralelas de gozo_diferente) */}
+              {(distribuicaoTipo === "1" || distribuicaoTipo === "2") && venderPeriodos.length === 1 && (
                 <Card className="border-primary/20 bg-primary/5">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm text-primary">
@@ -436,27 +436,29 @@ export function ExcecaoPeriodosSection({
                       <Label className="text-xs">Data de Início</Label>
                       <Input
                         type="date"
-                        value={periodos[0].data_inicio}
+                        value={venderPeriodos[0].data_inicio}
                         onChange={(e) => {
-                          const updated = [...periodos];
-                          updated[0] = { ...updated[0], data_inicio: e.target.value, data_fim: calcEndDate(e.target.value, diasGozo) };
-                          onPeriodosChange(updated);
+                          const targetId = venderPeriodos[0].id;
+                          const next = periodos.map(x => x.id === targetId
+                            ? { ...x, data_inicio: e.target.value, data_fim: calcEndDate(e.target.value, diasGozo) }
+                            : x);
+                          onPeriodosChange(next);
                         }}
                         className="mt-1"
                       />
                     </div>
                     <div>
                       <Label className="text-xs">Data de Fim (auto)</Label>
-                      <Input type="date" value={periodos[0].data_fim} readOnly className="mt-1 bg-muted cursor-not-allowed" />
+                      <Input type="date" value={venderPeriodos[0].data_fim} readOnly className="mt-1 bg-muted cursor-not-allowed" />
                     </div>
                   </CardContent>
                 </Card>
               )}
 
               {/* Ambos: two periods with auto-balance */}
-              {distribuicaoTipo === "ambos" && periodos.length === 2 && (
+              {distribuicaoTipo === "ambos" && venderPeriodos.length === 2 && (
                 <div className="space-y-3">
-                  {periodos.map((p, idx) => (
+                  {venderPeriodos.map((p, idx) => (
                     <Card key={p.id} className="border-primary/20 bg-primary/5">
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm text-primary">
@@ -485,9 +487,11 @@ export function ExcecaoPeriodosSection({
                               type="date"
                               value={p.data_inicio}
                               onChange={(e) => {
-                                const updated = [...periodos];
-                                updated[idx] = { ...updated[idx], data_inicio: e.target.value, data_fim: calcEndDate(e.target.value, p.dias) };
-                                onPeriodosChange(updated);
+                                const targetId = p.id;
+                                const next = periodos.map(x => x.id === targetId
+                                  ? { ...x, data_inicio: e.target.value, data_fim: calcEndDate(e.target.value, p.dias) }
+                                  : x);
+                                onPeriodosChange(next);
                               }}
                               className="mt-1"
                             />
@@ -506,8 +510,11 @@ export function ExcecaoPeriodosSection({
               {/* Livre: dynamic list */}
               {distribuicaoTipo === "livre" && (
                 <SubPeriodosList
-                  periodos={periodos}
-                  onChange={onPeriodosChange}
+                  periodos={venderPeriodos}
+                  onChange={(updated) => {
+                    // preservar gozoDiferentePeriodos paralelos
+                    onPeriodosChange([...updated, ...gozoDiferentePeriodos]);
+                  }}
                   totalDias={diasGozo}
                   referenciaPeriodo={0}
                   label="Períodos de gozo (livre)"
