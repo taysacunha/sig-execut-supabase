@@ -20,6 +20,8 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Search, Loader2, ArrowUpDown, CheckCircle2, Clock, AlertTriangle, XCircle, Undo2, CheckCheck, Printer, ChevronDown, Timer } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import { format, parseISO, addYears, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { usePagination } from "@/hooks/usePagination";
@@ -193,6 +195,7 @@ export function PeriodosAquisitivosTab() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [quitarDialogOpen, setQuitarDialogOpen] = useState(false);
   const [quitarTarget, setQuitarTarget] = useState<PeriodoAquisitivo[]>([]);
+  const [subTab, setSubTab] = useState<"pendentes" | "quitados">("pendentes");
 
   const { data: colaboradores = [], isLoading: loadingColabs } = useQuery({
     queryKey: ["periodos-aquisitivos-colabs"],
@@ -274,7 +277,10 @@ export function PeriodosAquisitivosTab() {
         const matchSetor = setorFilter === "all" || p.setorId === setorFilter;
         const matchStatus = statusFilter === "all" || p.status === statusFilter;
         const matchYear = yearFilter === "all" || p.periodoInicio.startsWith(yearFilter);
-        return matchSearch && matchSetor && matchStatus && matchYear;
+        const matchSubTab = subTab === "quitados"
+          ? p.status === "quitado"
+          : p.status !== "quitado";
+        return matchSearch && matchSetor && matchStatus && matchYear && matchSubTab;
       })
       .sort((a, b) => {
         let cmp = 0;
@@ -287,7 +293,7 @@ export function PeriodosAquisitivosTab() {
         }
         return sortDir === "asc" ? cmp : -cmp;
       });
-  }, [periodos, searchTerm, setorFilter, statusFilter, yearFilter, sortField, sortDir]);
+  }, [periodos, searchTerm, setorFilter, statusFilter, yearFilter, sortField, sortDir, subTab]);
 
   // Group by year for collapsible sections
   const groupedByYear = useMemo(() => {
@@ -314,14 +320,40 @@ export function PeriodosAquisitivosTab() {
     try { return format(parseISO(d), "dd/MM/yyyy", { locale: ptBR }); } catch { return d; }
   };
 
+  // Stats globais (independem da sub-aba) para que os cards reflitam o universo todo
+  // após aplicar busca/setor/ano. Ignoram statusFilter para servir como atalhos.
+  const globalScope = useMemo(() => {
+    return periodos.filter(p => {
+      const matchSearch = normalizeText(p.colaboradorNome).includes(normalizeText(searchTerm));
+      const matchSetor = setorFilter === "all" || p.setorId === setorFilter;
+      const matchYear = yearFilter === "all" || p.periodoInicio.startsWith(yearFilter);
+      return matchSearch && matchSetor && matchYear;
+    });
+  }, [periodos, searchTerm, setorFilter, yearFilter]);
+
   const stats = useMemo(() => ({
-    total: filtered.length,
-    quitado: filtered.filter(p => p.status === "quitado").length,
-    parcial: filtered.filter(p => p.status === "parcial").length,
-    pendente: filtered.filter(p => p.status === "pendente").length,
-    a_vencer: filtered.filter(p => p.status === "a_vencer").length,
-    vencido: filtered.filter(p => p.status === "vencido").length,
-  }), [filtered]);
+    total: globalScope.length,
+    quitado: globalScope.filter(p => p.status === "quitado").length,
+    parcial: globalScope.filter(p => p.status === "parcial").length,
+    pendente: globalScope.filter(p => p.status === "pendente").length,
+    a_vencer: globalScope.filter(p => p.status === "a_vencer").length,
+    vencido: globalScope.filter(p => p.status === "vencido").length,
+  }), [globalScope]);
+
+  const handleStatCardClick = (target: "all" | "quitado" | "parcial" | "pendente" | "a_vencer" | "vencido") => {
+    if (target === "all") {
+      setStatusFilter("all");
+      setSubTab("pendentes");
+      return;
+    }
+    if (target === "quitado") {
+      setSubTab("quitados");
+      setStatusFilter(statusFilter === "quitado" ? "all" : "quitado");
+      return;
+    }
+    setSubTab("pendentes");
+    setStatusFilter(statusFilter === target ? "all" : target);
+  };
 
   const isLoading = loadingColabs || loadingFerias;
 
