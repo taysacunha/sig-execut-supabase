@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
-import { Info, AlertTriangle, Plus, Trash2, DollarSign, CalendarClock } from "lucide-react";
+import { Info, AlertTriangle, Plus, Trash2, DollarSign, CalendarClock, FileSearch } from "lucide-react";
 import { format, parseISO, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -176,6 +176,13 @@ export function ExcecaoPeriodosSection({
   const diasGozo = Math.max(0, diasDisponiveis - diasVendidos);
   const opcoesDistribuicao = q1JaGozada ? ["2", "livre"] : ["1", "2", "ambos", "livre"];
   const opcoesGozoDiferente = q1JaGozada ? ["2"] : ["1", "2", "ambos"];
+
+  // Períodos do tipo "gozo_diferente" que coexistem com o modo "vender" (caso em que
+  // o colaborador vendeu dias no 1º período E ainda assim há um gozo real do 2º período
+  // distinto do enviado ao contador). Renderizados em uma seção paralela.
+  const gozoDiferentePeriodos = periodos.filter(p => p.tipo === "gozo_diferente");
+  const venderPeriodos = periodos.filter(p => p.tipo !== "gozo_diferente");
+  const hasMixedGozoDiferente = excecaoTipo === "vender" && gozoDiferentePeriodos.length > 0;
 
   // Se Q1 ficou "consumida" e a distribuição atual era "1" ou "ambos", forçar "2".
   useEffect(() => {
