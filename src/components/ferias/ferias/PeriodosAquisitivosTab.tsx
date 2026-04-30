@@ -746,11 +746,16 @@ export function PeriodosAquisitivosTab() {
               <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os status</SelectItem>
-                <SelectItem value="quitado">Quitado</SelectItem>
-                <SelectItem value="parcial">Parcial</SelectItem>
-                <SelectItem value="pendente">Pendente</SelectItem>
-                <SelectItem value="a_vencer">A Vencer</SelectItem>
-                <SelectItem value="vencido">Vencido</SelectItem>
+                {subTab === "quitados" ? (
+                  <SelectItem value="quitado">Quitado</SelectItem>
+                ) : (
+                  <>
+                    <SelectItem value="parcial">Parcial</SelectItem>
+                    <SelectItem value="pendente">Pendente</SelectItem>
+                    <SelectItem value="a_vencer">A Vencer</SelectItem>
+                    <SelectItem value="vencido">Vencido</SelectItem>
+                  </>
+                )}
               </SelectContent>
             </Select>
             <Select value={yearFilter} onValueChange={setYearFilter}>
@@ -798,7 +803,7 @@ export function PeriodosAquisitivosTab() {
             // Collapsible year sections when no year filter
             <div className="divide-y">
               {groupedByYear.map(group => (
-                <Collapsible key={group.year} defaultOpen={group.year >= today.getFullYear() - 1}>
+                <Collapsible key={group.year} defaultOpen={subTab === "pendentes" && group.year >= today.getFullYear() - 1}>
                   <CollapsibleTrigger className="flex items-center justify-between w-full px-4 py-3 hover:bg-muted/50 transition-colors">
                     <div className="flex items-center gap-3">
                       <ChevronDown className="h-4 w-4 transition-transform [&[data-state=open]]:rotate-180" />
