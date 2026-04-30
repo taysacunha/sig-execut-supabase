@@ -611,11 +611,81 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           const inferredOpcao = ferias.vender_dias ? "vender" : ferias.gozo_diferente ? "gozo_diferente" : "nenhum";
           form.setValue("opcao_adicional", inferredOpcao);
           setExcecaoTipo(inferredOpcao === "nenhum" ? null : inferredOpcao);
-          setExcDistribuicaoTipo(ferias.distribuicao_tipo || "");
+
+          // Fallback: sintetizar excPeriodos a partir dos campos planos (legado),
+          // para que o formulário de exceção mostre as datas já cadastradas mesmo
+          // sem linhas em ferias_gozo_periodos.
+          const sintetizados: GozoPeriodo[] = [];
+          let inferredDistFallback = ferias.distribuicao_tipo || "";
+
+          if (inferredOpcao === "vender") {
+            const qv = ferias.quinzena_venda || 1;
+            const diasVend = ferias.dias_vendidos || 0;
+            const diasGozoTotal = Math.max(0, 30 - diasVend);
+            // Tenta pegar as datas de gozo legacy de acordo com o período de venda
+            const g1i = ferias.gozo_quinzena1_inicio;
+            const g1f = ferias.gozo_quinzena1_fim;
+            const g2i = ferias.gozo_quinzena2_inicio;
+            const g2f = ferias.gozo_quinzena2_fim;
+            const tem1 = !!(g1i && g1f);
+            const tem2 = !!(g2i && g2f);
+            if (tem1 && tem2) {
+              if (!inferredDistFallback) inferredDistFallback = "ambos";
+              sintetizados.push({
+                id: crypto.randomUUID(), referencia_periodo: 1,
+                dias: Math.ceil(diasGozoTotal / 2),
+                data_inicio: g1i!, data_fim: g1f!, tipo: "vender",
+              });
+              sintetizados.push({
+                id: crypto.randomUUID(), referencia_periodo: 2,
+                dias: Math.floor(diasGozoTotal / 2),
+                data_inicio: g2i!, data_fim: g2f!, tipo: "vender",
+              });
+            } else if (tem1) {
+              if (!inferredDistFallback) inferredDistFallback = qv === 1 ? "2" : "1";
+              sintetizados.push({
+                id: crypto.randomUUID(),
+                referencia_periodo: qv === 1 ? 2 : 1,
+                dias: diasGozoTotal,
+                data_inicio: g1i!, data_fim: g1f!, tipo: "vender",
+              });
+            } else if (tem2) {
+              if (!inferredDistFallback) inferredDistFallback = qv === 1 ? "2" : "1";
+              sintetizados.push({
+                id: crypto.randomUUID(),
+                referencia_periodo: qv === 1 ? 2 : 1,
+                dias: diasGozoTotal,
+                data_inicio: g2i!, data_fim: g2f!, tipo: "vender",
+              });
+            }
+          } else if (inferredOpcao === "gozo_diferente") {
+            const g1i = ferias.gozo_quinzena1_inicio;
+            const g1f = ferias.gozo_quinzena1_fim;
+            const g2i = ferias.gozo_quinzena2_inicio;
+            const g2f = ferias.gozo_quinzena2_fim;
+            const tem1 = !!(g1i && g1f);
+            const tem2 = !!(g2i && g2f);
+            if (tem1 && tem2 && !inferredDistFallback) inferredDistFallback = "ambos";
+            else if (tem1 && !inferredDistFallback) inferredDistFallback = "1";
+            else if (tem2 && !inferredDistFallback) inferredDistFallback = "2";
+            if (tem1) sintetizados.push({
+              id: crypto.randomUUID(), referencia_periodo: 1, dias: 15,
+              data_inicio: g1i!, data_fim: g1f!, tipo: "gozo_diferente",
+            });
+            if (tem2) sintetizados.push({
+              id: crypto.randomUUID(), referencia_periodo: 2, dias: 15,
+              data_inicio: g2i!, data_fim: g2f!, tipo: "gozo_diferente",
+            });
+          }
+
+          setExcDistribuicaoTipo(inferredDistFallback);
           setExcDiasVendidos(ferias.dias_vendidos || 0);
-          setExcPeriodos([]);
+          setExcPeriodos(sintetizados);
         }
-        setTimeout(() => setExcHydrating(false), 50);
+        // Aumentar a janela de hidratação para garantir que os efeitos de
+        // ExcecaoPeriodosSection (que dependem de `periodos`/`distribuicaoTipo`)
+        // não interpretem o estado carregado como mudança manual do usuário.
+        setTimeout(() => setExcHydrating(false), 300);
       })();
     }
     setTimeout(() => { isResettingRef.current = false; }, 0);
