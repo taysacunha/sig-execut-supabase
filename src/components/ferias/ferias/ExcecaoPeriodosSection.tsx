@@ -15,6 +15,10 @@ export interface GozoPeriodo {
   data_inicio: string;
   data_fim: string;
   referencia_periodo: number;
+  /** Tipo do período: "vender" (parte gozada quando há venda) ou "gozo_diferente"
+   *  (datas reais distintas do que foi reportado ao contador). Permite armazenar
+   *  os dois cenários simultaneamente no mesmo registro. */
+  tipo?: "vender" | "gozo_diferente";
 }
 
 interface ExcecaoPeriodosSectionProps {
