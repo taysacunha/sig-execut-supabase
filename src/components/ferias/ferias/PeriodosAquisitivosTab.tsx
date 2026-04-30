@@ -20,6 +20,8 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Search, Loader2, ArrowUpDown, CheckCircle2, Clock, AlertTriangle, XCircle, Undo2, CheckCheck, Printer, ChevronDown, Timer } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import { format, parseISO, addYears, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { usePagination } from "@/hooks/usePagination";
@@ -193,6 +195,7 @@ export function PeriodosAquisitivosTab() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [quitarDialogOpen, setQuitarDialogOpen] = useState(false);
   const [quitarTarget, setQuitarTarget] = useState<PeriodoAquisitivo[]>([]);
+  const [subTab, setSubTab] = useState<"pendentes" | "quitados">("pendentes");
 
   const { data: colaboradores = [], isLoading: loadingColabs } = useQuery({
     queryKey: ["periodos-aquisitivos-colabs"],
@@ -274,7 +277,10 @@ export function PeriodosAquisitivosTab() {
         const matchSetor = setorFilter === "all" || p.setorId === setorFilter;
         const matchStatus = statusFilter === "all" || p.status === statusFilter;
         const matchYear = yearFilter === "all" || p.periodoInicio.startsWith(yearFilter);
-        return matchSearch && matchSetor && matchStatus && matchYear;
+        const matchSubTab = subTab === "quitados"
+          ? p.status === "quitado"
+          : p.status !== "quitado";
+        return matchSearch && matchSetor && matchStatus && matchYear && matchSubTab;
       })
       .sort((a, b) => {
         let cmp = 0;
@@ -287,7 +293,7 @@ export function PeriodosAquisitivosTab() {
         }
         return sortDir === "asc" ? cmp : -cmp;
       });
-  }, [periodos, searchTerm, setorFilter, statusFilter, yearFilter, sortField, sortDir]);
+  }, [periodos, searchTerm, setorFilter, statusFilter, yearFilter, sortField, sortDir, subTab]);
 
   // Group by year for collapsible sections
   const groupedByYear = useMemo(() => {
@@ -314,14 +320,40 @@ export function PeriodosAquisitivosTab() {
     try { return format(parseISO(d), "dd/MM/yyyy", { locale: ptBR }); } catch { return d; }
   };
 
+  // Stats globais (independem da sub-aba) para que os cards reflitam o universo todo
+  // após aplicar busca/setor/ano. Ignoram statusFilter para servir como atalhos.
+  const globalScope = useMemo(() => {
+    return periodos.filter(p => {
+      const matchSearch = normalizeText(p.colaboradorNome).includes(normalizeText(searchTerm));
+      const matchSetor = setorFilter === "all" || p.setorId === setorFilter;
+      const matchYear = yearFilter === "all" || p.periodoInicio.startsWith(yearFilter);
+      return matchSearch && matchSetor && matchYear;
+    });
+  }, [periodos, searchTerm, setorFilter, yearFilter]);
+
   const stats = useMemo(() => ({
-    total: filtered.length,
-    quitado: filtered.filter(p => p.status === "quitado").length,
-    parcial: filtered.filter(p => p.status === "parcial").length,
-    pendente: filtered.filter(p => p.status === "pendente").length,
-    a_vencer: filtered.filter(p => p.status === "a_vencer").length,
-    vencido: filtered.filter(p => p.status === "vencido").length,
-  }), [filtered]);
+    total: globalScope.length,
+    quitado: globalScope.filter(p => p.status === "quitado").length,
+    parcial: globalScope.filter(p => p.status === "parcial").length,
+    pendente: globalScope.filter(p => p.status === "pendente").length,
+    a_vencer: globalScope.filter(p => p.status === "a_vencer").length,
+    vencido: globalScope.filter(p => p.status === "vencido").length,
+  }), [globalScope]);
+
+  const handleStatCardClick = (target: "all" | "quitado" | "parcial" | "pendente" | "a_vencer" | "vencido") => {
+    if (target === "all") {
+      setStatusFilter("all");
+      setSubTab("pendentes");
+      return;
+    }
+    if (target === "quitado") {
+      setSubTab("quitados");
+      setStatusFilter(statusFilter === "quitado" ? "all" : "quitado");
+      return;
+    }
+    setSubTab("pendentes");
+    setStatusFilter(statusFilter === target ? "all" : target);
+  };
 
   const isLoading = loadingColabs || loadingFerias;
 
@@ -627,15 +659,73 @@ export function PeriodosAquisitivosTab() {
 
   return (
     <div className="space-y-6">
-      {/* Stats */}
+      {/* Stats — clicáveis: aplicam filtro de status e mudam a sub-aba */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-        <Card><CardContent className="pt-4 pb-4"><div className="text-sm font-medium text-muted-foreground">Total</div><div className="text-2xl font-bold">{stats.total}</div></CardContent></Card>
-        <Card className="border-green-500/20"><CardContent className="pt-4 pb-4"><div className="text-sm font-medium text-green-600">Quitados</div><div className="text-2xl font-bold text-green-600">{stats.quitado}</div></CardContent></Card>
-        <Card className="border-blue-500/20"><CardContent className="pt-4 pb-4"><div className="text-sm font-medium text-blue-600">Parciais</div><div className="text-2xl font-bold text-blue-600">{stats.parcial}</div></CardContent></Card>
-        <Card className="border-yellow-500/20"><CardContent className="pt-4 pb-4"><div className="text-sm font-medium text-yellow-600">Pendentes</div><div className="text-2xl font-bold text-yellow-600">{stats.pendente}</div></CardContent></Card>
-        <Card className="border-orange-500/20"><CardContent className="pt-4 pb-4"><div className="text-sm font-medium text-orange-600">A Vencer</div><div className="text-2xl font-bold text-orange-600">{stats.a_vencer}</div></CardContent></Card>
-        <Card className="border-destructive/20"><CardContent className="pt-4 pb-4"><div className="text-sm font-medium text-destructive">Vencidos</div><div className="text-2xl font-bold text-destructive">{stats.vencido}</div></CardContent></Card>
+        <button type="button" onClick={() => handleStatCardClick("all")} className="text-left">
+          <Card className={cn("transition-all hover:shadow-md hover:border-primary/40", statusFilter === "all" && "ring-2 ring-primary/40")}>
+            <CardContent className="pt-4 pb-4">
+              <div className="text-sm font-medium text-muted-foreground">Total</div>
+              <div className="text-2xl font-bold">{stats.total}</div>
+            </CardContent>
+          </Card>
+        </button>
+        <button type="button" onClick={() => handleStatCardClick("quitado")} className="text-left">
+          <Card className={cn("border-green-500/20 transition-all hover:shadow-md hover:border-green-500/60", subTab === "quitados" && "ring-2 ring-green-500/40")}>
+            <CardContent className="pt-4 pb-4">
+              <div className="text-sm font-medium text-green-600">Quitados</div>
+              <div className="text-2xl font-bold text-green-600">{stats.quitado}</div>
+            </CardContent>
+          </Card>
+        </button>
+        <button type="button" onClick={() => handleStatCardClick("parcial")} className="text-left">
+          <Card className={cn("border-blue-500/20 transition-all hover:shadow-md hover:border-blue-500/60", statusFilter === "parcial" && "ring-2 ring-blue-500/40")}>
+            <CardContent className="pt-4 pb-4">
+              <div className="text-sm font-medium text-blue-600">Parciais</div>
+              <div className="text-2xl font-bold text-blue-600">{stats.parcial}</div>
+            </CardContent>
+          </Card>
+        </button>
+        <button type="button" onClick={() => handleStatCardClick("pendente")} className="text-left">
+          <Card className={cn("border-yellow-500/20 transition-all hover:shadow-md hover:border-yellow-500/60", statusFilter === "pendente" && "ring-2 ring-yellow-500/40")}>
+            <CardContent className="pt-4 pb-4">
+              <div className="text-sm font-medium text-yellow-600">Pendentes</div>
+              <div className="text-2xl font-bold text-yellow-600">{stats.pendente}</div>
+            </CardContent>
+          </Card>
+        </button>
+        <button type="button" onClick={() => handleStatCardClick("a_vencer")} className="text-left">
+          <Card className={cn("border-orange-500/20 transition-all hover:shadow-md hover:border-orange-500/60", statusFilter === "a_vencer" && "ring-2 ring-orange-500/40")}>
+            <CardContent className="pt-4 pb-4">
+              <div className="text-sm font-medium text-orange-600">A Vencer</div>
+              <div className="text-2xl font-bold text-orange-600">{stats.a_vencer}</div>
+            </CardContent>
+          </Card>
+        </button>
+        <button type="button" onClick={() => handleStatCardClick("vencido")} className="text-left">
+          <Card className={cn("border-destructive/20 transition-all hover:shadow-md hover:border-destructive/60", statusFilter === "vencido" && "ring-2 ring-destructive/40")}>
+            <CardContent className="pt-4 pb-4">
+              <div className="text-sm font-medium text-destructive">Vencidos</div>
+              <div className="text-2xl font-bold text-destructive">{stats.vencido}</div>
+            </CardContent>
+          </Card>
+        </button>
       </div>
+
+      {/* Sub-abas: Pendentes (default) | Quitados */}
+      <Tabs value={subTab} onValueChange={(v) => { setSubTab(v as "pendentes" | "quitados"); setStatusFilter("all"); setSelected(new Set()); }}>
+        <TabsList className="grid w-full grid-cols-2 sm:w-[400px]">
+          <TabsTrigger value="pendentes" className="gap-2">
+            <Clock className="h-4 w-4" />
+            Pendentes
+            <Badge variant="secondary" className="ml-1">{stats.pendente + stats.a_vencer + stats.parcial + stats.vencido}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="quitados" className="gap-2">
+            <CheckCircle2 className="h-4 w-4" />
+            Quitados
+            <Badge variant="secondary" className="ml-1">{stats.quitado}</Badge>
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/* Filters */}
       <Card>
@@ -656,11 +746,16 @@ export function PeriodosAquisitivosTab() {
               <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os status</SelectItem>
-                <SelectItem value="quitado">Quitado</SelectItem>
-                <SelectItem value="parcial">Parcial</SelectItem>
-                <SelectItem value="pendente">Pendente</SelectItem>
-                <SelectItem value="a_vencer">A Vencer</SelectItem>
-                <SelectItem value="vencido">Vencido</SelectItem>
+                {subTab === "quitados" ? (
+                  <SelectItem value="quitado">Quitado</SelectItem>
+                ) : (
+                  <>
+                    <SelectItem value="parcial">Parcial</SelectItem>
+                    <SelectItem value="pendente">Pendente</SelectItem>
+                    <SelectItem value="a_vencer">A Vencer</SelectItem>
+                    <SelectItem value="vencido">Vencido</SelectItem>
+                  </>
+                )}
               </SelectContent>
             </Select>
             <Select value={yearFilter} onValueChange={setYearFilter}>
@@ -708,7 +803,7 @@ export function PeriodosAquisitivosTab() {
             // Collapsible year sections when no year filter
             <div className="divide-y">
               {groupedByYear.map(group => (
-                <Collapsible key={group.year} defaultOpen={group.year >= today.getFullYear() - 1}>
+                <Collapsible key={group.year} defaultOpen={subTab === "pendentes" && group.year >= today.getFullYear() - 1}>
                   <CollapsibleTrigger className="flex items-center justify-between w-full px-4 py-3 hover:bg-muted/50 transition-colors">
                     <div className="flex items-center gap-3">
                       <ChevronDown className="h-4 w-4 transition-transform [&[data-state=open]]:rotate-180" />

@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
-import { Info, AlertTriangle, Plus, Trash2, DollarSign, CalendarClock } from "lucide-react";
+import { Info, AlertTriangle, Plus, Trash2, DollarSign, CalendarClock, FileSearch } from "lucide-react";
 import { format, parseISO, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,10 @@ export interface GozoPeriodo {
   data_inicio: string;
   data_fim: string;
   referencia_periodo: number;
+  /** Tipo do período: "vender" (parte gozada quando há venda) ou "gozo_diferente"
+   *  (datas reais distintas do que foi reportado ao contador). Permite armazenar
+   *  os dois cenários simultaneamente no mesmo registro. */
+  tipo?: "vender" | "gozo_diferente";
 }
 
 interface ExcecaoPeriodosSectionProps {
@@ -173,6 +177,13 @@ export function ExcecaoPeriodosSection({
   const opcoesDistribuicao = q1JaGozada ? ["2", "livre"] : ["1", "2", "ambos", "livre"];
   const opcoesGozoDiferente = q1JaGozada ? ["2"] : ["1", "2", "ambos"];
 
+  // Períodos do tipo "gozo_diferente" que coexistem com o modo "vender" (caso em que
+  // o colaborador vendeu dias no 1º período E ainda assim há um gozo real do 2º período
+  // distinto do enviado ao contador). Renderizados em uma seção paralela.
+  const gozoDiferentePeriodos = periodos.filter(p => p.tipo === "gozo_diferente");
+  const venderPeriodos = periodos.filter(p => p.tipo !== "gozo_diferente");
+  const hasMixedGozoDiferente = excecaoTipo === "vender" && gozoDiferentePeriodos.length > 0;
+
   // Se Q1 ficou "consumida" e a distribuição atual era "1" ou "ambos", forçar "2".
   useEffect(() => {
     if (isHydrating) return;
@@ -211,34 +222,38 @@ export function ExcecaoPeriodosSection({
   // Initialize periods when distribuicaoTipo changes (skip during edit hydration)
   useEffect(() => {
     if (isHydrating) return;
+    // Sempre preservar quaisquer linhas paralelas de "gozo_diferente" ao reinicializar
+    // a parte de venda — elas representam o gozo real distinto do contador.
+    const keepParalelo = periodos.filter(p => p.tipo === "gozo_diferente");
     if (excecaoTipo === "vender") {
       if (diasGozo <= 0) {
-        onPeriodosChange([]);
+        onPeriodosChange([...keepParalelo]);
         return;
       }
       if (distribuicaoTipo === "1") {
-        onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 1 }]);
+        onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 1, tipo: "vender" }, ...keepParalelo]);
       } else if (distribuicaoTipo === "2") {
-        onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 2 }]);
+        onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 2, tipo: "vender" }, ...keepParalelo]);
       } else if (distribuicaoTipo === "ambos") {
         const d1 = Math.ceil(diasGozo / 2);
         const d2 = diasGozo - d1;
         onPeriodosChange([
-          { id: genId(), dias: d1, data_inicio: "", data_fim: "", referencia_periodo: 1 },
-          { id: genId(), dias: d2, data_inicio: "", data_fim: "", referencia_periodo: 2 },
+          { id: genId(), dias: d1, data_inicio: "", data_fim: "", referencia_periodo: 1, tipo: "vender" },
+          { id: genId(), dias: d2, data_inicio: "", data_fim: "", referencia_periodo: 2, tipo: "vender" },
+          ...keepParalelo,
         ]);
       } else if (distribuicaoTipo === "livre") {
-        onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 0 }]);
+        onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 0, tipo: "vender" }, ...keepParalelo]);
       }
     } else if (excecaoTipo === "gozo_diferente") {
       if (distribuicaoTipo === "1") {
-        onPeriodosChange([{ id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 1 }]);
+        onPeriodosChange([{ id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 1, tipo: "gozo_diferente" }]);
       } else if (distribuicaoTipo === "2") {
-        onPeriodosChange([{ id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 2 }]);
+        onPeriodosChange([{ id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 2, tipo: "gozo_diferente" }]);
       } else if (distribuicaoTipo === "ambos") {
         onPeriodosChange([
-          { id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 1 },
-          { id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 2 },
+          { id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 1, tipo: "gozo_diferente" },
+          { id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 2, tipo: "gozo_diferente" },
         ]);
       }
     }
@@ -412,8 +427,8 @@ export function ExcecaoPeriodosSection({
                 </div>
               </div>
 
-              {/* 1º ou 2º Período: single period */}
-              {(distribuicaoTipo === "1" || distribuicaoTipo === "2") && periodos.length === 1 && (
+              {/* 1º ou 2º Período: single period (ignora linhas paralelas de gozo_diferente) */}
+              {(distribuicaoTipo === "1" || distribuicaoTipo === "2") && venderPeriodos.length === 1 && (
                 <Card className="border-primary/20 bg-primary/5">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm text-primary">
@@ -425,27 +440,29 @@ export function ExcecaoPeriodosSection({
                       <Label className="text-xs">Data de Início</Label>
                       <Input
                         type="date"
-                        value={periodos[0].data_inicio}
+                        value={venderPeriodos[0].data_inicio}
                         onChange={(e) => {
-                          const updated = [...periodos];
-                          updated[0] = { ...updated[0], data_inicio: e.target.value, data_fim: calcEndDate(e.target.value, diasGozo) };
-                          onPeriodosChange(updated);
+                          const targetId = venderPeriodos[0].id;
+                          const next = periodos.map(x => x.id === targetId
+                            ? { ...x, data_inicio: e.target.value, data_fim: calcEndDate(e.target.value, diasGozo) }
+                            : x);
+                          onPeriodosChange(next);
                         }}
                         className="mt-1"
                       />
                     </div>
                     <div>
                       <Label className="text-xs">Data de Fim (auto)</Label>
-                      <Input type="date" value={periodos[0].data_fim} readOnly className="mt-1 bg-muted cursor-not-allowed" />
+                      <Input type="date" value={venderPeriodos[0].data_fim} readOnly className="mt-1 bg-muted cursor-not-allowed" />
                     </div>
                   </CardContent>
                 </Card>
               )}
 
               {/* Ambos: two periods with auto-balance */}
-              {distribuicaoTipo === "ambos" && periodos.length === 2 && (
+              {distribuicaoTipo === "ambos" && venderPeriodos.length === 2 && (
                 <div className="space-y-3">
-                  {periodos.map((p, idx) => (
+                  {venderPeriodos.map((p, idx) => (
                     <Card key={p.id} className="border-primary/20 bg-primary/5">
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm text-primary">
@@ -474,9 +491,11 @@ export function ExcecaoPeriodosSection({
                               type="date"
                               value={p.data_inicio}
                               onChange={(e) => {
-                                const updated = [...periodos];
-                                updated[idx] = { ...updated[idx], data_inicio: e.target.value, data_fim: calcEndDate(e.target.value, p.dias) };
-                                onPeriodosChange(updated);
+                                const targetId = p.id;
+                                const next = periodos.map(x => x.id === targetId
+                                  ? { ...x, data_inicio: e.target.value, data_fim: calcEndDate(e.target.value, p.dias) }
+                                  : x);
+                                onPeriodosChange(next);
                               }}
                               className="mt-1"
                             />
@@ -495,8 +514,11 @@ export function ExcecaoPeriodosSection({
               {/* Livre: dynamic list */}
               {distribuicaoTipo === "livre" && (
                 <SubPeriodosList
-                  periodos={periodos}
-                  onChange={onPeriodosChange}
+                  periodos={venderPeriodos}
+                  onChange={(updated) => {
+                    // preservar gozoDiferentePeriodos paralelos
+                    onPeriodosChange([...updated, ...gozoDiferentePeriodos]);
+                  }}
                   totalDias={diasGozo}
                   referenciaPeriodo={0}
                   label="Períodos de gozo (livre)"
@@ -545,6 +567,80 @@ export function ExcecaoPeriodosSection({
               </AlertDescription>
             </Alert>
           )}
+        </div>
+      )}
+
+      {/* ===== PARALELO: GOZO REAL DIFERENTE DO CONTADOR (durante modo VENDER) ===== */}
+      {hasMixedGozoDiferente && (
+        <div className="space-y-3 pl-4 border-l-2 border-amber-500/40">
+          <Alert className="border-amber-500/40 bg-amber-500/10">
+            <FileSearch className="h-4 w-4" />
+            <AlertTitle className="text-sm">Gozo real diferente do enviado ao contador</AlertTitle>
+            <AlertDescription className="text-xs">
+              Estes registros indicam que o gozo efetivo de algum período difere das datas oficiais
+              reportadas. As datas oficiais permanecem nos campos "1ª/2ª Quinzena" do formulário
+              acima — abaixo estão as datas reais.
+            </AlertDescription>
+          </Alert>
+
+          {[1, 2].map((ref) => {
+            const items = gozoDiferentePeriodos.filter(p => p.referencia_periodo === ref);
+            if (items.length === 0) return null;
+            return (
+              <Card key={ref} className="border-amber-500/30 bg-amber-500/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">{ref}º Período — gozo real</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {items.map((p, idx) => (
+                    <div key={p.id} className="grid grid-cols-3 gap-2">
+                      <div>
+                        <Label className="text-xs">Dias</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={p.dias}
+                          onChange={(e) => {
+                            const dias = Math.max(1, parseInt(e.target.value) || 1);
+                            const next = periodos.map(x => x.id === p.id
+                              ? { ...x, dias, data_fim: x.data_inicio ? calcEndDate(x.data_inicio, dias) : x.data_fim }
+                              : x);
+                            onPeriodosChange(next);
+                          }}
+                          className="h-9"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Início</Label>
+                        <Input
+                          type="date"
+                          value={p.data_inicio}
+                          onChange={(e) => {
+                            const data_inicio = e.target.value;
+                            const next = periodos.map(x => x.id === p.id
+                              ? { ...x, data_inicio, data_fim: data_inicio ? calcEndDate(data_inicio, x.dias) : "" }
+                              : x);
+                            onPeriodosChange(next);
+                          }}
+                          className="h-9"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Fim (auto)</Label>
+                        <Input type="date" value={p.data_fim} readOnly className="h-9 bg-muted cursor-not-allowed" />
+                      </div>
+                      {items.length > 1 && idx > 0 && (
+                        <Button type="button" variant="ghost" size="icon" className="h-9 w-9"
+                          onClick={() => onPeriodosChange(periodos.filter(x => x.id !== p.id))}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 

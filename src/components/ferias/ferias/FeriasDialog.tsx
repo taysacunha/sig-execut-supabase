@@ -581,7 +581,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             (ferias.vender_dias ? "vender" : ferias.gozo_diferente ? "gozo_diferente" : null);
           
           // Infer distribuicaoTipo from referencia_periodo values
-          const refs = [...new Set(loaded.map((p: any) => p.referencia_periodo))];
+          const venderRows = loaded.filter((p: any) => p.tipo !== "gozo_diferente");
+          const refs = [...new Set(venderRows.map((p: any) => p.referencia_periodo))];
           let inferredDist = ferias.distribuicao_tipo || "";
           if (!inferredDist) {
             if (refs.includes(0)) inferredDist = "livre";
@@ -601,6 +602,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             dias: p.dias,
             data_inicio: p.data_inicio,
             data_fim: p.data_fim,
+            tipo: (p.tipo === "gozo_diferente" ? "gozo_diferente" : "vender") as "vender" | "gozo_diferente",
           })));
         } else {
           // No gozo_periodos found — use flags from the main record
@@ -1123,7 +1125,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           .sort((a, b) => a.data_inicio.localeCompare(b.data_inicio))
           .map((p, idx) => ({
             ferias_id: feriasId,
-            tipo: excecaoTipo,
+            tipo: p.tipo || excecaoTipo,
             referencia_periodo: p.referencia_periodo ?? 1,
             numero: idx + 1,
             dias: p.dias,
