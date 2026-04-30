@@ -659,15 +659,73 @@ export function PeriodosAquisitivosTab() {
 
   return (
     <div className="space-y-6">
-      {/* Stats */}
+      {/* Stats — clicáveis: aplicam filtro de status e mudam a sub-aba */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-        <Card><CardContent className="pt-4 pb-4"><div className="text-sm font-medium text-muted-foreground">Total</div><div className="text-2xl font-bold">{stats.total}</div></CardContent></Card>
-        <Card className="border-green-500/20"><CardContent className="pt-4 pb-4"><div className="text-sm font-medium text-green-600">Quitados</div><div className="text-2xl font-bold text-green-600">{stats.quitado}</div></CardContent></Card>
-        <Card className="border-blue-500/20"><CardContent className="pt-4 pb-4"><div className="text-sm font-medium text-blue-600">Parciais</div><div className="text-2xl font-bold text-blue-600">{stats.parcial}</div></CardContent></Card>
-        <Card className="border-yellow-500/20"><CardContent className="pt-4 pb-4"><div className="text-sm font-medium text-yellow-600">Pendentes</div><div className="text-2xl font-bold text-yellow-600">{stats.pendente}</div></CardContent></Card>
-        <Card className="border-orange-500/20"><CardContent className="pt-4 pb-4"><div className="text-sm font-medium text-orange-600">A Vencer</div><div className="text-2xl font-bold text-orange-600">{stats.a_vencer}</div></CardContent></Card>
-        <Card className="border-destructive/20"><CardContent className="pt-4 pb-4"><div className="text-sm font-medium text-destructive">Vencidos</div><div className="text-2xl font-bold text-destructive">{stats.vencido}</div></CardContent></Card>
+        <button type="button" onClick={() => handleStatCardClick("all")} className="text-left">
+          <Card className={cn("transition-all hover:shadow-md hover:border-primary/40", statusFilter === "all" && "ring-2 ring-primary/40")}>
+            <CardContent className="pt-4 pb-4">
+              <div className="text-sm font-medium text-muted-foreground">Total</div>
+              <div className="text-2xl font-bold">{stats.total}</div>
+            </CardContent>
+          </Card>
+        </button>
+        <button type="button" onClick={() => handleStatCardClick("quitado")} className="text-left">
+          <Card className={cn("border-green-500/20 transition-all hover:shadow-md hover:border-green-500/60", subTab === "quitados" && "ring-2 ring-green-500/40")}>
+            <CardContent className="pt-4 pb-4">
+              <div className="text-sm font-medium text-green-600">Quitados</div>
+              <div className="text-2xl font-bold text-green-600">{stats.quitado}</div>
+            </CardContent>
+          </Card>
+        </button>
+        <button type="button" onClick={() => handleStatCardClick("parcial")} className="text-left">
+          <Card className={cn("border-blue-500/20 transition-all hover:shadow-md hover:border-blue-500/60", statusFilter === "parcial" && "ring-2 ring-blue-500/40")}>
+            <CardContent className="pt-4 pb-4">
+              <div className="text-sm font-medium text-blue-600">Parciais</div>
+              <div className="text-2xl font-bold text-blue-600">{stats.parcial}</div>
+            </CardContent>
+          </Card>
+        </button>
+        <button type="button" onClick={() => handleStatCardClick("pendente")} className="text-left">
+          <Card className={cn("border-yellow-500/20 transition-all hover:shadow-md hover:border-yellow-500/60", statusFilter === "pendente" && "ring-2 ring-yellow-500/40")}>
+            <CardContent className="pt-4 pb-4">
+              <div className="text-sm font-medium text-yellow-600">Pendentes</div>
+              <div className="text-2xl font-bold text-yellow-600">{stats.pendente}</div>
+            </CardContent>
+          </Card>
+        </button>
+        <button type="button" onClick={() => handleStatCardClick("a_vencer")} className="text-left">
+          <Card className={cn("border-orange-500/20 transition-all hover:shadow-md hover:border-orange-500/60", statusFilter === "a_vencer" && "ring-2 ring-orange-500/40")}>
+            <CardContent className="pt-4 pb-4">
+              <div className="text-sm font-medium text-orange-600">A Vencer</div>
+              <div className="text-2xl font-bold text-orange-600">{stats.a_vencer}</div>
+            </CardContent>
+          </Card>
+        </button>
+        <button type="button" onClick={() => handleStatCardClick("vencido")} className="text-left">
+          <Card className={cn("border-destructive/20 transition-all hover:shadow-md hover:border-destructive/60", statusFilter === "vencido" && "ring-2 ring-destructive/40")}>
+            <CardContent className="pt-4 pb-4">
+              <div className="text-sm font-medium text-destructive">Vencidos</div>
+              <div className="text-2xl font-bold text-destructive">{stats.vencido}</div>
+            </CardContent>
+          </Card>
+        </button>
       </div>
+
+      {/* Sub-abas: Pendentes (default) | Quitados */}
+      <Tabs value={subTab} onValueChange={(v) => { setSubTab(v as "pendentes" | "quitados"); setStatusFilter("all"); setSelected(new Set()); }}>
+        <TabsList className="grid w-full grid-cols-2 sm:w-[400px]">
+          <TabsTrigger value="pendentes" className="gap-2">
+            <Clock className="h-4 w-4" />
+            Pendentes
+            <Badge variant="secondary" className="ml-1">{stats.pendente + stats.a_vencer + stats.parcial + stats.vencido}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="quitados" className="gap-2">
+            <CheckCircle2 className="h-4 w-4" />
+            Quitados
+            <Badge variant="secondary" className="ml-1">{stats.quitado}</Badge>
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/* Filters */}
       <Card>
