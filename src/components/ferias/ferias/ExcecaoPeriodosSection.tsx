@@ -559,6 +559,80 @@ export function ExcecaoPeriodosSection({
         </div>
       )}
 
+      {/* ===== PARALELO: GOZO REAL DIFERENTE DO CONTADOR (durante modo VENDER) ===== */}
+      {hasMixedGozoDiferente && (
+        <div className="space-y-3 pl-4 border-l-2 border-amber-500/40">
+          <Alert className="border-amber-500/40 bg-amber-500/10">
+            <FileSearch className="h-4 w-4" />
+            <AlertTitle className="text-sm">Gozo real diferente do enviado ao contador</AlertTitle>
+            <AlertDescription className="text-xs">
+              Estes registros indicam que o gozo efetivo de algum período difere das datas oficiais
+              reportadas. As datas oficiais permanecem nos campos "1ª/2ª Quinzena" do formulário
+              acima — abaixo estão as datas reais.
+            </AlertDescription>
+          </Alert>
+
+          {[1, 2].map((ref) => {
+            const items = gozoDiferentePeriodos.filter(p => p.referencia_periodo === ref);
+            if (items.length === 0) return null;
+            return (
+              <Card key={ref} className="border-amber-500/30 bg-amber-500/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">{ref}º Período — gozo real</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {items.map((p, idx) => (
+                    <div key={p.id} className="grid grid-cols-3 gap-2">
+                      <div>
+                        <Label className="text-xs">Dias</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={p.dias}
+                          onChange={(e) => {
+                            const dias = Math.max(1, parseInt(e.target.value) || 1);
+                            const next = periodos.map(x => x.id === p.id
+                              ? { ...x, dias, data_fim: x.data_inicio ? calcEndDate(x.data_inicio, dias) : x.data_fim }
+                              : x);
+                            onPeriodosChange(next);
+                          }}
+                          className="h-9"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Início</Label>
+                        <Input
+                          type="date"
+                          value={p.data_inicio}
+                          onChange={(e) => {
+                            const data_inicio = e.target.value;
+                            const next = periodos.map(x => x.id === p.id
+                              ? { ...x, data_inicio, data_fim: data_inicio ? calcEndDate(data_inicio, x.dias) : "" }
+                              : x);
+                            onPeriodosChange(next);
+                          }}
+                          className="h-9"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Fim (auto)</Label>
+                        <Input type="date" value={p.data_fim} readOnly className="h-9 bg-muted cursor-not-allowed" />
+                      </div>
+                      {items.length > 1 && idx > 0 && (
+                        <Button type="button" variant="ghost" size="icon" className="h-9 w-9"
+                          onClick={() => onPeriodosChange(periodos.filter(x => x.id !== p.id))}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
       {/* ===== GOZO EM DATAS DIFERENTES ===== */}
       {excecaoTipo === "gozo_diferente" && (
         <div className="space-y-4 pl-4 border-l-2 border-primary/20">
