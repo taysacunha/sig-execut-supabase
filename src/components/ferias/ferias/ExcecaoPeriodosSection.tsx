@@ -222,34 +222,38 @@ export function ExcecaoPeriodosSection({
   // Initialize periods when distribuicaoTipo changes (skip during edit hydration)
   useEffect(() => {
     if (isHydrating) return;
+    // Sempre preservar quaisquer linhas paralelas de "gozo_diferente" ao reinicializar
+    // a parte de venda — elas representam o gozo real distinto do contador.
+    const keepParalelo = periodos.filter(p => p.tipo === "gozo_diferente");
     if (excecaoTipo === "vender") {
       if (diasGozo <= 0) {
-        onPeriodosChange([]);
+        onPeriodosChange([...keepParalelo]);
         return;
       }
       if (distribuicaoTipo === "1") {
-        onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 1 }]);
+        onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 1, tipo: "vender" }, ...keepParalelo]);
       } else if (distribuicaoTipo === "2") {
-        onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 2 }]);
+        onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 2, tipo: "vender" }, ...keepParalelo]);
       } else if (distribuicaoTipo === "ambos") {
         const d1 = Math.ceil(diasGozo / 2);
         const d2 = diasGozo - d1;
         onPeriodosChange([
-          { id: genId(), dias: d1, data_inicio: "", data_fim: "", referencia_periodo: 1 },
-          { id: genId(), dias: d2, data_inicio: "", data_fim: "", referencia_periodo: 2 },
+          { id: genId(), dias: d1, data_inicio: "", data_fim: "", referencia_periodo: 1, tipo: "vender" },
+          { id: genId(), dias: d2, data_inicio: "", data_fim: "", referencia_periodo: 2, tipo: "vender" },
+          ...keepParalelo,
         ]);
       } else if (distribuicaoTipo === "livre") {
-        onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 0 }]);
+        onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 0, tipo: "vender" }, ...keepParalelo]);
       }
     } else if (excecaoTipo === "gozo_diferente") {
       if (distribuicaoTipo === "1") {
-        onPeriodosChange([{ id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 1 }]);
+        onPeriodosChange([{ id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 1, tipo: "gozo_diferente" }]);
       } else if (distribuicaoTipo === "2") {
-        onPeriodosChange([{ id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 2 }]);
+        onPeriodosChange([{ id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 2, tipo: "gozo_diferente" }]);
       } else if (distribuicaoTipo === "ambos") {
         onPeriodosChange([
-          { id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 1 },
-          { id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 2 },
+          { id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 1, tipo: "gozo_diferente" },
+          { id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 2, tipo: "gozo_diferente" },
         ]);
       }
     }
