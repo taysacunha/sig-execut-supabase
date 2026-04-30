@@ -219,9 +219,22 @@ export function ExcecaoPeriodosSection({
     onPeriodosChange(updated);
   }, [diasGozo, periodos, onPeriodosChange]);
 
-  // Initialize periods when distribuicaoTipo changes (skip during edit hydration)
+  // Initialize periods when distribuicaoTipo changes (skip during edit hydration).
+  // IMPORTANT: nunca sobrescrever quando já existem períodos compatíveis com a
+  // distribuição atual — caso contrário, dados carregados na edição são apagados.
   useEffect(() => {
     if (isHydrating) return;
+    if (!distribuicaoTipo) return;
+    // Se já há períodos compatíveis com a distribuição escolhida, não reinicializar.
+    const refsAtuais = periodos
+      .filter(p => p.tipo !== "gozo_diferente")
+      .map(p => p.referencia_periodo);
+    const jaCompativel =
+      (distribuicaoTipo === "1" && refsAtuais.includes(1)) ||
+      (distribuicaoTipo === "2" && refsAtuais.includes(2)) ||
+      (distribuicaoTipo === "ambos" && refsAtuais.includes(1) && refsAtuais.includes(2)) ||
+      (distribuicaoTipo === "livre" && refsAtuais.includes(0));
+    if (jaCompativel) return;
     // Sempre preservar quaisquer linhas paralelas de "gozo_diferente" ao reinicializar
     // a parte de venda — elas representam o gozo real distinto do contador.
     const keepParalelo = periodos.filter(p => p.tipo === "gozo_diferente");
@@ -311,25 +324,11 @@ export function ExcecaoPeriodosSection({
     }
   }, [isHydrating, excecaoTipo, distribuicaoTipo, periodos, diasGozo, onPeriodosChange]);
 
-  // Reset distribuição when diasVendidos changes in vender mode (skip during edit hydration)
-  useEffect(() => {
-    if (isHydrating) return;
-    if (excecaoTipo === "vender" && distribuicaoTipo) {
-      const dt = distribuicaoTipo;
-      onDistribuicaoTipoChange("");
-      setTimeout(() => onDistribuicaoTipoChange(dt), 0);
-    }
-  }, [diasVendidos, excecaoTipo, distribuicaoTipo, isHydrating, onDistribuicaoTipoChange]);
-
-  // Reset when tipo changes (skip during edit hydration)
-  useEffect(() => {
-    if (isHydrating) return;
-    onDistribuicaoTipoChange("");
-    onPeriodosChange([]);
-    if (excecaoTipo === "gozo_diferente") {
-      onDiasVendidosChange(0);
-    }
-  }, [excecaoTipo, isHydrating, onDiasVendidosChange, onDistribuicaoTipoChange, onPeriodosChange]);
+  // OBS: Removidos os efeitos automáticos que limpavam `distribuicaoTipo` e `periodos`
+  // ao mudar `excecaoTipo` ou `diasVendidos`. Esses resets disparavam logo após a
+  // hidratação no modo edição, apagando os dados carregados do banco. A limpeza
+  // necessária ao trocar de modo agora é feita explicitamente nos handlers dos
+  // botões abaixo (onClick), garantindo que só ocorra em ações reais do usuário.
 
   return (
     <div className="space-y-4">
@@ -339,7 +338,16 @@ export function ExcecaoPeriodosSection({
           type="button"
           variant={excecaoTipo === "vender" ? "default" : "outline"}
           size="sm"
-          onClick={() => onExcecaoTipoChange(excecaoTipo === "vender" ? null : "vender")}
+          onClick={() => {
+            const novo = excecaoTipo === "vender" ? null : "vender";
+            // Limpar somente quando o usuário trocar de modo de fato.
+            if (novo !== excecaoTipo) {
+              onDistribuicaoTipoChange("");
+              onPeriodosChange([]);
+              if (novo === null) onDiasVendidosChange(0);
+            }
+            onExcecaoTipoChange(novo);
+          }}
         >
           <DollarSign className="h-4 w-4 mr-1" />
           Vender dias de férias
@@ -348,7 +356,15 @@ export function ExcecaoPeriodosSection({
           type="button"
           variant={excecaoTipo === "gozo_diferente" ? "default" : "outline"}
           size="sm"
-          onClick={() => onExcecaoTipoChange(excecaoTipo === "gozo_diferente" ? null : "gozo_diferente")}
+          onClick={() => {
+            const novo = excecaoTipo === "gozo_diferente" ? null : "gozo_diferente";
+            if (novo !== excecaoTipo) {
+              onDistribuicaoTipoChange("");
+              onPeriodosChange([]);
+              onDiasVendidosChange(0);
+            }
+            onExcecaoTipoChange(novo);
+          }}
         >
           <CalendarClock className="h-4 w-4 mr-1" />
           Gozo em datas diferentes
