@@ -1,99 +1,63 @@
-# Revisão do Módulo de Estoque — Status e Plano de Conclusão
+## Problema
 
-Fiz uma varredura página a página. Abaixo está o que está pronto, o que falta, e um plano objetivo para fechar os fluxos mais críticos (solicitação → separação → entrega → recebimento) que hoje estão incompletos.
+Quando criei a tabela `estoque_categorias` e troquei o input livre por Select vinculado a `categoria_id`, **não migrei** as categorias-texto que já existiam em `estoque_materiais.categoria`. Resultado:
 
----
+- A página **Categorias** ficou vazia (nenhuma categoria foi criada automaticamente).
+- Os materiais antigos têm `categoria` (texto) preenchido, mas `categoria_id` nulo. Na listagem o nome ainda aparece (uso o texto como fallback), mas no **dropdown de edição** o campo vem em "Sem categoria", e qualquer filtro/agrupamento futuro por `categoria_id` não enxergaria esses materiais.
 
-## 1. Status atual de cada página
+Foi um vacilo meu não ter feito a importação dos dados existentes na mesma migration.
 
-### ✅ Materiais (`EstoqueMateriais.tsx`)
-- Cadastro, edição, ativar/desativar, exclusão (com checagem de saldo) → **OK**.
-- Faltando: cadastro estruturado de **categorias** (hoje é texto livre, gera duplicidades).
+## Plano de correção
 
-### ✅ Locais de Armazenamento (`EstoqueLocais.tsx`)
-- Cadastro por unidade, soft-delete, exclusão → **OK**.
-- Faltando: suporte a **hierarquia** (campo `parent_id` existe na tabela mas a UI não usa — depósito → armário → prateleira).
+### 1. Migração de dados (uma vez)
+Rodar uma migration que:
 
-### ⚠️ Saldos (`EstoqueSaldos.tsx`)
-- Entrada, ajuste, transferência, exclusão com justificativa → **OK**.
-- Tabs por unidade → **OK**.
-- Faltando: nada bloqueante. Pequeno: visão consolidada por material somando todos os locais.
+1. Coleta todos os valores **distintos** e não-nulos de `estoque_materiais.categoria` (com `trim` e ignorando vazios).
+2. Para cada valor:
+   - Se já existe uma linha em `estoque_categorias` com mesmo nome (case-insensitive), reutiliza.
+   - Senão, insere uma nova categoria ativa com aquele nome.
+3. Atualiza `estoque_materiais.categoria_id` apontando para a categoria correspondente, casando por nome (case-insensitive, com `trim`).
+4. Mantém a coluna legada `categoria` (texto) preenchida para histórico/auditoria — só passa a ser ignorada na UI.
 
-### 🔴 Solicitações (`EstoqueSolicitacoes.tsx`) — **principal lacuna**
-- Criar solicitação (com unidade/setor auto-preenchidos do vínculo do usuário) → **OK**.
-- Mudança de status `pendente → aprovada → separada → entregue` → **só altera o campo `status`**.
-- **NÃO faz baixa de saldo**, **NÃO cria movimentação de saída**, **NÃO permite definir local de origem por item**, **NÃO permite informar `quantidade_atendida`** (fica sempre 0).
-- **NÃO existe confirmação de recebimento** pelo solicitante (campos `recebido_por_user_id` / `recebido_em` em `estoque_movimentacoes` nunca são preenchidos).
-- Cancelar não tem AlertDialog de confirmação.
-- Não dá para editar itens depois de criada.
+Tudo idempotente (`ON CONFLICT DO NOTHING`-equivalente via verificação por nome) para poder ser re-executado sem efeitos colaterais.
 
-### ⚠️ Movimentações (`EstoqueMovimentacoes.tsx`)
-- Listagem com filtros e busca → **OK**.
-- Faltando: exibir nome do **responsável** e do **recebedor** (hoje mostra só IDs internamente, nem isso). Botão de exportar.
+### 2. Ajuste mínimo na UI de Materiais
+- Listagem passa a usar **somente** `categoria_id → nome em estoque_categorias` (sem fallback para o texto antigo, já que o passo 1 garante o vínculo).
+- Continuar exibindo "—" quando o material realmente não tiver categoria.
 
-### ⚠️ Notificações (`EstoqueNotificacoes.tsx`)
-- Listagem, marcar como lida, marcar todas → **OK**.
-- Faltando: clicar na notificação **navegar** para a solicitação referenciada; gerar notificação automática de **estoque baixo** (não existe hoje).
+### 3. Documentação
+- Aviso na descrição do menu "Categorias" indicando que categorias antigas foram importadas automaticamente e podem ser renomeadas/desativadas.
 
-### ✅ Dashboard, Auditoria, Gestores/Usuários
-- Funcionais. Sem ajustes urgentes.
+## Detalhes técnicos
 
----
+Migração SQL (resumo):
 
-## 2. Plano de implementação (prioridade alta → baixa)
+```sql
+-- 1. Cria categorias faltantes
+INSERT INTO public.estoque_categorias (nome, is_active)
+SELECT DISTINCT btrim(m.categoria), true
+FROM public.estoque_materiais m
+WHERE m.categoria IS NOT NULL AND btrim(m.categoria) <> ''
+  AND NOT EXISTS (
+    SELECT 1 FROM public.estoque_categorias c
+    WHERE lower(c.nome) = lower(btrim(m.categoria))
+  );
 
-### 🔴 Etapa 1 — Fechar o fluxo de Solicitação/Separação/Entrega/Recebimento
-Fluxo proposto (estados existentes na tabela, sem migração de schema):
-
-```text
-pendente  → (gestor APROVA)        → aprovada
-aprovada  → (gestor SEPARA itens)  → separada   [baixa saldo + movimentação de saída]
-separada  → (gestor MARCA ENTREGUE)→ entregue
-entregue  → (solicitante CONFIRMA RECEBIMENTO) → preenche recebido_por/recebido_em
+-- 2. Vincula categoria_id em todos os materiais existentes
+UPDATE public.estoque_materiais m
+SET categoria_id = c.id
+FROM public.estoque_categorias c
+WHERE m.categoria_id IS NULL
+  AND m.categoria IS NOT NULL
+  AND lower(c.nome) = lower(btrim(m.categoria));
 ```
 
-Mudanças em `EstoqueSolicitacoes.tsx`:
-1. Novo **Dialog "Separar"** acionado quando o gestor avança de `aprovada → separada`:
-   - Lista cada item da solicitação com: quantidade solicitada, **Select de local de origem** (filtrado pelos locais da unidade da solicitação que tenham saldo > 0 do material) e campo **quantidade atendida** (default = solicitada, máx = saldo disponível).
-   - Ao confirmar:
-     - Atualiza `estoque_solicitacao_itens.quantidade_atendida` e `local_armazenamento_id`.
-     - Para cada item: faz **UPDATE** no `estoque_saldos` correspondente (subtrai) e **INSERT** em `estoque_movimentacoes` com `tipo='saida'`, `local_origem_id`, `solicitacao_id`, `responsavel_user_id = auth.uid()`.
-     - Muda status para `separada`.
-2. Botão **"Marcar como Entregue"** (gestor) → apenas muda status para `entregue` e notifica solicitante.
-3. Novo botão **"Confirmar Recebimento"** visível **apenas para o solicitante** quando status = `entregue`:
-   - Ao clicar: faz UPDATE em todas as `estoque_movimentacoes` da solicitação preenchendo `recebido_por_user_id` e `recebido_em`.
-   - Notifica os gestores da unidade que o material foi recebido.
-4. **AlertDialog de confirmação** ao cancelar solicitação.
-5. Permitir **editar itens** enquanto status = `pendente` (acréscimo, remoção, troca de quantidade).
+Depois disso, edito `EstoqueMateriais.tsx` para mostrar apenas `categoriaNome(m.categoria_id)` (sem fallback) e simplifico a função.
 
-### 🟠 Etapa 2 — Notificações inteligentes
-1. Notificação clicável: ao clicar em uma notificação com `referencia_tipo = 'solicitacao'`, navegar para `/estoque/solicitacoes` e abrir o dialog de detalhes daquela solicitação.
-2. Disparar notificação **"estoque_baixo"** automaticamente nas mutations de saldo (entrada/saída/ajuste/transferência) sempre que o saldo resultante de um material em um local cair ≤ `estoque_minimo`. Notificar gestores da unidade do local.
+## Resultado esperado
 
-### 🟡 Etapa 3 — Movimentações com nomes
-1. Buscar nomes de usuários (responsável e recebedor) e exibi-los em colunas extras.
-2. Botão **Exportar CSV** das movimentações filtradas (usando `exportUtils` já existente no projeto).
+- Todas as categorias que você já usava aparecem na página **Categorias**.
+- Todos os materiais continuam com categoria visível, agora ligados por `categoria_id`.
+- Você pode renomear uma categoria em um único lugar e propagar para todos os materiais.
 
-### 🟢 Etapa 4 — Polimentos de cadastro
-1. **Categorias de materiais**: criar tabela leve `estoque_categorias` (id, nome, is_active) + telinha simples no menu admin; trocar input de categoria do material por Select.
-2. **Hierarquia de locais**: no dialog de Local, permitir selecionar `parent_id` (mesmo unidade) e exibir os locais em formato de árvore na lista.
-3. **Visão consolidada por material** em Saldos: nova aba "Por material" somando saldo total entre locais.
-
----
-
-## 3. Detalhes técnicos
-
-- **Schema**: nada novo é estritamente necessário para a Etapa 1. As colunas `quantidade_atendida`, `local_armazenamento_id`, `recebido_por_user_id`, `recebido_em` já existem mas estão sem uso.
-- **RLS**: as policies de `estoque_solicitacoes`, `estoque_solicitacao_itens`, `estoque_saldos` e `estoque_movimentacoes` já permitem `INSERT/UPDATE` para usuários com `can_edit_system('estoque')`. Para a confirmação de recebimento (que precisa ser feita pelo próprio solicitante mesmo sem `view_edit`), adicionar uma policy específica em `estoque_movimentacoes` permitindo `UPDATE` apenas dos campos `recebido_por_user_id` e `recebido_em` quando `auth.uid()` for o `solicitante_user_id` da solicitação vinculada — isso exigirá uma function `is_solicitante(_solicitacao_id uuid)`.
-- **Concorrência de saldos**: na separação, ler o saldo dentro da própria mutation e abortar com toast se ficar negativo (sem locking server-side por enquanto; aceitável pelo volume).
-- **Memória do projeto**: AlertDialog para ações destrutivas (cancelar solicitação) está alinhado com a regra de Core memory.
-
----
-
-## 4. Sugestão de execução
-
-Posso entregar em 2 PRs/iterações:
-- **Iteração A** (crítica): Etapa 1 completa + AlertDialog de cancelamento + policy/function de recebimento.
-- **Iteração B** (qualidade): Etapas 2, 3 e 4.
-
-Confirma se quer que eu siga por essa ordem, ou prefere priorizar algo diferente (por exemplo, notificação de estoque baixo antes de tudo)?
+Confirma que posso aplicar essa migration de dados?
