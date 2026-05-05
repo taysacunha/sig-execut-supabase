@@ -418,6 +418,33 @@ export type Database = {
         }
         Relationships: []
       }
+      estoque_categorias: {
+        Row: {
+          created_at: string
+          descricao: string | null
+          id: string
+          is_active: boolean
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          is_active?: boolean
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          is_active?: boolean
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       estoque_gestores: {
         Row: {
           created_at: string | null
@@ -501,6 +528,7 @@ export type Database = {
       estoque_materiais: {
         Row: {
           categoria: string | null
+          categoria_id: string | null
           created_at: string | null
           descricao: string | null
           estoque_minimo: number | null
@@ -512,6 +540,7 @@ export type Database = {
         }
         Insert: {
           categoria?: string | null
+          categoria_id?: string | null
           created_at?: string | null
           descricao?: string | null
           estoque_minimo?: number | null
@@ -523,6 +552,7 @@ export type Database = {
         }
         Update: {
           categoria?: string | null
+          categoria_id?: string | null
           created_at?: string | null
           descricao?: string | null
           estoque_minimo?: number | null
@@ -532,7 +562,15 @@ export type Database = {
           unidade_medida?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "estoque_materiais_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_categorias"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       estoque_movimentacoes: {
         Row: {
