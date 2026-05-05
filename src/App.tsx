@@ -62,6 +62,7 @@ const FeriasAuditLogs = lazy(() => import("./pages/ferias/FeriasAuditLogs"));
 const EstoqueDashboard = lazy(() => import("./pages/estoque/EstoqueDashboard"));
 const EstoqueMateriais = lazy(() => import("./pages/estoque/EstoqueMateriais"));
 const EstoqueLocais = lazy(() => import("./pages/estoque/EstoqueLocais"));
+const EstoqueCategorias = lazy(() => import("./pages/estoque/EstoqueCategorias"));
 const EstoqueGestores = lazy(() => import("./pages/estoque/EstoqueGestores"));
 const EstoqueAuditLogs = lazy(() => import("./pages/estoque/EstoqueAuditLogs"));
 const EstoqueSolicitacoes = lazy(() => import("./pages/estoque/EstoqueSolicitacoes"));
@@ -186,6 +187,7 @@ const App = () => {
               <Route index element={<EstoqueDashboard />} />
               <Route path="materiais" element={<EstoqueMateriais />} />
               <Route path="locais" element={<EstoqueLocais />} />
+              <Route path="categorias" element={<EstoqueCategorias />} />
               <Route path="saldos" element={<EstoqueSaldos />} />
               <Route path="solicitacoes" element={<EstoqueSolicitacoes />} />
               <Route path="movimentacoes" element={<EstoqueMovimentacoes />} />
