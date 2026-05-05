@@ -32,3 +32,13 @@ CREATE POLICY "Solicitante can confirm receipt"
     solicitacao_id IS NOT NULL
     AND public.is_solicitante_estoque(auth.uid(), solicitacao_id)
   );
+
+-- Permite que o próprio solicitante cancele sua solicitação pendente
+DROP POLICY IF EXISTS "Solicitante can cancel own request" ON public.estoque_solicitacoes;
+
+CREATE POLICY "Solicitante can cancel own request"
+  ON public.estoque_solicitacoes
+  FOR UPDATE
+  TO authenticated
+  USING (solicitante_user_id = auth.uid())
+  WITH CHECK (solicitante_user_id = auth.uid());
