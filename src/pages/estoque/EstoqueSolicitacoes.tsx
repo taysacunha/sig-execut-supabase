@@ -791,6 +791,142 @@ export default function EstoqueSolicitacoes() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Separar Dialog */}
+      <Dialog open={!!separarSol} onOpenChange={(o) => { if (!o) { setSepararSol(null); setSepararItens([]); } }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Separar Itens</DialogTitle>
+            <DialogDescription>
+              Defina o local de origem e a quantidade atendida de cada item. A baixa de saldo será registrada automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {separarItens.length === 0 && (
+              <p className="text-sm text-muted-foreground">Nenhum item para separar.</p>
+            )}
+            {separarItens.map((it, idx) => {
+              const localSel = it.saldosDisponiveis.find((s) => s.local_id === it.local_armazenamento_id);
+              const maxDisp = localSel?.quantidade ?? 0;
+              return (
+                <div key={it.id} className="border rounded-lg p-3 space-y-2">
+                  <div className="flex justify-between items-baseline">
+                    <strong className="text-sm">{it.material_nome}</strong>
+                    <span className="text-xs text-muted-foreground">Solicitado: {it.quantidade_solicitada} {it.material_unidade}</span>
+                  </div>
+                  {it.saldosDisponiveis.length === 0 ? (
+                    <p className="text-sm text-destructive">Sem saldo disponível nesta unidade.</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs">Local de origem</Label>
+                        <Select
+                          value={it.local_armazenamento_id}
+                          onValueChange={(v) => {
+                            const novos = [...separarItens];
+                            novos[idx].local_armazenamento_id = v;
+                            const novoMax = it.saldosDisponiveis.find((s) => s.local_id === v)?.quantidade ?? 0;
+                            novos[idx].quantidade_atendida = Math.min(novos[idx].quantidade_atendida, novoMax, it.quantidade_solicitada);
+                            setSepararItens(novos);
+                          }}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {it.saldosDisponiveis.map((s) => (
+                              <SelectItem key={s.local_id} value={s.local_id}>
+                                {s.local_nome} (saldo: {s.quantidade})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Qtd. atendida (máx {Math.min(maxDisp, it.quantidade_solicitada)})</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={Math.min(maxDisp, it.quantidade_solicitada)}
+                          value={it.quantidade_atendida}
+                          onChange={(e) => {
+                            const novos = [...separarItens];
+                            const v = parseInt(e.target.value) || 0;
+                            novos[idx].quantidade_atendida = Math.max(0, Math.min(v, maxDisp, it.quantidade_solicitada));
+                            setSepararItens(novos);
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setSepararSol(null); setSepararItens([]); }}>Cancelar</Button>
+            <Button
+              onClick={() => separarMutation.mutate()}
+              disabled={separarMutation.isPending || separarItens.every((i) => i.quantidade_atendida === 0)}
+            >
+              {separarMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Confirmar Separação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Confirmation */}
+      <AlertDialog open={!!cancelConfirm} onOpenChange={(o) => !o && setCancelConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar solicitação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação marca a solicitação como cancelada e não pode ser desfeita. Itens já separados precisam ser devolvidos manualmente ao estoque.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                if (!cancelConfirm) return;
+                const { error } = await fromEstoque("estoque_solicitacoes")
+                  .update({ status: "cancelada" } as any)
+                  .eq("id", cancelConfirm.id);
+                if (error) toast.error("Erro ao cancelar");
+                else {
+                  toast.success("Solicitação cancelada!");
+                  queryClient.invalidateQueries({ queryKey: ["estoque-solicitacoes"] });
+                }
+                setCancelConfirm(null);
+              }}
+            >
+              Cancelar solicitação
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Receipt Confirmation */}
+      <AlertDialog open={!!receiptConfirm} onOpenChange={(o) => !o && setReceiptConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar recebimento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ao confirmar, você atesta que recebeu os materiais desta solicitação. Esta confirmação fica registrada no histórico.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => receiptConfirm && confirmarRecebimentoMutation.mutate(receiptConfirm)}
+              disabled={confirmarRecebimentoMutation.isPending}
+            >
+              {confirmarRecebimentoMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Confirmar recebimento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
