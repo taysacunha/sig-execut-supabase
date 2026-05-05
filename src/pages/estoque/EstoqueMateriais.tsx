@@ -24,6 +24,7 @@ interface Material {
   descricao: string | null;
   unidade_medida: string;
   categoria: string | null;
+  categoria_id: string | null;
   estoque_minimo: number;
   is_active: boolean;
 }
@@ -56,7 +57,7 @@ export default function EstoqueMateriais() {
     nome: "",
     descricao: "",
     unidade_medida: "un",
-    categoria: "",
+    categoria_id: "",
     estoque_minimo: 0,
   });
 
@@ -68,6 +69,20 @@ export default function EstoqueMateriais() {
       return (data || []) as unknown as Material[];
     },
   });
+
+  const { data: categorias = [] } = useQuery({
+    queryKey: ["estoque-categorias-ativas"],
+    queryFn: async () => {
+      const { data, error } = await fromEstoque("estoque_categorias").select("id, nome, is_active").order("nome");
+      if (error) throw error;
+      return (data || []) as unknown as { id: string; nome: string; is_active: boolean }[];
+    },
+  });
+  const categoriasAtivas = useMemo(() => categorias.filter((c) => c.is_active), [categorias]);
+  const categoriaNome = (id: string | null, fallback: string | null) => {
+    if (!id) return fallback || "—";
+    return categorias.find((c) => c.id === id)?.nome || fallback || "—";
+  };
 
   const { data: saldos = [] } = useQuery({
     queryKey: ["estoque-saldos-check"],
@@ -103,7 +118,8 @@ export default function EstoqueMateriais() {
         nome: values.nome,
         descricao: values.descricao || null,
         unidade_medida: values.unidade_medida,
-        categoria: values.categoria || null,
+        categoria_id: values.categoria_id || null,
+        categoria: values.categoria_id ? (categorias.find((c) => c.id === values.categoria_id)?.nome || null) : null,
         estoque_minimo: values.estoque_minimo,
       };
       if (values.id) {
@@ -166,7 +182,7 @@ export default function EstoqueMateriais() {
   const closeDialog = () => {
     setDialogOpen(false);
     setEditingMaterial(null);
-    setForm({ nome: "", descricao: "", unidade_medida: "un", categoria: "", estoque_minimo: 0 });
+    setForm({ nome: "", descricao: "", unidade_medida: "un", categoria_id: "", estoque_minimo: 0 });
   };
 
   const openEdit = (m: Material) => {
@@ -175,7 +191,7 @@ export default function EstoqueMateriais() {
       nome: m.nome,
       descricao: m.descricao || "",
       unidade_medida: m.unidade_medida,
-      categoria: m.categoria || "",
+      categoria_id: m.categoria_id || "",
       estoque_minimo: m.estoque_minimo,
     });
     setDialogOpen(true);
@@ -224,7 +240,7 @@ export default function EstoqueMateriais() {
             {paginatedData.map((m) => (
               <TableRow key={m.id}>
                 <TableCell className="font-medium">{m.nome}</TableCell>
-                <TableCell>{m.categoria || "—"}</TableCell>
+                <TableCell>{categoriaNome(m.categoria_id, m.categoria)}</TableCell>
                 <TableCell>{unidadeLabel(m.unidade_medida)}</TableCell>
                 <TableCell className="text-center">{m.estoque_minimo}</TableCell>
                 {canEditEstoque && (
@@ -358,7 +374,18 @@ export default function EstoqueMateriais() {
             </div>
             <div>
               <Label>Categoria</Label>
-              <Input value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} placeholder="Ex: Papelaria, Limpeza, Informática..." />
+              <Select value={form.categoria_id || "__none__"} onValueChange={(v) => setForm({ ...form, categoria_id: v === "__none__" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="Sem categoria" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Sem categoria</SelectItem>
+                  {categoriasAtivas.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {categoriasAtivas.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-1">Cadastre categorias em "Categorias" para classificar os materiais.</p>
+              )}
             </div>
           </div>
           <DialogFooter>
