@@ -315,6 +315,199 @@ export default function EstoqueSolicitacoes() {
     onError: () => toast.error("Erro ao cancelar"),
   });
 
+  // Aprovar (pendente -> aprovada)
+  const aprovarMutation = useMutation({
+    mutationFn: async (sol: Solicitacao) => {
+      const { error } = await fromEstoque("estoque_solicitacoes")
+        .update({ status: "aprovada" } as any)
+        .eq("id", sol.id);
+      if (error) throw error;
+      await criarNotificacao({
+        user_id: sol.solicitante_user_id,
+        tipo: "status_atualizado",
+        mensagem: "Sua solicitação foi aprovada e está aguardando separação.",
+        referencia_id: sol.id,
+        referencia_tipo: "solicitacao",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["estoque-solicitacoes"] });
+      toast.success("Solicitação aprovada!");
+    },
+    onError: () => toast.error("Erro ao aprovar"),
+  });
+
+  // Abrir dialog de separação: carrega itens + saldos disponíveis
+  const abrirSeparar = async (sol: Solicitacao) => {
+    try {
+      const { data: itensRaw, error: itensErr } = await fromEstoque("estoque_solicitacao_itens")
+        .select("*")
+        .eq("solicitacao_id", sol.id);
+      if (itensErr) throw itensErr;
+      const itensList = (itensRaw as any[]) || [];
+
+      // Locais da unidade
+      const { data: locaisUnidade } = await fromEstoque("estoque_locais_armazenamento")
+        .select("id, nome")
+        .eq("unidade_id", sol.unidade_id || "")
+        .eq("is_active", true);
+      const localIds = (locaisUnidade || []).map((l: any) => l.id);
+
+      // Saldos
+      const { data: saldosRaw } = await fromEstoque("estoque_saldos")
+        .select("material_id, local_armazenamento_id, quantidade")
+        .in("local_armazenamento_id", localIds.length > 0 ? localIds : ["00000000-0000-0000-0000-000000000000"])
+        .gt("quantidade", 0);
+
+      const novosItens = itensList.map((it: any) => {
+        const mat = todosMateriais.find((m) => m.id === it.material_id);
+        const saldosDoMat = (saldosRaw || [])
+          .filter((s: any) => s.material_id === it.material_id)
+          .map((s: any) => ({
+            local_id: s.local_armazenamento_id,
+            local_nome: (locaisUnidade || []).find((l: any) => l.id === s.local_armazenamento_id)?.nome || "—",
+            quantidade: s.quantidade,
+          }));
+        const defaultLocal = saldosDoMat[0]?.local_id || "";
+        const maxDisp = saldosDoMat[0]?.quantidade || 0;
+        return {
+          id: it.id,
+          material_id: it.material_id,
+          material_nome: mat?.nome || "—",
+          material_unidade: mat?.unidade_medida || "",
+          quantidade_solicitada: it.quantidade_solicitada,
+          quantidade_atendida: Math.min(it.quantidade_solicitada, maxDisp),
+          local_armazenamento_id: defaultLocal,
+          saldosDisponiveis: saldosDoMat,
+        };
+      });
+      setSepararItens(novosItens);
+      setSepararSol(sol);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao carregar itens");
+    }
+  };
+
+  // Separar (aprovada -> separada): baixa saldo + cria movimentações
+  const separarMutation = useMutation({
+    mutationFn: async () => {
+      if (!separarSol) throw new Error("Solicitação não encontrada");
+      const validos = separarItens.filter((i) => i.local_armazenamento_id && i.quantidade_atendida > 0);
+      if (validos.length === 0) throw new Error("Informe ao menos um item separado");
+
+      for (const it of validos) {
+        // Re-checa saldo atual
+        const { data: saldo } = await fromEstoque("estoque_saldos")
+          .select("id, quantidade")
+          .eq("material_id", it.material_id)
+          .eq("local_armazenamento_id", it.local_armazenamento_id)
+          .maybeSingle();
+        const saldoAtual = (saldo as any)?.quantidade || 0;
+        if (saldoAtual < it.quantidade_atendida) {
+          throw new Error(`Saldo insuficiente para ${it.material_nome} (disponível: ${saldoAtual})`);
+        }
+        const novoSaldo = saldoAtual - it.quantidade_atendida;
+        if (novoSaldo === 0) {
+          await fromEstoque("estoque_saldos").delete().eq("id", (saldo as any).id);
+        } else {
+          await fromEstoque("estoque_saldos").update({ quantidade: novoSaldo } as any).eq("id", (saldo as any).id);
+        }
+
+        // Atualiza item da solicitação
+        await fromEstoque("estoque_solicitacao_itens")
+          .update({
+            quantidade_atendida: it.quantidade_atendida,
+            local_armazenamento_id: it.local_armazenamento_id,
+          } as any)
+          .eq("id", it.id);
+
+        // Cria movimentação de saída
+        await fromEstoque("estoque_movimentacoes").insert({
+          material_id: it.material_id,
+          tipo: "saida",
+          quantidade: it.quantidade_atendida,
+          local_origem_id: it.local_armazenamento_id,
+          solicitacao_id: separarSol.id,
+          responsavel_user_id: user?.id,
+          observacoes: `Separação para solicitação de ${separarSol.solicitante_nome}`,
+        } as any);
+      }
+
+      // Atualiza status da solicitação
+      const { error: solErr } = await fromEstoque("estoque_solicitacoes")
+        .update({ status: "separada" } as any)
+        .eq("id", separarSol.id);
+      if (solErr) throw solErr;
+
+      await criarNotificacao({
+        user_id: separarSol.solicitante_user_id,
+        tipo: "material_separado",
+        mensagem: "Sua solicitação foi separada e está pronta para entrega.",
+        referencia_id: separarSol.id,
+        referencia_tipo: "solicitacao",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["estoque-solicitacoes"] });
+      queryClient.invalidateQueries({ queryKey: ["estoque-saldos"] });
+      queryClient.invalidateQueries({ queryKey: ["estoque-movimentacoes"] });
+      toast.success("Itens separados e baixa de saldo registrada!");
+      setSepararSol(null);
+      setSepararItens([]);
+    },
+    onError: (err: any) => toast.error(err.message || "Erro ao separar itens"),
+  });
+
+  // Marcar como Entregue (separada -> entregue)
+  const entregarMutation = useMutation({
+    mutationFn: async (sol: Solicitacao) => {
+      const { error } = await fromEstoque("estoque_solicitacoes")
+        .update({ status: "entregue" } as any)
+        .eq("id", sol.id);
+      if (error) throw error;
+      await criarNotificacao({
+        user_id: sol.solicitante_user_id,
+        tipo: "material_entregue",
+        mensagem: "Sua solicitação foi entregue. Confirme o recebimento na lista de solicitações.",
+        referencia_id: sol.id,
+        referencia_tipo: "solicitacao",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["estoque-solicitacoes"] });
+      toast.success("Marcada como entregue!");
+    },
+    onError: () => toast.error("Erro ao marcar como entregue"),
+  });
+
+  // Confirmar recebimento (somente solicitante): preenche recebido_por/recebido_em
+  const confirmarRecebimentoMutation = useMutation({
+    mutationFn: async (sol: Solicitacao) => {
+      if (!user?.id) throw new Error("Usuário não autenticado");
+      const { error } = await fromEstoque("estoque_movimentacoes")
+        .update({
+          recebido_por_user_id: user.id,
+          recebido_em: new Date().toISOString(),
+        } as any)
+        .eq("solicitacao_id", sol.id)
+        .is("recebido_em", null);
+      if (error) throw error;
+
+      // Notifica gestores
+      if (sol.unidade_id) {
+        const userName = user.user_metadata?.name || user.email || "Usuário";
+        await notificarGestoresUnidade(sol.unidade_id, `${userName} confirmou o recebimento dos materiais.`, sol.id);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["estoque-solicitacoes"] });
+      queryClient.invalidateQueries({ queryKey: ["estoque-movimentacoes"] });
+      setReceiptConfirm(null);
+      toast.success("Recebimento confirmado. Obrigado!");
+    },
+    onError: (err: any) => toast.error(err.message || "Erro ao confirmar recebimento"),
+  });
+
   const resetForm = () => {
     setDialogOpen(false);
     setUnidadeId("");
