@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -340,6 +340,7 @@ export default function EstoqueMateriais() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editingMaterial ? "Editar Material" : "Novo Material"}</DialogTitle>
+            <DialogDescription>Preencha as informações do material de estoque.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
