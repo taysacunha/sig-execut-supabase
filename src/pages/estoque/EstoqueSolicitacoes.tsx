@@ -2,13 +2,14 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, ClipboardList, Loader2, CheckCircle, Package, Truck, X, Eye } from "lucide-react";
+import { Plus, ClipboardList, Loader2, CheckCircle, Package, Truck, X, Eye, PackageCheck, HandHeart } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -90,6 +91,23 @@ export default function EstoqueSolicitacoes() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewDialog, setViewDialog] = useState<Solicitacao | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+
+  // Separação dialog state
+  const [separarSol, setSepararSol] = useState<Solicitacao | null>(null);
+  const [separarItens, setSepararItens] = useState<Array<{
+    id: string;
+    material_id: string;
+    material_nome: string;
+    material_unidade: string;
+    quantidade_solicitada: number;
+    quantidade_atendida: number;
+    local_armazenamento_id: string;
+    saldosDisponiveis: Array<{ local_id: string; local_nome: string; quantidade: number }>;
+  }>>([]);
+
+  // Cancel + receipt confirmation alert state
+  const [cancelConfirm, setCancelConfirm] = useState<Solicitacao | null>(null);
+  const [receiptConfirm, setReceiptConfirm] = useState<Solicitacao | null>(null);
 
   // Form state
   const [unidadeId, setUnidadeId] = useState("");
@@ -297,6 +315,200 @@ export default function EstoqueSolicitacoes() {
     onError: () => toast.error("Erro ao cancelar"),
   });
 
+  // Aprovar (pendente -> aprovada)
+  const aprovarMutation = useMutation({
+    mutationFn: async (sol: Solicitacao) => {
+      const { error } = await fromEstoque("estoque_solicitacoes")
+        .update({ status: "aprovada" } as any)
+        .eq("id", sol.id);
+      if (error) throw error;
+      await criarNotificacao({
+        user_id: sol.solicitante_user_id,
+        tipo: "status_atualizado",
+        mensagem: "Sua solicitação foi aprovada e está aguardando separação.",
+        referencia_id: sol.id,
+        referencia_tipo: "solicitacao",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["estoque-solicitacoes"] });
+      toast.success("Solicitação aprovada!");
+    },
+    onError: () => toast.error("Erro ao aprovar"),
+  });
+
+  // Abrir dialog de separação: carrega itens + saldos disponíveis
+  const abrirSeparar = async (sol: Solicitacao) => {
+    try {
+      const { data: itensRaw, error: itensErr } = await fromEstoque("estoque_solicitacao_itens")
+        .select("*")
+        .eq("solicitacao_id", sol.id);
+      if (itensErr) throw itensErr;
+      const itensList = (itensRaw as any[]) || [];
+
+      // Locais da unidade
+      const { data: locaisUnidadeRaw } = await fromEstoque("estoque_locais_armazenamento")
+        .select("id, nome")
+        .eq("unidade_id", sol.unidade_id || "")
+        .eq("is_active", true);
+      const locaisUnidade = (locaisUnidadeRaw as unknown as { id: string; nome: string }[]) || [];
+      const localIds = locaisUnidade.map((l) => l.id);
+
+      // Saldos
+      const { data: saldosRaw } = await fromEstoque("estoque_saldos")
+        .select("material_id, local_armazenamento_id, quantidade")
+        .in("local_armazenamento_id", localIds.length > 0 ? localIds : ["00000000-0000-0000-0000-000000000000"])
+        .gt("quantidade", 0);
+
+      const novosItens = itensList.map((it: any) => {
+        const mat = todosMateriais.find((m) => m.id === it.material_id);
+        const saldosDoMat = (saldosRaw || [])
+          .filter((s: any) => s.material_id === it.material_id)
+          .map((s: any) => ({
+            local_id: s.local_armazenamento_id,
+            local_nome: locaisUnidade.find((l) => l.id === s.local_armazenamento_id)?.nome || "—",
+            quantidade: s.quantidade,
+          }));
+        const defaultLocal = saldosDoMat[0]?.local_id || "";
+        const maxDisp = saldosDoMat[0]?.quantidade || 0;
+        return {
+          id: it.id,
+          material_id: it.material_id,
+          material_nome: mat?.nome || "—",
+          material_unidade: mat?.unidade_medida || "",
+          quantidade_solicitada: it.quantidade_solicitada,
+          quantidade_atendida: Math.min(it.quantidade_solicitada, maxDisp),
+          local_armazenamento_id: defaultLocal,
+          saldosDisponiveis: saldosDoMat,
+        };
+      });
+      setSepararItens(novosItens);
+      setSepararSol(sol);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao carregar itens");
+    }
+  };
+
+  // Separar (aprovada -> separada): baixa saldo + cria movimentações
+  const separarMutation = useMutation({
+    mutationFn: async () => {
+      if (!separarSol) throw new Error("Solicitação não encontrada");
+      const validos = separarItens.filter((i) => i.local_armazenamento_id && i.quantidade_atendida > 0);
+      if (validos.length === 0) throw new Error("Informe ao menos um item separado");
+
+      for (const it of validos) {
+        // Re-checa saldo atual
+        const { data: saldo } = await fromEstoque("estoque_saldos")
+          .select("id, quantidade")
+          .eq("material_id", it.material_id)
+          .eq("local_armazenamento_id", it.local_armazenamento_id)
+          .maybeSingle();
+        const saldoAtual = (saldo as any)?.quantidade || 0;
+        if (saldoAtual < it.quantidade_atendida) {
+          throw new Error(`Saldo insuficiente para ${it.material_nome} (disponível: ${saldoAtual})`);
+        }
+        const novoSaldo = saldoAtual - it.quantidade_atendida;
+        if (novoSaldo === 0) {
+          await fromEstoque("estoque_saldos").delete().eq("id", (saldo as any).id);
+        } else {
+          await fromEstoque("estoque_saldos").update({ quantidade: novoSaldo } as any).eq("id", (saldo as any).id);
+        }
+
+        // Atualiza item da solicitação
+        await fromEstoque("estoque_solicitacao_itens")
+          .update({
+            quantidade_atendida: it.quantidade_atendida,
+            local_armazenamento_id: it.local_armazenamento_id,
+          } as any)
+          .eq("id", it.id);
+
+        // Cria movimentação de saída
+        await fromEstoque("estoque_movimentacoes").insert({
+          material_id: it.material_id,
+          tipo: "saida",
+          quantidade: it.quantidade_atendida,
+          local_origem_id: it.local_armazenamento_id,
+          solicitacao_id: separarSol.id,
+          responsavel_user_id: user?.id,
+          observacoes: `Separação para solicitação de ${separarSol.solicitante_nome}`,
+        } as any);
+      }
+
+      // Atualiza status da solicitação
+      const { error: solErr } = await fromEstoque("estoque_solicitacoes")
+        .update({ status: "separada" } as any)
+        .eq("id", separarSol.id);
+      if (solErr) throw solErr;
+
+      await criarNotificacao({
+        user_id: separarSol.solicitante_user_id,
+        tipo: "material_separado",
+        mensagem: "Sua solicitação foi separada e está pronta para entrega.",
+        referencia_id: separarSol.id,
+        referencia_tipo: "solicitacao",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["estoque-solicitacoes"] });
+      queryClient.invalidateQueries({ queryKey: ["estoque-saldos"] });
+      queryClient.invalidateQueries({ queryKey: ["estoque-movimentacoes"] });
+      toast.success("Itens separados e baixa de saldo registrada!");
+      setSepararSol(null);
+      setSepararItens([]);
+    },
+    onError: (err: any) => toast.error(err.message || "Erro ao separar itens"),
+  });
+
+  // Marcar como Entregue (separada -> entregue)
+  const entregarMutation = useMutation({
+    mutationFn: async (sol: Solicitacao) => {
+      const { error } = await fromEstoque("estoque_solicitacoes")
+        .update({ status: "entregue" } as any)
+        .eq("id", sol.id);
+      if (error) throw error;
+      await criarNotificacao({
+        user_id: sol.solicitante_user_id,
+        tipo: "material_entregue",
+        mensagem: "Sua solicitação foi entregue. Confirme o recebimento na lista de solicitações.",
+        referencia_id: sol.id,
+        referencia_tipo: "solicitacao",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["estoque-solicitacoes"] });
+      toast.success("Marcada como entregue!");
+    },
+    onError: () => toast.error("Erro ao marcar como entregue"),
+  });
+
+  // Confirmar recebimento (somente solicitante): preenche recebido_por/recebido_em
+  const confirmarRecebimentoMutation = useMutation({
+    mutationFn: async (sol: Solicitacao) => {
+      if (!user?.id) throw new Error("Usuário não autenticado");
+      const { error } = await fromEstoque("estoque_movimentacoes")
+        .update({
+          recebido_por_user_id: user.id,
+          recebido_em: new Date().toISOString(),
+        } as any)
+        .eq("solicitacao_id", sol.id)
+        .is("recebido_em", null);
+      if (error) throw error;
+
+      // Notifica gestores
+      if (sol.unidade_id) {
+        const userName = user.user_metadata?.name || user.email || "Usuário";
+        await notificarGestoresUnidade(sol.unidade_id, `${userName} confirmou o recebimento dos materiais.`, sol.id);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["estoque-solicitacoes"] });
+      queryClient.invalidateQueries({ queryKey: ["estoque-movimentacoes"] });
+      setReceiptConfirm(null);
+      toast.success("Recebimento confirmado. Obrigado!");
+    },
+    onError: (err: any) => toast.error(err.message || "Erro ao confirmar recebimento"),
+  });
+
   const resetForm = () => {
     setDialogOpen(false);
     setUnidadeId("");
@@ -408,20 +620,28 @@ export default function EstoqueSolicitacoes() {
                         <Button size="sm" variant="ghost" onClick={() => setViewDialog(sol)}>
                           <Eye className="h-4 w-4" />
                         </Button>
-                        {canEditEstoque && NEXT_STATUS[sol.status] && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => updateStatusMutation.mutate({ id: sol.id, newStatus: NEXT_STATUS[sol.status], solicitacao: sol })}
-                          >
-                            {sol.status === "pendente" && <CheckCircle className="h-4 w-4 mr-1" />}
-                            {sol.status === "aprovada" && <Package className="h-4 w-4 mr-1" />}
-                            {sol.status === "separada" && <Truck className="h-4 w-4 mr-1" />}
-                            {NEXT_STATUS_LABEL[sol.status]}
+                        {canEditEstoque && sol.status === "pendente" && (
+                          <Button size="sm" variant="outline" onClick={() => aprovarMutation.mutate(sol)} disabled={aprovarMutation.isPending}>
+                            <CheckCircle className="h-4 w-4 mr-1" /> Aprovar
                           </Button>
                         )}
-                        {sol.status !== "cancelada" && sol.status !== "entregue" && (
-                          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => cancelMutation.mutate(sol.id)}>
+                        {canEditEstoque && sol.status === "aprovada" && (
+                          <Button size="sm" variant="outline" onClick={() => abrirSeparar(sol)}>
+                            <Package className="h-4 w-4 mr-1" /> Separar
+                          </Button>
+                        )}
+                        {canEditEstoque && sol.status === "separada" && (
+                          <Button size="sm" variant="outline" onClick={() => entregarMutation.mutate(sol)} disabled={entregarMutation.isPending}>
+                            <Truck className="h-4 w-4 mr-1" /> Entregar
+                          </Button>
+                        )}
+                        {sol.status === "entregue" && sol.solicitante_user_id === user?.id && (
+                          <Button size="sm" variant="outline" onClick={() => setReceiptConfirm(sol)}>
+                            <HandHeart className="h-4 w-4 mr-1" /> Confirmar Recebimento
+                          </Button>
+                        )}
+                        {sol.status !== "cancelada" && sol.status !== "entregue" && (canEditEstoque || sol.solicitante_user_id === user?.id) && (
+                          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setCancelConfirm(sol)}>
                             <X className="h-4 w-4" />
                           </Button>
                         )}
@@ -571,6 +791,142 @@ export default function EstoqueSolicitacoes() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Separar Dialog */}
+      <Dialog open={!!separarSol} onOpenChange={(o) => { if (!o) { setSepararSol(null); setSepararItens([]); } }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Separar Itens</DialogTitle>
+            <DialogDescription>
+              Defina o local de origem e a quantidade atendida de cada item. A baixa de saldo será registrada automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {separarItens.length === 0 && (
+              <p className="text-sm text-muted-foreground">Nenhum item para separar.</p>
+            )}
+            {separarItens.map((it, idx) => {
+              const localSel = it.saldosDisponiveis.find((s) => s.local_id === it.local_armazenamento_id);
+              const maxDisp = localSel?.quantidade ?? 0;
+              return (
+                <div key={it.id} className="border rounded-lg p-3 space-y-2">
+                  <div className="flex justify-between items-baseline">
+                    <strong className="text-sm">{it.material_nome}</strong>
+                    <span className="text-xs text-muted-foreground">Solicitado: {it.quantidade_solicitada} {it.material_unidade}</span>
+                  </div>
+                  {it.saldosDisponiveis.length === 0 ? (
+                    <p className="text-sm text-destructive">Sem saldo disponível nesta unidade.</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs">Local de origem</Label>
+                        <Select
+                          value={it.local_armazenamento_id}
+                          onValueChange={(v) => {
+                            const novos = [...separarItens];
+                            novos[idx].local_armazenamento_id = v;
+                            const novoMax = it.saldosDisponiveis.find((s) => s.local_id === v)?.quantidade ?? 0;
+                            novos[idx].quantidade_atendida = Math.min(novos[idx].quantidade_atendida, novoMax, it.quantidade_solicitada);
+                            setSepararItens(novos);
+                          }}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {it.saldosDisponiveis.map((s) => (
+                              <SelectItem key={s.local_id} value={s.local_id}>
+                                {s.local_nome} (saldo: {s.quantidade})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Qtd. atendida (máx {Math.min(maxDisp, it.quantidade_solicitada)})</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={Math.min(maxDisp, it.quantidade_solicitada)}
+                          value={it.quantidade_atendida}
+                          onChange={(e) => {
+                            const novos = [...separarItens];
+                            const v = parseInt(e.target.value) || 0;
+                            novos[idx].quantidade_atendida = Math.max(0, Math.min(v, maxDisp, it.quantidade_solicitada));
+                            setSepararItens(novos);
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setSepararSol(null); setSepararItens([]); }}>Cancelar</Button>
+            <Button
+              onClick={() => separarMutation.mutate()}
+              disabled={separarMutation.isPending || separarItens.every((i) => i.quantidade_atendida === 0)}
+            >
+              {separarMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Confirmar Separação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Confirmation */}
+      <AlertDialog open={!!cancelConfirm} onOpenChange={(o) => !o && setCancelConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar solicitação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação marca a solicitação como cancelada e não pode ser desfeita. Itens já separados precisam ser devolvidos manualmente ao estoque.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                if (!cancelConfirm) return;
+                const { error } = await fromEstoque("estoque_solicitacoes")
+                  .update({ status: "cancelada" } as any)
+                  .eq("id", cancelConfirm.id);
+                if (error) toast.error("Erro ao cancelar");
+                else {
+                  toast.success("Solicitação cancelada!");
+                  queryClient.invalidateQueries({ queryKey: ["estoque-solicitacoes"] });
+                }
+                setCancelConfirm(null);
+              }}
+            >
+              Cancelar solicitação
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Receipt Confirmation */}
+      <AlertDialog open={!!receiptConfirm} onOpenChange={(o) => !o && setReceiptConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar recebimento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ao confirmar, você atesta que recebeu os materiais desta solicitação. Esta confirmação fica registrada no histórico.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => receiptConfirm && confirmarRecebimentoMutation.mutate(receiptConfirm)}
+              disabled={confirmarRecebimentoMutation.isPending}
+            >
+              {confirmarRecebimentoMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Confirmar recebimento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
