@@ -92,6 +92,23 @@ export default function EstoqueSolicitacoes() {
   const [viewDialog, setViewDialog] = useState<Solicitacao | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
 
+  // Separação dialog state
+  const [separarSol, setSepararSol] = useState<Solicitacao | null>(null);
+  const [separarItens, setSepararItens] = useState<Array<{
+    id: string;
+    material_id: string;
+    material_nome: string;
+    material_unidade: string;
+    quantidade_solicitada: number;
+    quantidade_atendida: number;
+    local_armazenamento_id: string;
+    saldosDisponiveis: Array<{ local_id: string; local_nome: string; quantidade: number }>;
+  }>>([]);
+
+  // Cancel + receipt confirmation alert state
+  const [cancelConfirm, setCancelConfirm] = useState<Solicitacao | null>(null);
+  const [receiptConfirm, setReceiptConfirm] = useState<Solicitacao | null>(null);
+
   // Form state
   const [unidadeId, setUnidadeId] = useState("");
   const [setorId, setSetorId] = useState("");
