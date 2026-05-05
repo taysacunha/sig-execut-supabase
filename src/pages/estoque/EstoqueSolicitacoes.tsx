@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -144,6 +145,20 @@ export default function EstoqueSolicitacoes() {
       return data as unknown as Solicitacao[];
     },
   });
+
+  // Auto-abre o detalhe quando vier ?id= (de uma notificação clicada)
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const targetId = searchParams.get("id");
+    if (!targetId || solicitacoes.length === 0) return;
+    const sol = solicitacoes.find((s) => s.id === targetId);
+    if (sol) {
+      setViewDialog(sol);
+      const next = new URLSearchParams(searchParams);
+      next.delete("id");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, solicitacoes, setSearchParams]);
 
   // Fetch materials available in the selected unit (have stock > 0)
   const { data: materiaisDisponiveis = [] } = useQuery({
