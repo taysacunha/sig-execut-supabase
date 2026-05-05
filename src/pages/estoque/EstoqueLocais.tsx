@@ -49,7 +49,7 @@ export default function EstoqueLocais() {
   const [activeTab, setActiveTab] = useState("ativos");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Local | null>(null);
-  const [form, setForm] = useState({ nome: "", tipo: "deposito", unidade_id: "" });
+  const [form, setForm] = useState({ nome: "", tipo: "deposito", unidade_id: "", parent_id: "" });
   const [toggleConfirm, setToggleConfirm] = useState<{ id: string; nome: string; newActive: boolean } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; nome: string } | null>(null);
 
@@ -84,11 +84,13 @@ export default function EstoqueLocais() {
 
   const enrichLocal = (l: Local) => {
     const unidade = unidades.find((u) => u.id === l.unidade_id);
+    const parent = l.parent_id ? locais.find((p) => p.id === l.parent_id) : null;
     return {
       ...l,
       unidade_nome: unidade?.nome || "—",
       unidade_inativa: unidade ? !unidade.is_active : false,
       tipo_label: TIPOS.find((t) => t.value === l.tipo)?.label || l.tipo,
+      parent_nome: parent?.nome || null,
     };
   };
 
@@ -120,7 +122,12 @@ export default function EstoqueLocais() {
       });
       if (duplicate) throw new Error("Já existe um local com este nome nesta unidade");
 
-      const payload = { nome: values.nome, tipo: values.tipo, unidade_id: values.unidade_id, parent_id: null };
+      const payload = {
+        nome: values.nome,
+        tipo: values.tipo,
+        unidade_id: values.unidade_id,
+        parent_id: values.parent_id || null,
+      };
       if (values.id) {
         const { error } = await fromEstoque("estoque_locais_armazenamento").update(payload).eq("id", values.id);
         if (error) throw error;
@@ -178,12 +185,12 @@ export default function EstoqueLocais() {
   const closeDialog = () => {
     setDialogOpen(false);
     setEditing(null);
-    setForm({ nome: "", tipo: "deposito", unidade_id: "" });
+    setForm({ nome: "", tipo: "deposito", unidade_id: "", parent_id: "" });
   };
 
   const openEdit = (l: Local) => {
     setEditing(l);
-    setForm({ nome: l.nome, tipo: l.tipo, unidade_id: l.unidade_id });
+    setForm({ nome: l.nome, tipo: l.tipo, unidade_id: l.unidade_id, parent_id: l.parent_id || "" });
     setDialogOpen(true);
   };
 
@@ -238,6 +245,9 @@ export default function EstoqueLocais() {
                       <span title="Unidade inativa" className="text-amber-500">
                         <AlertTriangle className="h-3.5 w-3.5" />
                       </span>
+                    )}
+                    {l.parent_nome && (
+                      <Badge variant="outline" className="ml-2 text-xs">↳ {l.parent_nome}</Badge>
                     )}
                   </span>
                 </TableCell>
@@ -365,6 +375,25 @@ export default function EstoqueLocais() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>Local pai (opcional)</Label>
+              <Select
+                value={form.parent_id || "__none__"}
+                onValueChange={(v) => setForm({ ...form, parent_id: v === "__none__" ? "" : v })}
+                disabled={!form.unidade_id}
+              >
+                <SelectTrigger><SelectValue placeholder="Sem pai (raiz)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Sem pai (raiz)</SelectItem>
+                  {locais
+                    .filter((l) => l.is_active && l.unidade_id === form.unidade_id && (!editing || l.id !== editing.id))
+                    .map((l) => (
+                      <SelectItem key={l.id} value={l.id}>{l.nome}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">Use para criar hierarquia: prateleira dentro de armário, armário dentro de depósito, etc.</p>
             </div>
           </div>
           <DialogFooter>
