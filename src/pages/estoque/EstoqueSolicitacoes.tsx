@@ -620,20 +620,28 @@ export default function EstoqueSolicitacoes() {
                         <Button size="sm" variant="ghost" onClick={() => setViewDialog(sol)}>
                           <Eye className="h-4 w-4" />
                         </Button>
-                        {canEditEstoque && NEXT_STATUS[sol.status] && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => updateStatusMutation.mutate({ id: sol.id, newStatus: NEXT_STATUS[sol.status], solicitacao: sol })}
-                          >
-                            {sol.status === "pendente" && <CheckCircle className="h-4 w-4 mr-1" />}
-                            {sol.status === "aprovada" && <Package className="h-4 w-4 mr-1" />}
-                            {sol.status === "separada" && <Truck className="h-4 w-4 mr-1" />}
-                            {NEXT_STATUS_LABEL[sol.status]}
+                        {canEditEstoque && sol.status === "pendente" && (
+                          <Button size="sm" variant="outline" onClick={() => aprovarMutation.mutate(sol)} disabled={aprovarMutation.isPending}>
+                            <CheckCircle className="h-4 w-4 mr-1" /> Aprovar
                           </Button>
                         )}
-                        {sol.status !== "cancelada" && sol.status !== "entregue" && (
-                          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => cancelMutation.mutate(sol.id)}>
+                        {canEditEstoque && sol.status === "aprovada" && (
+                          <Button size="sm" variant="outline" onClick={() => abrirSeparar(sol)}>
+                            <Package className="h-4 w-4 mr-1" /> Separar
+                          </Button>
+                        )}
+                        {canEditEstoque && sol.status === "separada" && (
+                          <Button size="sm" variant="outline" onClick={() => entregarMutation.mutate(sol)} disabled={entregarMutation.isPending}>
+                            <Truck className="h-4 w-4 mr-1" /> Entregar
+                          </Button>
+                        )}
+                        {sol.status === "entregue" && sol.solicitante_user_id === user?.id && (
+                          <Button size="sm" variant="outline" onClick={() => setReceiptConfirm(sol)}>
+                            <HandHeart className="h-4 w-4 mr-1" /> Confirmar Recebimento
+                          </Button>
+                        )}
+                        {sol.status !== "cancelada" && sol.status !== "entregue" && (canEditEstoque || sol.solicitante_user_id === user?.id) && (
+                          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setCancelConfirm(sol)}>
                             <X className="h-4 w-4" />
                           </Button>
                         )}
