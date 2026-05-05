@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { useTableControls } from "@/hooks/useTableControls";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
+import { verificarEstoqueBaixo } from "@/hooks/useEstoqueNotificacoes";
 
 const fromEstoque = (table: string) => supabase.from(table as any);
 
@@ -267,6 +268,28 @@ export default function EstoqueSaldos() {
 
   const lowStockCount = saldos.filter((s) => s.quantidade <= (s.material_estoque_minimo || 0) && (s.material_estoque_minimo || 0) > 0).length;
 
+  // Consolidado por material: soma todos os locais
+  const consolidadoPorMaterial = useMemo(() => {
+    const map = new Map<string, { material_id: string; material_nome: string; material_unidade: string; estoque_minimo: number; total: number; locais: number }>();
+    for (const s of saldos) {
+      const cur = map.get(s.material_id);
+      if (cur) {
+        cur.total += s.quantidade;
+        cur.locais += 1;
+      } else {
+        map.set(s.material_id, {
+          material_id: s.material_id,
+          material_nome: s.material_nome || "—",
+          material_unidade: s.material_unidade || "",
+          estoque_minimo: s.material_estoque_minimo || 0,
+          total: s.quantidade,
+          locais: 1,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.material_nome.localeCompare(b.material_nome));
+  }, [saldos]);
+
   // ─── Row action handlers ───
   const handleAjustar = (s: Saldo) => {
     setSelectedSaldo(s);
@@ -328,6 +351,7 @@ export default function EstoqueSaldos() {
         local_destino_id: localId, responsavel_user_id: user?.id,
         observacoes: observacoes || null,
       } as any);
+      await verificarEstoqueBaixo(materialId, localId);
     },
     onSuccess: () => { invalidate(); toast.success("Entrada registrada!"); resetForms(); },
     onError: () => toast.error("Erro ao registrar entrada"),
@@ -346,6 +370,7 @@ export default function EstoqueSaldos() {
         responsavel_user_id: user?.id,
         observacoes: observacoes || "Ajuste manual",
       } as any);
+      await verificarEstoqueBaixo(selectedSaldo.material_id, selectedSaldo.local_armazenamento_id);
     },
     onSuccess: () => { invalidate(); toast.success("Ajuste registrado!"); resetForms(); },
     onError: () => toast.error("Erro ao registrar ajuste"),
@@ -377,6 +402,8 @@ export default function EstoqueSaldos() {
         responsavel_user_id: user?.id,
         observacoes: observacoes || null,
       } as any);
+      await verificarEstoqueBaixo(selectedSaldo.material_id, selectedSaldo.local_armazenamento_id);
+      await verificarEstoqueBaixo(selectedSaldo.material_id, localDestinoId);
     },
     onSuccess: () => { invalidate(); toast.success("Transferência realizada!"); resetForms(); },
     onError: (err: any) => toast.error(err.message || "Erro na transferência"),
@@ -446,6 +473,7 @@ export default function EstoqueSaldos() {
         <Tabs defaultValue="todas" className="space-y-4">
           <TabsList className="flex-wrap h-auto gap-1">
             <TabsTrigger value="todas">Todas ({saldos.length})</TabsTrigger>
+            <TabsTrigger value="por-material">Por material ({consolidadoPorMaterial.length})</TabsTrigger>
             {activeUnidades.map((u) => (
               <TabsTrigger key={u.id} value={u.id}>
                 {u.nome} ({saldosByUnidade[u.id]?.length || 0})
@@ -463,6 +491,50 @@ export default function EstoqueSaldos() {
                   onTransferir={handleTransferir}
                   onExcluir={handleExcluir}
                 />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="por-material">
+            <Card>
+              <CardContent className="pt-4">
+                {consolidadoPorMaterial.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">Nenhum saldo</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Material</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="text-right">Mínimo</TableHead>
+                        <TableHead className="text-right">Locais</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {consolidadoPorMaterial.map((c) => {
+                        const isLow = c.total <= c.estoque_minimo && c.estoque_minimo > 0;
+                        return (
+                          <TableRow key={c.material_id} className={isLow ? "bg-yellow-500/5" : ""}>
+                            <TableCell className="font-medium">{c.material_nome}</TableCell>
+                            <TableCell className="text-right font-mono">{c.total} {c.material_unidade}</TableCell>
+                            <TableCell className="text-right font-mono text-muted-foreground">{c.estoque_minimo}</TableCell>
+                            <TableCell className="text-right">{c.locais}</TableCell>
+                            <TableCell>
+                              {isLow ? (
+                                <Badge variant="outline" className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                                  <AlertTriangle className="h-3 w-3 mr-1" /> Baixo
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-green-500/20 text-green-400 border-green-500/30">OK</Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

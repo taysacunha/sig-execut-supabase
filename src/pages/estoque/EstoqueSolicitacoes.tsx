@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -14,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
-import { notificarGestoresUnidade, criarNotificacao } from "@/hooks/useEstoqueNotificacoes";
+import { notificarGestoresUnidade, criarNotificacao, verificarEstoqueBaixo } from "@/hooks/useEstoqueNotificacoes";
 import { useTableControls } from "@/hooks/useTableControls";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
 import { useUsuarioUnidades } from "@/hooks/useUsuarioUnidades";
@@ -144,6 +145,20 @@ export default function EstoqueSolicitacoes() {
       return data as unknown as Solicitacao[];
     },
   });
+
+  // Auto-abre o detalhe quando vier ?id= (de uma notificação clicada)
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const targetId = searchParams.get("id");
+    if (!targetId || solicitacoes.length === 0) return;
+    const sol = solicitacoes.find((s) => s.id === targetId);
+    if (sol) {
+      setViewDialog(sol);
+      const next = new URLSearchParams(searchParams);
+      next.delete("id");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, solicitacoes, setSearchParams]);
 
   // Fetch materials available in the selected unit (have stock > 0)
   const { data: materiaisDisponiveis = [] } = useQuery({
@@ -432,6 +447,7 @@ export default function EstoqueSolicitacoes() {
           responsavel_user_id: user?.id,
           observacoes: `Separação para solicitação de ${separarSol.solicitante_nome}`,
         } as any);
+        await verificarEstoqueBaixo(it.material_id, it.local_armazenamento_id);
       }
 
       // Atualiza status da solicitação

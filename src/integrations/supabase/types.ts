@@ -3202,6 +3202,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin_or_super: { Args: { _user_id: string }; Returns: boolean }
+      is_solicitante_estoque: {
+        Args: { _solicitacao_id: string; _user_id: string }
+        Returns: boolean
+      }
       make_first_admin: { Args: { _user_id: string }; Returns: boolean }
       save_broker_weekly_stats: {
         Args: {

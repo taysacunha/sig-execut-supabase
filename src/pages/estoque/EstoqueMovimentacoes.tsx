@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, ArrowDownUp } from "lucide-react";
+import { Loader2, ArrowDownUp, Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTableControls } from "@/hooks/useTableControls";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
+import { exportToExcel } from "@/lib/exportUtils";
 
 const fromEstoque = (table: string) => supabase.from(table as any);
 
@@ -61,6 +63,15 @@ export default function EstoqueMovimentacoes() {
     },
   });
 
+  const { data: profiles = [] } = useQuery({
+    queryKey: ["user-profiles-estoque"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("user_profiles").select("user_id, name");
+      if (error) throw error;
+      return data as { user_id: string; name: string }[];
+    },
+  });
+
   const { data: unidades = [] } = useQuery({
     queryKey: ["ferias-unidades"],
     queryFn: async () => {
@@ -90,6 +101,10 @@ export default function EstoqueMovimentacoes() {
     const unidade = unidades.find((u) => u.id === local.unidade_id);
     return `${local.nome} (${unidade?.nome || ""})`;
   };
+  const getUserName = (id: string | null) => {
+    if (!id) return "—";
+    return profiles.find((p) => p.user_id === id)?.name || "—";
+  };
 
   // Enrich data for table controls
   const enriched = movimentacoes
@@ -98,6 +113,8 @@ export default function EstoqueMovimentacoes() {
       ...m,
       material_nome: getMaterialNome(m.material_id),
       tipo_label: TIPO_LABELS[m.tipo] || m.tipo,
+      responsavel_nome: getUserName(m.responsavel_user_id),
+      recebedor_nome: getUserName(m.recebido_por_user_id),
     }));
 
   const {
@@ -110,11 +127,35 @@ export default function EstoqueMovimentacoes() {
     defaultItemsPerPage: 25,
   });
 
+  const handleExport = () => {
+    const rows = filteredData.map((m) => ({
+      Data: new Date(m.created_at).toLocaleString("pt-BR"),
+      Tipo: m.tipo_label,
+      Material: m.material_nome,
+      Quantidade: m.quantidade,
+      Origem: getLocalNome(m.local_origem_id),
+      Destino: getLocalNome(m.local_destino_id),
+      Responsável: m.responsavel_nome,
+      Recebedor: m.recebedor_nome,
+      "Recebido em": m.recebido_em ? new Date(m.recebido_em).toLocaleString("pt-BR") : "—",
+      Observações: m.observacoes || "",
+    }));
+    if (rows.length === 0) return;
+    exportToExcel(rows, `movimentacoes_estoque_${new Date().toISOString().slice(0, 10)}`, "Movimentações");
+  };
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Movimentações</h1>
-        <p className="text-muted-foreground">Histórico completo de movimentações do estoque</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Movimentações</h1>
+            <p className="text-muted-foreground">Histórico completo de movimentações do estoque</p>
+          </div>
+          <Button variant="outline" onClick={handleExport} disabled={filteredData.length === 0}>
+            <Download className="h-4 w-4 mr-2" /> Exportar
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -164,6 +205,8 @@ export default function EstoqueMovimentacoes() {
                     </TableHead>
                     <TableHead>Origem</TableHead>
                     <TableHead>Destino</TableHead>
+                    <TableHead>Responsável</TableHead>
+                    <TableHead>Recebedor</TableHead>
                     <TableHead>Observações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -185,6 +228,15 @@ export default function EstoqueMovimentacoes() {
                       <TableCell className="text-right font-mono">{mov.quantidade}</TableCell>
                       <TableCell className="text-sm">{getLocalNome(mov.local_origem_id)}</TableCell>
                       <TableCell className="text-sm">{getLocalNome(mov.local_destino_id)}</TableCell>
+                      <TableCell className="text-sm">{mov.responsavel_nome}</TableCell>
+                      <TableCell className="text-sm">
+                        {mov.recebedor_nome}
+                        {mov.recebido_em && (
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(mov.recebido_em).toLocaleDateString("pt-BR")}
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{mov.observacoes || "—"}</TableCell>
                     </TableRow>
                   ))}

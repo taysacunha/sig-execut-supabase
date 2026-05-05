@@ -1,7 +1,7 @@
-import { Bell, BellOff, Check, CheckCheck, Loader2 } from "lucide-react";
+import { BellOff, Check, CheckCheck, Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useEstoqueNotificacoes } from "@/hooks/useEstoqueNotificacoes";
 import { useTableControls } from "@/hooks/useTableControls";
 import { TableSearch, TablePagination } from "@/components/vendas/TableControls";
@@ -16,6 +16,7 @@ const TIPO_ICONS: Record<string, string> = {
 
 export default function EstoqueNotificacoes() {
   const { notificacoes, unreadCount, isLoading, markAsRead, markAllAsRead } = useEstoqueNotificacoes();
+  const navigate = useNavigate();
 
   const {
     searchTerm, setSearchTerm, currentPage, setCurrentPage,
@@ -25,6 +26,15 @@ export default function EstoqueNotificacoes() {
     searchField: "mensagem",
     defaultItemsPerPage: 25,
   });
+
+  const handleClick = (n: typeof notificacoes[number]) => {
+    if (!n.lida) markAsRead.mutate(n.id);
+    if (n.referencia_tipo === "solicitacao" && n.referencia_id) {
+      navigate(`/estoque/solicitacoes?id=${n.referencia_id}`);
+    } else if (n.referencia_tipo === "material" && n.referencia_id) {
+      navigate(`/estoque/saldos`);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -62,7 +72,8 @@ export default function EstoqueNotificacoes() {
             {paginatedData.map((n) => (
               <Card
                 key={n.id}
-                className={`transition-colors ${n.lida ? "opacity-60" : "border-primary/30 bg-primary/5"}`}
+                onClick={() => handleClick(n)}
+                className={`transition-colors cursor-pointer hover:bg-accent/50 ${n.lida ? "opacity-60" : "border-primary/30 bg-primary/5"}`}
               >
                 <CardContent className="py-3 flex items-start gap-3">
                   <span className="text-lg mt-0.5">{TIPO_ICONS[n.tipo] || "🔔"}</span>
@@ -79,7 +90,7 @@ export default function EstoqueNotificacoes() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => markAsRead.mutate(n.id)}
+                      onClick={(e) => { e.stopPropagation(); markAsRead.mutate(n.id); }}
                       className="shrink-0"
                     >
                       <Check className="h-4 w-4" />
