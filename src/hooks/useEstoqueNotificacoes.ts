@@ -96,3 +96,52 @@ export async function notificarGestoresUnidade(unidadeId: string, mensagem: stri
 
   await fromEstoque("estoque_notificacoes").insert(notificacoes as any);
 }
+
+// Verifica saldo de um material em um local; se ≤ estoque_minimo (e mínimo > 0),
+// dispara notificação "estoque_baixo" para todos os gestores da unidade.
+export async function verificarEstoqueBaixo(material_id: string, local_armazenamento_id: string) {
+  try {
+    const { data: mat } = await fromEstoque("estoque_materiais")
+      .select("nome, estoque_minimo")
+      .eq("id", material_id)
+      .maybeSingle();
+    const minimo = (mat as any)?.estoque_minimo || 0;
+    if (!mat || minimo <= 0) return;
+
+    const { data: saldo } = await fromEstoque("estoque_saldos")
+      .select("quantidade")
+      .eq("material_id", material_id)
+      .eq("local_armazenamento_id", local_armazenamento_id)
+      .maybeSingle();
+    const qtd = (saldo as any)?.quantidade ?? 0;
+    if (qtd > minimo) return;
+
+    const { data: local } = await fromEstoque("estoque_locais_armazenamento")
+      .select("nome, unidade_id")
+      .eq("id", local_armazenamento_id)
+      .maybeSingle();
+    const unidade_id = (local as any)?.unidade_id;
+    if (!unidade_id) return;
+
+    const { data: gestores } = await fromEstoque("estoque_gestores")
+      .select("user_id")
+      .eq("unidade_id", unidade_id);
+    if (!gestores?.length) return;
+
+    const mensagem = qtd === 0
+      ? `Estoque ZERADO: ${(mat as any).nome} em ${(local as any)?.nome || "local"}`
+      : `Estoque baixo: ${(mat as any).nome} (${qtd} restantes, mínimo ${minimo})`;
+
+    const notificacoes = (gestores as unknown as { user_id: string }[]).map((g) => ({
+      user_id: g.user_id,
+      tipo: "estoque_baixo",
+      mensagem,
+      referencia_id: material_id,
+      referencia_tipo: "material",
+    }));
+    await fromEstoque("estoque_notificacoes").insert(notificacoes as any);
+  } catch (e) {
+    // silent — alerta de baixa nunca deve bloquear o fluxo principal
+    console.warn("verificarEstoqueBaixo falhou", e);
+  }
+}
