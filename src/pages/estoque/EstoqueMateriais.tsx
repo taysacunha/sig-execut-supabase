@@ -80,8 +80,8 @@ export default function EstoqueMateriais() {
   });
   const categoriasAtivas = useMemo(() => categorias.filter((c) => c.is_active), [categorias]);
   const categoriaNome = (id: string | null, fallback: string | null) => {
-    if (!id) return fallback || "—";
-    return categorias.find((c) => c.id === id)?.nome || fallback || "—";
+    if (id) return categorias.find((c) => c.id === id)?.nome || fallback || "—";
+    return fallback || "—";
   };
 
   const { data: saldos = [] } = useQuery({
