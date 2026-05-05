@@ -1,80 +1,99 @@
-Vou corrigir o problema no formulário de edição de férias, especificamente nos dados de exceção/venda/gozo diferente que já estão salvos mas somem ao abrir o modal.
+# Revisão do Módulo de Estoque — Status e Plano de Conclusão
 
-## Diagnóstico
+Fiz uma varredura página a página. Abaixo está o que está pronto, o que falta, e um plano objetivo para fechar os fluxos mais críticos (solicitação → separação → entrega → recebimento) que hoje estão incompletos.
 
-O problema não parece estar no salvamento nem na consulta principal. A lógica atual chega a buscar `ferias_gozo_periodos` ao abrir o diálogo de edição, mas logo depois o componente `ExcecaoPeriodosSection` executa efeitos automáticos de “reset” quando `isHydrating` passa de `true` para `false`.
+---
 
-Na prática, acontece isto:
+## 1. Status atual de cada página
 
-```text
-1. Clica em Editar Anderson
-2. FeriasDialog carrega os períodos salvos de ferias_gozo_periodos
-3. Define excecaoTipo, distribuição, dias vendidos e excPeriodos
-4. Hydration termina
-5. ExcecaoPeriodosSection entende isso como mudança manual do usuário
-6. Limpa distribuição e periodos
-7. Os campos aparecem vazios/ocultos no modal
-```
+### ✅ Materiais (`EstoqueMateriais.tsx`)
+- Cadastro, edição, ativar/desativar, exclusão (com checagem de saldo) → **OK**.
+- Faltando: cadastro estruturado de **categorias** (hoje é texto livre, gera duplicidades).
 
-Isso explica por que os dados não aparecem mesmo estando cadastrados.
+### ✅ Locais de Armazenamento (`EstoqueLocais.tsx`)
+- Cadastro por unidade, soft-delete, exclusão → **OK**.
+- Faltando: suporte a **hierarquia** (campo `parent_id` existe na tabela mas a UI não usa — depósito → armário → prateleira).
 
-## Plano de correção
+### ⚠️ Saldos (`EstoqueSaldos.tsx`)
+- Entrada, ajuste, transferência, exclusão com justificativa → **OK**.
+- Tabs por unidade → **OK**.
+- Faltando: nada bloqueante. Pequeno: visão consolidada por material somando todos os locais.
 
-### 1. Impedir reset automático após hidratação
-No arquivo `src/components/ferias/ferias/ExcecaoPeriodosSection.tsx`, vou ajustar os efeitos que limpam dados para que eles só rodem em ações reais do usuário, não no primeiro carregamento da edição.
+### 🔴 Solicitações (`EstoqueSolicitacoes.tsx`) — **principal lacuna**
+- Criar solicitação (com unidade/setor auto-preenchidos do vínculo do usuário) → **OK**.
+- Mudança de status `pendente → aprovada → separada → entregue` → **só altera o campo `status`**.
+- **NÃO faz baixa de saldo**, **NÃO cria movimentação de saída**, **NÃO permite definir local de origem por item**, **NÃO permite informar `quantidade_atendida`** (fica sempre 0).
+- **NÃO existe confirmação de recebimento** pelo solicitante (campos `recebido_por_user_id` / `recebido_em` em `estoque_movimentacoes` nunca são preenchidos).
+- Cancelar não tem AlertDialog de confirmação.
+- Não dá para editar itens depois de criada.
 
-Mudanças principais:
-- Remover ou substituir o efeito que faz:
-  - `onDistribuicaoTipoChange("")`
-  - `onPeriodosChange([])`
-  ao detectar `excecaoTipo`.
-- Trocar essa limpeza automática por handlers explícitos nos botões:
-  - quando o usuário clicar em “Vender dias de férias”
-  - quando clicar em “Gozo em datas diferentes”
-- Preservar os períodos já carregados quando o modal abre em edição.
+### ⚠️ Movimentações (`EstoqueMovimentacoes.tsx`)
+- Listagem com filtros e busca → **OK**.
+- Faltando: exibir nome do **responsável** e do **recebedor** (hoje mostra só IDs internamente, nem isso). Botão de exportar.
 
-### 2. Ajustar mudança de “dias vendidos” para não limpar dados carregados
-Hoje existe outro efeito que, ao mudar `diasVendidos`, zera temporariamente a distribuição para recalcular os campos. Esse efeito também pode disparar depois da hidratação e apagar os dados salvos.
+### ⚠️ Notificações (`EstoqueNotificacoes.tsx`)
+- Listagem, marcar como lida, marcar todas → **OK**.
+- Faltando: clicar na notificação **navegar** para a solicitação referenciada; gerar notificação automática de **estoque baixo** (não existe hoje).
 
-Vou ajustar para:
-- não rodar no primeiro carregamento do registro;
-- preservar períodos `gozo_diferente` paralelos no caso misto;
-- só recalcular quando o usuário realmente alterar a quantidade de dias vendidos.
+### ✅ Dashboard, Auditoria, Gestores/Usuários
+- Funcionais. Sem ajustes urgentes.
 
-### 3. Melhorar a hidratação do caso misto Anderson
-No `src/components/ferias/ferias/FeriasDialog.tsx`, vou reforçar a leitura para o caso:
+---
 
-```text
-Venda de dias + gozo real diferente do contador
-```
+## 2. Plano de implementação (prioridade alta → baixa)
 
-Ajustes:
-- manter todas as linhas vindas de `ferias_gozo_periodos`, separando por `tipo` (`vender` e `gozo_diferente`);
-- inferir corretamente a distribuição usando apenas as linhas de venda quando houver mistura;
-- manter `excecaoTipo = "vender"` quando houver venda, mas sem descartar as linhas `gozo_diferente`;
-- se não houver linhas em `ferias_gozo_periodos`, criar fallback a partir dos campos legados (`gozo_quinzena1_*`, `gozo_quinzena2_*`, `dias_vendidos`, `quinzena_venda`).
-
-### 4. Corrigir a renderização dos períodos carregados
-No `ExcecaoPeriodosSection.tsx`, vou garantir que:
-- a seção de venda mostre os campos de gozo já salvos;
-- a seção paralela “Gozo real diferente do enviado ao contador” apareça quando houver linhas `tipo = "gozo_diferente"`;
-- os campos de data carreguem imediatamente, sem precisar alternar entre “Livre” e “2º Período”.
-
-### 5. Validação final
-Depois da implementação, vou verificar os principais fluxos:
+### 🔴 Etapa 1 — Fechar o fluxo de Solicitação/Separação/Entrega/Recebimento
+Fluxo proposto (estados existentes na tabela, sem migração de schema):
 
 ```text
-Editar férias simples
-Editar venda padrão
-Editar venda como exceção
-Editar gozo em datas diferentes
-Editar caso misto: venda + gozo diferente
-Salvar sem alterar e reabrir
+pendente  → (gestor APROVA)        → aprovada
+aprovada  → (gestor SEPARA itens)  → separada   [baixa saldo + movimentação de saída]
+separada  → (gestor MARCA ENTREGUE)→ entregue
+entregue  → (solicitante CONFIRMA RECEBIMENTO) → preenche recebido_por/recebido_em
 ```
 
-## Arquivos que serão alterados
+Mudanças em `EstoqueSolicitacoes.tsx`:
+1. Novo **Dialog "Separar"** acionado quando o gestor avança de `aprovada → separada`:
+   - Lista cada item da solicitação com: quantidade solicitada, **Select de local de origem** (filtrado pelos locais da unidade da solicitação que tenham saldo > 0 do material) e campo **quantidade atendida** (default = solicitada, máx = saldo disponível).
+   - Ao confirmar:
+     - Atualiza `estoque_solicitacao_itens.quantidade_atendida` e `local_armazenamento_id`.
+     - Para cada item: faz **UPDATE** no `estoque_saldos` correspondente (subtrai) e **INSERT** em `estoque_movimentacoes` com `tipo='saida'`, `local_origem_id`, `solicitacao_id`, `responsavel_user_id = auth.uid()`.
+     - Muda status para `separada`.
+2. Botão **"Marcar como Entregue"** (gestor) → apenas muda status para `entregue` e notifica solicitante.
+3. Novo botão **"Confirmar Recebimento"** visível **apenas para o solicitante** quando status = `entregue`:
+   - Ao clicar: faz UPDATE em todas as `estoque_movimentacoes` da solicitação preenchendo `recebido_por_user_id` e `recebido_em`.
+   - Notifica os gestores da unidade que o material foi recebido.
+4. **AlertDialog de confirmação** ao cancelar solicitação.
+5. Permitir **editar itens** enquanto status = `pendente` (acréscimo, remoção, troca de quantidade).
 
-- `src/components/ferias/ferias/FeriasDialog.tsx`
-- `src/components/ferias/ferias/ExcecaoPeriodosSection.tsx`
+### 🟠 Etapa 2 — Notificações inteligentes
+1. Notificação clicável: ao clicar em uma notificação com `referencia_tipo = 'solicitacao'`, navegar para `/estoque/solicitacoes` e abrir o dialog de detalhes daquela solicitação.
+2. Disparar notificação **"estoque_baixo"** automaticamente nas mutations de saldo (entrada/saída/ajuste/transferência) sempre que o saldo resultante de um material em um local cair ≤ `estoque_minimo`. Notificar gestores da unidade do local.
 
-Não deve ser necessária alteração no banco de dados, porque a tabela `ferias_gozo_periodos` já possui os campos necessários (`tipo`, `referencia_periodo`, `dias`, `data_inicio`, `data_fim`).
+### 🟡 Etapa 3 — Movimentações com nomes
+1. Buscar nomes de usuários (responsável e recebedor) e exibi-los em colunas extras.
+2. Botão **Exportar CSV** das movimentações filtradas (usando `exportUtils` já existente no projeto).
+
+### 🟢 Etapa 4 — Polimentos de cadastro
+1. **Categorias de materiais**: criar tabela leve `estoque_categorias` (id, nome, is_active) + telinha simples no menu admin; trocar input de categoria do material por Select.
+2. **Hierarquia de locais**: no dialog de Local, permitir selecionar `parent_id` (mesmo unidade) e exibir os locais em formato de árvore na lista.
+3. **Visão consolidada por material** em Saldos: nova aba "Por material" somando saldo total entre locais.
+
+---
+
+## 3. Detalhes técnicos
+
+- **Schema**: nada novo é estritamente necessário para a Etapa 1. As colunas `quantidade_atendida`, `local_armazenamento_id`, `recebido_por_user_id`, `recebido_em` já existem mas estão sem uso.
+- **RLS**: as policies de `estoque_solicitacoes`, `estoque_solicitacao_itens`, `estoque_saldos` e `estoque_movimentacoes` já permitem `INSERT/UPDATE` para usuários com `can_edit_system('estoque')`. Para a confirmação de recebimento (que precisa ser feita pelo próprio solicitante mesmo sem `view_edit`), adicionar uma policy específica em `estoque_movimentacoes` permitindo `UPDATE` apenas dos campos `recebido_por_user_id` e `recebido_em` quando `auth.uid()` for o `solicitante_user_id` da solicitação vinculada — isso exigirá uma function `is_solicitante(_solicitacao_id uuid)`.
+- **Concorrência de saldos**: na separação, ler o saldo dentro da própria mutation e abortar com toast se ficar negativo (sem locking server-side por enquanto; aceitável pelo volume).
+- **Memória do projeto**: AlertDialog para ações destrutivas (cancelar solicitação) está alinhado com a regra de Core memory.
+
+---
+
+## 4. Sugestão de execução
+
+Posso entregar em 2 PRs/iterações:
+- **Iteração A** (crítica): Etapa 1 completa + AlertDialog de cancelamento + policy/function de recebimento.
+- **Iteração B** (qualidade): Etapas 2, 3 e 4.
+
+Confirma se quer que eu siga por essa ordem, ou prefere priorizar algo diferente (por exemplo, notificação de estoque baixo antes de tudo)?
