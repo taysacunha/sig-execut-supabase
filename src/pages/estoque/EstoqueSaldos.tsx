@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { useTableControls } from "@/hooks/useTableControls";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
+import { verificarEstoqueBaixo } from "@/hooks/useEstoqueNotificacoes";
 
 const fromEstoque = (table: string) => supabase.from(table as any);
 
@@ -328,6 +329,7 @@ export default function EstoqueSaldos() {
         local_destino_id: localId, responsavel_user_id: user?.id,
         observacoes: observacoes || null,
       } as any);
+      await verificarEstoqueBaixo(materialId, localId);
     },
     onSuccess: () => { invalidate(); toast.success("Entrada registrada!"); resetForms(); },
     onError: () => toast.error("Erro ao registrar entrada"),
@@ -346,6 +348,7 @@ export default function EstoqueSaldos() {
         responsavel_user_id: user?.id,
         observacoes: observacoes || "Ajuste manual",
       } as any);
+      await verificarEstoqueBaixo(selectedSaldo.material_id, selectedSaldo.local_armazenamento_id);
     },
     onSuccess: () => { invalidate(); toast.success("Ajuste registrado!"); resetForms(); },
     onError: () => toast.error("Erro ao registrar ajuste"),
@@ -377,6 +380,8 @@ export default function EstoqueSaldos() {
         responsavel_user_id: user?.id,
         observacoes: observacoes || null,
       } as any);
+      await verificarEstoqueBaixo(selectedSaldo.material_id, selectedSaldo.local_armazenamento_id);
+      await verificarEstoqueBaixo(selectedSaldo.material_id, localDestinoId);
     },
     onSuccess: () => { invalidate(); toast.success("Transferência realizada!"); resetForms(); },
     onError: (err: any) => toast.error(err.message || "Erro na transferência"),
