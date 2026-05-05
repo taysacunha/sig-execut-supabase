@@ -347,11 +347,12 @@ export default function EstoqueSolicitacoes() {
       const itensList = (itensRaw as any[]) || [];
 
       // Locais da unidade
-      const { data: locaisUnidade } = await fromEstoque("estoque_locais_armazenamento")
+      const { data: locaisUnidadeRaw } = await fromEstoque("estoque_locais_armazenamento")
         .select("id, nome")
         .eq("unidade_id", sol.unidade_id || "")
         .eq("is_active", true);
-      const localIds = (locaisUnidade || []).map((l: any) => l.id);
+      const locaisUnidade = (locaisUnidadeRaw as unknown as { id: string; nome: string }[]) || [];
+      const localIds = locaisUnidade.map((l) => l.id);
 
       // Saldos
       const { data: saldosRaw } = await fromEstoque("estoque_saldos")
@@ -365,7 +366,7 @@ export default function EstoqueSolicitacoes() {
           .filter((s: any) => s.material_id === it.material_id)
           .map((s: any) => ({
             local_id: s.local_armazenamento_id,
-            local_nome: (locaisUnidade || []).find((l: any) => l.id === s.local_armazenamento_id)?.nome || "—",
+            local_nome: locaisUnidade.find((l) => l.id === s.local_armazenamento_id)?.nome || "—",
             quantidade: s.quantidade,
           }));
         const defaultLocal = saldosDoMat[0]?.local_id || "";
