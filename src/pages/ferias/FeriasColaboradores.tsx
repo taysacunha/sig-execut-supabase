@@ -72,7 +72,15 @@ const FeriasColaboradores = () => {
         `)
         .order("nome");
       if (error) throw error;
-      return data as Colaborador[];
+      // Buscar CPFs (apenas editores recebem dados; demais usuários: array vazio por RLS)
+      const { data: sensiveis } = await (supabase as any)
+        .from("ferias_colaboradores_dados_sensiveis")
+        .select("colaborador_id, cpf");
+      const cpfMap = new Map<string, string>();
+      for (const r of (sensiveis || [])) {
+        if (r.cpf) cpfMap.set(r.colaborador_id, r.cpf);
+      }
+      return (data || []).map((c: any) => ({ ...c, cpf: cpfMap.get(c.id) ?? null })) as Colaborador[];
     },
   });
 
