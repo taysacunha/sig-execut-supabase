@@ -54,7 +54,7 @@ export function ContadorPDFGenerator() {
         .select(`
           *,
           colaborador:ferias_colaboradores(
-            id, nome, cpf,
+            id, nome,
             setor:ferias_setores(id, nome),
             unidade:ferias_unidades(id, nome)
           )
@@ -96,6 +96,20 @@ export function ContadorPDFGenerator() {
 
       // Ordenar por nome
       result.sort((a, b) => (a.colaborador?.nome || "").localeCompare(b.colaborador?.nome || ""));
+
+      // Buscar CPFs (RLS: apenas editores recebem dados)
+      const ids = Array.from(new Set(result.map((f: any) => f.colaborador?.id).filter(Boolean)));
+      if (ids.length) {
+        const { data: sensiveis } = await (supabase as any)
+          .from("ferias_colaboradores_dados_sensiveis")
+          .select("colaborador_id, cpf")
+          .in("colaborador_id", ids);
+        const cpfMap = new Map<string, string>();
+        for (const r of (sensiveis || [])) if (r.cpf) cpfMap.set(r.colaborador_id, r.cpf);
+        result = result.map((f: any) => f.colaborador
+          ? { ...f, colaborador: { ...f.colaborador, cpf: cpfMap.get(f.colaborador.id) ?? null } }
+          : f);
+      }
 
       return result;
     },
