@@ -30,7 +30,7 @@ export function FormularioPDFGenerator({ anoReferencia }: FormularioPDFGenerator
       const { data, error } = await supabase
         .from("ferias_colaboradores")
         .select(`
-          id, nome, cpf, data_admissao, data_nascimento,
+          id, nome, data_admissao, data_nascimento,
           setor:ferias_setores!setor_titular_id(id, nome),
           cargo:ferias_cargos(id, nome),
           unidade:ferias_unidades(id, nome)
@@ -38,7 +38,17 @@ export function FormularioPDFGenerator({ anoReferencia }: FormularioPDFGenerator
         .eq("status", "ativo")
         .order("nome");
       if (error) throw error;
-      return data;
+      const list = data || [];
+      const ids = list.map((c: any) => c.id);
+      let cpfMap = new Map<string, string>();
+      if (ids.length) {
+        const { data: sensiveis } = await (supabase as any)
+          .from("ferias_colaboradores_dados_sensiveis")
+          .select("colaborador_id, cpf")
+          .in("colaborador_id", ids);
+        for (const r of (sensiveis || [])) if (r.cpf) cpfMap.set(r.colaborador_id, r.cpf);
+      }
+      return list.map((c: any) => ({ ...c, cpf: cpfMap.get(c.id) ?? null }));
     },
   });
 
@@ -47,14 +57,26 @@ export function FormularioPDFGenerator({ anoReferencia }: FormularioPDFGenerator
     queryFn: async () => {
       let query = supabase
         .from("ferias_formulario_anual")
-        .select(`*, colaborador:ferias_colaboradores!colaborador_id(id, nome, cpf, data_admissao, setor:ferias_setores!setor_titular_id(nome), cargo:ferias_cargos(nome))`)
+        .select(`*, colaborador:ferias_colaboradores!colaborador_id(id, nome, data_admissao, setor:ferias_setores!setor_titular_id(nome), cargo:ferias_cargos(nome))`)
         .eq("ano_referencia", anoReferencia);
       if (selectedColaborador !== "_all_") {
         query = query.eq("colaborador_id", selectedColaborador);
       }
       const { data, error } = await query;
       if (error) throw error;
-      return data || [];
+      const list = data || [];
+      const ids = Array.from(new Set(list.map((f: any) => f.colaborador?.id).filter(Boolean)));
+      let cpfMap = new Map<string, string>();
+      if (ids.length) {
+        const { data: sensiveis } = await (supabase as any)
+          .from("ferias_colaboradores_dados_sensiveis")
+          .select("colaborador_id, cpf")
+          .in("colaborador_id", ids);
+        for (const r of (sensiveis || [])) if (r.cpf) cpfMap.set(r.colaborador_id, r.cpf);
+      }
+      return list.map((f: any) => f.colaborador
+        ? { ...f, colaborador: { ...f.colaborador, cpf: cpfMap.get(f.colaborador.id) ?? null } }
+        : f);
     },
   });
 

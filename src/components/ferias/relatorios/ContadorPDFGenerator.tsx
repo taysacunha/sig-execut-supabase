@@ -54,7 +54,7 @@ export function ContadorPDFGenerator() {
         .select(`
           *,
           colaborador:ferias_colaboradores(
-            id, nome, cpf,
+            id, nome,
             setor:ferias_setores(id, nome),
             unidade:ferias_unidades(id, nome)
           )
@@ -96,6 +96,20 @@ export function ContadorPDFGenerator() {
 
       // Ordenar por nome
       result.sort((a, b) => (a.colaborador?.nome || "").localeCompare(b.colaborador?.nome || ""));
+
+      // Buscar CPFs (RLS: apenas editores recebem dados)
+      const ids = Array.from(new Set(result.map((f: any) => f.colaborador?.id).filter(Boolean)));
+      if (ids.length) {
+        const { data: sensiveis } = await (supabase as any)
+          .from("ferias_colaboradores_dados_sensiveis")
+          .select("colaborador_id, cpf")
+          .in("colaborador_id", ids);
+        const cpfMap = new Map<string, string>();
+        for (const r of (sensiveis || [])) if (r.cpf) cpfMap.set(r.colaborador_id, r.cpf);
+        result = result.map((f: any) => f.colaborador
+          ? { ...f, colaborador: { ...f.colaborador, cpf: cpfMap.get(f.colaborador.id) ?? null } }
+          : f);
+      }
 
       return result;
     },
@@ -216,7 +230,7 @@ export function ContadorPDFGenerator() {
         const rowData = showingAmbos
           ? [
               (f.colaborador?.nome || "N/A").substring(0, 28),
-              f.colaborador?.cpf || "-",
+              (f.colaborador as any)?.cpf || "-",
               formatDate(f.quinzena1_inicio),
               formatDate(f.quinzena1_fim),
               f.quinzena2_inicio ? formatDate(f.quinzena2_inicio) : "-",
@@ -227,7 +241,7 @@ export function ContadorPDFGenerator() {
             ]
           : [
               (f.colaborador?.nome || "N/A").substring(0, 32),
-              f.colaborador?.cpf || "-",
+              (f.colaborador as any)?.cpf || "-",
               formatDate(showingPeriodo1 ? f.quinzena1_inicio : f.quinzena2_inicio),
               formatDate(showingPeriodo1 ? f.quinzena1_fim : f.quinzena2_fim),
               getDiasVendidosSelecionado(f).toString(),
@@ -406,7 +420,7 @@ export function ContadorPDFGenerator() {
                   {ferias.slice(0, 20).map((f) => (
                     <TableRow key={f.id}>
                       <TableCell className="font-medium">{f.colaborador?.nome || "N/A"}</TableCell>
-                      <TableCell className="text-muted-foreground">{f.colaborador?.cpf || "-"}</TableCell>
+                      <TableCell className="text-muted-foreground">{(f.colaborador as any)?.cpf || "-"}</TableCell>
                       {showingAmbos ? (
                         <>
                           <TableCell>
