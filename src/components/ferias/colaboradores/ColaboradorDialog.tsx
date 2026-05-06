@@ -255,7 +255,6 @@ const ColaboradorDialog = ({ open, onOpenChange, colaborador }: ColaboradorDialo
       const payload = {
         nome: data.nome,
         nome_exibicao: data.nome_exibicao || null,
-        cpf: data.cpf || null,
         data_nascimento: data.data_nascimento,
         data_admissao: data.data_admissao,
         unidade_id: data.unidade_id || null,
@@ -286,6 +285,23 @@ const ColaboradorDialog = ({ open, onOpenChange, colaborador }: ColaboradorDialo
           .single();
         if (error) throw error;
         colaboradorId = inserted.id;
+      }
+
+      // Salvar CPF na tabela sensível separada (somente editores têm acesso via RLS)
+      const cpfValue = data.cpf?.trim() || null;
+      if (cpfValue) {
+        const { error: cpfError } = await supabase
+          .from("ferias_colaboradores_dados_sensiveis")
+          .upsert(
+            { colaborador_id: colaboradorId, cpf: cpfValue, updated_at: new Date().toISOString() },
+            { onConflict: "colaborador_id" }
+          );
+        if (cpfError) throw cpfError;
+      } else {
+        await supabase
+          .from("ferias_colaboradores_dados_sensiveis")
+          .delete()
+          .eq("colaborador_id", colaboradorId);
       }
 
       // Sincronização bidirecional de familiares
