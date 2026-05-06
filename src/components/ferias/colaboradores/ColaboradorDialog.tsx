@@ -287,21 +287,18 @@ const ColaboradorDialog = ({ open, onOpenChange, colaborador }: ColaboradorDialo
         colaboradorId = inserted.id;
       }
 
-      // Salvar CPF na tabela sensível separada (somente editores têm acesso via RLS)
+      // Salvar CPF na tabela sensível separada (somente editores têm acesso via RLS).
+      // Cast como any pois os types.ts são regenerados pelo Supabase após a migration.
+      const sensitiveTable = (supabase as any).from("ferias_colaboradores_dados_sensiveis");
       const cpfValue = data.cpf?.trim() || null;
       if (cpfValue) {
-        const { error: cpfError } = await supabase
-          .from("ferias_colaboradores_dados_sensiveis")
-          .upsert(
-            { colaborador_id: colaboradorId, cpf: cpfValue, updated_at: new Date().toISOString() },
-            { onConflict: "colaborador_id" }
-          );
+        const { error: cpfError } = await sensitiveTable.upsert(
+          { colaborador_id: colaboradorId, cpf: cpfValue, updated_at: new Date().toISOString() },
+          { onConflict: "colaborador_id" }
+        );
         if (cpfError) throw cpfError;
       } else {
-        await supabase
-          .from("ferias_colaboradores_dados_sensiveis")
-          .delete()
-          .eq("colaborador_id", colaboradorId);
+        await sensitiveTable.delete().eq("colaborador_id", colaboradorId);
       }
 
       // Sincronização bidirecional de familiares
