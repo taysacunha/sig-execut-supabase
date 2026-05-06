@@ -195,12 +195,24 @@ export default function FeriasFerias() {
       }
       const { data, error } = await supabase
         .from("ferias_ferias")
-        .select(`*, colaborador:ferias_colaboradores!colaborador_id (id, nome, cpf, setor_titular:ferias_setores!setor_titular_id (id, nome))`)
+        .select(`*, colaborador:ferias_colaboradores!colaborador_id (id, nome, setor_titular:ferias_setores!setor_titular_id (id, nome))`)
         .gte("quinzena1_inicio", `${anoFilter}-01-01`)
         .lte("quinzena1_inicio", `${anoFilter}-12-31`)
         .order("quinzena1_inicio", { ascending: false });
       if (error) throw error;
-      return data as unknown as FeriasRecord[];
+      const list = (data || []) as any[];
+      const ids = Array.from(new Set(list.map(f => f.colaborador?.id).filter(Boolean)));
+      const cpfMap = new Map<string, string>();
+      if (ids.length) {
+        const { data: sensiveis } = await (supabase as any)
+          .from("ferias_colaboradores_dados_sensiveis")
+          .select("colaborador_id, cpf")
+          .in("colaborador_id", ids);
+        for (const r of (sensiveis || [])) if (r.cpf) cpfMap.set(r.colaborador_id, r.cpf);
+      }
+      return list.map(f => f.colaborador
+        ? { ...f, colaborador: { ...f.colaborador, cpf: cpfMap.get(f.colaborador.id) ?? null } }
+        : f) as unknown as FeriasRecord[];
     },
   });
 
