@@ -230,7 +230,7 @@ export function ContadorPDFGenerator() {
         const rowData = showingAmbos
           ? [
               (f.colaborador?.nome || "N/A").substring(0, 28),
-              f.colaborador?.cpf || "-",
+              (f.colaborador as any)?.cpf || "-",
               formatDate(f.quinzena1_inicio),
               formatDate(f.quinzena1_fim),
               f.quinzena2_inicio ? formatDate(f.quinzena2_inicio) : "-",
@@ -241,7 +241,7 @@ export function ContadorPDFGenerator() {
             ]
           : [
               (f.colaborador?.nome || "N/A").substring(0, 32),
-              f.colaborador?.cpf || "-",
+              (f.colaborador as any)?.cpf || "-",
               formatDate(showingPeriodo1 ? f.quinzena1_inicio : f.quinzena2_inicio),
               formatDate(showingPeriodo1 ? f.quinzena1_fim : f.quinzena2_fim),
               getDiasVendidosSelecionado(f).toString(),
