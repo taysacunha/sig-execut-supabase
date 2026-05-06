@@ -420,7 +420,7 @@ export function ContadorPDFGenerator() {
                   {ferias.slice(0, 20).map((f) => (
                     <TableRow key={f.id}>
                       <TableCell className="font-medium">{f.colaborador?.nome || "N/A"}</TableCell>
-                      <TableCell className="text-muted-foreground">{f.colaborador?.cpf || "-"}</TableCell>
+                      <TableCell className="text-muted-foreground">{(f.colaborador as any)?.cpf || "-"}</TableCell>
                       {showingAmbos ? (
                         <>
                           <TableCell>
