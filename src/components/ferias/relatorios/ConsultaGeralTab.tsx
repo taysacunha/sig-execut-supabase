@@ -58,14 +58,26 @@ export function ConsultaGeralTab() {
         .select(`
           *,
           colaborador:ferias_colaboradores!colaborador_id(
-            id, nome, cpf,
+            id, nome,
             setor:ferias_setores!setor_titular_id(id, nome)
           )
         `)
         .gte("quinzena1_inicio", `${selectedYear}-01-01`)
         .lte("quinzena1_inicio", `${selectedYear}-12-31`);
       if (error) throw error;
-      return data || [];
+      const list = data || [];
+      const ids = Array.from(new Set(list.map((f: any) => f.colaborador?.id).filter(Boolean)));
+      let cpfMap = new Map<string, string>();
+      if (ids.length) {
+        const { data: sensiveis } = await (supabase as any)
+          .from("ferias_colaboradores_dados_sensiveis")
+          .select("colaborador_id, cpf")
+          .in("colaborador_id", ids);
+        for (const r of (sensiveis || [])) if (r.cpf) cpfMap.set(r.colaborador_id, r.cpf);
+      }
+      return list.map((f: any) => f.colaborador
+        ? { ...f, colaborador: { ...f.colaborador, cpf: cpfMap.get(f.colaborador.id) ?? null } }
+        : f);
     },
   });
 
