@@ -356,6 +356,7 @@ const ColaboradorDialog = ({ open, onOpenChange, colaborador }: ColaboradorDialo
       queryClient.invalidateQueries({ queryKey: ["colaboradores-aniversariantes-pdf"] });
       queryClient.invalidateQueries({ queryKey: ["colaboradores-aniversariantes-celebre-pdf"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-setores-substitutos"] });
+      queryClient.invalidateQueries({ queryKey: ["ferias-setores-substitutos-view"] });
       toast.success(isEditing ? "Colaborador atualizado" : "Colaborador criado");
       onOpenChange();
     },
