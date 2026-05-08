@@ -1008,7 +1008,6 @@ export type Database = {
           aviso_previo_fim: string | null
           aviso_previo_inicio: string | null
           cargo_id: string | null
-          cpf: string | null
           created_at: string | null
           data_admissao: string
           data_nascimento: string
@@ -1027,7 +1026,6 @@ export type Database = {
           aviso_previo_fim?: string | null
           aviso_previo_inicio?: string | null
           cargo_id?: string | null
-          cpf?: string | null
           created_at?: string | null
           data_admissao: string
           data_nascimento: string
@@ -1046,7 +1044,6 @@ export type Database = {
           aviso_previo_fim?: string | null
           aviso_previo_inicio?: string | null
           cargo_id?: string | null
-          cpf?: string | null
           created_at?: string | null
           data_admissao?: string
           data_nascimento?: string
@@ -1095,6 +1092,32 @@ export type Database = {
             columns: ["unidade_id"]
             isOneToOne: false
             referencedRelation: "ferias_unidades"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ferias_colaboradores_dados_sensiveis: {
+        Row: {
+          colaborador_id: string
+          cpf: string | null
+          updated_at: string
+        }
+        Insert: {
+          colaborador_id: string
+          cpf?: string | null
+          updated_at?: string
+        }
+        Update: {
+          colaborador_id?: string
+          cpf?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ferias_colaboradores_dados_sensiveis_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: true
+            referencedRelation: "ferias_colaboradores"
             referencedColumns: ["id"]
           },
         ]
