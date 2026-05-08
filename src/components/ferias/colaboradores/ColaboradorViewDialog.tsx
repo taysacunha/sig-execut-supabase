@@ -40,6 +40,8 @@ const ColaboradorViewDialog = ({ open, onOpenChange, colaborador }: ColaboradorV
   const { data: setoresSubstitutos = [] } = useQuery({
     queryKey: ["ferias-setores-substitutos-view", colaborador?.id],
     enabled: !!colaborador?.id,
+    staleTime: 0,
+    refetchOnMount: "always",
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ferias_colaborador_setores_substitutos")
