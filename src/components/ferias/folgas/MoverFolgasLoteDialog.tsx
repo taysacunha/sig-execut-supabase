@@ -297,7 +297,8 @@ export function MoverFolgasLoteDialog({
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleSelection(colab.id)}
-                          className="h-4 w-4 rounded border-input"
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-4 w-4 rounded border-input cursor-pointer"
                         />
                         <div className="flex-1">
                           <span className={cn(
