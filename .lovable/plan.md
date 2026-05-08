@@ -1,30 +1,29 @@
 ## Problema
 
-No dialog "Mover Folgas em Lote" (`src/components/ferias/folgas/MoverFolgasLoteDialog.tsx`), cada item da lista de colaboradores tem dois handlers de seleção que se anulam:
+No dialog "Editar Colaborador", a aba de setores substitutos exibe dados antigos (cache) em vez do que foi salvo na última edição. O salvamento funciona corretamente no banco (a visualização pelo botão "olho" mostra o valor certo), mas ao reabrir o lápis aparece a seleção anterior.
 
-- O `<div>` envolvente tem `onClick={() => toggleSelection(colab.id)}`
-- O `<input type="checkbox">` filho tem `onChange={() => toggleSelection(colab.id)}`
+## Causa raiz
 
-Quando o usuário clica no checkbox, dispara o `onChange` do input **e** o `onClick` do div pai (event bubbling). O resultado é dois `toggleSelection` em sequência — o estado marca e desmarca no mesmo clique, parecendo que "não responde". Clicar no nome funciona porque dispara apenas o handler do div.
+Em `src/components/ferias/colaboradores/ColaboradorDialog.tsx`:
+
+1. A query `["ferias-setores-substitutos", colaborador?.id]` **nunca é invalidada** após o `mutation.onSuccess`. Logo, na próxima abertura do dialog o React Query devolve imediatamente o array em cache (estado anterior).
+2. O efeito que popula `selectedSetoresSubstitutos` usa um flag `hasLoadedSubstitutos` que dispara apenas uma vez por abertura. Como o cache já está "fetched", ele copia o valor antigo e ignora qualquer refetch posterior.
+
+Por isso o usuário vê "locação" (valor anterior) mesmo tendo salvo "cadastro de imóvel".
 
 ## Correção
 
-Impedir a propagação do clique no checkbox para o div pai, mantendo um único toggle por interação.
+Em `ColaboradorDialog.tsx`:
 
-No item da lista (linhas ~287-318):
+1. No `onSuccess` da mutation, adicionar:
+   ```ts
+   queryClient.invalidateQueries({ queryKey: ["ferias-setores-substitutos"] });
+   ```
+2. Para garantir dados frescos ao abrir o dialog (mesmo se a invalidação não tiver corrido ainda), forçar refetch quando `open && colaborador?.id` mudarem — usar `refetchOnMount: "always"` na query ou chamar `queryClient.invalidateQueries` no `useEffect` que abre o dialog.
+3. Tornar o efeito de carga reativo a `setoresSubstitutos`: em vez do flag `hasLoadedSubstitutos` (que congela o estado), sincronizar `selectedSetoresSubstitutos` sempre que a query atualizar enquanto o dialog estiver aberto e o usuário ainda não tiver feito alterações locais — ou simplesmente recarregar quando `colaborador?.id` ou o array retornado mudar de identidade após refetch.
 
-```tsx
-<input
-  type="checkbox"
-  checked={isSelected}
-  onChange={() => toggleSelection(colab.id)}
-  onClick={(e) => e.stopPropagation()}
-  className="h-4 w-4 rounded border-input cursor-pointer"
-/>
-```
+## Arquivos afetados
 
-Com `stopPropagation` no `onClick` do input, o clique direto no checkbox executa só o `onChange`. O clique em qualquer outra área do item continua acionando o handler do div.
+- `src/components/ferias/colaboradores/ColaboradorDialog.tsx`
 
-## Validação
-
-Testar em `/ferias/folgas` → abrir "Mover Folgas em Lote" → selecionar sábado destino → clicar nos checkboxes e nos nomes alternadamente, conferindo que cada clique alterna o estado uma única vez e o contador no rodapé reflete corretamente.
+Sem alterações de schema ou backend.

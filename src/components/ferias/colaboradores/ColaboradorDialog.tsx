@@ -162,6 +162,8 @@ const ColaboradorDialog = ({ open, onOpenChange, colaborador }: ColaboradorDialo
   const { data: setoresSubstitutos = [], isFetched: setoresSubstitutosFetched } = useQuery({
     queryKey: ["ferias-setores-substitutos", colaborador?.id],
     enabled: !!colaborador?.id,
+    refetchOnMount: "always",
+    staleTime: 0,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ferias_colaborador_setores_substitutos")
@@ -232,20 +234,19 @@ const ColaboradorDialog = ({ open, onOpenChange, colaborador }: ColaboradorDialo
     }
   }, [colaborador, form]);
 
-  // Separate effect for loading substitute sectors - using flag to prevent resets
-  const [hasLoadedSubstitutos, setHasLoadedSubstitutos] = useState(false);
-  
+  // Sync selected substitute sectors whenever the query data changes for this colaborador.
+  // Uses join key to ensure fresh data after refetch overrides stale cache.
+  const substitutosKey = setoresSubstitutos.join(",");
   useEffect(() => {
-    if (colaborador && setoresSubstitutosFetched && !hasLoadedSubstitutos) {
+    if (colaborador && open && setoresSubstitutosFetched) {
       setSelectedSetoresSubstitutos(setoresSubstitutos);
-      setHasLoadedSubstitutos(true);
     }
-  }, [colaborador, setoresSubstitutosFetched, setoresSubstitutos, hasLoadedSubstitutos]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colaborador?.id, open, setoresSubstitutosFetched, substitutosKey]);
 
-  // Reset flag when dialog closes
+  // Reset tab when dialog closes
   useEffect(() => {
     if (!open) {
-      setHasLoadedSubstitutos(false);
       setActiveTab("dados");
     }
   }, [open]);
@@ -354,6 +355,7 @@ const ColaboradorDialog = ({ open, onOpenChange, colaborador }: ColaboradorDialo
       queryClient.invalidateQueries({ queryKey: ["ferias-colaboradores-ativos"] });
       queryClient.invalidateQueries({ queryKey: ["colaboradores-aniversariantes-pdf"] });
       queryClient.invalidateQueries({ queryKey: ["colaboradores-aniversariantes-celebre-pdf"] });
+      queryClient.invalidateQueries({ queryKey: ["ferias-setores-substitutos"] });
       toast.success(isEditing ? "Colaborador atualizado" : "Colaborador criado");
       onOpenChange();
     },
