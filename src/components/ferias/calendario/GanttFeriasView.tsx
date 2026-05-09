@@ -62,8 +62,8 @@ const SETOR_COLORS = [
 ];
 
 const DAY_WIDTH = 28;
-const ROW_HEIGHT = 36;
-const NAME_COL_WIDTH = 200;
+const ROW_HEIGHT = 52;
+const NAME_COL_WIDTH = 240;
 
 function getGozoIntervals(f: Ferias): Array<{ start: Date; end: Date }> {
   if (f.gozo_flexivel && f._gozoPeriodos && f._gozoPeriodos.length > 0) {
@@ -199,28 +199,26 @@ export function GanttFeriasView({ ferias, startDate, endDate, onSelectFerias }: 
             {rows.map((row, idx) => {
               const colors = setorColorMap.get(row.setorId);
               const hasOverlap = overlappingSectors.has(row.ferias[0]?.colaborador_id);
+              const subline = [row.unidade, row.setor].filter(Boolean).join(" - ");
               return (
                 <div
                   key={idx}
                   className={`flex items-center gap-1.5 px-2 border-b ${idx % 2 === 0 ? "bg-background" : "bg-muted/20"}`}
                   style={{ height: ROW_HEIGHT }}
                 >
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-medium truncate flex items-center gap-1">
-                      {row.nome}
-                      {row.unidade && (
-                        <span className="text-muted-foreground font-normal"> - {row.unidade}</span>
-                      )}
+                  <div className="flex flex-col w-full">
+                    <span className="text-xs font-medium leading-tight break-words flex items-start gap-1">
+                      <span className="flex-1">{row.nome}</span>
                       {hasOverlap && (
-                        <span className="inline-block w-2 h-2 rounded-full bg-destructive shrink-0" title="Sobreposição com outro colaborador do mesmo setor" />
+                        <span className="inline-block w-2 h-2 mt-1 rounded-full bg-destructive shrink-0" title="Sobreposição com outro colaborador do mesmo setor" />
                       )}
                     </span>
-                    {row.setor && (
+                    {subline && (
                       <span
-                        className="text-[10px] truncate"
+                        className="text-[10px] leading-tight break-words"
                         style={{ color: colors?.text || "hsl(var(--muted-foreground))" }}
                       >
-                        {row.setor}
+                        {subline}
                       </span>
                     )}
                   </div>
