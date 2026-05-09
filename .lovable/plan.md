@@ -1,53 +1,57 @@
-## Diagnóstico
+## Objetivo
 
-Os logs mostram quase só ações do Bruno porque **as tabelas do módulo Férias não têm gatilhos de auditoria anexados no banco**.
+Exibir a **unidade** vinculada ao colaborador em três pontos do módulo de Férias para facilitar a leitura visual de quantos colaboradores de cada unidade estão de férias/folga:
 
-O que encontrei:
+1. Aba **Férias** do Calendário → lista "Férias em {mês}"
+2. Aba **Férias** do Calendário → gráfico de **Gantt** (nome lateral + tooltip)
+3. Aba **Mapa por Setor** das Folgas de Sábado
 
-1. A função `audit_module_changes()` foi atualizada para reconhecer tabelas `ferias_*` (em `.lovable/ferias_audit_triggers_migration.sql`).
-2. Mas essa migration **nunca foi movida para `supabase/migrations/`**, então o `CREATE TRIGGER ... ON ferias_*` provavelmente nunca rodou em produção.
-3. As migrations efetivamente aplicadas (`20260114175221_*.sql`) só anexam triggers em tabelas de **Escalas, Vendas e Sistema** (`brokers`, `locations`, `schedule_assignments`, `generated_schedules`, `sales`, `sales_brokers`, `sales_teams`, `broker_evaluations`, `monthly_leads`, `proposals`, `user_roles`, `system_access`).
-4. Resultado: quando a Germana edita colaboradores, folgas, férias, afastamentos, setores substitutos etc. → **nenhum log é inserido**. Os únicos logs do dia são os do Bruno em outros módulos (Escalas/Vendas/Sistema), por isso parece que "só o Bruno" aparece.
+Formato exibido: `Nome - Unidade` (ex.: `Taysa - Tambaú`).
 
-A política de SELECT (`Users can view own module audit_logs`) está correta — quem tem acesso a `ferias` enxerga **todos** os logs do módulo, então o problema não é visibilidade, é **ausência de inserção**.
+---
 
-## Correção
+## Mudanças por arquivo
 
-Criar uma nova migration timestamped em `supabase/migrations/` que:
+### 1. `src/components/ferias/calendario/CalendarioFeriasTab.tsx`
+Na lista "Férias em {mês}" (card que renderiza `feriasDoMes`), incluir a unidade ao lado do nome do colaborador:
+- `{f.colaborador?.nome} {f.colaborador?.unidade?.nome ? `- ${f.colaborador.unidade.nome}` : ""}`
+- Manter o setor como informação secundária (já exibida).
+- Os dados de unidade já vêm na query (`colaborador.unidade.nome`), então não precisa alterar a busca.
 
-1. **Atualiza `public.audit_module_changes()`** com a versão que classifica tabelas `ferias_*` no módulo `ferias` (mesmo conteúdo do arquivo `.lovable/ferias_audit_triggers_migration.sql`, idempotente via `CREATE OR REPLACE`).
+### 2. `src/components/ferias/calendario/GanttFeriasView.tsx`
+- Adicionar `unidade` ao tipo já existente em `Ferias.colaborador` (já está tipado como `unidade?: { nome: string } | null`).
+- No agrupamento `rows` (Map por colaborador), guardar também `unidade: f.colaborador?.unidade?.nome ?? ""`.
+- **Coluna fixa de nomes** (esquerda): renderizar `{nome} - {unidade}` na linha do nome (ou em uma segunda linha em fonte menor, se ficar muito longo). Manter setor como terceira linha pequena.
+- **Tooltip** das barras: adicionar uma linha com a unidade dentro do bloco que hoje mostra setor e datas: `<div className="text-xs text-muted-foreground">{unidade}</div>`.
 
-2. **Anexa triggers `AFTER INSERT/UPDATE/DELETE`** em todas as tabelas relevantes do módulo Férias, com `DROP TRIGGER IF EXISTS` antes de cada `CREATE TRIGGER` para ser idempotente:
-   - `ferias_colaboradores`
-   - `ferias_ferias`
-   - `ferias_folgas`
-   - `ferias_folgas_escala`
-   - `ferias_folgas_creditos`
-   - `ferias_folgas_perdas`
-   - `ferias_afastamentos`
-   - `ferias_setores`
-   - `ferias_equipes`
-   - `ferias_cargos`
-   - `ferias_unidades`
-   - `ferias_feriados`
-   - `ferias_formulario_anual`
-   - `ferias_gozo_periodos`
-   - `ferias_periodos_quitados`
-   - `ferias_setor_chefes`
-   - `ferias_colaborador_setores_substitutos`
-   - `ferias_configuracoes`
-   - `ferias_quinzenas`
-   - `ferias_conflitos` (se existir)
+### 3. `src/components/ferias/folgas/SetoresSabadosTable.tsx`
+- Estender a query de `ferias_folgas` para trazer a unidade do colaborador:
+  ```ts
+  colaborador:ferias_colaboradores!ferias_folgas_colaborador_id_fkey(
+    nome, nome_exibicao, setor_titular_id, familiar_id,
+    unidade:ferias_unidades(nome)
+  )
+  ```
+- Atualizar a interface `Colaborador` para incluir `unidade?: { nome: string } | null`.
+- No `Badge` de cada folga na célula da matriz, exibir a unidade abaixo do nome em fonte pequena. Como o `Badge` é um único bloco compacto, a melhor abordagem é trocar pelo conjunto:
+  ```tsx
+  <div className="flex flex-col items-center gap-0.5">
+    <Badge ...>{getDisplayName(folga.colaborador)}</Badge>
+    {folga.colaborador?.unidade?.nome && (
+      <span className="text-[10px] text-muted-foreground leading-tight">
+        {folga.colaborador.unidade.nome}
+      </span>
+    )}
+  </div>
+  ```
+- Manter o `title` (tooltip nativo) incluindo a unidade também.
 
-3. Não altera nenhuma policy nem dado existente — apenas garante que toda edição futura seja registrada com o `changed_by` / `changed_by_email` correto do usuário autenticado.
+---
 
-## Observação importante
+## Pontos fora do escopo
 
-- Os logs **anteriores** das alterações da Germana **não podem ser recuperados** — eles nunca foram gravados. A correção vale a partir da aplicação da migration.
-- Se a Germana edita algo via Edge Function que usa `service_role`, o log aparecerá como `sistema@interno` (sem `auth.uid()`). Se isso acontecer, será necessário ajuste adicional para propagar o usuário.
+- Não altera filtros, ordenação ou regras de cálculo.
+- Não cria índice/agrupamento por unidade (apenas exibição).
+- Não mexe na aba de Aniversariantes nem na Folgas de Sábado fora da tab "Mapa por Setor".
 
-## Arquivo a criar
-
-- `supabase/migrations/{timestamp}_ferias_audit_triggers.sql` — conteúdo derivado de `.lovable/ferias_audit_triggers_migration.sql`, com a lista de tabelas acima.
-
-Nenhuma alteração de frontend é necessária.
+Posso confirmar e implementar?

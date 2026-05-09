@@ -107,7 +107,7 @@ export function GanttFeriasView({ ferias, startDate, endDate, onSelectFerias }: 
 
   // Group by colaborador (merge multiple férias for same person)
   const rows = useMemo(() => {
-    const map = new Map<string, { nome: string; setor: string; setorId: string; ferias: Ferias[] }>();
+    const map = new Map<string, { nome: string; setor: string; setorId: string; unidade: string; ferias: Ferias[] }>();
     ferias.forEach(f => {
       const colabId = f.colaborador_id;
       if (!map.has(colabId)) {
@@ -115,6 +115,7 @@ export function GanttFeriasView({ ferias, startDate, endDate, onSelectFerias }: 
           nome: f.colaborador?.nome || "Colaborador",
           setor: f.colaborador?.setor?.nome || "",
           setorId: f.colaborador?.setor?.id || "",
+          unidade: f.colaborador?.unidade?.nome || "",
           ferias: [],
         });
       }
@@ -207,6 +208,9 @@ export function GanttFeriasView({ ferias, startDate, endDate, onSelectFerias }: 
                   <div className="flex flex-col min-w-0">
                     <span className="text-xs font-medium truncate flex items-center gap-1">
                       {row.nome}
+                      {row.unidade && (
+                        <span className="text-muted-foreground font-normal"> - {row.unidade}</span>
+                      )}
                       {hasOverlap && (
                         <span className="inline-block w-2 h-2 rounded-full bg-destructive shrink-0" title="Sobreposição com outro colaborador do mesmo setor" />
                       )}
@@ -331,6 +335,9 @@ export function GanttFeriasView({ ferias, startDate, endDate, onSelectFerias }: 
                                   {row.setor && <span className="text-muted-foreground">{row.setor} • </span>}
                                   {format(interval.start, "dd/MM/yyyy")} a {format(interval.end, "dd/MM/yyyy")} ({totalDias} dias)
                                 </div>
+                                {row.unidade && (
+                                  <div className="text-xs text-muted-foreground">Unidade: {row.unidade}</div>
+                                )}
                                 {f.vender_dias && f.dias_vendidos ? (
                                   <div className="text-xs text-primary">{f.dias_vendidos} dias vendidos</div>
                                 ) : null}

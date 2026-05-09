@@ -25,6 +25,7 @@ interface Colaborador {
   nome_exibicao: string | null;
   setor_titular_id: string;
   familiar_id: string | null;
+  unidade?: { nome: string } | null;
 }
 
 interface Folga {
@@ -88,7 +89,7 @@ export function SetoresSabadosTable({ year, month }: SetoresSabadosTableProps) {
 
       const { data, error } = await supabase
         .from("ferias_folgas")
-        .select("id, data_sabado, colaborador_id, is_excecao, colaborador:ferias_colaboradores!ferias_folgas_colaborador_id_fkey(nome, nome_exibicao, setor_titular_id, familiar_id)")
+        .select("id, data_sabado, colaborador_id, is_excecao, colaborador:ferias_colaboradores!ferias_folgas_colaborador_id_fkey(nome, nome_exibicao, setor_titular_id, familiar_id, unidade:ferias_unidades(nome))")
         .gte("data_sabado", monthStart)
         .lte("data_sabado", monthEnd);
 
@@ -243,20 +244,27 @@ export function SetoresSabadosTable({ year, month }: SetoresSabadosTableProps) {
                               {folgasNaCelula.map(folga => {
                                 const isFamiliar = familiarPairsOnSameSaturday.has(folga.colaborador_id);
                                 const isChefe = chefeIds.has(folga.colaborador_id);
+                                const unidadeNome = folga.colaborador?.unidade?.nome;
                                 return (
-                                  <Badge
-                                    key={folga.id}
-                                    variant={folga.is_excecao ? "outline" : "secondary"}
-                                    className={cn(
-                                      "text-xs truncate max-w-[120px] justify-center py-1",
-                                      isFamiliar && "bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-700",
-                                      isChefe && !isFamiliar && "bg-violet-100 text-violet-800 border-violet-300 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-700",
-                                      folga.is_excecao && !isFamiliar && !isChefe && "border-amber-400 text-amber-700 bg-amber-50"
+                                  <div key={folga.id} className="flex flex-col items-center gap-0.5">
+                                    <Badge
+                                      variant={folga.is_excecao ? "outline" : "secondary"}
+                                      className={cn(
+                                        "text-xs truncate max-w-[120px] justify-center py-1",
+                                        isFamiliar && "bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-700",
+                                        isChefe && !isFamiliar && "bg-violet-100 text-violet-800 border-violet-300 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-700",
+                                        folga.is_excecao && !isFamiliar && !isChefe && "border-amber-400 text-amber-700 bg-amber-50"
+                                      )}
+                                      title={`${folga.colaborador?.nome}${unidadeNome ? ` - ${unidadeNome}` : ""}${isFamiliar ? " (Familiar folgando junto)" : ""}${isChefe ? " (Chefe de setor)" : ""}${folga.is_excecao ? " (Ajuste manual)" : ""}`}
+                                    >
+                                      {getDisplayName(folga.colaborador)}
+                                    </Badge>
+                                    {unidadeNome && (
+                                      <span className="text-[10px] text-muted-foreground leading-tight truncate max-w-[120px]">
+                                        {unidadeNome}
+                                      </span>
                                     )}
-                                    title={`${folga.colaborador?.nome}${isFamiliar ? " (Familiar folgando junto)" : ""}${isChefe ? " (Chefe de setor)" : ""}${folga.is_excecao ? " (Ajuste manual)" : ""}`}
-                                  >
-                                    {getDisplayName(folga.colaborador)}
-                                  </Badge>
+                                  </div>
                                 );
                               })}
                             </div>

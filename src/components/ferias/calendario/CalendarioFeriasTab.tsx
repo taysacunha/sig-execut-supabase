@@ -578,8 +578,13 @@ export function CalendarioFeriasTab() {
                     >
                       <div className="flex items-center gap-4">
                         <div className="flex flex-col">
-                          <p className="font-medium flex items-center gap-2">
-                            {f.colaborador?.nome || "Colaborador"}
+                          <p className="font-medium flex items-center gap-2 flex-wrap">
+                            <span>
+                              {f.colaborador?.nome || "Colaborador"}
+                              {f.colaborador?.unidade?.nome && (
+                                <span className="text-muted-foreground font-normal"> - {f.colaborador.unidade.nome}</span>
+                              )}
+                            </span>
                             {f.is_excecao && (
                               <Badge variant="outline" className="text-orange-600 border-orange-300">
                                 Exceção
