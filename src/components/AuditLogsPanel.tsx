@@ -649,6 +649,15 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                 onChange={handleModuleSearchChange}
                 placeholder="Buscar..."
               />
+              <DateRangeAndLimit
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                loadLimit={loadLimit}
+                onDateFromChange={setDateFrom}
+                onDateToChange={setDateTo}
+                onLoadLimitChange={setLoadLimit}
+                totalLoaded={moduleLogs.length}
+              />
             </div>
 
             <ScrollArea className="h-[400px]">
@@ -837,6 +846,15 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                 value={moduleSearchTerm}
                 onChange={handleModuleSearchChange}
                 placeholder="Buscar..."
+              />
+              <DateRangeAndLimit
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                loadLimit={loadLimit}
+                onDateFromChange={setDateFrom}
+                onDateToChange={setDateTo}
+                onLoadLimitChange={setLoadLimit}
+                totalLoaded={moduleLogs.length}
               />
             </div>
 
