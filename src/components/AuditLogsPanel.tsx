@@ -147,6 +147,78 @@ interface AuditLogsPanelProps {
   showAdminTab?: boolean;
 }
 
+function DateRangeAndLimit({
+  dateFrom,
+  dateTo,
+  loadLimit,
+  onDateFromChange,
+  onDateToChange,
+  onLoadLimitChange,
+  totalLoaded,
+}: {
+  dateFrom: string;
+  dateTo: string;
+  loadLimit: number;
+  onDateFromChange: (v: string) => void;
+  onDateToChange: (v: string) => void;
+  onLoadLimitChange: (n: number) => void;
+  totalLoaded: number;
+}) {
+  return (
+    <div className="flex items-end gap-2 flex-wrap">
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs text-muted-foreground">De</Label>
+        <Input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => onDateFromChange(e.target.value)}
+          className="h-9 w-[150px]"
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs text-muted-foreground">Até</Label>
+        <Input
+          type="date"
+          value={dateTo}
+          onChange={(e) => onDateToChange(e.target.value)}
+          className="h-9 w-[150px]"
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs text-muted-foreground">Carregar últimos</Label>
+        <Select value={String(loadLimit)} onValueChange={(v) => onLoadLimitChange(Number(v))}>
+          <SelectTrigger className="h-9 w-[120px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="200">200</SelectItem>
+            <SelectItem value="500">500</SelectItem>
+            <SelectItem value="1000">1000</SelectItem>
+            <SelectItem value="2000">2000</SelectItem>
+            <SelectItem value="5000">5000</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {(dateFrom || dateTo) && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-9"
+          onClick={() => {
+            onDateFromChange("");
+            onDateToChange("");
+          }}
+        >
+          Limpar datas
+        </Button>
+      )}
+      <span className="text-xs text-muted-foreground self-center ml-2">
+        Carregados: {totalLoaded}
+      </span>
+    </div>
+  );
+}
+
 export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", showAdminTab = true }: AuditLogsPanelProps) {
   const [adminLogs, setAdminLogs] = useState<AdminAuditLog[]>([]);
   const [moduleLogs, setModuleLogs] = useState<ModuleAuditLog[]>([]);
