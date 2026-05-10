@@ -1743,18 +1743,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                 <Separator />
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle className="flex items-center justify-between gap-2">
-                    <span>Conflitos Detectados</span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={checkingConflicts}
-                      onClick={() => checkConflicts(form.getValues())}
-                    >
-                      {checkingConflicts ? <Loader2 className="h-3 w-3 animate-spin" /> : "Recarregar"}
-                    </Button>
-                  </AlertTitle>
+                  <AlertTitle>Conflitos Detectados</AlertTitle>
                   <AlertDescription>
                     <ul className="list-disc list-inside mt-2 space-y-1">
                       {conflicts.map((c, i) => (
