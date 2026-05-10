@@ -177,6 +177,11 @@ export function ExcecaoPeriodosSection({
   const opcoesDistribuicao = q1JaGozada ? ["2", "livre"] : ["1", "2", "ambos", "livre"];
   const opcoesGozoDiferente = q1JaGozada ? ["2"] : ["1", "2", "ambos"];
 
+  // Quando o gozo restante (após venda) é maior que 15 dias, é impossível
+  // alocá-lo em um único período oficial (cada período tem no máximo 15 dias).
+  // Nesse caso só fazem sentido as opções "Ambos" ou "Livre".
+  const singlePeriodInviavel = diasGozo > 15;
+
   // Períodos do tipo "gozo_diferente" que coexistem com o modo "vender" (caso em que
   // o colaborador vendeu dias no 1º período E ainda assim há um gozo real do 2º período
   // distinto do enviado ao contador). Renderizados em uma seção paralela.
@@ -191,6 +196,16 @@ export function ExcecaoPeriodosSection({
       onDistribuicaoTipoChange("2");
     }
   }, [q1JaGozada, distribuicaoTipo, isHydrating, onDistribuicaoTipoChange]);
+
+  // Se o gozo é maior que 15 dias e o usuário (ou o estado carregado) está em
+  // "1" ou "2", forçar para "ambos" (única distribuição válida em períodos oficiais).
+  useEffect(() => {
+    if (isHydrating) return;
+    if (excecaoTipo !== "vender") return;
+    if (singlePeriodInviavel && (distribuicaoTipo === "1" || distribuicaoTipo === "2")) {
+      onDistribuicaoTipoChange("ambos");
+    }
+  }, [singlePeriodInviavel, distribuicaoTipo, excecaoTipo, isHydrating, onDistribuicaoTipoChange]);
 
   // Se diasVendidos exceder os disponíveis (ex.: q1JaGozada virou true), reduzir.
   useEffect(() => {
