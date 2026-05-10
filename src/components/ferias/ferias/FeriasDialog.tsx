@@ -957,12 +957,22 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const watchedFields = form.watch(["colaborador_id", "quinzena1_inicio", "quinzena1_fim", "quinzena2_inicio", "quinzena2_fim"]);
   
   useEffect(() => {
-    const values = form.getValues();
-    if (values.colaborador_id && values.quinzena1_inicio && values.quinzena1_fim) {
-      const debounce = setTimeout(() => checkConflicts(values), 500);
-      return () => clearTimeout(debounce);
+    if (!open) {
+      setConflicts([]);
+      return;
     }
-  }, [watchedFields, excecaoTipo, excPeriodos, opcaoAdicional, diasVendidos, quinzenaVendaEfetiva, gozoVendaInicio, gozoVendaFim, q1JaGozada, open, ferias?.id]);
+    // Aguarda hidratação do form antes de verificar.
+    const t = setTimeout(() => {
+      const values = form.getValues();
+      if (values.colaborador_id && values.quinzena1_inicio && values.quinzena1_fim) {
+        checkConflicts(values);
+      } else {
+        setConflicts([]);
+      }
+    }, 100);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, ferias?.id]);
 
   // Fetch all ferias for selected collaborator to calculate period balances
   const { data: colabAllFerias = [] } = useQuery({
