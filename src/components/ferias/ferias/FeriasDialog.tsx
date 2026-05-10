@@ -962,7 +962,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       const debounce = setTimeout(() => checkConflicts(values), 500);
       return () => clearTimeout(debounce);
     }
-  }, [watchedFields, excecaoTipo, excPeriodos, opcaoAdicional, diasVendidos, quinzenaVendaEfetiva, gozoVendaInicio, gozoVendaFim, q1JaGozada]);
+  }, [watchedFields, excecaoTipo, excPeriodos, opcaoAdicional, diasVendidos, quinzenaVendaEfetiva, gozoVendaInicio, gozoVendaFim, q1JaGozada, open, ferias?.id]);
 
   // Fetch all ferias for selected collaborator to calculate period balances
   const { data: colabAllFerias = [] } = useQuery({
