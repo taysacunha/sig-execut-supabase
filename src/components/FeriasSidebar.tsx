@@ -1,4 +1,4 @@
-import { Home, Users, Building2, Calendar, CalendarDays, Cake, FileText, Settings, LogOut, UserCircle, Shield, Crown, Briefcase, User, ArrowLeft, History, CalendarRange, FileBarChart, CreditCard } from "lucide-react";
+import { Home, Users, Building2, Calendar, CalendarDays, Cake, FileText, Settings, LogOut, UserCircle, Shield, Crown, Briefcase, User, ArrowLeft, History, CalendarRange, FileBarChart, CreditCard, HelpCircle } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -40,6 +40,7 @@ const moduleMenuItems: MenuItem[] = [
   { title: "Créditos", url: "/ferias/creditos", icon: CreditCard },
   { title: "Configurações", url: "/ferias/configuracoes", icon: Settings },
   { title: "Perfil", url: "/ferias/perfil", icon: UserCircle },
+  { title: "Ajuda", url: "/ferias/ajuda", icon: HelpCircle },
 ];
 
 // Itens restritos a super_admin/admin (verificação de ROLE)
