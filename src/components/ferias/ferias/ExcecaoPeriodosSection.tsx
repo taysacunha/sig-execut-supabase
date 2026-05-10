@@ -450,12 +450,31 @@ export function ExcecaoPeriodosSection({
                       type="button"
                       variant={distribuicaoTipo === tipo ? "default" : "outline"}
                       size="sm"
+                      disabled={singlePeriodInviavel && (tipo === "1" || tipo === "2")}
+                      title={
+                        singlePeriodInviavel && (tipo === "1" || tipo === "2")
+                          ? `Gozo de ${diasGozo} dias não cabe em um único período oficial (máx. 15 dias).`
+                          : undefined
+                      }
                       onClick={() => onDistribuicaoTipoChange(tipo)}
                     >
                       {tipo === "1" ? "1º Período" : tipo === "2" ? "2º Período" : tipo === "ambos" ? "Ambos" : "Livre"}
                     </Button>
                   ))}
                 </div>
+                {singlePeriodInviavel && (
+                  <Alert className="border-amber-500/40 bg-amber-500/10">
+                    <Info className="h-4 w-4" />
+                    <AlertTitle className="text-sm">Apenas "Ambos" ou "Livre" disponíveis</AlertTitle>
+                    <AlertDescription className="text-xs">
+                      Como o gozo é de <strong>{diasGozo} dias</strong> (acima de 15), não é possível
+                      alocá-lo em um único período oficial — cada período comporta no máximo 15 dias.
+                      Use <strong>Ambos</strong> para dividir entre os dois períodos, ou <strong>Livre</strong>
+                      para usar datas fora dos períodos oficiais. Para liberar "1º" ou "2º", aumente os dias
+                      vendidos até que sobrem no máximo 15 dias de gozo.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
 
               {/* 1º ou 2º Período: single period (ignora linhas paralelas de gozo_diferente) */}
