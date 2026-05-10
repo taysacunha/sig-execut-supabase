@@ -35,6 +35,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface AdminAuditLog {
   id: string;
@@ -174,25 +176,39 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
   const [moduleSortField, setModuleSortField] = useState<keyof ModuleAuditLog | null>("created_at");
   const [moduleSortDirection, setModuleSortDirection] = useState<"asc" | "desc">("desc");
 
+  // Server-side load filters (shared)
+  const [loadLimit, setLoadLimit] = useState<number>(500);
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
+
   const fetchLogs = async () => {
     setLoading(true);
     try {
+      const effectiveLimit = loadLimit;
+
       // Fetch admin audit logs
-      const { data: adminData, error: adminError } = await supabase
+      let adminQuery = supabase
         .from("admin_audit_logs")
         .select("*")
-        .order("created_at", { ascending: false })
-        .limit(500);
+        .order("created_at", { ascending: false });
+      if (dateFrom) adminQuery = adminQuery.gte("created_at", dateFrom);
+      if (dateTo) adminQuery = adminQuery.lte("created_at", `${dateTo}T23:59:59.999Z`);
+      adminQuery = adminQuery.limit(effectiveLimit);
+      const { data: adminData, error: adminError } = await adminQuery;
       
       if (adminError) throw adminError;
       setAdminLogs(adminData || []);
 
       // Fetch module audit logs
-      const { data: moduleData, error: moduleError } = await supabase
+      let moduleQuery = supabase
         .from("module_audit_logs")
         .select("*")
-        .order("created_at", { ascending: false })
-        .limit(500);
+        .order("created_at", { ascending: false });
+      if (moduleFilter !== "all") moduleQuery = moduleQuery.eq("module_name", moduleFilter);
+      if (dateFrom) moduleQuery = moduleQuery.gte("created_at", dateFrom);
+      if (dateTo) moduleQuery = moduleQuery.lte("created_at", `${dateTo}T23:59:59.999Z`);
+      moduleQuery = moduleQuery.limit(effectiveLimit);
+      const { data: moduleData, error: moduleError } = await moduleQuery;
       
       if (moduleError) throw moduleError;
       setModuleLogs(moduleData || []);
@@ -205,7 +221,8 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
 
   useEffect(() => {
     fetchLogs();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moduleFilter, dateFrom, dateTo, loadLimit]);
 
   const toggleRow = (id: string) => {
     setExpandedRows(prev => {
@@ -257,7 +274,6 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
   // Filtered and sorted module logs
   const filteredModuleLogs = useMemo(() => {
     let result = moduleLogs.filter(log => {
-      if (moduleFilter !== "all" && log.module_name !== moduleFilter) return false;
       if (tableFilter !== "all" && log.table_name !== tableFilter) return false;
       if (moduleSearchTerm) {
         const term = moduleSearchTerm.toLowerCase();
