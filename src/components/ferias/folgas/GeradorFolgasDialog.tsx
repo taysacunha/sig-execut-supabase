@@ -31,6 +31,7 @@ interface Setor {
 }
 
 interface FeriasAtivas {
+  id: string;
   colaborador_id: string;
   quinzena1_inicio: string;
   quinzena1_fim: string;
@@ -43,6 +44,14 @@ interface FeriasAtivas {
   gozo_quinzena2_fim: string | null;
   is_excecao: boolean | null;
   status: string | null;
+  gozo_flexivel: boolean | null;
+}
+
+interface GozoPeriodo {
+  ferias_id: string;
+  tipo: string;
+  data_inicio: string;
+  data_fim: string;
 }
 
 interface Perda {
@@ -201,7 +210,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       
       const { data, error } = await supabase
         .from("ferias_ferias")
-        .select("colaborador_id, quinzena1_inicio, quinzena1_fim, quinzena2_inicio, quinzena2_fim, gozo_diferente, gozo_quinzena1_inicio, gozo_quinzena1_fim, gozo_quinzena2_inicio, gozo_quinzena2_fim, is_excecao, status")
+        .select("id, colaborador_id, quinzena1_inicio, quinzena1_fim, quinzena2_inicio, quinzena2_fim, gozo_diferente, gozo_quinzena1_inicio, gozo_quinzena1_fim, gozo_quinzena2_inicio, gozo_quinzena2_fim, is_excecao, status, gozo_flexivel")
         .or(`quinzena1_inicio.lte.${monthEnd},quinzena2_fim.gte.${monthStart}`)
         // Bloqueia folga para QUALQUER férias agendada/em curso (incluindo "pendente" e exceções).
         // Só liberamos quando a férias está em estado terminal: cancelada, reprovada ou concluída.
@@ -211,6 +220,48 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       return data as FeriasAtivas[];
     },
   });
+
+  // Sub-períodos reais de gozo (quando gozo_flexivel) — apenas dias de descanso, ignora venda
+  const feriasIds = useMemo(() => feriasAtivas.map(f => f.id).filter(Boolean), [feriasAtivas]);
+  const { data: gozoPeriodos = [] } = useQuery({
+    queryKey: ["ferias-gozo-periodos-folgas-gerador", feriasIds.sort().join(",")],
+    enabled: feriasIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ferias_gozo_periodos" as any)
+        .select("ferias_id, tipo, data_inicio, data_fim")
+        .in("ferias_id", feriasIds)
+        .neq("tipo", "venda");
+      if (error) throw error;
+      return (data || []) as unknown as GozoPeriodo[];
+    },
+  });
+
+  const gozoPeriodosByFerias = useMemo(() => {
+    const map = new Map<string, GozoPeriodo[]>();
+    gozoPeriodos.forEach(p => {
+      const list = map.get(p.ferias_id) || [];
+      list.push(p);
+      map.set(p.ferias_id, list);
+    });
+    return map;
+  }, [gozoPeriodos]);
+
+  // Retorna intervalos REAIS de gozo (descanso) para uma férias
+  const getGozoRanges = (ferias: FeriasAtivas): Array<{ inicio: string; fim: string }> => {
+    const subs = gozoPeriodosByFerias.get(ferias.id);
+    if (subs && subs.length > 0) {
+      return subs.map(s => ({ inicio: s.data_inicio, fim: s.data_fim }));
+    }
+    const ranges: Array<{ inicio: string; fim: string }> = [];
+    const q1i = ferias.gozo_diferente && ferias.gozo_quinzena1_inicio ? ferias.gozo_quinzena1_inicio : ferias.quinzena1_inicio;
+    const q1f = ferias.gozo_diferente && ferias.gozo_quinzena1_fim ? ferias.gozo_quinzena1_fim : ferias.quinzena1_fim;
+    if (q1i && q1f) ranges.push({ inicio: q1i, fim: q1f });
+    const q2i = ferias.gozo_diferente && ferias.gozo_quinzena2_inicio ? ferias.gozo_quinzena2_inicio : ferias.quinzena2_inicio;
+    const q2f = ferias.gozo_diferente && ferias.gozo_quinzena2_fim ? ferias.gozo_quinzena2_fim : ferias.quinzena2_fim;
+    if (q2i && q2f) ranges.push({ inicio: q2i, fim: q2f });
+    return ranges;
+  };
 
   // Query perdas do mês
   const { data: perdas = [] } = useQuery({
@@ -288,32 +339,15 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
 
     feriasAtivas.forEach(ferias => {
       if (ferias.colaborador_id !== colabId) return;
-
-      const q1Start = parseISO(ferias.gozo_diferente && ferias.gozo_quinzena1_inicio 
-        ? ferias.gozo_quinzena1_inicio : ferias.quinzena1_inicio);
-      const q1End = parseISO(ferias.gozo_diferente && ferias.gozo_quinzena1_fim 
-        ? ferias.gozo_quinzena1_fim : ferias.quinzena1_fim);
-
-      const q1OverlapStart = q1Start > monthStart ? q1Start : monthStart;
-      const q1OverlapEnd = q1End < monthEnd ? q1End : monthEnd;
-      if (q1OverlapStart <= q1OverlapEnd) {
-        totalDays += differenceInDays(q1OverlapEnd, q1OverlapStart) + 1;
-      }
-
-      const q2Raw = ferias.gozo_diferente && ferias.gozo_quinzena2_inicio 
-        ? ferias.gozo_quinzena2_inicio : ferias.quinzena2_inicio;
-      const q2EndRaw = ferias.gozo_diferente && ferias.gozo_quinzena2_fim 
-        ? ferias.gozo_quinzena2_fim : ferias.quinzena2_fim;
-
-      if (q2Raw && q2EndRaw) {
-        const q2Start = parseISO(q2Raw);
-        const q2End = parseISO(q2EndRaw);
-        const q2OverlapStart = q2Start > monthStart ? q2Start : monthStart;
-        const q2OverlapEnd = q2End < monthEnd ? q2End : monthEnd;
-        if (q2OverlapStart <= q2OverlapEnd) {
-          totalDays += differenceInDays(q2OverlapEnd, q2OverlapStart) + 1;
+      getGozoRanges(ferias).forEach(r => {
+        const start = parseISO(r.inicio);
+        const end = parseISO(r.fim);
+        const overlapStart = start > monthStart ? start : monthStart;
+        const overlapEnd = end < monthEnd ? end : monthEnd;
+        if (overlapStart <= overlapEnd) {
+          totalDays += differenceInDays(overlapEnd, overlapStart) + 1;
         }
-      }
+      });
     });
 
     return totalDays;
@@ -325,35 +359,31 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     const currentMonthDays = countVacationDaysInMonth(colabId);
     if (currentMonthDays === 0) return false;
 
-    let otherMonthDays = 0;
-
+    // Mapa: "yyyy-MM" -> dias de gozo naquele mês (somando todas as férias do colaborador)
+    const daysByMonth = new Map<string, number>();
     feriasAtivas.forEach(ferias => {
       if (ferias.colaborador_id !== colabId) return;
-
-      const q1Start = parseISO(ferias.gozo_diferente && ferias.gozo_quinzena1_inicio 
-        ? ferias.gozo_quinzena1_inicio : ferias.quinzena1_inicio);
-      const q2EndRaw = ferias.gozo_diferente && ferias.gozo_quinzena2_fim 
-        ? ferias.gozo_quinzena2_fim : ferias.quinzena2_fim;
-      const q2End = q2EndRaw ? parseISO(q2EndRaw) : parseISO(ferias.gozo_diferente && ferias.gozo_quinzena1_fim 
-        ? ferias.gozo_quinzena1_fim : ferias.quinzena1_fim);
-
-      const startMonth = q1Start.getMonth() + 1;
-      const endMonth = q2End.getMonth() + 1;
-
-      if (startMonth !== month || endMonth !== month) {
-        if (startMonth !== month) {
-          const otherMonthStart = startOfMonth(q1Start);
-          const otherMonthEnd = endOfMonth(q1Start);
-          const overlapStart = q1Start > otherMonthStart ? q1Start : otherMonthStart;
-          const overlapEnd = q2End < otherMonthEnd ? q2End : otherMonthEnd;
-          if (overlapStart <= overlapEnd) {
-            otherMonthDays = Math.max(otherMonthDays, differenceInDays(overlapEnd, overlapStart) + 1);
-          }
+      getGozoRanges(ferias).forEach(r => {
+        let cursor = parseISO(r.inicio);
+        const end = parseISO(r.fim);
+        while (cursor <= end) {
+          const mStart = startOfMonth(cursor);
+          const mEnd = endOfMonth(cursor);
+          const sliceEnd = end < mEnd ? end : mEnd;
+          const days = differenceInDays(sliceEnd, cursor) + 1;
+          const key = format(mStart, "yyyy-MM");
+          daysByMonth.set(key, (daysByMonth.get(key) || 0) + days);
+          cursor = new Date(mEnd.getFullYear(), mEnd.getMonth() + 1, 1);
         }
-      }
+      });
     });
 
-    return otherMonthDays > 0 && currentMonthDays > otherMonthDays;
+    // Encontra mês com mais dias de gozo
+    let maxDays = 0;
+    daysByMonth.forEach(d => { if (d > maxDays) maxDays = d; });
+
+    // Pula folga apenas no mês atual se ele NÃO é o que tem mais dias
+    return maxDays > currentMonthDays;
   };
 
   const hasFullMonthVacation = (colabId: string): boolean => {
@@ -401,17 +431,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
   const isColabOnVacation = (colabId: string, saturdayDate: string): boolean => {
     return feriasAtivas.some(ferias => {
       if (ferias.colaborador_id !== colabId) return false;
-      
-      const q1Start = ferias.gozo_diferente && ferias.gozo_quinzena1_inicio 
-        ? ferias.gozo_quinzena1_inicio : ferias.quinzena1_inicio;
-      const q1End = ferias.gozo_diferente && ferias.gozo_quinzena1_fim 
-        ? ferias.gozo_quinzena1_fim : ferias.quinzena1_fim;
-      const q2Start = ferias.gozo_diferente && ferias.gozo_quinzena2_inicio 
-        ? ferias.gozo_quinzena2_inicio : ferias.quinzena2_inicio;
-      const q2End = ferias.gozo_diferente && ferias.gozo_quinzena2_fim 
-        ? ferias.gozo_quinzena2_fim : ferias.quinzena2_fim;
-      
-      return (saturdayDate >= q1Start && saturdayDate <= q1End) || (saturdayDate >= q2Start && saturdayDate <= q2End);
+      return getGozoRanges(ferias).some(r => saturdayDate >= r.inicio && saturdayDate <= r.fim);
     });
   };
 
