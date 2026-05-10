@@ -92,6 +92,7 @@ interface ConflictInfo {
   colaborador_nome: string;
   tipo: string;
   periodo: string;
+  motivo_vinculo?: string;
 }
 
 export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSuccess }: FeriasDialogProps) {
