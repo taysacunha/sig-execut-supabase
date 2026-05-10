@@ -957,12 +957,22 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const watchedFields = form.watch(["colaborador_id", "quinzena1_inicio", "quinzena1_fim", "quinzena2_inicio", "quinzena2_fim"]);
   
   useEffect(() => {
-    const values = form.getValues();
-    if (values.colaborador_id && values.quinzena1_inicio && values.quinzena1_fim) {
-      const debounce = setTimeout(() => checkConflicts(values), 500);
-      return () => clearTimeout(debounce);
+    if (!open) {
+      setConflicts([]);
+      return;
     }
-  }, [watchedFields, excecaoTipo, excPeriodos, opcaoAdicional, diasVendidos, quinzenaVendaEfetiva, gozoVendaInicio, gozoVendaFim, q1JaGozada, open, ferias?.id]);
+    // Aguarda hidratação do form antes de verificar.
+    const t = setTimeout(() => {
+      const values = form.getValues();
+      if (values.colaborador_id && values.quinzena1_inicio && values.quinzena1_fim) {
+        checkConflicts(values);
+      } else {
+        setConflicts([]);
+      }
+    }, 100);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, ferias?.id]);
 
   // Fetch all ferias for selected collaborator to calculate period balances
   const { data: colabAllFerias = [] } = useQuery({
@@ -1733,18 +1743,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                 <Separator />
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle className="flex items-center justify-between gap-2">
-                    <span>Conflitos Detectados</span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={checkingConflicts}
-                      onClick={() => checkConflicts(form.getValues())}
-                    >
-                      {checkingConflicts ? <Loader2 className="h-3 w-3 animate-spin" /> : "Recarregar"}
-                    </Button>
-                  </AlertTitle>
+                  <AlertTitle>Conflitos Detectados</AlertTitle>
                   <AlertDescription>
                     <ul className="list-disc list-inside mt-2 space-y-1">
                       {conflicts.map((c, i) => (
