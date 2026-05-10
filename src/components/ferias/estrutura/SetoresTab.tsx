@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Pencil, Trash2, Crown, Users, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Crown, Users, ArrowUpDown, ArrowUp, ArrowDown, Eye } from "lucide-react";
 import { toast } from "sonner";
 import SetorDialog from "./SetorDialog";
+import SetorViewDialog from "./SetorViewDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +41,7 @@ const SetoresTab = () => {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingSetor, setEditingSetor] = useState<Setor | null>(null);
+  const [viewingSetor, setViewingSetor] = useState<Setor | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("nome");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -280,7 +282,16 @@ const SetoresTab = () => {
                           <Button
                             variant="ghost"
                             size="icon"
+                            onClick={() => setViewingSetor(setor)}
+                            title="Visualizar"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() => handleEdit(setor)}
+                            title="Editar"
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -288,6 +299,7 @@ const SetoresTab = () => {
                             variant="ghost"
                             size="icon"
                             onClick={() => setDeleteId(setor.id)}
+                            title="Excluir"
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
@@ -306,6 +318,12 @@ const SetoresTab = () => {
         open={dialogOpen}
         onOpenChange={handleCloseDialog}
         setor={editingSetor}
+      />
+
+      <SetorViewDialog
+        open={!!viewingSetor}
+        onOpenChange={(o) => !o && setViewingSetor(null)}
+        setor={viewingSetor}
       />
 
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
