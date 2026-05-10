@@ -1,39 +1,38 @@
-## Diagnóstico
+## Objetivo
 
-A tabela `module_audit_logs` armazena indefinidamente — não há cron job, não há cleanup. Os triggers de auditoria do módulo Férias (migração `20260508234225_ferias_audit_triggers.sql`) estão corretamente anexados a todas as tabelas `ferias_*`, então as alterações de ontem **estão no banco**.
+Criar uma página de Ajuda para o sistema de Férias e Folgas, no mesmo estilo do `Help.tsx` já existente em Plantões — com explicações detalhadas de cada módulo, passo a passo de cadastros, atualizações, visualizações e dicas de uso.
 
-**Causa real do "só aparecem os de hoje":** em `src/components/AuditLogsPanel.tsx`, `fetchLogs()` faz:
+## Arquivos
 
-```ts
-supabase.from("module_audit_logs").select("*").order("created_at", { ascending: false }).limit(500)
-```
+**Novo:**
+- `src/pages/ferias/FeriasHelp.tsx` — página com Tabs cobrindo cada área do módulo.
 
-O filtro de módulo (`moduleFilter === "ferias"`) é aplicado **no cliente**, depois do `.limit(500)`. Como o sistema gera muitos logs por dia (Estoque, Escalas, Vendas, Sistema), o batch de 500 mais recentes pode estar quase todo composto por logs de outros módulos do dia atual, deixando apenas alguns ferias de hoje e empurrando os de ontem para fora da janela. O usuário, na aba Férias, vê só os ferias de hoje.
+**Editados:**
+- `src/App.tsx` — registrar lazy import e rota `/ferias/ajuda`.
+- `src/components/FeriasSidebar.tsx` — adicionar item "Ajuda" no menu (ícone `HelpCircle`), visível para qualquer usuário com acesso ao sistema "ferias".
 
-A aba "Ações Administrativas" também tem `.limit(500)`, mas ali não importa nesse caso — o problema está nas Alterações nos Módulos.
+## Estrutura da página (abas)
 
-## Solução
+Seguindo exatamente o padrão visual do `Help.tsx` de Plantões (Tabs + Cards + Alerts + Badges + ícones lucide, container `max-w-5xl`, tokens semânticos do design system):
 
-**Arquivo:** `src/components/AuditLogsPanel.tsx`
+1. **Visão Geral** — o que é o sistema, papéis (super_admin/admin/manager/supervisor/collaborator), fluxo recomendado de uso.
+2. **Dashboard** — indicadores exibidos, como interpretar pendências e alertas.
+3. **Colaboradores** — cadastro completo (campos obrigatórios, vínculo com unidade/setor/cargo/equipe), edição, visualização (botão olho), inativação, importação/aniversário, afastamentos.
+4. **Estrutura** — abas Unidades, Setores, Cargos, Equipes: criar/editar/visualizar, vínculos entre entidades, regras de inativação.
+5. **Períodos Aquisitivos e Férias** — como funcionam os períodos aquisitivos, geração automática, lançamento manual, redução de férias, exceções de períodos, quitação de período, validações de sobreposição/conflitos, gerador em lote.
+6. **Folgas de Sábado** — gerador de folgas, mover folga (individual e em lote), trocar, perda de folga, remover, impressão/PDF, quadro de setores nos sábados.
+7. **Calendário** — abas de férias, folgas e aniversariantes; visão Gantt; filtros.
+8. **Aniversariantes** — listagem, geração de PDF padrão e versão "celebre".
+9. **Relatórios** — Consulta Geral, Contador, Exceções, Formulário Anual; exportação PDF.
+10. **Créditos** — créditos de férias e folgas, como utilizar, regras de prescrição.
+11. **Configurações** — abas Quinzenas, Feriados, Folgas, Regras, Avançado.
+12. **Perfil, Usuários e Auditoria** — alteração de senha, gestão de acessos, leitura dos logs (com os filtros novos de data/módulo/limite).
 
-1. **Filtro de módulo no servidor.** Em `fetchLogs`, quando `defaultModule` (ou `moduleFilter` atual) for diferente de `"all"`, aplicar `.eq("module_name", moduleFilter)` antes do `.limit()`. Assim os 500 mais recentes são todos do módulo escolhido.
-   - Tornar `fetchLogs` dependente de `moduleFilter` (incluir no `useEffect` deps + recarregar quando o filtro muda) e passar a refazer fetch ao trocar módulo, em vez de filtrar localmente.
-   - O filtro adicional `tableFilter` continua client-side (já dentro de um módulo).
+Cada aba terá: descrição da funcionalidade, passo a passo numerado ("Como cadastrar", "Como editar", "Como visualizar"), `Alert` com dicas/avisos importantes, e referência aos botões/ícones reais da interface.
 
-2. **Filtro por intervalo de datas.** Adicionar dois inputs de data ("De" / "Até") no topo de cada aba (Admin e Módulos). Quando preenchidos, aplicar `.gte("created_at", de)` e `.lte("created_at", ate + 1 dia)` na query. Default: nenhum filtro (comportamento atual de "últimos N").
+## Notas técnicas
 
-3. **Aumentar/expor o limite.** Trocar o `.limit(500)` fixo por um seletor "Carregar últimos N" com opções 200 / 500 / 1000 / 2000 (default 500). Quando há filtro de data ativo, dispensar o limit (ou usar 5000 como teto de segurança).
-
-4. **Indicador "Mostrando X de Y carregados".** Pequeno texto abaixo da tabela mostrando `Carregados: {moduleLogs.length} (filtro de módulo: {moduleFilter})` para o usuário entender o escopo.
-
-5. **Botão Atualizar** já existe (linha 372) — deve refazer o fetch respeitando os novos filtros de servidor.
-
-## Detalhes técnicos
-
-- Não há mudança de schema, RLS, triggers ou backend.
-- O componente já aceita `defaultModule="ferias"` via prop — basta usar como valor inicial real do filtro de servidor.
-- Manter PT-BR e padrões UI existentes.
-
-## Arquivos a modificar
-
-- `src/components/AuditLogsPanel.tsx`
+- 100% frontend, sem alterações de schema, RLS ou lógica de negócio.
+- Reutilizar componentes shadcn já usados em `Help.tsx` (Card, Tabs, Alert, Badge, Separator).
+- Conteúdo em PT-BR.
+- Antes de escrever cada aba, vou consultar rapidamente os componentes/diálogos correspondentes em `src/components/ferias/**` e as páginas em `src/pages/ferias/**` para descrever fielmente os campos, botões e fluxos reais — evitando inventar funcionalidades.
