@@ -92,6 +92,7 @@ interface ConflictInfo {
   colaborador_nome: string;
   tipo: string;
   periodo: string;
+  motivo_vinculo?: string;
 }
 
 export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSuccess }: FeriasDialogProps) {
@@ -755,6 +756,19 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       );
       const eleCobreIds = new Set(colabsThatCoverMySector);
 
+      // Buscar nomes dos setores envolvidos para mensagens explicativas.
+      const setorIdsParaNome = new Set<string>([selectedColab.setor_titular_id, ...mySubstituteSectors]);
+      sameSetorColabs.forEach(c => setorIdsParaNome.add(c.setor_titular_id));
+      const setorNomeMap: Record<string, string> = {};
+      if (setorIdsParaNome.size > 0) {
+        const { data: setoresRows } = await supabase
+          .from("ferias_setores")
+          .select("id, nome")
+          .in("id", Array.from(setorIdsParaNome));
+        (setoresRows || []).forEach((s: any) => { setorNomeMap[s.id] = s.nome; });
+      }
+      const meuSetorNome = setorNomeMap[selectedColab.setor_titular_id] || "setor titular";
+
       if (sameSetorColabs && sameSetorColabs.length > 0) {
         const colabIds = sameSetorColabs.map((c) => c.id);
         const { data: existingFerias } = await supabase
@@ -821,9 +835,20 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             if (overlap) {
               const colabId = (ef as any).colaborador_id;
               let tipo = "Mesmo setor";
-              if (mesmoSetorIds.has(colabId)) tipo = "Mesmo setor";
-              else if (euCubroIds.has(colabId)) tipo = "Setor substituto (você cobre)";
-              else if (eleCobreIds.has(colabId)) tipo = "Setor substituto (ele cobre)";
+              let motivo = "";
+              const outroSetorId = (ef.colaborador as any)?.setor_titular_id;
+              const outroSetorNome = (outroSetorId && setorNomeMap[outroSetorId]) || "setor";
+              const outroNome = (ef.colaborador as any)?.nome || "Colaborador";
+              if (mesmoSetorIds.has(colabId)) {
+                tipo = "Mesmo setor";
+                motivo = `Ambos têm ${meuSetorNome} como setor titular.`;
+              } else if (euCubroIds.has(colabId)) {
+                tipo = "Setor substituto (você cobre)";
+                motivo = `Você está cadastrado como substituto do setor ${outroSetorNome} (titular de ${outroNome}).`;
+              } else if (eleCobreIds.has(colabId)) {
+                tipo = "Setor substituto (ele cobre)";
+                motivo = `${outroNome} está cadastrado como substituto do seu setor titular (${meuSetorNome}).`;
+              }
               const periodoStr = efIntervals
                 .map(i => `${format(i.start, "dd/MM")} - ${format(i.end, "dd/MM")}`)
                 .join(" / ");
@@ -831,6 +856,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                 colaborador_nome: (ef.colaborador as any)?.nome || "Desconhecido",
                 tipo,
                 periodo: periodoStr,
+                motivo_vinculo: motivo || undefined,
               });
             }
           }
@@ -936,7 +962,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       const debounce = setTimeout(() => checkConflicts(values), 500);
       return () => clearTimeout(debounce);
     }
-  }, [watchedFields, excecaoTipo, excPeriodos, opcaoAdicional, diasVendidos, quinzenaVendaEfetiva, gozoVendaInicio, gozoVendaFim, q1JaGozada]);
+  }, [watchedFields, excecaoTipo, excPeriodos, opcaoAdicional, diasVendidos, quinzenaVendaEfetiva, gozoVendaInicio, gozoVendaFim, q1JaGozada, open, ferias?.id]);
 
   // Fetch all ferias for selected collaborator to calculate period balances
   const { data: colabAllFerias = [] } = useQuery({
@@ -1707,11 +1733,29 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                 <Separator />
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle>Conflitos Detectados</AlertTitle>
+                  <AlertTitle className="flex items-center justify-between gap-2">
+                    <span>Conflitos Detectados</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={checkingConflicts}
+                      onClick={() => checkConflicts(form.getValues())}
+                    >
+                      {checkingConflicts ? <Loader2 className="h-3 w-3 animate-spin" /> : "Recarregar"}
+                    </Button>
+                  </AlertTitle>
                   <AlertDescription>
                     <ul className="list-disc list-inside mt-2 space-y-1">
                       {conflicts.map((c, i) => (
-                        <li key={i}><strong>{c.colaborador_nome}</strong> ({c.tipo}): {c.periodo}</li>
+                        <li key={i}>
+                          <strong>{c.colaborador_nome}</strong> ({c.tipo}): {c.periodo}
+                          {c.motivo_vinculo && (
+                            <div className="text-xs text-muted-foreground ml-5 mt-0.5">
+                              {c.motivo_vinculo}
+                            </div>
+                          )}
+                        </li>
                       ))}
                     </ul>
                     <p className="mt-2 text-sm">Marque como "Exceção" no topo se deseja prosseguir.</p>

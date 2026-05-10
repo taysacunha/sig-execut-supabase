@@ -177,6 +177,11 @@ export function ExcecaoPeriodosSection({
   const opcoesDistribuicao = q1JaGozada ? ["2", "livre"] : ["1", "2", "ambos", "livre"];
   const opcoesGozoDiferente = q1JaGozada ? ["2"] : ["1", "2", "ambos"];
 
+  // Quando o gozo restante (após venda) é maior que 15 dias, é impossível
+  // alocá-lo em um único período oficial (cada período tem no máximo 15 dias).
+  // Nesse caso só fazem sentido as opções "Ambos" ou "Livre".
+  const singlePeriodInviavel = diasGozo > 15;
+
   // Períodos do tipo "gozo_diferente" que coexistem com o modo "vender" (caso em que
   // o colaborador vendeu dias no 1º período E ainda assim há um gozo real do 2º período
   // distinto do enviado ao contador). Renderizados em uma seção paralela.
@@ -191,6 +196,16 @@ export function ExcecaoPeriodosSection({
       onDistribuicaoTipoChange("2");
     }
   }, [q1JaGozada, distribuicaoTipo, isHydrating, onDistribuicaoTipoChange]);
+
+  // Se o gozo é maior que 15 dias e o usuário (ou o estado carregado) está em
+  // "1" ou "2", forçar para "ambos" (única distribuição válida em períodos oficiais).
+  useEffect(() => {
+    if (isHydrating) return;
+    if (excecaoTipo !== "vender") return;
+    if (singlePeriodInviavel && (distribuicaoTipo === "1" || distribuicaoTipo === "2")) {
+      onDistribuicaoTipoChange("ambos");
+    }
+  }, [singlePeriodInviavel, distribuicaoTipo, excecaoTipo, isHydrating, onDistribuicaoTipoChange]);
 
   // Se diasVendidos exceder os disponíveis (ex.: q1JaGozada virou true), reduzir.
   useEffect(() => {
@@ -435,12 +450,31 @@ export function ExcecaoPeriodosSection({
                       type="button"
                       variant={distribuicaoTipo === tipo ? "default" : "outline"}
                       size="sm"
+                      disabled={singlePeriodInviavel && (tipo === "1" || tipo === "2")}
+                      title={
+                        singlePeriodInviavel && (tipo === "1" || tipo === "2")
+                          ? `Gozo de ${diasGozo} dias não cabe em um único período oficial (máx. 15 dias).`
+                          : undefined
+                      }
                       onClick={() => onDistribuicaoTipoChange(tipo)}
                     >
                       {tipo === "1" ? "1º Período" : tipo === "2" ? "2º Período" : tipo === "ambos" ? "Ambos" : "Livre"}
                     </Button>
                   ))}
                 </div>
+                {singlePeriodInviavel && (
+                  <Alert className="border-amber-500/40 bg-amber-500/10">
+                    <Info className="h-4 w-4" />
+                    <AlertTitle className="text-sm">Apenas "Ambos" ou "Livre" disponíveis</AlertTitle>
+                    <AlertDescription className="text-xs">
+                      Como o gozo é de <strong>{diasGozo} dias</strong> (acima de 15), não é possível
+                      alocá-lo em um único período oficial — cada período comporta no máximo 15 dias.
+                      Use <strong>Ambos</strong> para dividir entre os dois períodos, ou <strong>Livre</strong>
+                      para usar datas fora dos períodos oficiais. Para liberar "1º" ou "2º", aumente os dias
+                      vendidos até que sobrem no máximo 15 dias de gozo.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
 
               {/* 1º ou 2º Período: single period (ignora linhas paralelas de gozo_diferente) */}
