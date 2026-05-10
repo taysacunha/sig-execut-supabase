@@ -835,9 +835,20 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             if (overlap) {
               const colabId = (ef as any).colaborador_id;
               let tipo = "Mesmo setor";
-              if (mesmoSetorIds.has(colabId)) tipo = "Mesmo setor";
-              else if (euCubroIds.has(colabId)) tipo = "Setor substituto (você cobre)";
-              else if (eleCobreIds.has(colabId)) tipo = "Setor substituto (ele cobre)";
+              let motivo = "";
+              const outroSetorId = (ef.colaborador as any)?.setor_titular_id;
+              const outroSetorNome = (outroSetorId && setorNomeMap[outroSetorId]) || "setor";
+              const outroNome = (ef.colaborador as any)?.nome || "Colaborador";
+              if (mesmoSetorIds.has(colabId)) {
+                tipo = "Mesmo setor";
+                motivo = `Ambos têm ${meuSetorNome} como setor titular.`;
+              } else if (euCubroIds.has(colabId)) {
+                tipo = "Setor substituto (você cobre)";
+                motivo = `Você está cadastrado como substituto do setor ${outroSetorNome} (titular de ${outroNome}).`;
+              } else if (eleCobreIds.has(colabId)) {
+                tipo = "Setor substituto (ele cobre)";
+                motivo = `${outroNome} está cadastrado como substituto do seu setor titular (${meuSetorNome}).`;
+              }
               const periodoStr = efIntervals
                 .map(i => `${format(i.start, "dd/MM")} - ${format(i.end, "dd/MM")}`)
                 .join(" / ");
@@ -845,6 +856,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                 colaborador_nome: (ef.colaborador as any)?.nome || "Desconhecido",
                 tipo,
                 periodo: periodoStr,
+                motivo_vinculo: motivo || undefined,
               });
             }
           }
