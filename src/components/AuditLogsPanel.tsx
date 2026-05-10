@@ -35,6 +35,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface AdminAuditLog {
   id: string;
@@ -145,6 +147,78 @@ interface AuditLogsPanelProps {
   showAdminTab?: boolean;
 }
 
+function DateRangeAndLimit({
+  dateFrom,
+  dateTo,
+  loadLimit,
+  onDateFromChange,
+  onDateToChange,
+  onLoadLimitChange,
+  totalLoaded,
+}: {
+  dateFrom: string;
+  dateTo: string;
+  loadLimit: number;
+  onDateFromChange: (v: string) => void;
+  onDateToChange: (v: string) => void;
+  onLoadLimitChange: (n: number) => void;
+  totalLoaded: number;
+}) {
+  return (
+    <div className="flex items-end gap-2 flex-wrap">
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs text-muted-foreground">De</Label>
+        <Input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => onDateFromChange(e.target.value)}
+          className="h-9 w-[150px]"
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs text-muted-foreground">Até</Label>
+        <Input
+          type="date"
+          value={dateTo}
+          onChange={(e) => onDateToChange(e.target.value)}
+          className="h-9 w-[150px]"
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs text-muted-foreground">Carregar últimos</Label>
+        <Select value={String(loadLimit)} onValueChange={(v) => onLoadLimitChange(Number(v))}>
+          <SelectTrigger className="h-9 w-[120px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="200">200</SelectItem>
+            <SelectItem value="500">500</SelectItem>
+            <SelectItem value="1000">1000</SelectItem>
+            <SelectItem value="2000">2000</SelectItem>
+            <SelectItem value="5000">5000</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {(dateFrom || dateTo) && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-9"
+          onClick={() => {
+            onDateFromChange("");
+            onDateToChange("");
+          }}
+        >
+          Limpar datas
+        </Button>
+      )}
+      <span className="text-xs text-muted-foreground self-center ml-2">
+        Carregados: {totalLoaded}
+      </span>
+    </div>
+  );
+}
+
 export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", showAdminTab = true }: AuditLogsPanelProps) {
   const [adminLogs, setAdminLogs] = useState<AdminAuditLog[]>([]);
   const [moduleLogs, setModuleLogs] = useState<ModuleAuditLog[]>([]);
@@ -174,25 +248,39 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
   const [moduleSortField, setModuleSortField] = useState<keyof ModuleAuditLog | null>("created_at");
   const [moduleSortDirection, setModuleSortDirection] = useState<"asc" | "desc">("desc");
 
+  // Server-side load filters (shared)
+  const [loadLimit, setLoadLimit] = useState<number>(500);
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
+
   const fetchLogs = async () => {
     setLoading(true);
     try {
+      const effectiveLimit = loadLimit;
+
       // Fetch admin audit logs
-      const { data: adminData, error: adminError } = await supabase
+      let adminQuery = supabase
         .from("admin_audit_logs")
         .select("*")
-        .order("created_at", { ascending: false })
-        .limit(500);
+        .order("created_at", { ascending: false });
+      if (dateFrom) adminQuery = adminQuery.gte("created_at", dateFrom);
+      if (dateTo) adminQuery = adminQuery.lte("created_at", `${dateTo}T23:59:59.999Z`);
+      adminQuery = adminQuery.limit(effectiveLimit);
+      const { data: adminData, error: adminError } = await adminQuery;
       
       if (adminError) throw adminError;
       setAdminLogs(adminData || []);
 
       // Fetch module audit logs
-      const { data: moduleData, error: moduleError } = await supabase
+      let moduleQuery = supabase
         .from("module_audit_logs")
         .select("*")
-        .order("created_at", { ascending: false })
-        .limit(500);
+        .order("created_at", { ascending: false });
+      if (moduleFilter !== "all") moduleQuery = moduleQuery.eq("module_name", moduleFilter);
+      if (dateFrom) moduleQuery = moduleQuery.gte("created_at", dateFrom);
+      if (dateTo) moduleQuery = moduleQuery.lte("created_at", `${dateTo}T23:59:59.999Z`);
+      moduleQuery = moduleQuery.limit(effectiveLimit);
+      const { data: moduleData, error: moduleError } = await moduleQuery;
       
       if (moduleError) throw moduleError;
       setModuleLogs(moduleData || []);
@@ -205,7 +293,8 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
 
   useEffect(() => {
     fetchLogs();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moduleFilter, dateFrom, dateTo, loadLimit]);
 
   const toggleRow = (id: string) => {
     setExpandedRows(prev => {
@@ -257,7 +346,6 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
   // Filtered and sorted module logs
   const filteredModuleLogs = useMemo(() => {
     let result = moduleLogs.filter(log => {
-      if (moduleFilter !== "all" && log.module_name !== moduleFilter) return false;
       if (tableFilter !== "all" && log.table_name !== tableFilter) return false;
       if (moduleSearchTerm) {
         const term = moduleSearchTerm.toLowerCase();
@@ -412,6 +500,15 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                 onChange={handleAdminSearchChange}
                 placeholder="Buscar por nome ou email..."
               />
+              <DateRangeAndLimit
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                loadLimit={loadLimit}
+                onDateFromChange={setDateFrom}
+                onDateToChange={setDateTo}
+                onLoadLimitChange={setLoadLimit}
+                totalLoaded={adminLogs.length}
+              />
             </div>
 
             <ScrollArea className="h-[400px]">
@@ -551,6 +648,15 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                 value={moduleSearchTerm}
                 onChange={handleModuleSearchChange}
                 placeholder="Buscar..."
+              />
+              <DateRangeAndLimit
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                loadLimit={loadLimit}
+                onDateFromChange={setDateFrom}
+                onDateToChange={setDateTo}
+                onLoadLimitChange={setLoadLimit}
+                totalLoaded={moduleLogs.length}
               />
             </div>
 
@@ -740,6 +846,15 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                 value={moduleSearchTerm}
                 onChange={handleModuleSearchChange}
                 placeholder="Buscar..."
+              />
+              <DateRangeAndLimit
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                loadLimit={loadLimit}
+                onDateFromChange={setDateFrom}
+                onDateToChange={setDateTo}
+                onLoadLimitChange={setLoadLimit}
+                totalLoaded={moduleLogs.length}
               />
             </div>
 

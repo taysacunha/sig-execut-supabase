@@ -1,21 +1,39 @@
-## Ajuste no bloco de Conflitos Detectados
+## Diagnóstico
 
-**Problemas relatados:**
-1. O botão "Recarregar" no `AlertTitle` ficou desalinhado/feio.
-2. O `checkConflicts` está rodando a cada alteração de campo (com debounce de 500ms), o que dá a sensação de "recarregando o tempo todo".
+A tabela `module_audit_logs` armazena indefinidamente — não há cron job, não há cleanup. Os triggers de auditoria do módulo Férias (migração `20260508234225_ferias_audit_triggers.sql`) estão corretamente anexados a todas as tabelas `ferias_*`, então as alterações de ontem **estão no banco**.
 
-**Mudanças em `src/components/ferias/ferias/FeriasDialog.tsx`:**
+**Causa real do "só aparecem os de hoje":** em `src/components/AuditLogsPanel.tsx`, `fetchLogs()` faz:
 
-1. **Remover o botão "Recarregar"** do `AlertTitle` — voltar ao título simples "Conflitos Detectados". Manter o `motivo_vinculo` exibido em texto secundário abaixo de cada item (já implementado).
+```ts
+supabase.from("module_audit_logs").select("*").order("created_at", { ascending: false }).limit(500)
+```
 
-2. **Trocar o `useEffect` que dispara `checkConflicts` por uma execução única ao abrir o dialog:**
-   - Hoje (linhas ~931-939) o efeito depende de `watchedFields`, `excecaoTipo`, `excPeriodos`, `opcaoAdicional`, `diasVendidos`, `quinzenaVendaEfetiva`, `gozoVendaInicio`, `gozoVendaFim`, `q1JaGozada`, `open`, `ferias?.id` — qualquer digitação re-dispara.
-   - Substituir por um `useEffect` com dependências apenas `[open, ferias?.id]`: quando `open === true`, aguardar a hidratação do form (próximo tick) e chamar `checkConflicts(form.getValues())` uma única vez. Se `colaborador_id` ou as datas ainda não estiverem preenchidas (cadastro novo), apenas zerar `conflicts` e não chamar.
-   - Garantir reset de `conflicts` para `[]` quando o dialog fecha (`open === false`), evitando "lixo" de uma abertura anterior.
+O filtro de módulo (`moduleFilter === "ferias"`) é aplicado **no cliente**, depois do `.limit(500)`. Como o sistema gera muitos logs por dia (Estoque, Escalas, Vendas, Sistema), o batch de 500 mais recentes pode estar quase todo composto por logs de outros módulos do dia atual, deixando apenas alguns ferias de hoje e empurrando os de ontem para fora da janela. O usuário, na aba Férias, vê só os ferias de hoje.
 
-3. **Não rodar verificação durante a digitação** — qualquer mudança de período/exceção será revalidada apenas no submit (a função `onSubmit` em ~linha 1256 já trata `conflicts.length > 0` como gate de exceção; manter esse caminho intacto). Se ao salvar houver novos conflitos, o usuário verá no próximo open. Aceitável dado o pedido explícito.
+A aba "Ações Administrativas" também tem `.limit(500)`, mas ali não importa nesse caso — o problema está nas Alterações nos Módulos.
 
-**Arquivo a modificar:**
-- `src/components/ferias/ferias/FeriasDialog.tsx`
+## Solução
 
-Sem mudanças de schema, RLS ou outros componentes.
+**Arquivo:** `src/components/AuditLogsPanel.tsx`
+
+1. **Filtro de módulo no servidor.** Em `fetchLogs`, quando `defaultModule` (ou `moduleFilter` atual) for diferente de `"all"`, aplicar `.eq("module_name", moduleFilter)` antes do `.limit()`. Assim os 500 mais recentes são todos do módulo escolhido.
+   - Tornar `fetchLogs` dependente de `moduleFilter` (incluir no `useEffect` deps + recarregar quando o filtro muda) e passar a refazer fetch ao trocar módulo, em vez de filtrar localmente.
+   - O filtro adicional `tableFilter` continua client-side (já dentro de um módulo).
+
+2. **Filtro por intervalo de datas.** Adicionar dois inputs de data ("De" / "Até") no topo de cada aba (Admin e Módulos). Quando preenchidos, aplicar `.gte("created_at", de)` e `.lte("created_at", ate + 1 dia)` na query. Default: nenhum filtro (comportamento atual de "últimos N").
+
+3. **Aumentar/expor o limite.** Trocar o `.limit(500)` fixo por um seletor "Carregar últimos N" com opções 200 / 500 / 1000 / 2000 (default 500). Quando há filtro de data ativo, dispensar o limit (ou usar 5000 como teto de segurança).
+
+4. **Indicador "Mostrando X de Y carregados".** Pequeno texto abaixo da tabela mostrando `Carregados: {moduleLogs.length} (filtro de módulo: {moduleFilter})` para o usuário entender o escopo.
+
+5. **Botão Atualizar** já existe (linha 372) — deve refazer o fetch respeitando os novos filtros de servidor.
+
+## Detalhes técnicos
+
+- Não há mudança de schema, RLS, triggers ou backend.
+- O componente já aceita `defaultModule="ferias"` via prop — basta usar como valor inicial real do filtro de servidor.
+- Manter PT-BR e padrões UI existentes.
+
+## Arquivos a modificar
+
+- `src/components/AuditLogsPanel.tsx`
