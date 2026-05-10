@@ -428,6 +428,15 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                 onChange={handleAdminSearchChange}
                 placeholder="Buscar por nome ou email..."
               />
+              <DateRangeAndLimit
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                loadLimit={loadLimit}
+                onDateFromChange={setDateFrom}
+                onDateToChange={setDateTo}
+                onLoadLimitChange={setLoadLimit}
+                totalLoaded={adminLogs.length}
+              />
             </div>
 
             <ScrollArea className="h-[400px]">
