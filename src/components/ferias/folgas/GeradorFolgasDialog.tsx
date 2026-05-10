@@ -705,29 +705,51 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
         const satsSemSetor = unit.availableSaturdays
           .filter(sat => (sectorSaturdayCount[setorId]?.[sat] || 0) === 0);
 
-        // Sort candidates: prefer saturdays without this sector, then by sector-density + global count
+        // HARD RULE for restricted sectors: if there is at least one saturday
+        // without anyone from this sector, NEVER stack. Only fall back to
+        // stacking when every available saturday for this unit already has
+        // the sector covered (truly impossible to spread).
         const cmp = compareCandidates(unit);
-        const candidates = satsSemSetor.length > 0
-          ? satsSemSetor.sort(cmp)
-          : [...unit.availableSaturdays].sort(cmp);
+        const strictCandidates = satsSemSetor.length > 0 ? [...satsSemSetor].sort(cmp) : null;
+        const fallbackCandidates = [...unit.availableSaturdays].sort(cmp);
 
         let assigned = false;
-        for (const candidateSat of candidates) {
-          if (!hasChefeConflict(unit, candidateSat)) {
-            assignUnit(unit, candidateSat);
-            logStackingIfAny(unit, candidateSat);
-            assigned = true;
-            break;
-          }
-        }
 
-        // Fallback: ignore chefe conflict
-        if (!assigned) {
-          const bestSat = candidates[0];
-          if (bestSat) {
-            assignUnit(unit, bestSat);
-            logStackingIfAny(unit, bestSat);
-            diagnostics.push(`Conflito de chefes ignorado para ${unit.memberIds.map(id => colabById.get(id)?.nome).join(", ")}`);
+        if (strictCandidates) {
+          for (const candidateSat of strictCandidates) {
+            if (!hasChefeConflict(unit, candidateSat)) {
+              assignUnit(unit, candidateSat);
+              assigned = true;
+              break;
+            }
+          }
+          // If chefe conflict blocks every empty-sector saturday, ignore chefe
+          // conflict but STILL respect the no-stacking rule (stay among strictCandidates)
+          if (!assigned) {
+            const bestSat = strictCandidates[0];
+            if (bestSat) {
+              assignUnit(unit, bestSat);
+              assigned = true;
+              diagnostics.push(`Conflito de chefes ignorado para ${unit.memberIds.map(id => colabById.get(id)?.nome).join(", ")}`);
+            }
+          }
+        } else {
+          // Truly no empty-sector saturday available for this unit — stacking is unavoidable
+          for (const candidateSat of fallbackCandidates) {
+            if (!hasChefeConflict(unit, candidateSat)) {
+              assignUnit(unit, candidateSat);
+              logStackingIfAny(unit, candidateSat);
+              assigned = true;
+              break;
+            }
+          }
+          if (!assigned) {
+            const bestSat = fallbackCandidates[0];
+            if (bestSat) {
+              assignUnit(unit, bestSat);
+              logStackingIfAny(unit, bestSat);
+              diagnostics.push(`Conflito de chefes ignorado para ${unit.memberIds.map(id => colabById.get(id)?.nome).join(", ")}`);
+            }
           }
         }
       }
@@ -801,12 +823,19 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
               if (unitAssignments.get(u.id) !== overSat) return false;
               if (!u.availableSaturdays.includes(underSat)) return false;
               if (hasChefeConflict(u, underSat)) return false;
-              // Don't move if destination already has someone from any of the unit's sectors,
-              // UNLESS the source already has duplicate of the same sector (move would reduce stacking)
+              // Don't move if it would increase stacking in a small (restricted) sector.
+              // For large sectors, allow stacking trade if it reduces source stacking.
               for (const sid of u.allSetorIds) {
                 const destCount = sectorSaturdayCount[sid]?.[underSat] || 0;
                 const srcCount = sectorSaturdayCount[sid]?.[overSat] || 0;
-                if (destCount > 0 && srcCount <= 1) return false;
+                const sectorSize = unitsBySetorId.get(sid)?.length || 0;
+                const isRestricted = sectorSize <= saturdaysOfMonth.length;
+                if (isRestricted) {
+                  // Strict: never create or maintain stacking in a restricted sector
+                  if (destCount > 0) return false;
+                } else {
+                  if (destCount > 0 && srcCount <= 1) return false;
+                }
               }
               return true;
             })
@@ -845,6 +874,85 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
             }
           }
         }
+      }
+    }
+
+    // Step 7.5: Per-sector post-rebalance — eliminate avoidable stacking in restricted sectors
+    for (const setorId of setoresRestritos) {
+      const sectorUnits = unitsBySetorId.get(setorId) || [];
+      let madeProgress = true;
+      let safety = 0;
+      while (madeProgress && safety++ < 50) {
+        madeProgress = false;
+        // Find a saturday with stacking in this sector
+        const stackedSat = saturdaysOfMonth.find(sat => (sectorSaturdayCount[setorId]?.[sat] || 0) >= 2);
+        if (!stackedSat) break;
+        // Find an empty saturday for this sector
+        const emptySats = saturdaysOfMonth.filter(sat => (sectorSaturdayCount[setorId]?.[sat] || 0) === 0);
+        if (emptySats.length === 0) break;
+
+        // Candidate units to move: singles assigned to stackedSat that include this sector
+        const candidates = sectorUnits.filter(u =>
+          u.type === "single" &&
+          unitAssignments.get(u.id) === stackedSat
+        );
+
+        let moved = false;
+        for (const u of candidates) {
+          // Try to move to an empty sat where unit can go
+          const targetSat = emptySats.find(sat => {
+            if (!u.availableSaturdays.includes(sat)) return false;
+            if (hasChefeConflict(u, sat)) return false;
+            // Don't create stacking in another restricted sector
+            for (const sid of u.allSetorIds) {
+              const sectorSize = unitsBySetorId.get(sid)?.length || 0;
+              const isRestricted = sectorSize <= saturdaysOfMonth.length;
+              if (isRestricted && (sectorSaturdayCount[sid]?.[sat] || 0) > 0) return false;
+            }
+            return true;
+          });
+          if (targetSat) {
+            // Apply move
+            const fromSat = stackedSat;
+            unitAssignments.set(u.id, targetSat);
+            globalPersonCount[fromSat] -= u.memberIds.length;
+            globalPersonCount[targetSat] += u.memberIds.length;
+            for (const sid of u.allSetorIds) {
+              if (sectorSaturdayCount[sid]) {
+                sectorSaturdayCount[sid][fromSat] -= 1;
+                sectorSaturdayCount[sid][targetSat] += 1;
+              }
+            }
+            // Update chefe assignments
+            const chefeSecs: string[] = [];
+            u.memberIds.forEach(mid => {
+              getChefeSectors(mid).forEach(sid => { if (!chefeSecs.includes(sid)) chefeSecs.push(sid); });
+            });
+            for (const csid of chefeSecs) {
+              chefeAssignments.get(csid)?.get(fromSat)?.clear();
+              if (!chefeAssignments.get(csid)?.has(targetSat)) {
+                chefeAssignments.get(csid)!.set(targetSat, new Set());
+              }
+              u.memberIds.forEach(mid => {
+                if (getChefeSectors(mid).includes(csid)) {
+                  chefeAssignments.get(csid)!.get(targetSat)!.add(mid);
+                }
+              });
+            }
+            moved = true;
+            madeProgress = true;
+            break;
+          }
+        }
+        if (!moved) break;
+      }
+
+      // Final diagnostic if stacking still remains
+      const stillStacked = saturdaysOfMonth.filter(sat => (sectorSaturdayCount[setorId]?.[sat] || 0) >= 2);
+      if (stillStacked.length > 0) {
+        const setorNome = setorById.get(setorId)?.nome || setorId;
+        const datas = stillStacked.map(s => format(new Date(s + "T12:00:00"), "dd/MM")).join(", ");
+        diagnostics.push(`Empilhamento de setor (${setorNome}) em ${datas} — sem alternativa após pós-rebalanceamento`);
       }
     }
 
