@@ -756,6 +756,19 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       );
       const eleCobreIds = new Set(colabsThatCoverMySector);
 
+      // Buscar nomes dos setores envolvidos para mensagens explicativas.
+      const setorIdsParaNome = new Set<string>([selectedColab.setor_titular_id, ...mySubstituteSectors]);
+      sameSetorColabs.forEach(c => setorIdsParaNome.add(c.setor_titular_id));
+      const setorNomeMap: Record<string, string> = {};
+      if (setorIdsParaNome.size > 0) {
+        const { data: setoresRows } = await supabase
+          .from("ferias_setores")
+          .select("id, nome")
+          .in("id", Array.from(setorIdsParaNome));
+        (setoresRows || []).forEach((s: any) => { setorNomeMap[s.id] = s.nome; });
+      }
+      const meuSetorNome = setorNomeMap[selectedColab.setor_titular_id] || "setor titular";
+
       if (sameSetorColabs && sameSetorColabs.length > 0) {
         const colabIds = sameSetorColabs.map((c) => c.id);
         const { data: existingFerias } = await supabase
