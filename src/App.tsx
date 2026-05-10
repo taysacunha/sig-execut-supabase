@@ -57,6 +57,7 @@ const FeriasConfiguracoes = lazy(() => import("./pages/ferias/FeriasConfiguracoe
 const FeriasRelatorios = lazy(() => import("./pages/ferias/FeriasRelatorios"));
 const FeriasCreditos = lazy(() => import("./pages/ferias/FeriasCreditos"));
 const FeriasAuditLogs = lazy(() => import("./pages/ferias/FeriasAuditLogs"));
+const FeriasHelp = lazy(() => import("./pages/ferias/FeriasHelp"));
 
 // Estoque
 const EstoqueDashboard = lazy(() => import("./pages/estoque/EstoqueDashboard"));
@@ -175,6 +176,7 @@ const App = () => {
               <Route path="creditos" element={<FeriasCreditos />} />
               <Route path="configuracoes" element={<FeriasConfiguracoes />} />
               <Route path="perfil" element={<Profile />} />
+              <Route path="ajuda" element={<FeriasHelp />} />
               <Route path="usuarios" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><UserManagement /></RoleGuard>} />
               <Route path="auditoria" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><FeriasAuditLogs /></RoleGuard>} />
             </Route>
