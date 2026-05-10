@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Pencil, Trash2, Users, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Users, ArrowUpDown, ArrowUp, ArrowDown, Eye } from "lucide-react";
 import { toast } from "sonner";
 import CargoDialog from "./CargoDialog";
+import CargoViewDialog from "./CargoViewDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,6 +31,7 @@ const CargosTab = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCargo, setEditingCargo] = useState<Cargo | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [viewingCargo, setViewingCargo] = useState<Cargo | null>(null);
   const [sortField, setSortField] = useState<SortField>("nome");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const queryClient = useQueryClient();
@@ -212,6 +214,14 @@ const CargosTab = () => {
                         <Button
                           variant="ghost"
                           size="icon"
+                          onClick={() => setViewingCargo(cargo)}
+                          title="Visualizar"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleEdit(cargo)}
                         >
                           <Pencil className="h-4 w-4" />
@@ -237,6 +247,12 @@ const CargosTab = () => {
         open={dialogOpen}
         onOpenChange={handleCloseDialog}
         cargo={editingCargo}
+      />
+
+      <CargoViewDialog
+        open={!!viewingCargo}
+        onOpenChange={(o) => !o && setViewingCargo(null)}
+        cargo={viewingCargo}
       />
 
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>

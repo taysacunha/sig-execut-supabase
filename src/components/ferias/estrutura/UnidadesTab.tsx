@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Pencil, Trash2, Building2, Users } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Building2, Users, Eye } from "lucide-react";
 import { toast } from "sonner";
 import UnidadeDialog from "./UnidadeDialog";
+import UnidadeViewDialog from "./UnidadeViewDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +41,7 @@ const UnidadesTab = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUnidade, setEditingUnidade] = useState<Unidade | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [viewingUnidade, setViewingUnidade] = useState<Unidade | null>(null);
   const queryClient = useQueryClient();
 
   const { data: unidades = [], isLoading } = useQuery({
@@ -183,6 +185,14 @@ const UnidadesTab = () => {
                         <Button
                           variant="ghost"
                           size="icon"
+                          onClick={() => setViewingUnidade(unidade)}
+                          title="Visualizar"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleEdit(unidade)}
                         >
                           <Pencil className="h-4 w-4" />
@@ -208,6 +218,12 @@ const UnidadesTab = () => {
         open={dialogOpen}
         onOpenChange={handleCloseDialog}
         unidade={editingUnidade}
+      />
+
+      <UnidadeViewDialog
+        open={!!viewingUnidade}
+        onOpenChange={(o) => !o && setViewingUnidade(null)}
+        unidade={viewingUnidade}
       />
 
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
