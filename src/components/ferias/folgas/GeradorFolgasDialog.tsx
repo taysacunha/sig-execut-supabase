@@ -378,19 +378,21 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       });
     });
 
-    // Encontra mês com mais dias de gozo
-    let maxDays = 0;
-    daysByMonth.forEach(d => { if (d > maxDays) maxDays = d; });
+    // Se as férias estão em um único mês, não há "mês secundário" — não libera.
+    if (daysByMonth.size <= 1) return false;
 
-    // Pula folga apenas no mês atual se ele NÃO é o que tem mais dias
-    return maxDays > currentMonthDays;
+    // Encontra o menor número de dias entre todos os meses com gozo
+    let minDays = Infinity;
+    daysByMonth.forEach(d => { if (d < minDays) minDays = d; });
+
+    // Libera a folga somente no mês com MENOS dias de gozo (mês secundário).
+    // Em caso de empate, mantém comportamento conservador (não libera).
+    return !(currentMonthDays === minDays && currentMonthDays < (Math.max(...daysByMonth.values())));
   };
 
-  const hasFullMonthVacation = (colabId: string): boolean => {
+  const hasVacationInMonth = (colabId: string): boolean => {
     if (!configMap.FOLGAS_BLOQUEAR_MES_FERIAS) return false;
-    const vacationDays = countVacationDaysInMonth(colabId);
-    const daysInMonth = getDaysInMonth(new Date(year, month - 1));
-    return vacationDays > daysInMonth / 2;
+    return countVacationDaysInMonth(colabId) > 0;
   };
 
   const isInExperiencePeriod = (colab: Colaborador): boolean => {
@@ -455,11 +457,13 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
         exclusionReasons.set(colab.id, "Período de experiência");
       } else if (hasPerda(colab.id)) {
         exclusionReasons.set(colab.id, "Perda registrada");
-      } else if (hasFullMonthVacation(colab.id)) {
-        const isExcecao = feriasAtivas.some(f => f.colaborador_id === colab.id && f.is_excecao);
-        exclusionReasons.set(colab.id, isExcecao ? "Férias no mês (exceção)" : "Férias no mês");
-      } else if (shouldSkipDueToTwoMonthVacation(colab.id)) {
-        exclusionReasons.set(colab.id, "Folga no outro mês (férias dividida)");
+      } else if (hasVacationInMonth(colab.id)) {
+        // Se as férias se dividem entre meses e este é o mês secundário (menos dias),
+        // libera a folga. Caso contrário, exclui.
+        if (!shouldSkipDueToTwoMonthVacation(colab.id)) {
+          const isExcecao = feriasAtivas.some(f => f.colaborador_id === colab.id && f.is_excecao);
+          exclusionReasons.set(colab.id, isExcecao ? "Férias no mês (exceção)" : "Férias no mês");
+        }
       }
     });
 
