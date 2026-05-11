@@ -205,17 +205,25 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
   const { data: feriasAtivas = [] } = useQuery({
     queryKey: ["ferias-ativas-gerador", year, month],
     queryFn: async () => {
-      const monthStart = format(startOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
-      const monthEnd = format(endOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
-      
+      // Janela ampla: mês anterior, mês atual e mês posterior.
+      // Necessário para detectar férias que atravessam meses (ex.: começa em maio e termina em junho).
+      // A sobreposição real é calculada no client usando os intervalos reais de gozo
+      // (gozo_diferente, gozo_flexivel via ferias_gozo_periodos).
+      const windowStart = format(startOfMonth(new Date(year, month - 2)), "yyyy-MM-dd");
+      const windowEnd = format(endOfMonth(new Date(year, month)), "yyyy-MM-dd");
+
       const { data, error } = await supabase
         .from("ferias_ferias")
         .select("id, colaborador_id, quinzena1_inicio, quinzena1_fim, quinzena2_inicio, quinzena2_fim, gozo_diferente, gozo_quinzena1_inicio, gozo_quinzena1_fim, gozo_quinzena2_inicio, gozo_quinzena2_fim, is_excecao, status, gozo_flexivel")
-        .or(`quinzena1_inicio.lte.${monthEnd},quinzena2_fim.gte.${monthStart}`)
+        // Sobreposição real: férias.inicio <= janela.fim E férias.fim >= janela.inicio.
+        // Usamos quinzena1_inicio e COALESCE(quinzena2_fim, quinzena1_fim) via dois filtros AND
+        // para evitar problemas com .or().
+        .lte("quinzena1_inicio", windowEnd)
+        .or(`quinzena2_fim.gte.${windowStart},quinzena1_fim.gte.${windowStart}`)
         // Bloqueia folga para QUALQUER férias agendada/em curso (incluindo "pendente" e exceções).
         // Só liberamos quando a férias está em estado terminal: cancelada, reprovada ou concluída.
         .not("status", "in", '("cancelada","reprovada","concluida")');
-      
+
       if (error) throw error;
       return data as FeriasAtivas[];
     },
@@ -353,13 +361,9 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     return totalDays;
   };
 
-  const shouldSkipDueToTwoMonthVacation = (colabId: string): boolean => {
-    if (!configMap.FOLGAS_FERIAS_DOIS_MESES) return false;
-
-    const currentMonthDays = countVacationDaysInMonth(colabId);
-    if (currentMonthDays === 0) return false;
-
-    // Mapa: "yyyy-MM" -> dias de gozo naquele mês (somando todas as férias do colaborador)
+  // Conta dias de gozo (descanso) de um colaborador em CADA mês onde há gozo.
+  // Chave: "yyyy-MM" -> total de dias.
+  const getVacationDaysByMonth = (colabId: string): Map<string, number> => {
     const daysByMonth = new Map<string, number>();
     feriasAtivas.forEach(ferias => {
       if (ferias.colaborador_id !== colabId) return;
@@ -377,22 +381,44 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
         }
       });
     });
-
-    // Se as férias estão em um único mês, não há "mês secundário" — não libera.
-    if (daysByMonth.size <= 1) return false;
-
-    // Encontra o menor número de dias entre todos os meses com gozo
-    let minDays = Infinity;
-    daysByMonth.forEach(d => { if (d < minDays) minDays = d; });
-
-    // Libera a folga somente no mês com MENOS dias de gozo (mês secundário).
-    // Em caso de empate, mantém comportamento conservador (não libera).
-    return !(currentMonthDays === minDays && currentMonthDays < (Math.max(...daysByMonth.values())));
+    return daysByMonth;
   };
 
-  const hasVacationInMonth = (colabId: string): boolean => {
+  // Decide se o colaborador deve ser BLOQUEADO no mês corrente por estar de férias.
+  // Regras:
+  //  - sem gozo no mês corrente: NÃO bloqueia.
+  //  - gozo só em um mês: BLOQUEIA esse mês.
+  //  - gozo dividido entre 2+ meses: BLOQUEIA o(s) mês(es) com mais dias e
+  //    LIBERA apenas o mês com MENOS dias (mês secundário). Empate: bloqueia.
+  const shouldBlockVacationMonth = (colabId: string): boolean => {
     if (!configMap.FOLGAS_BLOQUEAR_MES_FERIAS) return false;
-    return countVacationDaysInMonth(colabId) > 0;
+
+    const daysByMonth = getVacationDaysByMonth(colabId);
+    const currentKey = format(startOfMonth(new Date(year, month - 1)), "yyyy-MM");
+    const currentMonthDays = daysByMonth.get(currentKey) || 0;
+
+    if (currentMonthDays === 0) return false; // sem férias no mês corrente
+
+    // Se a configuração de "dois meses" está desligada, sempre bloqueia.
+    if (!configMap.FOLGAS_FERIAS_DOIS_MESES) return true;
+
+    // Apenas um mês com gozo: bloqueia.
+    if (daysByMonth.size <= 1) return true;
+
+    const values = Array.from(daysByMonth.values());
+    const minDays = Math.min(...values);
+    const maxDays = Math.max(...values);
+
+    // Empate (todos os meses com mesmo número de dias): conservador, bloqueia.
+    if (minDays === maxDays) return true;
+
+    // Conta quantos meses têm o valor mínimo. Se houver empate no mínimo,
+    // não há um único "mês secundário" claro -> bloqueia.
+    const monthsWithMin = values.filter(v => v === minDays).length;
+    if (monthsWithMin > 1) return true;
+
+    // Libera apenas se o mês corrente é o ÚNICO com o menor número de dias.
+    return currentMonthDays !== minDays;
   };
 
   const isInExperiencePeriod = (colab: Colaborador): boolean => {
@@ -457,13 +483,15 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
         exclusionReasons.set(colab.id, "Período de experiência");
       } else if (hasPerda(colab.id)) {
         exclusionReasons.set(colab.id, "Perda registrada");
-      } else if (hasVacationInMonth(colab.id)) {
-        // Se as férias se dividem entre meses e este é o mês secundário (menos dias),
-        // libera a folga. Caso contrário, exclui.
-        if (!shouldSkipDueToTwoMonthVacation(colab.id)) {
-          const isExcecao = feriasAtivas.some(f => f.colaborador_id === colab.id && f.is_excecao);
-          exclusionReasons.set(colab.id, isExcecao ? "Férias no mês (exceção)" : "Férias no mês");
-        }
+      } else if (shouldBlockVacationMonth(colab.id)) {
+        // Bloqueia se há férias no mês corrente E não é o mês secundário
+        // (mês com menos dias quando férias atravessam dois meses).
+        const isExcecao = feriasAtivas.some(f => f.colaborador_id === colab.id && f.is_excecao);
+        const daysByMonth = getVacationDaysByMonth(colab.id);
+        const motivo = daysByMonth.size > 1
+          ? "Férias no mês (mês principal)"
+          : (isExcecao ? "Férias no mês (exceção)" : "Férias no mês");
+        exclusionReasons.set(colab.id, motivo);
       }
     });
 

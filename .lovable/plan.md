@@ -1,56 +1,54 @@
-## Objetivo
+## Diagnóstico
 
-Adicionar, na aba **Gantt** do calendário de férias (`viewMode === "gantt"` em `CalendarioFeriasTab`), um botão **"Gerar PDF"** que exporta o Gantt de **um mês** (mês selecionado, com ano vigente em `ganttYear`).
+O problema atual está no `GeradorFolgasDialog.tsx`, na consulta e na regra que decide se o colaborador deve ser bloqueado por férias no mês.
 
-## Mudanças
+Principais falhas encontradas:
 
-### 1. Novo arquivo: `src/components/ferias/calendario/GanttFeriasPDFGenerator.tsx`
+1. **Filtro Supabase incorreto para férias do mês**
+   - A consulta usa:
+     ```ts
+     .or(`quinzena1_inicio.lte.${monthEnd},quinzena2_fim.gte.${monthStart}`)
+     ```
+   - Isso é um `OU`, não uma checagem real de sobreposição.
+   - Resultado: pode trazer férias fora do mês e também pode deixar passar férias relevantes dependendo de `quinzena2_fim`, campos nulos, gozo diferente ou subperíodos.
 
-Componente isolado que recebe:
-- `ferias: Ferias[]` (já filtradas, com `_gozoPeriodos`)
-- `year: number`
-- `month: number` (1–12)
+2. **A regra de “férias em dois meses” está invertida no nome/efeito**
+   - A função `shouldSkipDueToTwoMonthVacation` retorna `false` justamente quando deveria bloquear e `true` quando deveria liberar, o que deixa a leitura propensa a erro.
+   - Para Gabriella, o esperado é: se a maior parte das férias foi em maio e poucos dias em junho, ela deve poder entrar no preview de junho.
+   - Para Luciano/Rejane/Amally, se têm férias majoritárias ou normais em junho, devem ser excluídos.
 
-Comportamento:
-- Botão `<Button variant="outline" size="sm">` com ícone `Download` e label **"Gerar PDF do mês"**.
-- Ao clicar, abre um pequeno popover/dropdown com os 12 meses (Janeiro–Dezembro) baseados em `ganttYear` para o usuário escolher qual mês exportar — assim o PDF é sempre **um mês**, mesmo se o Gantt estiver mostrando vários ou o ano inteiro.
-  - Alternativa mais simples: usar `Select` inline com os 12 meses, default = mês atual selecionado no Gantt. (Vamos por essa para evitar dependência de Popover.)
-- Geração via `jsPDF` (já usado em `FolgasPDFGenerator.tsx`):
-  - Orientação **paisagem** (`landscape`), formato A4.
-  - Cabeçalho: "Calendário de Férias — {Mês Por extenso} {ano}".
-  - Subcabeçalho: data de geração, total de colaboradores.
-  - Tabela Gantt:
-    - Coluna fixa à esquerda: nome do colaborador + setor/unidade.
-    - Cabeçalho com dias do mês (1..N).
-    - Linhas com barras horizontais coloridas por setor (mesma paleta `SETOR_COLORS` do `GanttFeriasView`), preenchendo as células dos dias do gozo.
-    - Fins de semana com fundo cinza claro.
-    - Sobreposições no mesmo setor: borda direita vermelha + ponto vermelho ao lado do nome.
-  - Rodapé: numeração de página `Página X de Y`.
-- Filtra `ferias` para mostrar apenas quem tem **gozo dentro do mês**.
-- Salva como `ferias-gantt-{ano}-{mes2digitos}.pdf`.
+3. **Busca depende demais dos campos agregados das quinzenas**
+   - O cálculo final usa `getGozoRanges`, que é correto, mas a consulta inicial pode não trazer todos os registros necessários para o cálculo.
+   - A forma mais segura é buscar férias ativas de forma mais ampla no ano/meses próximos e fazer a sobreposição real no client usando os intervalos reais de gozo.
 
-### 2. Edição: `src/components/ferias/calendario/CalendarioFeriasTab.tsx`
+## Plano de correção
 
-- Importar `GanttFeriasPDFGenerator`.
-- Dentro do bloco `viewMode === "gantt"` (logo antes do `<GanttFeriasView>`, na mesma faixa de filtros ou em um header acima do Gantt), renderizar:
-  ```tsx
-  <GanttFeriasPDFGenerator
-    ferias={feriasFiltradas}
-    year={ganttYear}
-    month={/* default */}
-  />
-  ```
-- O default de mês passado ao componente: primeiro mês selecionado em `ganttMonths` (parseado), ou mês atual de `calendarMonth` se nenhum for selecionado, ou mês atual real se "year" estiver ativo. O `Select` interno do componente permite o usuário trocar antes de gerar.
+1. **Substituir a consulta de férias do gerador de folgas**
+   - Buscar férias não canceladas/reprovadas em uma janela segura ao redor do mês selecionado.
+   - Incluir todos os campos necessários de gozo normal, gozo diferente e gozo flexível.
+   - Evitar o `.or()` atual que não representa sobreposição real.
 
-## Detalhes técnicos
+2. **Criar helpers explícitos para a regra de férias**
+   - `getVacationDaysByMonth(colabId)` para contar dias reais de gozo por mês.
+   - `isSecondaryMonthForTwoMonthVacation(colabId)` para dizer claramente se o mês atual é o mês com menos dias.
+   - `shouldBlockVacationMonth(colabId)` para centralizar a decisão:
+     - sem férias no mês: não bloqueia;
+     - férias só em um mês: bloqueia;
+     - férias em dois meses: bloqueia no mês com mais dias e libera no mês com menos dias;
+     - empate: bloqueia por segurança.
 
-- **Reuso**: copiar a lógica de `getGozoIntervals`, `setorColorMap` e detecção de overlaps do próprio `GanttFeriasView.tsx` para o gerador (extrair também não é necessário; manter local mantém o componente autocontido).
-- **Cálculo de larguras** no PDF: `pageWidth - margem - colNomes` dividido por número de dias do mês.
-- **Fontes**: jsPDF padrão (helvetica), tamanhos 7–9 pt para caber.
-- **Sem mudanças** em schema, RLS, queries ou demais abas.
+3. **Aplicar a regra no preview**
+   - Excluir quem estiver de férias no mês principal.
+   - Liberar quem tiver férias atravessando dois meses apenas no mês secundário.
+   - Manter as demais regras existentes: experiência, perda registrada, afastamento, familiares, chefes e distribuição.
 
-## Não-alterações
+4. **Melhorar o motivo exibido no preview**
+   - Quando bloquear por férias, exibir motivo mais claro, por exemplo:
+     - `Férias no mês`
+     - `Férias no mês principal`
+   - Isso ajuda a conferir por que Gabriella foi liberada ou bloqueada.
 
-- A view Gantt na tela continua idêntica.
-- Nenhuma outra aba é tocada.
-- Sem nova dependência (jsPDF já está no projeto).
+5. **Validar sem alterar banco de dados**
+   - Não será necessária migration.
+   - Validar a lógica por inspeção/checagem local do TypeScript e do fluxo do componente.
+   - Se possível, usar os dados visíveis no preview depois da implementação para confirmar que Luciano/Rejane/Amally saem e Gabriella entra em junho.
