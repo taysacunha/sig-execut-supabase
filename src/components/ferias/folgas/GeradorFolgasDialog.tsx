@@ -205,17 +205,25 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
   const { data: feriasAtivas = [] } = useQuery({
     queryKey: ["ferias-ativas-gerador", year, month],
     queryFn: async () => {
-      const monthStart = format(startOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
-      const monthEnd = format(endOfMonth(new Date(year, month - 1)), "yyyy-MM-dd");
-      
+      // Janela ampla: mês anterior, mês atual e mês posterior.
+      // Necessário para detectar férias que atravessam meses (ex.: começa em maio e termina em junho).
+      // A sobreposição real é calculada no client usando os intervalos reais de gozo
+      // (gozo_diferente, gozo_flexivel via ferias_gozo_periodos).
+      const windowStart = format(startOfMonth(new Date(year, month - 2)), "yyyy-MM-dd");
+      const windowEnd = format(endOfMonth(new Date(year, month)), "yyyy-MM-dd");
+
       const { data, error } = await supabase
         .from("ferias_ferias")
         .select("id, colaborador_id, quinzena1_inicio, quinzena1_fim, quinzena2_inicio, quinzena2_fim, gozo_diferente, gozo_quinzena1_inicio, gozo_quinzena1_fim, gozo_quinzena2_inicio, gozo_quinzena2_fim, is_excecao, status, gozo_flexivel")
-        .or(`quinzena1_inicio.lte.${monthEnd},quinzena2_fim.gte.${monthStart}`)
+        // Sobreposição real: férias.inicio <= janela.fim E férias.fim >= janela.inicio.
+        // Usamos quinzena1_inicio e COALESCE(quinzena2_fim, quinzena1_fim) via dois filtros AND
+        // para evitar problemas com .or().
+        .lte("quinzena1_inicio", windowEnd)
+        .or(`quinzena2_fim.gte.${windowStart},quinzena1_fim.gte.${windowStart}`)
         // Bloqueia folga para QUALQUER férias agendada/em curso (incluindo "pendente" e exceções).
         // Só liberamos quando a férias está em estado terminal: cancelada, reprovada ou concluída.
         .not("status", "in", '("cancelada","reprovada","concluida")');
-      
+
       if (error) throw error;
       return data as FeriasAtivas[];
     },
