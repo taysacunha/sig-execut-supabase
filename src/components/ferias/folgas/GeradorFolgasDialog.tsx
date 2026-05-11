@@ -361,13 +361,9 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     return totalDays;
   };
 
-  const shouldSkipDueToTwoMonthVacation = (colabId: string): boolean => {
-    if (!configMap.FOLGAS_FERIAS_DOIS_MESES) return false;
-
-    const currentMonthDays = countVacationDaysInMonth(colabId);
-    if (currentMonthDays === 0) return false;
-
-    // Mapa: "yyyy-MM" -> dias de gozo naquele mês (somando todas as férias do colaborador)
+  // Conta dias de gozo (descanso) de um colaborador em CADA mês onde há gozo.
+  // Chave: "yyyy-MM" -> total de dias.
+  const getVacationDaysByMonth = (colabId: string): Map<string, number> => {
     const daysByMonth = new Map<string, number>();
     feriasAtivas.forEach(ferias => {
       if (ferias.colaborador_id !== colabId) return;
@@ -385,22 +381,44 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
         }
       });
     });
-
-    // Se as férias estão em um único mês, não há "mês secundário" — não libera.
-    if (daysByMonth.size <= 1) return false;
-
-    // Encontra o menor número de dias entre todos os meses com gozo
-    let minDays = Infinity;
-    daysByMonth.forEach(d => { if (d < minDays) minDays = d; });
-
-    // Libera a folga somente no mês com MENOS dias de gozo (mês secundário).
-    // Em caso de empate, mantém comportamento conservador (não libera).
-    return !(currentMonthDays === minDays && currentMonthDays < (Math.max(...daysByMonth.values())));
+    return daysByMonth;
   };
 
-  const hasVacationInMonth = (colabId: string): boolean => {
+  // Decide se o colaborador deve ser BLOQUEADO no mês corrente por estar de férias.
+  // Regras:
+  //  - sem gozo no mês corrente: NÃO bloqueia.
+  //  - gozo só em um mês: BLOQUEIA esse mês.
+  //  - gozo dividido entre 2+ meses: BLOQUEIA o(s) mês(es) com mais dias e
+  //    LIBERA apenas o mês com MENOS dias (mês secundário). Empate: bloqueia.
+  const shouldBlockVacationMonth = (colabId: string): boolean => {
     if (!configMap.FOLGAS_BLOQUEAR_MES_FERIAS) return false;
-    return countVacationDaysInMonth(colabId) > 0;
+
+    const daysByMonth = getVacationDaysByMonth(colabId);
+    const currentKey = format(startOfMonth(new Date(year, month - 1)), "yyyy-MM");
+    const currentMonthDays = daysByMonth.get(currentKey) || 0;
+
+    if (currentMonthDays === 0) return false; // sem férias no mês corrente
+
+    // Se a configuração de "dois meses" está desligada, sempre bloqueia.
+    if (!configMap.FOLGAS_FERIAS_DOIS_MESES) return true;
+
+    // Apenas um mês com gozo: bloqueia.
+    if (daysByMonth.size <= 1) return true;
+
+    const values = Array.from(daysByMonth.values());
+    const minDays = Math.min(...values);
+    const maxDays = Math.max(...values);
+
+    // Empate (todos os meses com mesmo número de dias): conservador, bloqueia.
+    if (minDays === maxDays) return true;
+
+    // Conta quantos meses têm o valor mínimo. Se houver empate no mínimo,
+    // não há um único "mês secundário" claro -> bloqueia.
+    const monthsWithMin = values.filter(v => v === minDays).length;
+    if (monthsWithMin > 1) return true;
+
+    // Libera apenas se o mês corrente é o ÚNICO com o menor número de dias.
+    return currentMonthDays !== minDays;
   };
 
   const isInExperiencePeriod = (colab: Colaborador): boolean => {
