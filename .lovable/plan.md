@@ -1,38 +1,54 @@
-## Objetivo
+## Problema
 
-Criar uma página de Ajuda para o sistema de Férias e Folgas, no mesmo estilo do `Help.tsx` já existente em Plantões — com explicações detalhadas de cada módulo, passo a passo de cadastros, atualizações, visualizações e dicas de uso.
+No `src/components/ferias/folgas/GeradorFolgasDialog.tsx`, duas regras de exclusão por férias estão incorretas — produzindo o oposto do esperado.
 
-## Arquivos
+### Bug 1 — Colaboradores em férias aparecem no preview (Luciano, Rejane, Amally...)
 
-**Novo:**
-- `src/pages/ferias/FeriasHelp.tsx` — página com Tabs cobrindo cada área do módulo.
+A função `hasFullMonthVacation` só bloqueia o colaborador se ele tiver **mais da metade do mês** em férias:
 
-**Editados:**
-- `src/App.tsx` — registrar lazy import e rota `/ferias/ajuda`.
-- `src/components/FeriasSidebar.tsx` — adicionar item "Ajuda" no menu (ícone `HelpCircle`), visível para qualquer usuário com acesso ao sistema "ferias".
+```ts
+return vacationDays > daysInMonth / 2;
+```
 
-## Estrutura da página (abas)
+Resultado: quem tira ~15 dias (uma quinzena) num mês de 30 dias **não é bloqueado** e entra no preview, mesmo estando de férias naquele mês.
 
-Seguindo exatamente o padrão visual do `Help.tsx` de Plantões (Tabs + Cards + Alerts + Badges + ícones lucide, container `max-w-5xl`, tokens semânticos do design system):
+### Bug 2 — Gabriella (férias em maio com pequena sobra em junho) não aparece em junho
 
-1. **Visão Geral** — o que é o sistema, papéis (super_admin/admin/manager/supervisor/collaborator), fluxo recomendado de uso.
-2. **Dashboard** — indicadores exibidos, como interpretar pendências e alertas.
-3. **Colaboradores** — cadastro completo (campos obrigatórios, vínculo com unidade/setor/cargo/equipe), edição, visualização (botão olho), inativação, importação/aniversário, afastamentos.
-4. **Estrutura** — abas Unidades, Setores, Cargos, Equipes: criar/editar/visualizar, vínculos entre entidades, regras de inativação.
-5. **Períodos Aquisitivos e Férias** — como funcionam os períodos aquisitivos, geração automática, lançamento manual, redução de férias, exceções de períodos, quitação de período, validações de sobreposição/conflitos, gerador em lote.
-6. **Folgas de Sábado** — gerador de folgas, mover folga (individual e em lote), trocar, perda de folga, remover, impressão/PDF, quadro de setores nos sábados.
-7. **Calendário** — abas de férias, folgas e aniversariantes; visão Gantt; filtros.
-8. **Aniversariantes** — listagem, geração de PDF padrão e versão "celebre".
-9. **Relatórios** — Consulta Geral, Contador, Exceções, Formulário Anual; exportação PDF.
-10. **Créditos** — créditos de férias e folgas, como utilizar, regras de prescrição.
-11. **Configurações** — abas Quinzenas, Feriados, Folgas, Regras, Avançado.
-12. **Perfil, Usuários e Auditoria** — alteração de senha, gestão de acessos, leitura dos logs (com os filtros novos de data/módulo/limite).
+A função `shouldSkipDueToTwoMonthVacation` está **invertida**:
 
-Cada aba terá: descrição da funcionalidade, passo a passo numerado ("Como cadastrar", "Como editar", "Como visualizar"), `Alert` com dicas/avisos importantes, e referência aos botões/ícones reais da interface.
+```ts
+// Pula folga apenas no mês atual se ele NÃO é o que tem mais dias
+return maxDays > currentMonthDays;
+```
 
-## Notas técnicas
+Hoje, se o colaborador tem mais dias de férias em **outro** mês, ele é excluído do mês atual. Para Gabriella (maioria em maio, ponta em junho), maio > junho → ela é **excluída de junho**. O correto é o oposto: ela deve **receber** a folga no mês onde tem **menos** sobreposição (junho), justamente porque lá ela tem sábados livres.
 
-- 100% frontend, sem alterações de schema, RLS ou lógica de negócio.
-- Reutilizar componentes shadcn já usados em `Help.tsx` (Card, Tabs, Alert, Badge, Separator).
-- Conteúdo em PT-BR.
-- Antes de escrever cada aba, vou consultar rapidamente os componentes/diálogos correspondentes em `src/components/ferias/**` e as páginas em `src/pages/ferias/**` para descrever fielmente os campos, botões e fluxos reais — evitando inventar funcionalidades.
+## Correção
+
+Unificar a regra de "férias no mês" para um único critério:
+
+1. **Se o colaborador tem férias somente em 1 mês** → bloquear folga nesse mês (qualquer quantidade de dias de gozo, não só >50%).
+2. **Se as férias se dividem em 2 meses** → conceder a folga **no mês com menos dias de gozo** (ou seja, bloquear apenas no mês com mais dias). Empate: bloquear o mês atual (mantém comportamento conservador).
+
+### Mudanças no código
+
+Arquivo único: `src/components/ferias/folgas/GeradorFolgasDialog.tsx`
+
+- **Substituir** `hasFullMonthVacation` por `hasVacationInMonth` que retorna `true` sempre que `countVacationDaysInMonth(colabId) > 0` (respeitando a flag `FOLGAS_BLOQUEAR_MES_FERIAS`).
+- **Inverter** `shouldSkipDueToTwoMonthVacation` para retornar `true` quando o mês atual tem **mais ou igual** dias de gozo que os outros meses (ou seja, "este é o mês 'principal' das férias"). Caso contrário, retornar `false` para liberar a folga.
+- Ajustar a ordem de checagem no `Step 1` (`exclusionReasons`) para:
+  - Primeiro `hasVacationInMonth` → se falso, não há nada a checar.
+  - Se verdadeiro, checar `shouldSkipDueToTwoMonthVacation`: se for o mês secundário (menos dias), **liberar** (não excluir); senão, excluir com motivo "Férias no mês".
+- Manter a flag `FOLGAS_FERIAS_DOIS_MESES`: quando desligada, sempre bloquear se houver qualquer dia de férias no mês.
+- Mensagens de exclusão ajustadas para refletir a nova lógica ("Férias no mês" / "Férias no mês (exceção)").
+
+### Resultado esperado
+
+- Luciano, Rejane, Amally (férias inteiramente dentro de junho ou maioria em junho) → **excluídos** do preview de junho.
+- Gabriella (maio principal, junho secundário) → **incluída** no preview de junho.
+
+### Não-alterações
+
+- Sem mudanças de schema, RLS ou outras telas.
+- A regra de exceção (`is_excecao`) e os afastamentos continuam exatamente como estão.
+- O algoritmo de alocação (Steps 4–7) não é tocado.
