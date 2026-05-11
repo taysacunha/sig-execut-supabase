@@ -1,17 +1,15 @@
-## Problema
+## Plano
 
-Após reorganizar o `DialogContent` como `flex flex-col`, o scroll interno parou de funcionar — provavelmente porque o `DialogContent` do shadcn aplica seus próprios paddings/grid e o filho `flex-1 min-h-0` não está recebendo a altura esperada.
+1. Ajustar o layout do `GeradorFolgasDialog` para garantir altura fixa calculável no estado de preview.
+   - Trocar o `max-h-[90vh]` isolado por uma altura explícita do diálogo, mantendo limite responsivo.
+   - Preservar o header e o rodapé fixos.
 
-## Correção
+2. Corrigir a área central do preview para ser a única região rolável.
+   - Envolver a lista/accordion dos setores em um contêiner com `min-h-0`, `flex-1` e `overflow-hidden`.
+   - Garantir que o `ScrollArea` receba altura real (`h-full`) para que o viewport interno consiga rolar.
 
-Em `src/components/ferias/folgas/GeradorFolgasDialog.tsx`:
+3. Manter os alertas fora do fluxo principal do preview.
+   - Preservar o botão/popover “Ver alertas”, sem recolocar a div de alertas ocupando espaço vertical.
 
-1. Manter o `DialogContent` com `max-h-[90vh] flex flex-col overflow-hidden`.
-2. Garantir que o container interno (tanto o estado inicial quanto o de preview) seja:
-   - `flex-1 min-h-0` para herdar a altura disponível, e
-   - tenha um wrapper rolável próprio com `overflow-y-auto` quando necessário.
-3. No estado de preview, envolver a `ScrollArea` da tabela em um wrapper `flex-1 min-h-0` e dar à `ScrollArea` `h-full` (em vez de `flex-1`), pois o `ScrollArea` do Radix precisa de altura concreta para ativar o scroll interno.
-4. No estado inicial (configuração), trocar `overflow-auto flex-1 min-h-0` por um wrapper `flex-1 min-h-0 overflow-y-auto` claro, para restabelecer o scroll do conteúdo de configuração quando ultrapassa a altura.
-5. Manter `DialogHeader` e `DialogFooter` como `flex-shrink-0`.
-
-Sem mudanças de lógica, regras ou banco — apenas layout.
+4. Validar o resultado no viewport atual.
+   - Confirmar que, após gerar preview, Administração/Apoio e os demais setores ficam acessíveis por scroll, enquanto “Voltar” e “Salvar folgas” permanecem visíveis.
