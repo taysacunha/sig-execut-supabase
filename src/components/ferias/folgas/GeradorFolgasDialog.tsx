@@ -483,13 +483,15 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
         exclusionReasons.set(colab.id, "Período de experiência");
       } else if (hasPerda(colab.id)) {
         exclusionReasons.set(colab.id, "Perda registrada");
-      } else if (hasVacationInMonth(colab.id)) {
-        // Se as férias se dividem entre meses e este é o mês secundário (menos dias),
-        // libera a folga. Caso contrário, exclui.
-        if (!shouldSkipDueToTwoMonthVacation(colab.id)) {
-          const isExcecao = feriasAtivas.some(f => f.colaborador_id === colab.id && f.is_excecao);
-          exclusionReasons.set(colab.id, isExcecao ? "Férias no mês (exceção)" : "Férias no mês");
-        }
+      } else if (shouldBlockVacationMonth(colab.id)) {
+        // Bloqueia se há férias no mês corrente E não é o mês secundário
+        // (mês com menos dias quando férias atravessam dois meses).
+        const isExcecao = feriasAtivas.some(f => f.colaborador_id === colab.id && f.is_excecao);
+        const daysByMonth = getVacationDaysByMonth(colab.id);
+        const motivo = daysByMonth.size > 1
+          ? "Férias no mês (mês principal)"
+          : (isExcecao ? "Férias no mês (exceção)" : "Férias no mês");
+        exclusionReasons.set(colab.id, motivo);
       }
     });
 
