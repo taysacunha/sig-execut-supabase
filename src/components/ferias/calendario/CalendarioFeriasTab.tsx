@@ -14,6 +14,7 @@ import { Calendar as CalendarIcon, AlertCircle, Users, Palmtree, BarChart3, List
 import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, eachDayOfInterval, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { GanttFeriasView } from "./GanttFeriasView";
+import { GanttFeriasPDFGenerator } from "./GanttFeriasPDFGenerator";
 import { getYearOptions } from "@/lib/dateUtils";
 import { MultiSelect } from "@/components/ui/multi-select";
 
@@ -644,6 +645,18 @@ export function CalendarioFeriasTab() {
         </Card>
       </div>
       ) : (
+        <>
+        <div className="flex justify-end">
+          <GanttFeriasPDFGenerator
+            ferias={feriasFiltradas}
+            year={ganttYear}
+            defaultMonth={(() => {
+              const nums = ganttMonths.filter((m) => m !== "year").map(Number).filter((n) => !isNaN(n));
+              if (nums.length > 0) return Math.min(...nums) + 1;
+              return calendarMonth.getMonth() + 1;
+            })()}
+          />
+        </div>
         <GanttFeriasView
           ferias={feriasGantt}
           startDate={ganttRange.start}
@@ -653,6 +666,7 @@ export function CalendarioFeriasTab() {
             setDetailsOpen(true);
           }}
         />
+        </>
       )}
 
       {/* Dialog de detalhes */}
