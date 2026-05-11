@@ -1,54 +1,56 @@
-## Problema
+## Objetivo
 
-No `src/components/ferias/folgas/GeradorFolgasDialog.tsx`, duas regras de exclusão por férias estão incorretas — produzindo o oposto do esperado.
+Adicionar, na aba **Gantt** do calendário de férias (`viewMode === "gantt"` em `CalendarioFeriasTab`), um botão **"Gerar PDF"** que exporta o Gantt de **um mês** (mês selecionado, com ano vigente em `ganttYear`).
 
-### Bug 1 — Colaboradores em férias aparecem no preview (Luciano, Rejane, Amally...)
+## Mudanças
 
-A função `hasFullMonthVacation` só bloqueia o colaborador se ele tiver **mais da metade do mês** em férias:
+### 1. Novo arquivo: `src/components/ferias/calendario/GanttFeriasPDFGenerator.tsx`
 
-```ts
-return vacationDays > daysInMonth / 2;
-```
+Componente isolado que recebe:
+- `ferias: Ferias[]` (já filtradas, com `_gozoPeriodos`)
+- `year: number`
+- `month: number` (1–12)
 
-Resultado: quem tira ~15 dias (uma quinzena) num mês de 30 dias **não é bloqueado** e entra no preview, mesmo estando de férias naquele mês.
+Comportamento:
+- Botão `<Button variant="outline" size="sm">` com ícone `Download` e label **"Gerar PDF do mês"**.
+- Ao clicar, abre um pequeno popover/dropdown com os 12 meses (Janeiro–Dezembro) baseados em `ganttYear` para o usuário escolher qual mês exportar — assim o PDF é sempre **um mês**, mesmo se o Gantt estiver mostrando vários ou o ano inteiro.
+  - Alternativa mais simples: usar `Select` inline com os 12 meses, default = mês atual selecionado no Gantt. (Vamos por essa para evitar dependência de Popover.)
+- Geração via `jsPDF` (já usado em `FolgasPDFGenerator.tsx`):
+  - Orientação **paisagem** (`landscape`), formato A4.
+  - Cabeçalho: "Calendário de Férias — {Mês Por extenso} {ano}".
+  - Subcabeçalho: data de geração, total de colaboradores.
+  - Tabela Gantt:
+    - Coluna fixa à esquerda: nome do colaborador + setor/unidade.
+    - Cabeçalho com dias do mês (1..N).
+    - Linhas com barras horizontais coloridas por setor (mesma paleta `SETOR_COLORS` do `GanttFeriasView`), preenchendo as células dos dias do gozo.
+    - Fins de semana com fundo cinza claro.
+    - Sobreposições no mesmo setor: borda direita vermelha + ponto vermelho ao lado do nome.
+  - Rodapé: numeração de página `Página X de Y`.
+- Filtra `ferias` para mostrar apenas quem tem **gozo dentro do mês**.
+- Salva como `ferias-gantt-{ano}-{mes2digitos}.pdf`.
 
-### Bug 2 — Gabriella (férias em maio com pequena sobra em junho) não aparece em junho
+### 2. Edição: `src/components/ferias/calendario/CalendarioFeriasTab.tsx`
 
-A função `shouldSkipDueToTwoMonthVacation` está **invertida**:
+- Importar `GanttFeriasPDFGenerator`.
+- Dentro do bloco `viewMode === "gantt"` (logo antes do `<GanttFeriasView>`, na mesma faixa de filtros ou em um header acima do Gantt), renderizar:
+  ```tsx
+  <GanttFeriasPDFGenerator
+    ferias={feriasFiltradas}
+    year={ganttYear}
+    month={/* default */}
+  />
+  ```
+- O default de mês passado ao componente: primeiro mês selecionado em `ganttMonths` (parseado), ou mês atual de `calendarMonth` se nenhum for selecionado, ou mês atual real se "year" estiver ativo. O `Select` interno do componente permite o usuário trocar antes de gerar.
 
-```ts
-// Pula folga apenas no mês atual se ele NÃO é o que tem mais dias
-return maxDays > currentMonthDays;
-```
+## Detalhes técnicos
 
-Hoje, se o colaborador tem mais dias de férias em **outro** mês, ele é excluído do mês atual. Para Gabriella (maioria em maio, ponta em junho), maio > junho → ela é **excluída de junho**. O correto é o oposto: ela deve **receber** a folga no mês onde tem **menos** sobreposição (junho), justamente porque lá ela tem sábados livres.
+- **Reuso**: copiar a lógica de `getGozoIntervals`, `setorColorMap` e detecção de overlaps do próprio `GanttFeriasView.tsx` para o gerador (extrair também não é necessário; manter local mantém o componente autocontido).
+- **Cálculo de larguras** no PDF: `pageWidth - margem - colNomes` dividido por número de dias do mês.
+- **Fontes**: jsPDF padrão (helvetica), tamanhos 7–9 pt para caber.
+- **Sem mudanças** em schema, RLS, queries ou demais abas.
 
-## Correção
+## Não-alterações
 
-Unificar a regra de "férias no mês" para um único critério:
-
-1. **Se o colaborador tem férias somente em 1 mês** → bloquear folga nesse mês (qualquer quantidade de dias de gozo, não só >50%).
-2. **Se as férias se dividem em 2 meses** → conceder a folga **no mês com menos dias de gozo** (ou seja, bloquear apenas no mês com mais dias). Empate: bloquear o mês atual (mantém comportamento conservador).
-
-### Mudanças no código
-
-Arquivo único: `src/components/ferias/folgas/GeradorFolgasDialog.tsx`
-
-- **Substituir** `hasFullMonthVacation` por `hasVacationInMonth` que retorna `true` sempre que `countVacationDaysInMonth(colabId) > 0` (respeitando a flag `FOLGAS_BLOQUEAR_MES_FERIAS`).
-- **Inverter** `shouldSkipDueToTwoMonthVacation` para retornar `true` quando o mês atual tem **mais ou igual** dias de gozo que os outros meses (ou seja, "este é o mês 'principal' das férias"). Caso contrário, retornar `false` para liberar a folga.
-- Ajustar a ordem de checagem no `Step 1` (`exclusionReasons`) para:
-  - Primeiro `hasVacationInMonth` → se falso, não há nada a checar.
-  - Se verdadeiro, checar `shouldSkipDueToTwoMonthVacation`: se for o mês secundário (menos dias), **liberar** (não excluir); senão, excluir com motivo "Férias no mês".
-- Manter a flag `FOLGAS_FERIAS_DOIS_MESES`: quando desligada, sempre bloquear se houver qualquer dia de férias no mês.
-- Mensagens de exclusão ajustadas para refletir a nova lógica ("Férias no mês" / "Férias no mês (exceção)").
-
-### Resultado esperado
-
-- Luciano, Rejane, Amally (férias inteiramente dentro de junho ou maioria em junho) → **excluídos** do preview de junho.
-- Gabriella (maio principal, junho secundário) → **incluída** no preview de junho.
-
-### Não-alterações
-
-- Sem mudanças de schema, RLS ou outras telas.
-- A regra de exceção (`is_excecao`) e os afastamentos continuam exatamente como estão.
-- O algoritmo de alocação (Steps 4–7) não é tocado.
+- A view Gantt na tela continua idêntica.
+- Nenhuma outra aba é tocada.
+- Sem nova dependência (jsPDF já está no projeto).
