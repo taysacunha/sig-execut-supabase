@@ -1294,7 +1294,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] !flex flex-col overflow-hidden">
+      <DialogContent className="max-w-5xl h-[90vh] !flex flex-col overflow-hidden gap-4">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <RefreshCw className="h-5 w-5" />
@@ -1427,7 +1427,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
             </DialogFooter>
           </div>
         ) : (
-          <div className="space-y-4 flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden gap-4">
             <div className="flex items-center gap-4 flex-wrap flex-shrink-0">
               <Badge variant="secondary" className="gap-1">
                 <Building2 className="h-3 w-3" />
