@@ -1,54 +1,19 @@
-## Diagnóstico
+## Problema
 
-O problema atual está no `GeradorFolgasDialog.tsx`, na consulta e na regra que decide se o colaborador deve ser bloqueado por férias no mês.
+No dialog "Gerar Escala de Folgas - Todos os Setores", quando o preview é gerado, o bloco de alertas (`diagnosticMessage`) aparece no topo com texto longo. Como o `DialogContent` tem `max-h-[90vh]` mas o conteúdo interno usa altura fixa (`ScrollArea h-[400px]`), o alerta empurra o restante (badges, tabela, footer) para fora da área visível.
 
-Principais falhas encontradas:
+## Solução
 
-1. **Filtro Supabase incorreto para férias do mês**
-   - A consulta usa:
-     ```ts
-     .or(`quinzena1_inicio.lte.${monthEnd},quinzena2_fim.gte.${monthStart}`)
-     ```
-   - Isso é um `OU`, não uma checagem real de sobreposição.
-   - Resultado: pode trazer férias fora do mês e também pode deixar passar férias relevantes dependendo de `quinzena2_fim`, campos nulos, gozo diferente ou subperíodos.
+Reorganizar o layout do preview para que:
 
-2. **A regra de “férias em dois meses” está invertida no nome/efeito**
-   - A função `shouldSkipDueToTwoMonthVacation` retorna `false` justamente quando deveria bloquear e `true` quando deveria liberar, o que deixa a leitura propensa a erro.
-   - Para Gabriella, o esperado é: se a maior parte das férias foi em maio e poucos dias em junho, ela deve poder entrar no preview de junho.
-   - Para Luciano/Rejane/Amally, se têm férias majoritárias ou normais em junho, devem ser excluídos.
+1. O `DialogContent` use `flex flex-col` com `max-h-[90vh]`, garantindo que footer e tabela fiquem sempre visíveis.
+2. A `ScrollArea` da tabela passe a usar `flex-1 min-h-0` (em vez de `h-[400px]`), ocupando o espaço restante.
+3. O bloco de alertas deixe de ser um painel sempre expandido. Será substituído por um **Badge/Botão "Alertas (N)"** colocado na linha de badges do topo. Ao clicar, abre um **Popover** com o conteúdo dos alertas em uma área rolável (`max-h-64 overflow-auto`).
+   - Se não houver alertas, o badge não aparece.
+   - O conteúdo do popover preserva o ícone, a cor âmbar e a mensagem completa.
 
-3. **Busca depende demais dos campos agregados das quinzenas**
-   - O cálculo final usa `getGozoRanges`, que é correto, mas a consulta inicial pode não trazer todos os registros necessários para o cálculo.
-   - A forma mais segura é buscar férias ativas de forma mais ampla no ano/meses próximos e fazer a sobreposição real no client usando os intervalos reais de gozo.
+Resultado: o alerta continua acessível e visível (badge sempre destacado), mas não consome espaço vertical, e a tabela do preview e o footer (botão Salvar) ficam sempre dentro do dialog.
 
-## Plano de correção
+## Arquivo afetado
 
-1. **Substituir a consulta de férias do gerador de folgas**
-   - Buscar férias não canceladas/reprovadas em uma janela segura ao redor do mês selecionado.
-   - Incluir todos os campos necessários de gozo normal, gozo diferente e gozo flexível.
-   - Evitar o `.or()` atual que não representa sobreposição real.
-
-2. **Criar helpers explícitos para a regra de férias**
-   - `getVacationDaysByMonth(colabId)` para contar dias reais de gozo por mês.
-   - `isSecondaryMonthForTwoMonthVacation(colabId)` para dizer claramente se o mês atual é o mês com menos dias.
-   - `shouldBlockVacationMonth(colabId)` para centralizar a decisão:
-     - sem férias no mês: não bloqueia;
-     - férias só em um mês: bloqueia;
-     - férias em dois meses: bloqueia no mês com mais dias e libera no mês com menos dias;
-     - empate: bloqueia por segurança.
-
-3. **Aplicar a regra no preview**
-   - Excluir quem estiver de férias no mês principal.
-   - Liberar quem tiver férias atravessando dois meses apenas no mês secundário.
-   - Manter as demais regras existentes: experiência, perda registrada, afastamento, familiares, chefes e distribuição.
-
-4. **Melhorar o motivo exibido no preview**
-   - Quando bloquear por férias, exibir motivo mais claro, por exemplo:
-     - `Férias no mês`
-     - `Férias no mês principal`
-   - Isso ajuda a conferir por que Gabriella foi liberada ou bloqueada.
-
-5. **Validar sem alterar banco de dados**
-   - Não será necessária migration.
-   - Validar a lógica por inspeção/checagem local do TypeScript e do fluxo do componente.
-   - Se possível, usar os dados visíveis no preview depois da implementação para confirmar que Luciano/Rejane/Amally saem e Gabriella entra em junho.
+- `src/components/ferias/folgas/GeradorFolgasDialog.tsx` — alterações apenas de layout/JSX no bloco do preview (`!showPreview ? ... : (...)`). Sem mudanças de lógica, regras, queries ou banco.

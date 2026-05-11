@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, RefreshCw, Users, Calendar, AlertTriangle, CheckCircle, Building2, Gift } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 interface Colaborador {
@@ -1293,8 +1294,8 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh]">
-        <DialogHeader>
+      <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <RefreshCw className="h-5 w-5" />
             Gerar Escala de Folgas - Todos os Setores
@@ -1305,7 +1306,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
         </DialogHeader>
 
         {!showPreview ? (
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-4 overflow-auto flex-1 min-h-0">
             <div className="p-4 bg-muted rounded-lg space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Building2 className="h-4 w-4" />
@@ -1426,15 +1427,8 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
             </DialogFooter>
           </div>
         ) : (
-          <div className="space-y-4">
-            {diagnosticMessage && (
-              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <span>{diagnosticMessage}</span>
-              </div>
-            )}
-            
-            <div className="flex items-center gap-4 flex-wrap">
+          <div className="space-y-4 flex-1 min-h-0 flex flex-col overflow-hidden">
+            <div className="flex items-center gap-4 flex-wrap flex-shrink-0">
               <Badge variant="secondary" className="gap-1">
                 <Building2 className="h-3 w-3" />
                 {setoresComDados.length} setores
@@ -1454,6 +1448,25 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
                   {excludedRows.length} excluídos
                 </Badge>
               )}
+              {diagnosticMessage && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 transition-colors px-2.5 py-0.5 text-xs font-medium"
+                    >
+                      <AlertTriangle className="h-3 w-3" />
+                      Ver alertas
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-96 max-h-64 overflow-auto bg-amber-50 border-amber-200 text-amber-900 text-sm">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                      <span className="whitespace-pre-wrap break-words">{diagnosticMessage}</span>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
               <div className="ml-auto flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -1466,7 +1479,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
               </div>
             </div>
 
-            <ScrollArea className="h-[400px] rounded-md border">
+            <ScrollArea className="flex-1 min-h-0 rounded-md border">
               <Accordion type="multiple" defaultValue={setoresComDados.map(g => g.setor.id)} className="w-full">
                 {previewBySetor.map(group => {
                   const setorAssigned = group.rows.filter(r => !r.motivo_exclusao && r.data_sabado);
@@ -1562,7 +1575,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
               </Accordion>
             </ScrollArea>
 
-            <DialogFooter>
+            <DialogFooter className="flex-shrink-0">
               <Button variant="outline" onClick={() => setShowPreview(false)}>Voltar</Button>
               <Button 
                 onClick={() => saveMutation.mutate()} 
