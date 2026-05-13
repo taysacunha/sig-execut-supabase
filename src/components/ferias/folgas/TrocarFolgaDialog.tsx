@@ -118,6 +118,12 @@ export function TrocarFolgaDialog({
       const target = allFolgas.find((f) => f.id === targetFolgaId);
       if (!target) throw new Error("Folga destino não encontrada");
 
+      const fmt = (s: string) => format(new Date(s + "T12:00:00"), "dd/MM");
+      const sourceName = folga.colaborador?.nome || "colega";
+      const targetName = target.colaborador?.nome || "colega";
+      const justSrc = `Trocada com ${targetName} (${fmt(folga.data_sabado)} ↔ ${fmt(target.data_sabado)})`;
+      const justTgt = `Trocada com ${sourceName} (${fmt(target.data_sabado)} ↔ ${fmt(folga.data_sabado)})`;
+
       // Troca principal
       const { error: error1 } = await supabase
         .from("ferias_folgas")
@@ -125,6 +131,7 @@ export function TrocarFolgaDialog({
           data_sabado: target.data_sabado,
           is_excecao: true,
           excecao_motivo: "Troca entre colaboradores",
+          excecao_justificativa: justSrc,
         })
         .eq("id", folga.id);
 
@@ -136,6 +143,7 @@ export function TrocarFolgaDialog({
           data_sabado: folga.data_sabado,
           is_excecao: true,
           excecao_motivo: "Troca entre colaboradores",
+          excecao_justificativa: justTgt,
         })
         .eq("id", target.id);
 
@@ -149,6 +157,7 @@ export function TrocarFolgaDialog({
             data_sabado: target.data_sabado,
             is_excecao: true,
             excecao_motivo: "Troca junto com familiar",
+            excecao_justificativa: `Trocada com familiar de ${targetName} (${fmt(swapInfo.sourceFamiliarFolga.data_sabado)} ↔ ${fmt(target.data_sabado)})`,
           })
           .eq("id", swapInfo.sourceFamiliarFolga.id);
 
@@ -160,6 +169,7 @@ export function TrocarFolgaDialog({
             data_sabado: folga.data_sabado,
             is_excecao: true,
             excecao_motivo: "Troca junto com familiar",
+            excecao_justificativa: `Trocada com familiar de ${sourceName} (${fmt(swapInfo.targetFamiliarFolga.data_sabado)} ↔ ${fmt(folga.data_sabado)})`,
           })
           .eq("id", swapInfo.targetFamiliarFolga.id);
 

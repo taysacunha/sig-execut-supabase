@@ -1,8 +1,7 @@
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download, Loader2 } from "lucide-react";
-import { format, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, isWeekend, getDate, isSaturday, isSunday } from "date-fns";
+import { format, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, isWeekend, getDate, isSaturday, isSunday, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import jsPDF from "jspdf";
 import { toast } from "sonner";
@@ -38,7 +37,12 @@ interface Ferias {
 interface Props {
   ferias: Ferias[];
   year: number;
-  defaultMonth: number; // 1-12
+  /** months selected (0-11) — empty means single month from rangeStart */
+  selectedMonths: number[];
+  /** true if "year" mode (full year) */
+  isFullYear: boolean;
+  /** Visible range start (month start) — used when selectedMonths is empty */
+  rangeStart: Date;
 }
 
 // Paleta RGB para setores (espelha SETOR_COLORS do GanttFeriasView)
@@ -76,29 +80,23 @@ const MESES = [
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 
-export function GanttFeriasPDFGenerator({ ferias, year, defaultMonth }: Props) {
-  const [selectedMonth, setSelectedMonth] = useState<number>(defaultMonth);
+export function GanttFeriasPDFGenerator({ ferias, year, selectedMonths, isFullYear, rangeStart }: Props) {
   const [generating, setGenerating] = useState(false);
 
-  const monthOptions = useMemo(() => MESES.map((m, i) => ({ value: String(i + 1), label: m })), []);
+  const monthsToRender = useMemo<number[]>(() => {
+    if (isFullYear) return Array.from({ length: 12 }, (_, i) => i);
+    if (selectedMonths.length > 0) return [...selectedMonths].sort((a, b) => a - b);
+    return [rangeStart.getMonth()];
+  }, [isFullYear, selectedMonths, rangeStart]);
 
-  const handleGenerate = () => {
-    setGenerating(true);
-    try {
-      const monthStart = startOfMonth(new Date(year, selectedMonth - 1));
-      const monthEnd = endOfMonth(new Date(year, selectedMonth - 1));
-      const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
-
-      // Filtra férias com gozo dentro do mês
-      const feriasMes = ferias.filter((f) =>
-        getGozoIntervals(f).some((iv) => iv.start <= monthEnd && iv.end >= monthStart)
-      );
-
-      if (feriasMes.length === 0) {
-        toast.error(`Nenhuma férias em ${MESES[selectedMonth - 1]} de ${year}`);
-        setGenerating(false);
-        return;
-      }
+  const renderMonth = (pdf: jsPDF, month: number, isFirst: boolean) => {
+    const monthStart = startOfMonth(new Date(year, month));
+    const monthEnd = endOfMonth(new Date(year, month));
+    const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
+    const feriasMes = ferias.filter((f) =>
+      getGozoIntervals(f).some((iv) => iv.start <= monthEnd && iv.end >= monthStart)
+    );
+    if (feriasMes.length === 0) return false;
 
       // Agrupar por colaborador
       const rowsMap = new Map<string, { nome: string; setorId: string; setorNome: string; unidade: string; ferias: Ferias[] }>();
@@ -151,7 +149,6 @@ export function GanttFeriasPDFGenerator({ ferias, year, defaultMonth }: Props) {
       });
 
       // PDF setup
-      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
       const pageW = pdf.internal.pageSize.getWidth();
       const pageH = pdf.internal.pageSize.getHeight();
       const margin = 8;
@@ -160,23 +157,24 @@ export function GanttFeriasPDFGenerator({ ferias, year, defaultMonth }: Props) {
       const dayHeaderH = 7;
       const rowH = 7;
       const footerH = 8;
+      const detailsBlockMin = 30; // espaço mínimo para detalhamento
 
       const tableLeft = margin;
       const tableRight = pageW - margin;
       const tableWidth = tableRight - tableLeft;
       const dayWidth = (tableWidth - colNomes) / days.length;
 
-      // Quantas linhas cabem por página
-      const availH = pageH - headerH - dayHeaderH - footerH - margin;
+      // Quantas linhas cabem em UMA página (gráfico) reservando espaço para detalhamento
+      const availH = pageH - headerH - dayHeaderH - footerH - margin - detailsBlockMin;
       const rowsPerPage = Math.max(1, Math.floor(availH / rowH));
-      const totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
+      const ganttPages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
 
-      const drawHeader = (pageNum: number) => {
+      const drawHeader = () => {
         // Título
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(13);
         pdf.setTextColor(20, 20, 20);
-        pdf.text(`Calendário de Férias — ${MESES[selectedMonth - 1]} de ${year}`, margin, margin + 5);
+        pdf.text(`Calendário de Férias — ${MESES[month]} de ${year}`, margin, margin + 5);
         pdf.setFont("helvetica", "normal");
         pdf.setFontSize(8);
         pdf.setTextColor(100, 100, 100);
@@ -186,7 +184,7 @@ export function GanttFeriasPDFGenerator({ ferias, year, defaultMonth }: Props) {
           margin + 10
         );
         // Page indicator (right)
-        pdf.text(`Página ${pageNum} de ${totalPages}`, tableRight, margin + 10, { align: "right" });
+        pdf.text(`Página ${pdf.getNumberOfPages()}`, tableRight, margin + 10, { align: "right" });
       };
 
       const drawDayHeader = (top: number) => {
@@ -327,10 +325,66 @@ export function GanttFeriasPDFGenerator({ ferias, year, defaultMonth }: Props) {
         pdf.text("Sobreposição no setor", x + 4, y);
       };
 
-      // Render pages
-      for (let p = 0; p < totalPages; p++) {
-        if (p > 0) pdf.addPage();
-        drawHeader(p + 1);
+      // Detalhamento textual por colaborador (lista) — desenhado abaixo do gráfico
+      const drawDetails = (rowsSlice: typeof rows, top: number): number => {
+        let y = top + 4;
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9);
+        pdf.setTextColor(40, 40, 40);
+        pdf.text("Detalhamento por colaborador", tableLeft, y);
+        y += 4;
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(60, 60, 60);
+        const colW = tableWidth / 2;
+        let col = 0;
+        let rowY = y;
+        rowsSlice.forEach((r) => {
+          if (rowY > pageH - margin - 6) {
+            pdf.addPage();
+            drawHeader();
+            rowY = margin + headerH + 4;
+            pdf.setFont("helvetica", "bold");
+            pdf.setFontSize(9);
+            pdf.text("Detalhamento por colaborador (cont.)", tableLeft, rowY);
+            rowY += 4;
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(7.5);
+            col = 0;
+          }
+          const x = tableLeft + col * colW;
+          pdf.setFont("helvetica", "bold");
+          pdf.setTextColor(30, 30, 30);
+          const sub = [r.unidade, r.setorNome].filter(Boolean).join(" • ");
+          pdf.text(`• ${r.nome}${sub ? "  " + sub : ""}`, x, rowY);
+          pdf.setFont("helvetica", "normal");
+          pdf.setTextColor(80, 80, 80);
+          let lineY = rowY + 3;
+          r.ferias.forEach((f) => {
+            getGozoIntervals(f).forEach((iv) => {
+              const dias = Math.round((iv.end.getTime() - iv.start.getTime()) / 86400000) + 1;
+              pdf.text(
+                `  ${format(iv.start, "dd/MM/yyyy")} a ${format(iv.end, "dd/MM/yyyy")} (${dias}d)`,
+                x,
+                lineY
+              );
+              lineY += 3;
+            });
+          });
+          if (col === 0) {
+            col = 1;
+          } else {
+            col = 0;
+            rowY = lineY + 1;
+          }
+        });
+        return rowY;
+      };
+
+      // Render gantt page(s) for this month
+      for (let p = 0; p < ganttPages; p++) {
+        if (!isFirst || p > 0) pdf.addPage();
+        drawHeader();
         const top = margin + headerH;
         drawDayHeader(top);
         const startIdx = p * rowsPerPage;
@@ -340,13 +394,40 @@ export function GanttFeriasPDFGenerator({ ferias, year, defaultMonth }: Props) {
         });
         const gridBottom = top + dayHeaderH + pageRows.length * rowH;
         drawGrid(top + dayHeaderH, gridBottom);
-        // legenda no rodapé da última página
-        if (p === totalPages - 1) {
+        // Detalhamento na última página do gráfico do mês
+        if (p === ganttPages - 1) {
+          drawDetails(rows, gridBottom + 2);
           drawLegend(pageH - margin - 1);
         }
+        isFirst = false;
       }
+      return true;
+  };
 
-      pdf.save(`ferias-gantt-${year}-${String(selectedMonth).padStart(2, "0")}.pdf`);
+  const handleGenerate = () => {
+    setGenerating(true);
+    try {
+      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      let isFirst = true;
+      let any = false;
+      for (const m of monthsToRender) {
+        const rendered = renderMonth(pdf, m, isFirst);
+        if (rendered) {
+          any = true;
+          isFirst = false;
+        }
+      }
+      if (!any) {
+        toast.error("Nenhuma férias no período selecionado");
+        setGenerating(false);
+        return;
+      }
+      const suffix = isFullYear
+        ? `${year}-ano`
+        : monthsToRender.length === 1
+          ? `${year}-${String(monthsToRender[0] + 1).padStart(2, "0")}`
+          : `${year}-${monthsToRender.map((m) => String(m + 1).padStart(2, "0")).join("-")}`;
+      pdf.save(`ferias-gantt-${suffix}.pdf`);
       toast.success("PDF gerado com sucesso");
     } catch (err: any) {
       console.error(err);
@@ -357,21 +438,9 @@ export function GanttFeriasPDFGenerator({ ferias, year, defaultMonth }: Props) {
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
-        <SelectTrigger className="w-[140px] h-9">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {monthOptions.map((m) => (
-            <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generating} className="gap-1.5">
-        {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-        Gerar PDF do mês
-      </Button>
-    </div>
+    <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generating} className="gap-1.5">
+      {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+      Gerar PDF
+    </Button>
   );
 }

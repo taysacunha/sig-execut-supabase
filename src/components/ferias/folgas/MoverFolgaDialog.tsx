@@ -86,6 +86,9 @@ export function MoverFolgaDialog({
     mutationFn: async () => {
       if (!folga || !newSaturday) throw new Error("Dados inválidos");
 
+      const fmt = (s: string) => format(new Date(s + "T12:00:00"), "dd/MM");
+      const justificativa = `Movida de ${fmt(folga.data_sabado)} para ${fmt(newSaturday)}`;
+
       // Mover a folga principal
       const { error } = await supabase
         .from("ferias_folgas")
@@ -93,6 +96,7 @@ export function MoverFolgaDialog({
           data_sabado: newSaturday,
           is_excecao: true,
           excecao_motivo: "Mudança de sábado",
+          excecao_justificativa: justificativa,
         })
         .eq("id", folga.id);
 
@@ -100,12 +104,14 @@ export function MoverFolgaDialog({
 
       // Se tem familiar com folga no mês, mover junto
       if (familiarFolga) {
+        const familiarJust = `Movida de ${fmt(familiarFolga.data_sabado)} para ${fmt(newSaturday)} (junto com familiar)`;
         const { error: familiarError } = await supabase
           .from("ferias_folgas")
           .update({
             data_sabado: newSaturday,
             is_excecao: true,
             excecao_motivo: "Movido junto com familiar",
+            excecao_justificativa: familiarJust,
           })
           .eq("id", familiarFolga.id);
 

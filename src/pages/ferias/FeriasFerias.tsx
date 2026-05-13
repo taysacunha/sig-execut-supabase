@@ -13,7 +13,7 @@ import {
   Loader2, Edit, Eye, Plus, Sparkles, CalendarMinus,
   FileText, Clock, XCircle, Download, ArrowUpDown, Printer,
   ChevronLeft, ChevronRight, Trash2, ChevronDown, ChevronUp,
-  Send, Undo2, AlertCircle
+  Send, Undo2, AlertCircle, HelpCircle
 } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -45,6 +45,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { usePagination } from "@/hooks/usePagination";
 import { TablePagination } from "@/components/vendas/TableControls";
 import { normalizeText } from "@/lib/textUtils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // ========== Types ==========
 
@@ -575,8 +576,25 @@ export default function FeriasFerias() {
           </h1>
           <p className="text-muted-foreground">Gerenciamento de férias dos colaboradores</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Label className="text-sm text-muted-foreground whitespace-nowrap">Ano de referência</Label>
+        <div className="flex items-start gap-3">
+          <div className="flex flex-col text-right">
+            <div className="flex items-center justify-end gap-1">
+              <Label className="text-sm font-medium whitespace-nowrap">Ano de referência</Label>
+              <TooltipProvider delayDuration={150}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button type="button" className="text-muted-foreground hover:text-foreground" aria-label="Ajuda sobre ano de referência">
+                      <HelpCircle className="h-3.5 w-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs text-xs">
+                    Refere-se ao ano do <strong>período aquisitivo</strong>, não ao ano em que o gozo foi marcado. Ex.: período aquisitivo 2025 pode ter gozo marcado em 2026 — selecione 2025.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+            <span className="text-[11px] text-muted-foreground whitespace-nowrap">Ano do período aquisitivo</span>
+          </div>
           <Select value={anoFilter} onValueChange={setAnoFilter}>
             <SelectTrigger className="w-32"><SelectValue placeholder="Ano" /></SelectTrigger>
             <SelectContent>{years.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>

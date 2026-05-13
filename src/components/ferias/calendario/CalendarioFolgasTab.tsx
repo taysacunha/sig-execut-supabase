@@ -9,6 +9,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { CalendarDays, Users, CheckCircle, AlertCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { format, parseISO, startOfMonth, endOfMonth, isSaturday, eachDayOfInterval, isSameDay, getMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -284,24 +285,51 @@ export function CalendarioFolgasTab() {
                         {folgasDoDia.length} colaborador{folgasDoDia.length > 1 ? "es" : ""}
                       </span>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {folgasDoDia.map((f) => (
-                        <Badge
-                          key={f.id}
-                          variant={f.is_excecao ? "outline" : "secondary"}
-                          className={`cursor-pointer hover:bg-primary/10 ${
-                            f.is_excecao ? "border-orange-300 text-orange-600" : ""
-                          }`}
-                          onClick={() => {
-                            setSelectedFolga(f);
-                            setDetailsOpen(true);
-                          }}
-                        >
-                          {f.colaborador?.nome || "Colaborador"}
-                          {f.is_excecao && " ⚠️"}
-                        </Badge>
-                      ))}
-                    </div>
+                    <TooltipProvider delayDuration={200}>
+                      <div className="flex flex-wrap gap-2">
+                        {folgasDoDia.map((f) => {
+                          const motivo = f.excecao_motivo || "";
+                          const isConflito = /conflito|falha/i.test(motivo);
+                          const badge = (
+                            <Badge
+                              variant={f.is_excecao ? "outline" : "secondary"}
+                              className={`cursor-pointer hover:bg-primary/10 inline-flex items-center gap-1 ${
+                                f.is_excecao
+                                  ? isConflito
+                                    ? "border-orange-400 text-orange-700"
+                                    : "border-muted-foreground/30 text-foreground"
+                                  : ""
+                              }`}
+                              onClick={() => {
+                                setSelectedFolga(f);
+                                setDetailsOpen(true);
+                              }}
+                            >
+                              <span>{f.colaborador?.nome || "Colaborador"}</span>
+                              {f.is_excecao && (
+                                <AlertCircle
+                                  className={`h-3 w-3 ${isConflito ? "text-orange-500" : "text-muted-foreground"}`}
+                                />
+                              )}
+                            </Badge>
+                          );
+                          if (!f.is_excecao) return <div key={f.id}>{badge}</div>;
+                          return (
+                            <Tooltip key={f.id}>
+                              <TooltipTrigger asChild>{badge}</TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-xs text-xs space-y-1">
+                                {f.excecao_motivo && (
+                                  <div><strong>Motivo:</strong> {f.excecao_motivo}</div>
+                                )}
+                                {f.excecao_justificativa && (
+                                  <div><strong>Justificativa:</strong> {f.excecao_justificativa}</div>
+                                )}
+                              </TooltipContent>
+                            </Tooltip>
+                          );
+                        })}
+                      </div>
+                    </TooltipProvider>
                   </div>
                 ))}
               </div>
