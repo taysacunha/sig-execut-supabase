@@ -592,8 +592,15 @@ export function CalendarioFeriasTab() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-lg">
-              Férias em {format(calendarMonth, "MMMM yyyy", { locale: ptBR })}
+              {listaAnoGozo === "all"
+                ? `Férias em ${format(calendarMonth, "MMMM yyyy", { locale: ptBR })}`
+                : `Férias com gozo em ${listaAnoGozo}`}
             </CardTitle>
+            {listaAnoGozo !== "all" && (
+              <p className="text-xs text-muted-foreground">
+                Mostrando colaboradores com período de gozo neste ano (independente do período aquisitivo)
+              </p>
+            )}
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -602,17 +609,71 @@ export function CalendarioFeriasTab() {
                   <Skeleton key={i} className="h-16 w-full" />
                 ))}
               </div>
-            ) : feriasDoMes.length === 0 ? (
+            ) : feriasLista.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <Palmtree className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                <p className="text-muted-foreground">Nenhuma férias neste mês</p>
-                <p className="text-sm text-muted-foreground/70">
-                  Navegue pelo calendário para ver outros meses
+                <p className="text-muted-foreground">
+                  {listaAnoGozo === "all" ? "Nenhuma férias neste mês" : "Nenhuma férias neste ano"}
                 </p>
+                <p className="text-sm text-muted-foreground/70">
+                  Ajuste os filtros para ver outros períodos
+                </p>
+              </div>
+            ) : feriasListaPorMes ? (
+              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                {feriasListaPorMes.map(([monthKey, fs]) => (
+                  <div key={monthKey} className="space-y-2">
+                    <div className="sticky top-0 bg-background py-1">
+                      <Badge variant="secondary" className="capitalize">
+                        {format(parseISO(monthKey + "-01"), "MMMM yyyy", { locale: ptBR })}
+                      </Badge>
+                      <span className="ml-2 text-xs text-muted-foreground">{fs.length} colaborador{fs.length > 1 ? "es" : ""}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {fs.map((f) => {
+                        const intervals = getGozoIntervals(f);
+                        return (
+                          <div
+                            key={f.id}
+                            className={`flex items-center justify-between p-3 rounded-lg border transition-colors cursor-pointer hover:bg-muted/50 ${
+                              f.is_excecao ? "border-orange-300 bg-orange-50/50" : ""
+                            }`}
+                            onClick={() => {
+                              setSelectedFerias(f);
+                              setDetailsOpen(true);
+                            }}
+                          >
+                            <div className="flex flex-col">
+                              <p className="font-medium flex items-center gap-2 flex-wrap">
+                                <span>
+                                  {f.colaborador?.nome || "Colaborador"}
+                                  {f.colaborador?.unidade?.nome && (
+                                    <span className="text-muted-foreground font-normal"> - {f.colaborador.unidade.nome}</span>
+                                  )}
+                                </span>
+                                {f.is_excecao && (
+                                  <Badge variant="outline" className="text-orange-600 border-orange-300">Exceção</Badge>
+                                )}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                                {intervals.map((interval, idx) => (
+                                  <span key={idx}>
+                                    {idx > 0 && "• "}
+                                    {idx + 1}ª: {format(interval.start, "dd/MM/yyyy")} - {format(interval.end, "dd/MM/yyyy")}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
-                {feriasDoMes.map((f) => {
+                {feriasLista.map((f) => {
                   const intervals = getGozoIntervals(f);
                   return (
                     <div
