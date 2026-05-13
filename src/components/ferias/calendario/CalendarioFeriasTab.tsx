@@ -581,7 +581,7 @@ export function CalendarioFeriasTab() {
                 searchPlaceholder="Buscar setor..."
               />
             </div>
-            <div className="space-y-1">
+            <div className="flex flex-col space-y-1">
               <Label className="text-xs font-medium text-muted-foreground">Unidade</Label>
               <Select value={selectedUnidade} onValueChange={setSelectedUnidade}>
                 <SelectTrigger className="w-full sm:w-[160px] h-9">
@@ -632,7 +632,7 @@ export function CalendarioFeriasTab() {
                     searchPlaceholder="Buscar mês..."
                   />
                 </div>
-                <div className="space-y-1">
+                <div className="flex flex-col space-y-1">
                   <Label className="text-xs font-medium text-muted-foreground">Ano</Label>
                   <Select value={String(ganttYear)} onValueChange={(v) => setGanttYear(Number(v))}>
                     <SelectTrigger className="w-full sm:w-[100px] h-9">
@@ -648,7 +648,7 @@ export function CalendarioFeriasTab() {
               </>
             )}
             {viewMode === "lista" && (
-              <div className="space-y-1">
+              <div className="flex flex-col space-y-1">
                 <div className="flex items-center gap-1">
                   <Label className="text-xs font-medium text-muted-foreground">Período exibido</Label>
                   <TooltipProvider>
