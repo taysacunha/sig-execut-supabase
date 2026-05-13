@@ -342,7 +342,7 @@ export function GanttFeriasPDFGenerator({ ferias, year, selectedMonths, isFullYe
         rowsSlice.forEach((r) => {
           if (rowY > pageH - margin - 6) {
             pdf.addPage();
-            drawHeader(pageNum);
+            drawHeader();
             rowY = margin + headerH + 4;
             pdf.setFont("helvetica", "bold");
             pdf.setFontSize(9);
@@ -383,9 +383,8 @@ export function GanttFeriasPDFGenerator({ ferias, year, selectedMonths, isFullYe
 
       // Render gantt page(s) for this month
       for (let p = 0; p < ganttPages; p++) {
-        if (p > 0) pdf.addPage();
-        else if (pageNum > 1) pdf.addPage();
-        drawHeader(pageNum);
+        if (!isFirst || p > 0) pdf.addPage();
+        drawHeader();
         const top = margin + headerH;
         drawDayHeader(top);
         const startIdx = p * rowsPerPage;
@@ -400,7 +399,7 @@ export function GanttFeriasPDFGenerator({ ferias, year, selectedMonths, isFullYe
           drawDetails(rows, gridBottom + 2);
           drawLegend(pageH - margin - 1);
         }
-        pageNum++;
+        isFirst = false;
       }
       return true;
   };
@@ -409,15 +408,13 @@ export function GanttFeriasPDFGenerator({ ferias, year, selectedMonths, isFullYe
     setGenerating(true);
     try {
       const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-      let pageNum = 1;
+      let isFirst = true;
       let any = false;
-      // total de páginas é desconhecido a priori; usamos pageNum corrente como referência
-      const totalPagesPlaceholder = monthsToRender.length; // mínimo
       for (const m of monthsToRender) {
-        const rendered = renderMonth(pdf, m, pageNum, totalPagesPlaceholder);
+        const rendered = renderMonth(pdf, m, isFirst);
         if (rendered) {
           any = true;
-          // pageNum já foi incrementado dentro de renderMonth
+          isFirst = false;
         }
       }
       if (!any) {
