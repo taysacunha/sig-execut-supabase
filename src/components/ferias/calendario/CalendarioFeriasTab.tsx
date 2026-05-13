@@ -77,6 +77,7 @@ export function CalendarioFeriasTab() {
   const [searchNome, setSearchNome] = useState("");
   const [ganttMonths, setGanttMonths] = useState<string[]>([]); // empty = current month only
   const [ganttYear, setGanttYear] = useState(new Date().getFullYear());
+  const [listaAnoGozo, setListaAnoGozo] = useState<string>("all");
 
   // Buscar férias
   const { data: ferias = [], isLoading: loadingFerias } = useQuery({
@@ -314,6 +315,40 @@ export function CalendarioFeriasTab() {
       );
     });
   }, [feriasFiltradas, calendarMonth]);
+
+  // Férias filtradas por ano do gozo (independe do período aquisitivo)
+  const feriasDoAno = useMemo(() => {
+    if (listaAnoGozo === "all") return feriasFiltradas;
+    const ano = Number(listaAnoGozo);
+    const yearStart = new Date(ano, 0, 1);
+    const yearEnd = new Date(ano, 11, 31, 23, 59, 59);
+    return feriasFiltradas.filter((f) =>
+      getGozoIntervals(f).some((iv) => iv.start <= yearEnd && iv.end >= yearStart)
+    );
+  }, [feriasFiltradas, listaAnoGozo]);
+
+  // Lista efetiva exibida no modo "Lista"
+  const feriasLista = listaAnoGozo === "all" ? feriasDoMes : feriasDoAno;
+
+  // Agrupar por mês quando filtrando por ano (para facilitar leitura)
+  const feriasListaPorMes = useMemo(() => {
+    if (listaAnoGozo === "all") return null;
+    const map = new Map<string, typeof feriasLista>();
+    feriasLista.forEach((f) => {
+      const intervals = getGozoIntervals(f);
+      const ano = Number(listaAnoGozo);
+      intervals.forEach((iv) => {
+        if (iv.start.getFullYear() === ano || iv.end.getFullYear() === ano) {
+          const monthKey = format(iv.start.getFullYear() === ano ? iv.start : new Date(ano, 0, 1), "yyyy-MM");
+          if (!map.has(monthKey)) map.set(monthKey, []);
+          if (!map.get(monthKey)!.find((x) => x.id === f.id)) {
+            map.get(monthKey)!.push(f);
+          }
+        }
+      });
+    });
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [feriasLista, listaAnoGozo]);
 
   const handleDayClick = (day: Date) => {
     const feriasNoDia = feriasFiltradas.filter((f) => {
