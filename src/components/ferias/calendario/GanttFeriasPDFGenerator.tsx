@@ -441,21 +441,9 @@ export function GanttFeriasPDFGenerator({ ferias, year, selectedMonths, isFullYe
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
-        <SelectTrigger className="w-[140px] h-9">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {monthOptions.map((m) => (
-            <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generating} className="gap-1.5">
-        {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-        Gerar PDF do mês
-      </Button>
-    </div>
+    <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generating} className="gap-1.5">
+      {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+      Gerar PDF
+    </Button>
   );
 }
