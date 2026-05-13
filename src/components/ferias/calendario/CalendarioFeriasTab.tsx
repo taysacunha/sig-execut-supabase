@@ -204,9 +204,15 @@ export function CalendarioFeriasTab() {
         const nome = f.colaborador?.nome?.toLowerCase() || "";
         if (!nome.includes(searchNome.toLowerCase())) return false;
       }
+      if (statusFilter === "em_gozo" && !FERIAS_EM_GOZO_STATUSES.includes(f.status)) {
+        return false;
+      }
+      if (statusFilter === "excecao" && !f.is_excecao) {
+        return false;
+      }
       return true;
     });
-  }, [ferias, selectedSetores, selectedUnidade, selectedColaboradores, searchNome, unidades]);
+  }, [ferias, selectedSetores, selectedUnidade, selectedColaboradores, searchNome, unidades, statusFilter]);
 
   // Gantt date range — based on selected months or full year
   const ganttRange = useMemo(() => {
