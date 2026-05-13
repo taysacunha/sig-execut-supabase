@@ -759,11 +759,9 @@ export function CalendarioFeriasTab() {
           <GanttFeriasPDFGenerator
             ferias={feriasFiltradas}
             year={ganttYear}
-            defaultMonth={(() => {
-              const nums = ganttMonths.filter((m) => m !== "year").map(Number).filter((n) => !isNaN(n));
-              if (nums.length > 0) return Math.min(...nums) + 1;
-              return calendarMonth.getMonth() + 1;
-            })()}
+            isFullYear={ganttMonths.includes("year")}
+            selectedMonths={ganttMonths.filter((m) => m !== "year").map(Number).filter((n) => !isNaN(n))}
+            rangeStart={ganttRange.start}
           />
         </div>
         <GanttFeriasView
