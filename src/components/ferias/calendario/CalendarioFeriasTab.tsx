@@ -527,7 +527,7 @@ export function CalendarioFeriasTab() {
             </Button>
           </div>
           {hasActiveFilters && (
-            <Button variant="ghost" size="sm" onClick={resetFilters} className="gap-1">
+            <Button variant="outline" size="sm" onClick={resetFilters} className="gap-1 border-destructive text-destructive hover:bg-destructive/10">
               <X className="h-4 w-4" />
               Limpar filtros
             </Button>
