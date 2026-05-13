@@ -555,7 +555,7 @@ export function CalendarioFeriasTab() {
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Filtros</span>
           </div>
           <div className="flex flex-wrap gap-3">
-            <div className="space-y-1">
+            <div className="flex flex-col space-y-1">
               <Label className="text-xs font-medium text-muted-foreground">Colaboradores</Label>
               <MultiSelect
                 options={colaboradorOptions}
@@ -568,7 +568,7 @@ export function CalendarioFeriasTab() {
                 searchPlaceholder="Buscar colaborador..."
               />
             </div>
-            <div className="space-y-1">
+            <div className="flex flex-col space-y-1">
               <Label className="text-xs font-medium text-muted-foreground">Setores</Label>
               <MultiSelect
                 options={setores.map((s) => ({ value: s.id, label: s.nome }))}
