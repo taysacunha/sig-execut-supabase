@@ -434,7 +434,10 @@ export function CalendarioFeriasTab() {
     <div className="space-y-6">
       {/* Cards de resumo */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+        <Card
+          className={`cursor-pointer transition-all ${cardActiveCls("ano")}`}
+          onClick={() => handleCardClick("ano")}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total no Ano</CardTitle>
             <Palmtree className="h-4 w-4 text-muted-foreground" />
@@ -448,7 +451,10 @@ export function CalendarioFeriasTab() {
           </CardContent>
         </Card>
 
-        <Card className="border-primary/20">
+        <Card
+          className={`cursor-pointer transition-all border-primary/20 ${cardActiveCls("em_gozo")}`}
+          onClick={() => handleCardClick("em_gozo")}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Em Gozo</CardTitle>
             <CalendarIcon className="h-4 w-4 text-primary" />
@@ -462,7 +468,10 @@ export function CalendarioFeriasTab() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          className={`cursor-pointer transition-all ${cardActiveCls("mes")}`}
+          onClick={() => handleCardClick("mes")}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Este Mês</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
@@ -476,7 +485,10 @@ export function CalendarioFeriasTab() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          className={`cursor-pointer transition-all ${cardActiveCls("excecao")}`}
+          onClick={() => handleCardClick("excecao")}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Com Exceção</CardTitle>
             <AlertCircle className="h-4 w-4 text-orange-500" />
