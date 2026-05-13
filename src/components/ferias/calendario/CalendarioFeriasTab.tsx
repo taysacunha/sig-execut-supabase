@@ -527,7 +527,7 @@ export function CalendarioFeriasTab() {
             </Button>
           </div>
           {hasActiveFilters && (
-            <Button variant="ghost" size="sm" onClick={resetFilters} className="gap-1">
+            <Button variant="outline" size="sm" onClick={resetFilters} className="gap-1 border-destructive text-destructive hover:bg-destructive/10">
               <X className="h-4 w-4" />
               Limpar filtros
             </Button>
@@ -555,7 +555,7 @@ export function CalendarioFeriasTab() {
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Filtros</span>
           </div>
           <div className="flex flex-wrap gap-3">
-            <div className="space-y-1">
+            <div className="flex flex-col space-y-1">
               <Label className="text-xs font-medium text-muted-foreground">Colaboradores</Label>
               <MultiSelect
                 options={colaboradorOptions}
@@ -568,7 +568,7 @@ export function CalendarioFeriasTab() {
                 searchPlaceholder="Buscar colaborador..."
               />
             </div>
-            <div className="space-y-1">
+            <div className="flex flex-col space-y-1">
               <Label className="text-xs font-medium text-muted-foreground">Setores</Label>
               <MultiSelect
                 options={setores.map((s) => ({ value: s.id, label: s.nome }))}
@@ -581,7 +581,7 @@ export function CalendarioFeriasTab() {
                 searchPlaceholder="Buscar setor..."
               />
             </div>
-            <div className="space-y-1">
+            <div className="flex flex-col space-y-1">
               <Label className="text-xs font-medium text-muted-foreground">Unidade</Label>
               <Select value={selectedUnidade} onValueChange={setSelectedUnidade}>
                 <SelectTrigger className="w-full sm:w-[160px] h-9">
@@ -597,7 +597,7 @@ export function CalendarioFeriasTab() {
             </div>
             {viewMode === "gantt" && (
               <>
-                <div className="space-y-1">
+                <div className="flex flex-col space-y-1">
                   <Label className="text-xs font-medium text-muted-foreground">Meses do Gantt</Label>
                   <MultiSelect
                     options={[
@@ -632,7 +632,7 @@ export function CalendarioFeriasTab() {
                     searchPlaceholder="Buscar mês..."
                   />
                 </div>
-                <div className="space-y-1">
+                <div className="flex flex-col space-y-1">
                   <Label className="text-xs font-medium text-muted-foreground">Ano</Label>
                   <Select value={String(ganttYear)} onValueChange={(v) => setGanttYear(Number(v))}>
                     <SelectTrigger className="w-full sm:w-[100px] h-9">
@@ -648,7 +648,7 @@ export function CalendarioFeriasTab() {
               </>
             )}
             {viewMode === "lista" && (
-              <div className="space-y-1">
+              <div className="flex flex-col space-y-1">
                 <div className="flex items-center gap-1">
                   <Label className="text-xs font-medium text-muted-foreground">Período exibido</Label>
                   <TooltipProvider>
