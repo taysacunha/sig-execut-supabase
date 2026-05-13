@@ -597,7 +597,7 @@ export function CalendarioFeriasTab() {
             </div>
             {viewMode === "gantt" && (
               <>
-                <div className="space-y-1">
+                <div className="flex flex-col space-y-1">
                   <Label className="text-xs font-medium text-muted-foreground">Meses do Gantt</Label>
                   <MultiSelect
                     options={[
