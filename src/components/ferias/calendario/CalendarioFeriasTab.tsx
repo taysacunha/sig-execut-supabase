@@ -10,13 +10,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, AlertCircle, Users, Palmtree, BarChart3, List } from "lucide-react";
+import { Calendar as CalendarIcon, AlertCircle, Users, Palmtree, BarChart3, List, SlidersHorizontal, X, HelpCircle } from "lucide-react";
 import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, eachDayOfInterval, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { GanttFeriasView } from "./GanttFeriasView";
 import { GanttFeriasPDFGenerator } from "./GanttFeriasPDFGenerator";
-import { getYearOptions } from "@/lib/dateUtils";
+import { getYearOptions, FERIAS_EM_GOZO_STATUSES } from "@/lib/dateUtils";
 import { MultiSelect } from "@/components/ui/multi-select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface GozoPeriodo {
   id: string;
@@ -78,6 +79,7 @@ export function CalendarioFeriasTab() {
   const [ganttMonths, setGanttMonths] = useState<string[]>([]); // empty = current month only
   const [ganttYear, setGanttYear] = useState(new Date().getFullYear());
   const [listaAnoGozo, setListaAnoGozo] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "ano" | "em_gozo" | "mes" | "excecao">("all");
 
   // Buscar férias
   const { data: ferias = [], isLoading: loadingFerias } = useQuery({
