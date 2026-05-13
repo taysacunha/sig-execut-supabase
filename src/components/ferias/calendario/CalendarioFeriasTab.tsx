@@ -384,6 +384,52 @@ export function CalendarioFeriasTab() {
 
   const loading = loadingFerias;
 
+  const hasActiveFilters =
+    selectedColaboradores.length > 0 ||
+    selectedSetores.length > 0 ||
+    selectedUnidade !== "all" ||
+    listaAnoGozo !== "all" ||
+    statusFilter !== "all" ||
+    !!searchNome;
+
+  const resetFilters = () => {
+    setSelectedColaboradores([]);
+    setSelectedSetores([]);
+    setSelectedUnidade("all");
+    setSearchNome("");
+    setListaAnoGozo("all");
+    setGanttMonths([]);
+    setGanttYear(new Date().getFullYear());
+    setCalendarMonth(new Date());
+    setStatusFilter("all");
+  };
+
+  const handleCardClick = (key: "ano" | "em_gozo" | "mes" | "excecao") => {
+    const turningOn = statusFilter !== key;
+    setStatusFilter(turningOn ? key : "all");
+    if (turningOn) {
+      setViewMode("lista");
+      if (key === "ano") {
+        setListaAnoGozo(String(new Date().getFullYear()));
+      } else if (key === "mes") {
+        setListaAnoGozo("all");
+        setCalendarMonth(new Date());
+      } else {
+        setListaAnoGozo("all");
+      }
+    }
+  };
+
+  const cardActiveCls = (key: string) =>
+    statusFilter === key ? "ring-2 ring-primary bg-primary/5" : "hover:border-primary/40";
+
+  const statusFilterLabel: Record<string, string> = {
+    ano: `Mostrando: férias com gozo em ${new Date().getFullYear()}`,
+    em_gozo: "Mostrando: em gozo agora",
+    mes: "Mostrando: férias do mês atual",
+    excecao: "Mostrando: somente exceções",
+  };
+
   return (
     <div className="space-y-6">
       {/* Cards de resumo */}
