@@ -89,7 +89,7 @@ export function GanttFeriasPDFGenerator({ ferias, year, selectedMonths, isFullYe
     return [rangeStart.getMonth()];
   }, [isFullYear, selectedMonths, rangeStart]);
 
-  const renderMonth = (pdf: jsPDF, month: number, pageNum: number, totalPages: number) => {
+  const renderMonth = (pdf: jsPDF, month: number, isFirst: boolean) => {
     const monthStart = startOfMonth(new Date(year, month));
     const monthEnd = endOfMonth(new Date(year, month));
     const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
@@ -169,7 +169,7 @@ export function GanttFeriasPDFGenerator({ ferias, year, selectedMonths, isFullYe
       const rowsPerPage = Math.max(1, Math.floor(availH / rowH));
       const ganttPages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
 
-      const drawHeader = (pageNum: number) => {
+      const drawHeader = () => {
         // Título
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(13);
@@ -184,7 +184,7 @@ export function GanttFeriasPDFGenerator({ ferias, year, selectedMonths, isFullYe
           margin + 10
         );
         // Page indicator (right)
-        pdf.text(`Página ${pageNum} de ${totalPages}`, tableRight, margin + 10, { align: "right" });
+        pdf.text(`Página ${pdf.getNumberOfPages()}`, tableRight, margin + 10, { align: "right" });
       };
 
       const drawDayHeader = (top: number) => {
