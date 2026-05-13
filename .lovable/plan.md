@@ -1,75 +1,70 @@
 ## Plano
 
-Quatro ajustes independentes na área de Férias.
+Melhorias de UX nos filtros e cards do Calendário > Férias (`src/components/ferias/calendario/CalendarioFeriasTab.tsx`).
 
-### 1) Página Férias — Clarear o filtro "Ano de referência"
+### 1) Identificação clara dos campos de filtro
 
-Arquivo: `src/pages/ferias/FeriasFerias.tsx` (linhas ~578-585).
+Hoje os filtros (Colaboradores, Setores, Unidade, Meses/Ano no Gantt, Ano do gozo na Lista) aparecem só com placeholder, sem rótulo. Vou:
 
-- Manter o label "Ano de referência" como título.
-- Adicionar um subtítulo logo abaixo do label, em texto pequeno e `text-muted-foreground`, deixando explícito que se trata do ano do **período aquisitivo**, não do ano em que o gozo das férias foi marcado.
-- Adicionar um `Tooltip` (ícone `HelpCircle`) ao lado do Select com um exemplo curto: "Ex.: período aquisitivo 2025 pode ter gozo marcado em 2026 — selecione 2025."
-- Reorganizar o bloco para layout em coluna (label + subtítulo) com o Select à direita, mantendo responsividade.
+- Envolver o bloco de filtros num container com fundo `bg-muted/40` e título pequeno "Filtros" (ícone `SlidersHorizontal`), padrão visual semelhante ao `ColaboradorFilters.tsx`.
+- Cada controle ganha um `Label` pequeno acima (`text-xs font-medium text-muted-foreground`):
+  - "Colaboradores"
+  - "Setores"
+  - "Unidade"
+  - "Meses do Gantt" / "Ano" (no modo Gantt)
+  - "Período exibido" para o select da lista (renomear "Ano do gozo" para deixar mais claro: opções "Mês atual do calendário" e "Ano de gozo: 2025/2026/...")
+- Adicionar um `HelpCircle` com tooltip ao lado de "Período exibido" explicando: "Selecione um ano para ver todos os colaboradores com gozo naquele ano, mesmo que o período aquisitivo seja de outro ano."
 
-Sem mudanças de lógica/consulta — apenas UI/copy.
+### 2) Botão "Limpar filtros"
 
-### 2) Aba Gantt (Calendário) — unificar mês do gráfico e do PDF, e melhorar o PDF
+- Adicionar ao final da barra de filtros um botão `variant="ghost"` com ícone `X` "Limpar filtros".
+- Só aparece quando há algum filtro ativo (`hasActiveFilters`).
+- Ao clicar, executa um `resetFilters()` que volta tudo para o padrão:
+  - `selectedColaboradores = []`
+  - `selectedSetores = []`
+  - `selectedUnidade = "all"`
+  - `searchNome = ""`
+  - `listaAnoGozo = "all"`
+  - `ganttMonths = []` e `ganttYear = ano atual`
+  - `calendarMonth = new Date()` (volta para o mês atual)
+  - `statusFilter = "all"` (novo, ver item 3)
 
-Arquivos:
-- `src/components/ferias/calendario/CalendarioFeriasTab.tsx`
-- `src/components/ferias/calendario/GanttFeriasPDFGenerator.tsx`
+Resultado: calendário volta a mostrar o mês atual, lista volta a mostrar colaboradores com férias no mês atual.
 
-Mudanças:
+### 3) Cards de resumo clicáveis (filtro rápido)
 
-- Remover o `Select` de mês interno do `GanttFeriasPDFGenerator` (props `defaultMonth` deixa de ser usado para escolha de mês).
-- O componente passa a receber e respeitar o intervalo já filtrado no Gantt (`startDate`/`endDate`) e o array de meses selecionados (ou "year").
-- O botão "Gerar PDF do mês" passa a "Gerar PDF" e gera exatamente o que está em tela: um único mês, vários meses ou ano inteiro (paginação por mês).
-- Em `CalendarioFeriasTab`, passar para o gerador as props `range`, `ganttMonths`, `ganttYear` e a lista atual de `feriasGantt` (ou seja, os colaboradores realmente exibidos).
-- No PDF, abaixo do gráfico Gantt da página, incluir uma seção "Detalhamento por colaborador" listando, para cada colaborador presente naquela página/mês:
-  - Nome, setor, unidade
-  - Cada período de gozo com texto: `dd/MM/yyyy a dd/MM/yyyy (Nd)`
-  - Caso vários períodos, listar todos em linhas separadas
-- Ajustar `rowsPerPage` para reservar espaço da seção de detalhamento; se não couber tudo na mesma página do gráfico, paginar a lista textual em páginas seguintes mantendo o cabeçalho.
+Hoje "Total no Ano", "Em Gozo", "Este Mês" e "Com Exceção" são apenas leitura. Vou transformá-los em filtros rápidos via novo estado `statusFilter: "all" | "ano" | "em_gozo" | "mes" | "excecao"`.
 
-### 3) Calendário > Folgas de Sábado — corrigir justificativa de exceção e visual do alerta
+Comportamento:
 
-Arquivos:
-- `src/components/ferias/folgas/MoverFolgaDialog.tsx`
-- `src/components/ferias/folgas/MoverFolgasLoteDialog.tsx`
-- `src/components/ferias/folgas/TrocarFolgaDialog.tsx`
-- `src/components/ferias/calendario/CalendarioFolgasTab.tsx`
+- Cards ganham `cursor-pointer`, hover sutil (`hover:border-primary/40`) e estado ativo (`ring-2 ring-primary` + `bg-primary/5`).
+- Clicar num card alterna o filtro (clique novamente no card ativo desativa, voltando a `"all"`).
+- Quando um card está ativo:
+  - Força `viewMode = "lista"` (a Gantt continua com seu próprio recorte de meses).
+  - Reseta `listaAnoGozo` conforme o card:
+    - **Total no Ano**: `listaAnoGozo = String(anoAtual)` → mostra todos os colaboradores com gozo no ano atual, agrupado por mês.
+    - **Em Gozo**: `listaAnoGozo = "all"`, mas a lista é filtrada adicionalmente por `status ∈ {em_gozo_q1, em_gozo_q2, em_gozo}`. Calendário também passa a destacar só esses dias.
+    - **Este Mês**: `listaAnoGozo = "all"` e `calendarMonth = new Date()` → comportamento padrão atual.
+    - **Com Exceção**: `listaAnoGozo = "all"` e filtra `f.is_excecao === true`.
+- Indicação textual no título do card "Lista" mostrando o filtro ativo (ex.: "Mostrando: Em gozo agora" + um chip com botão `X` para remover).
 
-Diagnóstico: ao mover uma folga, gravamos `is_excecao=true` e `excecao_motivo`, mas **não** atualizamos `excecao_justificativa` com a origem→destino correta. Como a coluna pode ter ficado de uma exceção anterior (ex.: alocação no gerador), a justificativa atual fica defasada (caso da Taysa: justificativa antiga "saiu de 9/5 para 2/5" persiste mesmo após ser realocada de volta para 9/5).
+### 4) Layout
 
-Correções:
+- Empilhar barra superior em duas linhas em telas estreitas: linha 1 com toggle Lista/Gantt + botão Limpar; linha 2 com os controles de filtro com seus labels.
+- Manter responsivo (`flex-wrap`) e sem alterar a Gantt além do label.
 
-- Em `MoverFolgaDialog`: ao mover, gravar `excecao_justificativa = "Movida de dd/MM para dd/MM"` usando `folga.data_sabado` (origem) e `newSaturday` (destino), tanto para a folga principal quanto para a do familiar.
-- Em `MoverFolgasLoteDialog`: já preenche `excecao_justificativa` no caso "Realocado em lote"; padronizar para o mesmo formato "Movida de dd/MM para dd/MM" e garantir que o caso "Alocado em lote" também grave a origem (sábado anterior, quando existir) ou um texto consistente.
-- Em `TrocarFolgaDialog`: gravar `excecao_justificativa = "Trocada com {nome do colega} (dd/MM ↔ dd/MM)"` para cada lado da troca; mesmo padrão para o caso "Troca junto com familiar".
-- Visual em `CalendarioFolgasTab`:
-  - Substituir o emoji `⚠️` no Badge por um `AlertCircle` (lucide) pequeno, com `text-orange-500`, alinhado, removendo concatenação de string.
-  - Usar `Tooltip` no Badge mostrando `excecao_motivo` + `excecao_justificativa` em hover, para reduzir a sensação de "tudo alertado".
-  - Manter o estilo visualmente mais sutil para exceções comuns (borda laranja já existe), reservando destaque maior apenas quando `excecao_motivo` indicar conflito real (lista a definir: "Conflito", "Falha de validação"). Para os demais ("Mudança de sábado", "Realocado em lote", "Troca entre colaboradores"), usar `border-muted` e ícone `text-muted-foreground` para reduzir ruído visual.
+### Detalhes técnicos
 
-Observação: as exceções já gravadas no banco continuarão exibindo a justificativa antiga; a correção evita o problema daqui pra frente. Não vamos rodar backfill automático sem confirmação do usuário.
-
-### 4) Calendário > Férias (Lista) — filtro por ano do gozo
-
-Arquivo: `src/components/ferias/calendario/CalendarioFeriasTab.tsx`.
-
-- Adicionar dois novos controles na barra de filtros (visíveis no modo "Lista"):
-  - `Select "Ano do gozo"` com opções de `getYearOptions()` + opção "Todos os anos".
-  - O filtro atual já tem multi-select de colaborador; nada muda nele.
-- Novo `useMemo` `feriasDoAno`:
-  - Se "Todos os anos" → não filtra por ano.
-  - Caso contrário → mantém apenas férias cujos `getGozoIntervals` tenham algum intervalo cruzando o ano selecionado (independe do `ano_referencia` do período aquisitivo).
-- No modo "Lista", trocar a fonte da listagem de `feriasDoMes` para `feriasDoAno` quando "Ano do gozo" estiver definido, mantendo o calendário mensal como visual auxiliar e exibindo a contagem total no card "Total no ano" coerente com o filtro.
-- Agrupar a listagem por mês quando o filtro for "ano inteiro" para facilitar leitura, mantendo o item de detalhe atual ao clicar.
-- Não altera o Gantt; ele continua com seu próprio seletor de meses/ano.
+- Adicionar `statusFilter` state e estendê-lo em `feriasLista` / `feriasDoMes` / `feriasDoAno` via um único `useMemo` derivado: aplica os filtros base e, depois, o recorte do card.
+- `hasActiveFilters` = `selectedColaboradores.length || selectedSetores.length || selectedUnidade !== "all" || listaAnoGozo !== "all" || statusFilter !== "all" || searchNome`.
+- `resetFilters()` chama os setters acima.
+- Para o card "Em Gozo", reaproveitar `FERIAS_EM_GOZO_STATUSES` de `src/lib/dateUtils.ts`.
+- Sem mudanças de schema, queries ou lógica de domínio. Tudo em UI/estado local do componente.
 
 ### Validação
 
-- Conferir que o filtro "Ano de referência" mostra subtítulo e tooltip e não quebra geração de férias/formulário (mesma prop `anoReferencia` continua sendo passada).
-- Gerar o Gantt com 1 mês, vários meses e "Ano inteiro" e gerar o PDF: deve sair com o mesmo recorte da tela e trazer a seção textual por colaborador.
-- Mover, trocar e mover em lote folgas e abrir o detalhe no Calendário > Folgas de Sábado: a justificativa deve refletir a origem→destino correta; ícone de alerta sutil para exceções rotineiras.
-- No Calendário > Férias (Lista), selecionar "2026" como ano do gozo e confirmar que Maria de Lourdes aparece mesmo com período aquisitivo de 2025.
+- Clicar em cada card → lista atualiza para o conjunto correto e card fica destacado.
+- Clicar de novo no mesmo card → desativa.
+- "Limpar filtros" volta calendário ao mês atual, lista mostra colaboradores com férias no mês atual e nenhum card fica ativo.
+- Labels visíveis em todos os campos; tooltip explica "Período exibido".
+- Filtros combinam (ex.: card "Em Gozo" + setor X mostra só os em gozo do setor X).
