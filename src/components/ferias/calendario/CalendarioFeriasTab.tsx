@@ -503,120 +503,180 @@ export function CalendarioFeriasTab() {
         </Card>
       </div>
 
-      {/* View toggle + search */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-1">
-          <Button
-            variant={viewMode === "lista" ? "default" : "outline"}
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setViewMode("lista")}
-          >
-            <List className="h-4 w-4" />
-            Lista
-          </Button>
-          <Button
-            variant={viewMode === "gantt" ? "default" : "outline"}
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setViewMode("gantt")}
-          >
-            <BarChart3 className="h-4 w-4" />
-            Gantt
-          </Button>
+      {/* View toggle + filtros */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex gap-1">
+            <Button
+              variant={viewMode === "lista" ? "default" : "outline"}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setViewMode("lista")}
+            >
+              <List className="h-4 w-4" />
+              Lista
+            </Button>
+            <Button
+              variant={viewMode === "gantt" ? "default" : "outline"}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setViewMode("gantt")}
+            >
+              <BarChart3 className="h-4 w-4" />
+              Gantt
+            </Button>
+          </div>
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" onClick={resetFilters} className="gap-1">
+              <X className="h-4 w-4" />
+              Limpar filtros
+            </Button>
+          )}
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
-          <MultiSelect
-            options={colaboradorOptions}
-            selected={selectedColaboradores}
-            onChange={setSelectedColaboradores}
-            placeholder="Colaboradores"
-            className="w-full sm:w-[200px]"
-            maxDisplay={1}
-            searchable
-            searchPlaceholder="Buscar colaborador..."
-          />
-          <MultiSelect
-            options={setores.map((s) => ({ value: s.id, label: s.nome }))}
-            selected={selectedSetores}
-            onChange={setSelectedSetores}
-            placeholder="Setores"
-            className="w-full sm:w-[180px]"
-            maxDisplay={1}
-            searchable
-            searchPlaceholder="Buscar setor..."
-          />
-          <Select value={selectedUnidade} onValueChange={setSelectedUnidade}>
-            <SelectTrigger className="w-full sm:w-[160px] h-9">
-              <SelectValue placeholder="Unidade" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as unidades</SelectItem>
-              {unidades.map((u) => (
-                <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {viewMode === "gantt" && (
-            <>
+
+        {statusFilter !== "all" && (
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="gap-1.5">
+              {statusFilterLabel[statusFilter]}
+              <button
+                onClick={() => setStatusFilter("all")}
+                className="ml-1 hover:bg-muted rounded-sm"
+                aria-label="Remover filtro"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          </div>
+        )}
+
+        <div className="rounded-lg border bg-muted/40 p-3">
+          <div className="flex items-center gap-2 mb-3">
+            <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Filtros</span>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs font-medium text-muted-foreground">Colaboradores</Label>
               <MultiSelect
-                options={[
-                  { value: "0", label: "Janeiro" },
-                  { value: "1", label: "Fevereiro" },
-                  { value: "2", label: "Março" },
-                  { value: "3", label: "Abril" },
-                  { value: "4", label: "Maio" },
-                  { value: "5", label: "Junho" },
-                  { value: "6", label: "Julho" },
-                  { value: "7", label: "Agosto" },
-                  { value: "8", label: "Setembro" },
-                  { value: "9", label: "Outubro" },
-                  { value: "10", label: "Novembro" },
-                  { value: "11", label: "Dezembro" },
-                  { value: "year", label: "Ano inteiro" },
-                ]}
-                selected={ganttMonths}
-                onChange={(vals) => {
-                  // If "year" is toggled, select only it
-                  if (vals.includes("year") && !ganttMonths.includes("year")) {
-                    setGanttMonths(["year"]);
-                  } else if (ganttMonths.includes("year") && vals.length > 1) {
-                    setGanttMonths(vals.filter((v) => v !== "year"));
-                  } else {
-                    setGanttMonths(vals);
-                  }
-                }}
-                placeholder="Meses"
-                className="w-full sm:w-[180px]"
-                maxDisplay={2}
+                options={colaboradorOptions}
+                selected={selectedColaboradores}
+                onChange={setSelectedColaboradores}
+                placeholder="Colaboradores"
+                className="w-full sm:w-[200px]"
+                maxDisplay={1}
                 searchable
-                searchPlaceholder="Buscar mês..."
+                searchPlaceholder="Buscar colaborador..."
               />
-              <Select value={String(ganttYear)} onValueChange={(v) => setGanttYear(Number(v))}>
-                <SelectTrigger className="w-full sm:w-[100px] h-9">
-                  <SelectValue />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-medium text-muted-foreground">Setores</Label>
+              <MultiSelect
+                options={setores.map((s) => ({ value: s.id, label: s.nome }))}
+                selected={selectedSetores}
+                onChange={setSelectedSetores}
+                placeholder="Setores"
+                className="w-full sm:w-[180px]"
+                maxDisplay={1}
+                searchable
+                searchPlaceholder="Buscar setor..."
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-medium text-muted-foreground">Unidade</Label>
+              <Select value={selectedUnidade} onValueChange={setSelectedUnidade}>
+                <SelectTrigger className="w-full sm:w-[160px] h-9">
+                  <SelectValue placeholder="Unidade" />
                 </SelectTrigger>
                 <SelectContent>
-                  {getYearOptions().map((y) => (
-                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  <SelectItem value="all">Todas as unidades</SelectItem>
+                  {unidades.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </>
-          )}
-          {viewMode === "lista" && (
-            <Select value={listaAnoGozo} onValueChange={setListaAnoGozo}>
-              <SelectTrigger className="w-full sm:w-[170px] h-9">
-                <SelectValue placeholder="Ano do gozo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Mês do calendário</SelectItem>
-                {getYearOptions().map((y) => (
-                  <SelectItem key={y} value={String(y)}>Ano do gozo: {y}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+            </div>
+            {viewMode === "gantt" && (
+              <>
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium text-muted-foreground">Meses do Gantt</Label>
+                  <MultiSelect
+                    options={[
+                      { value: "0", label: "Janeiro" },
+                      { value: "1", label: "Fevereiro" },
+                      { value: "2", label: "Março" },
+                      { value: "3", label: "Abril" },
+                      { value: "4", label: "Maio" },
+                      { value: "5", label: "Junho" },
+                      { value: "6", label: "Julho" },
+                      { value: "7", label: "Agosto" },
+                      { value: "8", label: "Setembro" },
+                      { value: "9", label: "Outubro" },
+                      { value: "10", label: "Novembro" },
+                      { value: "11", label: "Dezembro" },
+                      { value: "year", label: "Ano inteiro" },
+                    ]}
+                    selected={ganttMonths}
+                    onChange={(vals) => {
+                      if (vals.includes("year") && !ganttMonths.includes("year")) {
+                        setGanttMonths(["year"]);
+                      } else if (ganttMonths.includes("year") && vals.length > 1) {
+                        setGanttMonths(vals.filter((v) => v !== "year"));
+                      } else {
+                        setGanttMonths(vals);
+                      }
+                    }}
+                    placeholder="Meses"
+                    className="w-full sm:w-[180px]"
+                    maxDisplay={2}
+                    searchable
+                    searchPlaceholder="Buscar mês..."
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium text-muted-foreground">Ano</Label>
+                  <Select value={String(ganttYear)} onValueChange={(v) => setGanttYear(Number(v))}>
+                    <SelectTrigger className="w-full sm:w-[100px] h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getYearOptions().map((y) => (
+                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+            {viewMode === "lista" && (
+              <div className="space-y-1">
+                <div className="flex items-center gap-1">
+                  <Label className="text-xs font-medium text-muted-foreground">Período exibido</Label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <HelpCircle className="h-3 w-3 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        Selecione um ano para ver todos os colaboradores com gozo naquele ano,
+                        mesmo que o período aquisitivo seja de outro ano.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <Select value={listaAnoGozo} onValueChange={setListaAnoGozo}>
+                  <SelectTrigger className="w-full sm:w-[200px] h-9">
+                    <SelectValue placeholder="Período exibido" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Mês atual do calendário</SelectItem>
+                    {getYearOptions().map((y) => (
+                      <SelectItem key={y} value={String(y)}>Ano de gozo: {y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
