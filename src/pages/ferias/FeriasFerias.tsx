@@ -13,7 +13,7 @@ import {
   Loader2, Edit, Eye, Plus, Sparkles, CalendarMinus,
   FileText, Clock, XCircle, Download, ArrowUpDown, Printer,
   ChevronLeft, ChevronRight, Trash2, ChevronDown, ChevronUp,
-  Send, Undo2, AlertCircle
+  Send, Undo2, AlertCircle, HelpCircle
 } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -45,6 +45,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { usePagination } from "@/hooks/usePagination";
 import { TablePagination } from "@/components/vendas/TableControls";
 import { normalizeText } from "@/lib/textUtils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // ========== Types ==========
 
