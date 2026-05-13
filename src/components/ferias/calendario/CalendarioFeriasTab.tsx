@@ -538,6 +538,19 @@ export function CalendarioFeriasTab() {
               </Select>
             </>
           )}
+          {viewMode === "lista" && (
+            <Select value={listaAnoGozo} onValueChange={setListaAnoGozo}>
+              <SelectTrigger className="w-full sm:w-[170px] h-9">
+                <SelectValue placeholder="Ano do gozo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Mês do calendário</SelectItem>
+                {getYearOptions().map((y) => (
+                  <SelectItem key={y} value={String(y)}>Ano do gozo: {y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </div>
 
