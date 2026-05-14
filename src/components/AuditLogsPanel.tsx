@@ -443,9 +443,32 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
       if (tableFilter !== "all" && log.table_name !== tableFilter) return false;
       if (moduleSearchTerm) {
         const term = moduleSearchTerm.toLowerCase();
+        const tableLabel = (tableLabels[log.table_name] || log.table_name).toLowerCase();
+        const moduleLabel = (moduleLabels[log.module_name] || log.module_name).toLowerCase();
+        const recordLabel = getRecordLabel(log).toLowerCase();
+        const fieldsText = (log.changed_fields || [])
+          .map(f => formatFieldLabel(f).toLowerCase())
+          .join(" ");
+        const dataText = (() => {
+          try {
+            return (
+              JSON.stringify(log.old_data || {}).toLowerCase() +
+              " " +
+              JSON.stringify(log.new_data || {}).toLowerCase()
+            );
+          } catch {
+            return "";
+          }
+        })();
         return (
           log.changed_by_email?.toLowerCase().includes(term) ||
-          log.table_name?.toLowerCase().includes(term)
+          log.table_name?.toLowerCase().includes(term) ||
+          tableLabel.includes(term) ||
+          moduleLabel.includes(term) ||
+          recordLabel.includes(term) ||
+          fieldsText.includes(term) ||
+          dataText.includes(term) ||
+          matchesActionKeyword(log.action, term)
         );
       }
       return true;
