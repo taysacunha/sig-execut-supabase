@@ -485,6 +485,45 @@ export function ExcecaoPeriodosSection({
                 )}
               </div>
 
+              {/* Período da venda (informação obrigatória para o relatório do contador) */}
+              {onQuinzenaVendaChange && (
+                <Alert className="border-primary/30 bg-primary/5">
+                  <FileCheck className="h-4 w-4 text-primary" />
+                  <AlertTitle className="text-sm">Período da venda (enviado ao contador)</AlertTitle>
+                  <AlertDescription className="text-xs space-y-2">
+                    <p>
+                      Selecione em qual período aquisitivo os <strong>{Math.min(diasVendidos, 10)} dia
+                      {Math.min(diasVendidos, 10) !== 1 ? "s" : ""} vendidos</strong> serão alocados no
+                      relatório do contador. Essa informação é independente das datas de gozo interno.
+                    </p>
+                    <Select
+                      value={String(
+                        distribuicaoTipo === "1"
+                          ? 1
+                          : distribuicaoTipo === "2"
+                          ? 2
+                          : (q1JaGozada ? 2 : (quinzenaVenda || 1))
+                      )}
+                      onValueChange={(v) => onQuinzenaVendaChange(parseInt(v))}
+                      disabled={distribuicaoTipo === "1" || distribuicaoTipo === "2"}
+                    >
+                      <SelectTrigger className="max-w-[220px] bg-background">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {!q1JaGozada && <SelectItem value="1">1º Período</SelectItem>}
+                        <SelectItem value="2">2º Período</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {(distribuicaoTipo === "1" || distribuicaoTipo === "2") && (
+                      <p className="text-muted-foreground">
+                        Travado em <strong>{distribuicaoTipo}º Período</strong> pela distribuição escolhida acima.
+                      </p>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* 1º ou 2º Período: single period (ignora linhas paralelas de gozo_diferente) */}
               {(distribuicaoTipo === "1" || distribuicaoTipo === "2") && venderPeriodos.length === 1 && (
                 <Card className="border-primary/20 bg-primary/5">
