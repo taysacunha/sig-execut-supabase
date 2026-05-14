@@ -172,8 +172,6 @@ export function ExcecaoPeriodosSection({
   q2Fim,
   isHydrating = false,
   q1JaGozada = false,
-  quinzenaVenda,
-  onQuinzenaVendaChange,
 }: ExcecaoPeriodosSectionProps) {
   const diasDisponiveis: number = q1JaGozada ? 15 : 30;
   const diasGozo = Math.max(0, diasDisponiveis - diasVendidos);
