@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, Filter, Users, Eye, AlertTriangle } from "lucide-react";
+import { Plus, Pencil, Trash2, Filter, Users, Eye, AlertTriangle, FileDown } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import jsPDF from "jspdf";
 import ColaboradorDialog from "@/components/ferias/colaboradores/ColaboradorDialog";
 import ColaboradorViewDialog from "@/components/ferias/colaboradores/ColaboradorViewDialog";
 import ColaboradorFilters from "@/components/ferias/colaboradores/ColaboradorFilters";
@@ -202,6 +203,95 @@ const FeriasColaboradores = () => {
 
   const activeFiltersCount = [statusFilter, setorFilter, unidadeFilter].filter(f => f !== "todos").length;
 
+  const handleExportPDF = () => {
+    const rows = filteredData;
+    if (rows.length === 0) {
+      toast.error("Nenhum colaborador para exportar");
+      return;
+    }
+    try {
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const today = format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR });
+
+      let y = 15;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("Lista de Colaboradores", 14, y);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      y += 6;
+      doc.text(`Total: ${rows.length} colaborador(es) — Gerado em ${today}`, 14, y);
+
+      // Filtros ativos
+      const filtros: string[] = [];
+      if (statusFilter !== "todos") filtros.push(`Status: ${statusFilter}`);
+      if (setorFilter !== "todos") {
+        const s = setores.find((x: any) => x.id === setorFilter);
+        if (s) filtros.push(`Setor: ${s.nome}`);
+      }
+      if (unidadeFilter !== "todos") {
+        const u = unidades.find((x: any) => x.id === unidadeFilter);
+        if (u) filtros.push(`Unidade: ${u.nome}`);
+      }
+      if (searchTerm) filtros.push(`Busca: "${searchTerm}"`);
+      if (filtros.length > 0) {
+        y += 5;
+        doc.setFontSize(9);
+        doc.text(`Filtros: ${filtros.join(" | ")}`, 14, y);
+      }
+
+      y += 8;
+      // Cabeçalho da tabela
+      const cols = [
+        { label: "Nome", x: 14, w: 90 },
+        { label: "Setor", x: 104, w: 70 },
+        { label: "Cargo", x: 174, w: 60 },
+        { label: "Admissão", x: 234, w: 30 },
+      ];
+      doc.setFillColor(230, 230, 230);
+      doc.rect(14, y - 4, pageWidth - 28, 7, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      cols.forEach(c => doc.text(c.label, c.x, y));
+      y += 5;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      rows.forEach((c, idx) => {
+        if (y > pageHeight - 15) {
+          doc.addPage();
+          y = 15;
+          doc.setFillColor(230, 230, 230);
+          doc.rect(14, y - 4, pageWidth - 28, 7, "F");
+          doc.setFont("helvetica", "bold");
+          cols.forEach(col => doc.text(col.label, col.x, y));
+          y += 5;
+          doc.setFont("helvetica", "normal");
+        }
+        if (idx % 2 === 0) {
+          doc.setFillColor(248, 248, 248);
+          doc.rect(14, y - 4, pageWidth - 28, 6, "F");
+        }
+        const truncate = (s: string, max: number) =>
+          s.length > max ? s.slice(0, max - 1) + "…" : s;
+        doc.text(truncate(c.nome || "-", 55), cols[0].x, y);
+        doc.text(truncate(c.ferias_setores?.nome || "-", 40), cols[1].x, y);
+        doc.text(truncate(c.ferias_cargos?.nome || "-", 35), cols[2].x, y);
+        doc.text(c.data_admissao ? formatDate(c.data_admissao) : "-", cols[3].x, y);
+        y += 6;
+      });
+
+      const dateStr = format(new Date(), "yyyy-MM-dd", { locale: ptBR });
+      doc.save(`colaboradores-${dateStr}.pdf`);
+      toast.success("PDF exportado com sucesso");
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao gerar PDF");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -211,10 +301,16 @@ const FeriasColaboradores = () => {
             Gerencie os colaboradores da organização
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Colaborador
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExportPDF}>
+            <FileDown className="h-4 w-4 mr-2" />
+            PDF
+          </Button>
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Colaborador
+          </Button>
+        </div>
       </div>
 
       <Card>

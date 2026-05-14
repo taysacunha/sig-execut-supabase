@@ -141,6 +141,100 @@ const tableLabels: Record<string, string> = {
   ferias_folgas_escala_mes: "Escala do Mês (Cascata)",
 };
 
+// Tradução de nomes técnicos de colunas para rótulos legíveis nos detalhes
+const fieldLabels: Record<string, string> = {
+  nome: "Nome",
+  nome_exibicao: "Nome de exibição",
+  status: "Status",
+  data_admissao: "Admissão",
+  data_nascimento: "Nascimento",
+  observacoes: "Observações",
+  cpf: "CPF",
+  setor_titular_id: "Setor titular",
+  unidade_id: "Unidade",
+  cargo_id: "Cargo",
+  equipe_id: "Equipe",
+  familiar_id: "Familiar",
+  colaborador_id: "Colaborador",
+  data_sabado: "Sábado",
+  data_inicio: "Início",
+  data_fim: "Fim",
+  motivo: "Motivo",
+  motivo_descricao: "Descrição do motivo",
+  is_excecao: "Exceção",
+  excecao_motivo: "Motivo da exceção",
+  excecao_justificativa: "Justificativa",
+  quinzena1_inicio: "Quinzena 1 - início",
+  quinzena1_fim: "Quinzena 1 - fim",
+  quinzena2_inicio: "Quinzena 2 - início",
+  quinzena2_fim: "Quinzena 2 - fim",
+  gozo_quinzena1_inicio: "Gozo Q1 - início",
+  gozo_quinzena1_fim: "Gozo Q1 - fim",
+  gozo_quinzena2_inicio: "Gozo Q2 - início",
+  gozo_quinzena2_fim: "Gozo Q2 - fim",
+  vender_dias: "Vende dias",
+  dias_vendidos: "Dias vendidos",
+  quinzena_venda: "Quinzena de venda",
+  enviado_contador: "Enviado ao contador",
+  enviado_contador_q1: "Enviado contador Q1",
+  enviado_contador_q2: "Enviado contador Q2",
+  is_active: "Ativo",
+  created_at: "Criado em",
+  updated_at: "Atualizado em",
+  created_by: "Criado por",
+};
+
+const formatFieldLabel = (field: string) => fieldLabels[field] || field;
+
+const formatFieldValue = (val: unknown): string => {
+  if (val === null || val === undefined || val === "") return "—";
+  if (typeof val === "boolean") return val ? "Sim" : "Não";
+  if (typeof val === "string") {
+    // Datas ISO YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+      try {
+        return format(new Date(val + "T00:00:00"), "dd/MM/yyyy");
+      } catch {
+        return val;
+      }
+    }
+    // Timestamps ISO
+    if (/^\d{4}-\d{2}-\d{2}T/.test(val)) {
+      try {
+        return format(new Date(val), "dd/MM/yyyy HH:mm");
+      } catch {
+        return val;
+      }
+    }
+    return val;
+  }
+  if (typeof val === "object") return JSON.stringify(val);
+  return String(val);
+};
+
+// Extrai um rótulo amigável do "alvo" do log a partir dos dados
+const getRecordLabel = (log: ModuleAuditLog): string => {
+  const data = (log.new_data || log.old_data) as Record<string, unknown> | null;
+  if (!data) return log.record_id?.slice(0, 8) || "—";
+  const nome = (data.nome || data.nome_exibicao || data.name || data.titulo) as string | undefined;
+  if (nome) return nome;
+  const dataSab = data.data_sabado as string | undefined;
+  if (dataSab) return `Sábado ${formatFieldValue(dataSab)}`;
+  const inicio = data.data_inicio as string | undefined;
+  if (inicio) return `A partir de ${formatFieldValue(inicio)}`;
+  return (log.record_id || "—").slice(0, 8);
+};
+
+const ACTION_KEYWORDS: Record<string, string[]> = {
+  INSERT: ["inseriu", "inserir", "adicionou", "criou", "cadastrou", "novo"],
+  UPDATE: ["alterou", "alterar", "atualizou", "atualizar", "editou", "modificou"],
+  DELETE: ["excluiu", "excluir", "removeu", "remover", "deletou", "apagou"],
+};
+
+const matchesActionKeyword = (action: string, term: string): boolean => {
+  const keywords = ACTION_KEYWORDS[action] || [];
+  return keywords.some(k => k.includes(term) || term.includes(k));
+};
 interface AuditLogsPanelProps {
   defaultModule?: "escalas" | "vendas" | "estoque" | "ferias" | "sistema" | "all";
   defaultTab?: "admin" | "modules";
@@ -234,11 +328,11 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
 
   // Pagination for admin logs
   const [adminPage, setAdminPage] = useState(1);
-  const [adminItemsPerPage, setAdminItemsPerPage] = useState(20);
+  const [adminItemsPerPage, setAdminItemsPerPage] = useState(100);
 
   // Pagination for module logs
   const [modulePage, setModulePage] = useState(1);
-  const [moduleItemsPerPage, setModuleItemsPerPage] = useState(20);
+  const [moduleItemsPerPage, setModuleItemsPerPage] = useState(100);
 
   // Sorting for admin logs
   const [adminSortField, setAdminSortField] = useState<keyof AdminAuditLog | null>("created_at");
@@ -349,9 +443,32 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
       if (tableFilter !== "all" && log.table_name !== tableFilter) return false;
       if (moduleSearchTerm) {
         const term = moduleSearchTerm.toLowerCase();
+        const tableLabel = (tableLabels[log.table_name] || log.table_name).toLowerCase();
+        const moduleLabel = (moduleLabels[log.module_name] || log.module_name).toLowerCase();
+        const recordLabel = getRecordLabel(log).toLowerCase();
+        const fieldsText = (log.changed_fields || [])
+          .map(f => formatFieldLabel(f).toLowerCase())
+          .join(" ");
+        const dataText = (() => {
+          try {
+            return (
+              JSON.stringify(log.old_data || {}).toLowerCase() +
+              " " +
+              JSON.stringify(log.new_data || {}).toLowerCase()
+            );
+          } catch {
+            return "";
+          }
+        })();
         return (
           log.changed_by_email?.toLowerCase().includes(term) ||
-          log.table_name?.toLowerCase().includes(term)
+          log.table_name?.toLowerCase().includes(term) ||
+          tableLabel.includes(term) ||
+          moduleLabel.includes(term) ||
+          recordLabel.includes(term) ||
+          fieldsText.includes(term) ||
+          dataText.includes(term) ||
+          matchesActionKeyword(log.action, term)
         );
       }
       return true;
@@ -511,7 +628,7 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
               />
             </div>
 
-            <ScrollArea className="h-[400px]">
+            <ScrollArea className="h-[700px]">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -660,7 +777,7 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
               />
             </div>
 
-            <ScrollArea className="h-[400px]">
+            <ScrollArea className="h-[700px]">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -702,7 +819,7 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                       />
                     </TableHead>
                     <TableHead>Usuário</TableHead>
-                    <TableHead>Campos</TableHead>
+                    <TableHead>Registro / Campos</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -737,8 +854,9 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                               </Badge>
                             </TableCell>
                             <TableCell className="text-sm text-muted-foreground">{log.changed_by_email || "Sistema"}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">
-                              {log.changed_fields?.join(", ") || "—"}
+                            <TableCell className="text-xs max-w-[260px]">
+                              <div className="font-medium text-foreground truncate">{getRecordLabel(log)}</div>
+                              <div className="text-muted-foreground truncate">{(log.changed_fields||[]).map(formatFieldLabel).join(", ") || "—"}</div>
                             </TableCell>
                           </TableRow>
                           <CollapsibleContent asChild>
@@ -754,17 +872,17 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                                           const newVal = log.new_data ? (log.new_data as Record<string, unknown>)[field] : undefined;
                                           return (
                                             <div key={field} className="flex items-start gap-2 p-2 bg-muted rounded">
-                                              <span className="font-medium min-w-[120px]">{field}:</span>
+                                              <span className="font-medium min-w-[160px]">{formatFieldLabel(field)}:</span>
                                               <div className="flex items-center gap-2 flex-wrap">
                                                 {oldVal !== undefined && (
                                                   <span className="px-2 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded text-xs line-through">
-                                                    {typeof oldVal === 'object' ? JSON.stringify(oldVal) : String(oldVal)}
+                                                    {formatFieldValue(oldVal)}
                                                   </span>
                                                 )}
                                                 <span className="text-muted-foreground">→</span>
                                                 {newVal !== undefined && (
                                                   <span className="px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded text-xs">
-                                                    {typeof newVal === 'object' ? JSON.stringify(newVal) : String(newVal)}
+                                                    {formatFieldValue(newVal)}
                                                   </span>
                                                 )}
                                               </div>
@@ -858,7 +976,7 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
               />
             </div>
 
-            <ScrollArea className="h-[400px]">
+            <ScrollArea className="h-[700px]">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -900,7 +1018,7 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                       />
                     </TableHead>
                     <TableHead>Usuário</TableHead>
-                    <TableHead>Campos</TableHead>
+                    <TableHead>Registro / Campos</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -935,8 +1053,9 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                               </Badge>
                             </TableCell>
                             <TableCell className="text-sm text-muted-foreground">{log.changed_by_email || "Sistema"}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">
-                              {log.changed_fields?.join(", ") || "—"}
+                            <TableCell className="text-xs max-w-[260px]">
+                              <div className="font-medium text-foreground truncate">{getRecordLabel(log)}</div>
+                              <div className="text-muted-foreground truncate">{(log.changed_fields||[]).map(formatFieldLabel).join(", ") || "—"}</div>
                             </TableCell>
                           </TableRow>
                           <CollapsibleContent asChild>
@@ -952,17 +1071,17 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                                           const newVal = log.new_data ? (log.new_data as Record<string, unknown>)[field] : undefined;
                                           return (
                                             <div key={field} className="flex items-start gap-2 p-2 bg-muted rounded">
-                                              <span className="font-medium min-w-[120px]">{field}:</span>
+                                              <span className="font-medium min-w-[160px]">{formatFieldLabel(field)}:</span>
                                               <div className="flex items-center gap-2 flex-wrap">
                                                 {oldVal !== undefined && (
                                                   <span className="px-2 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded text-xs line-through">
-                                                    {typeof oldVal === 'object' ? JSON.stringify(oldVal) : String(oldVal)}
+                                                    {formatFieldValue(oldVal)}
                                                   </span>
                                                 )}
                                                 <span className="text-muted-foreground">→</span>
                                                 {newVal !== undefined && (
                                                   <span className="px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded text-xs">
-                                                    {typeof newVal === 'object' ? JSON.stringify(newVal) : String(newVal)}
+                                                    {formatFieldValue(newVal)}
                                                   </span>
                                                 )}
                                               </div>

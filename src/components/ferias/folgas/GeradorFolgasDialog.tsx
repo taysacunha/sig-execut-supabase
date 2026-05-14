@@ -362,64 +362,65 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     return totalDays;
   };
 
-  // Conta dias de gozo (descanso) de um colaborador em CADA mês onde há gozo.
-  // Chave: "yyyy-MM" -> total de dias.
-  const getVacationDaysByMonth = (colabId: string): Map<string, number> => {
-    const daysByMonth = new Map<string, number>();
+  // Threshold (em dias) para considerar um bloco contínuo de gozo "longo"
+  // e portanto bloquear folgas em todos os meses por ele tocados.
+  const VACATION_BLOCK_THRESHOLD_DAYS = 15;
+
+  // Une os intervalos REAIS de gozo de TODAS as férias do colaborador,
+  // mesclando blocos contíguos (gap <= 1 dia) ou sobrepostos.
+  // Ex.: 15/06–29/06 + 30/06–14/07 = 1 bloco de 30 dias.
+  const getMergedGozoBlocks = (
+    colabId: string
+  ): Array<{ inicio: Date; fim: Date; dias: number }> => {
+    const ranges: Array<{ inicio: Date; fim: Date }> = [];
     feriasAtivas.forEach(ferias => {
       if (ferias.colaborador_id !== colabId) return;
       getGozoRanges(ferias).forEach(r => {
-        let cursor = parseISO(r.inicio);
-        const end = parseISO(r.fim);
-        while (cursor <= end) {
-          const mStart = startOfMonth(cursor);
-          const mEnd = endOfMonth(cursor);
-          const sliceEnd = end < mEnd ? end : mEnd;
-          const days = differenceInDays(sliceEnd, cursor) + 1;
-          const key = format(mStart, "yyyy-MM");
-          daysByMonth.set(key, (daysByMonth.get(key) || 0) + days);
-          cursor = new Date(mEnd.getFullYear(), mEnd.getMonth() + 1, 1);
-        }
+        ranges.push({ inicio: parseISO(r.inicio), fim: parseISO(r.fim) });
       });
     });
-    return daysByMonth;
+    ranges.sort((a, b) => a.inicio.getTime() - b.inicio.getTime());
+    const merged: Array<{ inicio: Date; fim: Date; dias: number }> = [];
+    for (const r of ranges) {
+      const last = merged[merged.length - 1];
+      if (last && differenceInDays(r.inicio, last.fim) <= 1) {
+        if (r.fim > last.fim) last.fim = r.fim;
+      } else {
+        merged.push({ inicio: r.inicio, fim: r.fim, dias: 0 });
+      }
+    }
+    for (const b of merged) b.dias = differenceInDays(b.fim, b.inicio) + 1;
+    return merged;
   };
 
-  // Decide se o colaborador deve ser BLOQUEADO no mês corrente por estar de férias.
-  // Regras:
-  //  - sem gozo no mês corrente: NÃO bloqueia.
-  //  - gozo só em um mês: BLOQUEIA esse mês.
-  //  - gozo dividido entre 2+ meses: BLOQUEIA o(s) mês(es) com mais dias e
-  //    LIBERA apenas o mês com MENOS dias (mês secundário). Empate: bloqueia.
-  const shouldBlockVacationMonth = (colabId: string): boolean => {
-    if (!configMap.FOLGAS_BLOQUEAR_MES_FERIAS) return false;
-
-    const daysByMonth = getVacationDaysByMonth(colabId);
-    const currentKey = format(startOfMonth(new Date(year, month - 1)), "yyyy-MM");
-    const currentMonthDays = daysByMonth.get(currentKey) || 0;
-
-    if (currentMonthDays === 0) return false; // sem férias no mês corrente
-
-    // Se a configuração de "dois meses" está desligada, sempre bloqueia.
-    if (!configMap.FOLGAS_FERIAS_DOIS_MESES) return true;
-
-    // Apenas um mês com gozo: bloqueia.
-    if (daysByMonth.size <= 1) return true;
-
-    const values = Array.from(daysByMonth.values());
-    const minDays = Math.min(...values);
-    const maxDays = Math.max(...values);
-
-    // Empate (todos os meses com mesmo número de dias): conservador, bloqueia.
-    if (minDays === maxDays) return true;
-
-    // Conta quantos meses têm o valor mínimo. Se houver empate no mínimo,
-    // não há um único "mês secundário" claro -> bloqueia.
-    const monthsWithMin = values.filter(v => v === minDays).length;
-    if (monthsWithMin > 1) return true;
-
-    // Libera apenas se o mês corrente é o ÚNICO com o menor número de dias.
-    return currentMonthDays !== minDays;
+  // Decide se o colaborador deve ser BLOQUEADO no mês corrente por férias.
+  // Regra nova (mais justa): bloqueia somente se houver um bloco CONTÍNUO
+  // de gozo (>=15 dias) que toque o mês corrente. Blocos curtos (ex.: 1 dia
+  // de Maria de Lourdes em julho) NÃO bloqueiam o mês.
+  // Caso Amally: 15/06–29/06 + 30/06–14/07 vira um único bloco de 30 dias
+  // que toca junho E julho — bloqueia ambos.
+  // Caso Pedro: 15 dias contínuos em julho >= 15 — bloqueia julho.
+  const shouldBlockVacationMonth = (
+    colabId: string
+  ): { blocked: boolean; reason?: string } => {
+    if (!configMap.FOLGAS_BLOQUEAR_MES_FERIAS) return { blocked: false };
+    const monthStart = startOfMonth(new Date(year, month - 1));
+    const monthEnd = endOfMonth(new Date(year, month - 1));
+    const blocks = getMergedGozoBlocks(colabId);
+    for (const b of blocks) {
+      const overlaps = b.inicio <= monthEnd && b.fim >= monthStart;
+      if (!overlaps) continue;
+      if (b.dias >= VACATION_BLOCK_THRESHOLD_DAYS) {
+        const fmt = (d: Date) => format(d, "dd/MM");
+        const touchesMultipleMonths =
+          b.inicio < monthStart || b.fim > monthEnd;
+        const motivo = touchesMultipleMonths
+          ? `Férias ${b.dias} dias contínuos (${fmt(b.inicio)}–${fmt(b.fim)})`
+          : `Férias ${b.dias} dias no mês (${fmt(b.inicio)}–${fmt(b.fim)})`;
+        return { blocked: true, reason: motivo };
+      }
+    }
+    return { blocked: false };
   };
 
   const isInExperiencePeriod = (colab: Colaborador): boolean => {
@@ -484,15 +485,11 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
         exclusionReasons.set(colab.id, "Período de experiência");
       } else if (hasPerda(colab.id)) {
         exclusionReasons.set(colab.id, "Perda registrada");
-      } else if (shouldBlockVacationMonth(colab.id)) {
-        // Bloqueia se há férias no mês corrente E não é o mês secundário
-        // (mês com menos dias quando férias atravessam dois meses).
-        const isExcecao = feriasAtivas.some(f => f.colaborador_id === colab.id && f.is_excecao);
-        const daysByMonth = getVacationDaysByMonth(colab.id);
-        const motivo = daysByMonth.size > 1
-          ? "Férias no mês (mês principal)"
-          : (isExcecao ? "Férias no mês (exceção)" : "Férias no mês");
-        exclusionReasons.set(colab.id, motivo);
+      } else {
+        const block = shouldBlockVacationMonth(colab.id);
+        if (block.blocked) {
+          exclusionReasons.set(colab.id, block.reason || "Férias no mês");
+        }
       }
     });
 
