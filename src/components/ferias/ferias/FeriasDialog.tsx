@@ -601,6 +601,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           setExcecaoTipo(inferredTipo);
           setExcDistribuicaoTipo(inferredDist);
           setExcDiasVendidos(ferias.dias_vendidos || 0);
+          setExcQuinzenaVenda(ferias.quinzena_venda || (inferredDist === "2" ? 2 : 1));
           setExcPeriodos(loaded.map((p: any) => ({
             id: p.id || crypto.randomUUID(),
             referencia_periodo: p.referencia_periodo,
