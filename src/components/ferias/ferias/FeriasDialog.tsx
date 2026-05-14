@@ -46,7 +46,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Loader2, AlertTriangle, Calendar, Check, ChevronsUpDown, Users, Info, ShieldAlert } from "lucide-react";
+import { Loader2, AlertTriangle, Calendar, Check, ChevronsUpDown, Users, Info, ShieldAlert, FileCheck, CalendarClock } from "lucide-react";
 import { format, parseISO, addDays, addYears, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
