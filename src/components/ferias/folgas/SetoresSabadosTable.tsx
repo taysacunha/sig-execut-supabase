@@ -338,8 +338,8 @@ export function SetoresSabadosTable({ year, month }: SetoresSabadosTableProps) {
                             {setor.nome}
                           </span>
                         </HoverCardTrigger>
-                        <HoverCardContent side="right" className="w-72">
-                          <div className="space-y-2">
+                        <HoverCardContent side="right" align="start" className="w-80">
+                          <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
                             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                               Em férias em {format(new Date(year, month - 1), "MMMM yyyy", { locale: ptBR })}
                             </div>
@@ -347,13 +347,13 @@ export function SetoresSabadosTable({ year, month }: SetoresSabadosTableProps) {
                               const list = feriasPorSetor.get(setor.id) || [];
                               if (list.length === 0) {
                                 return (
-                                  <p className="text-sm text-muted-foreground">
+                                  <p className="text-sm text-muted-foreground whitespace-normal break-words">
                                     Nenhum colaborador deste setor está de férias neste mês.
                                   </p>
                                 );
                               }
                               return (
-                                <ul className="space-y-1.5 max-h-64 overflow-y-auto">
+                                <ul className="space-y-1.5">
                                   {list.map((it, i) => (
                                     <li key={i} className="text-sm">
                                       <div className="font-medium">{it.nome}</div>
