@@ -133,13 +133,13 @@ export function ContadorPDFGenerator() {
     return diasVendidosContador;
   };
 
-  // Formata "Dias Vend." adicionando o sufixo do período (1º/2º) somente no modo "Ambos"
-  // — assim o relatório do contador deixa explícito a qual período aquisitivo a venda
-  // foi alocada, evitando ambiguidade quando os dois períodos aparecem juntos.
+  // Formata "Dias Vend." sempre com o sufixo do período (1º/2º) quando definido,
+  // independente do modo selecionado, deixando explícito a qual período aquisitivo
+  // a venda foi alocada.
   const formatDiasVendidos = (f: any) => {
     const dias = getDiasVendidosSelecionado(f);
     if (dias <= 0) return "0";
-    if (showingAmbos && f.quinzena_venda) return `${dias} (${f.quinzena_venda}º)`;
+    if (f.quinzena_venda) return `${dias} (${f.quinzena_venda}º)`;
     return String(dias);
   };
 
@@ -272,9 +272,7 @@ export function ContadorPDFGenerator() {
       pdf.setTextColor(128, 128, 128);
       pdf.text(`Total de registros: ${ferias.length}`, margin, pageHeight - 10);
       pdf.text(
-        showingAmbos
-          ? "Dias vendidos limitados a 10. O sufixo (1º/2º) indica o período aquisitivo da venda."
-          : "Dias vendidos limitados a 10 para fins contábeis. Aparecem somente no período em que foram alocados.",
+        "Dias vendidos limitados a 10. O sufixo (1º/2º) indica o período aquisitivo da venda.",
         pageWidth - margin,
         pageHeight - 10,
         { align: "right" }

@@ -1,63 +1,62 @@
 ## Objetivo
 
-Tornar claro, em telas e no PDF do contador, o que é informação enviada ao **contador** (períodos oficiais e dias vendidos) e o que é o **gozo interno real** (datas que o colaborador efetivamente goza). Hoje os dois ficam misturados nos dialogs de exceção e o PDF do contador exibe os dias vendidos sem indicar o período correto.
+Garantir que a informação do período aquisitivo da venda (1º/2º) apareça sempre no relatório do contador (preview e PDF), e fazer um backfill nos registros antigos sem `quinzena_venda` definido.
 
----
+## 1. Mostrar sufixo do período sempre (não só em "Ambos")
 
-## Mudanças
+Arquivo: `src/components/ferias/relatorios/ContadorPDFGenerator.tsx`
 
-### 1. FeriasDialog — divisor visual Contador x Interno (apenas em exceção)
+- Atualizar a função `formatDiasVendidos` para sempre adicionar o sufixo `(1º)` ou `(2º)` quando `dias > 0` e `f.quinzena_venda` estiver definido — atualmente o sufixo só aparece em `showingAmbos`.
+- Resultado: no modo 1ª Quinzena, 2ª Quinzena e Ambos, a célula "Dias Vend." passa a exibir, por exemplo, `10 (1º)`.
+- Atualizar o texto do rodapé do PDF para refletir que o sufixo aparece em todos os modos.
+- O cabeçalho da coluna e o restante da lógica (`getDiasVendidosSelecionado`, filtragem por período) continuam iguais.
 
-Arquivos: `src/components/ferias/ferias/FeriasDialog.tsx`, `src/components/ferias/ferias/ExcecaoPeriodosSection.tsx`.
+## 2. Backfill de `quinzena_venda` para registros antigos
 
-- Quando **não é exceção**, manter o layout atual (não há divisão — o que vai ao contador é o que será gozado).
-- Quando **é exceção** (`is_excecao = true`):
-  - Envolver a SEÇÃO 2 (Cards "1º Período" e "2º Período" — `quinzena1/quinzena2`) em um bloco com cabeçalho destacado:
-    - Título: **"Enviado ao contador"** + ícone `FileCheck` + descrição curta ("Períodos oficiais que constarão no relatório do contador").
-    - Borda/fundo sutil (ex.: `border-primary/30 bg-primary/5`) para identidade visual.
-  - Envolver a SEÇÃO 3 de exceção (`ExcecaoPeriodosSection`) em outro bloco com cabeçalho:
-    - Título: **"Gozo interno (real)"** + ícone `CalendarClock` + descrição ("Datas que o colaborador efetivamente vai gozar — não vão ao contador").
-    - Borda/fundo distinto (ex.: `border-amber-500/30 bg-amber-500/5`) para contraste claro.
-  - Adicionar um separador visual entre os dois blocos (linha + chip "Sistema interno").
+Criar uma migration nova (`supabase/migrations/<timestamp>_backfill_quinzena_venda.sql`) com a regra:
 
-### 2. Seleção de qual período recebe os dias vendidos no modo exceção
+- Aplicar somente onde `dias_vendidos > 0` AND `quinzena_venda IS NULL`.
+- Regras de inferência, na ordem:
+  1. `distribuicao_tipo = '1'` → `quinzena_venda = 1`
+  2. `distribuicao_tipo = '2'` → `quinzena_venda = 2`
+  3. Quinzena 1 com duração de exatamente 5 dias (ou seja, `quinzena1_fim - quinzena1_inicio + 1 = 5`) e quinzena 2 cheia → `quinzena_venda = 1` (caso da Ivone).
+  4. Quinzena 2 com 5 dias e quinzena 1 cheia → `quinzena_venda = 2`.
+  5. Qualquer outro caso (ambos/livre sem padrão claro, gozo flexível, gozo diferente, etc.) → `quinzena_venda = 2` (default solicitado).
 
-Hoje, no modo padrão (`isVendaPadrao`), o gestor já escolhe `quinzena_venda` (1º ou 2º). No modo **exceção tipo "vender"**, o `quinzena_venda` é definido implicitamente pelo `distribuicaoTipo` ("1", "2", "ambos", "livre"), mas quando é `"ambos"` ou `"livre"` o sistema não registra a qual período oficial os 10 dias vendidos pertencem — por isso o PDF do contador fica ambíguo.
+Registros que já têm `quinzena_venda` preenchido não são alterados.
 
-Em `ExcecaoPeriodosSection.tsx`, quando `excecaoTipo === "vender"` e `diasVendidos > 0`:
+## 3. Verificação
 
-- Adicionar um seletor obrigatório **"Período da venda (para o contador)"** com opções `1º Período` / `2º Período` (ocultar 1º quando `q1JaGozada`).
-- Persistir essa escolha no campo `quinzena_venda` da tabela `ferias_ferias` (campo já existe). A lógica de submit em `FeriasDialog.tsx` (linhas ~1158-1205) deve passar a usar esse valor ao invés de derivar do `distribuicaoTipo` quando a distribuição for "ambos" ou "livre".
-- Para `distribuicaoTipo === "1"` ou `"2"`, pré-preencher e travar o seletor com o período correspondente (mantendo consistência).
-
-### 3. ContadorPDFGenerator — exibir período da venda corretamente
-
-Arquivo: `src/components/ferias/relatorios/ContadorPDFGenerator.tsx`.
-
-A função `getDiasVendidosSelecionado` já filtra por `quinzena_venda`, mas faltam dois ajustes:
-
-- **Modo "Ambos" (PDF e preview)**: na coluna "Dias Vend.", quando `dias_vendidos > 0`, exibir o valor com sufixo do período: ex. `10 (1º)` ou `10 (2º)`. Aplicar o mesmo no Badge da tabela de preview (linhas 442-446).
-- **Modo "1ª Quinzena" / "2ª Quinzena"**: a função já zera os dias vendidos quando o período da venda é o outro — confirmar que a query/filtro não inclui registros sem férias relevantes ao período. Corrigir o cálculo em `getDiasGozoSelecionado` para que, no modo single-period, **não desconte** dias vendidos do outro período (já está correto, mas adicionar teste manual com registro `quinzena_venda=2` filtrado em "1ª Quinzena": deve mostrar 15 dias gozo e 0 dias vendidos).
-- Atualizar o rodapé/legenda do PDF: trocar "Dias vendidos limitados a 10..." por "Dias vendidos: o sufixo (1º/2º) indica em qual período aquisitivo a venda foi alocada."
-
-### 4. Migration / dados legados
-
-Não é necessária migration — campo `quinzena_venda` já existe. Para registros existentes em modo exceção com `distribuicaoTipo` "ambos"/"livre" o valor pode estar como `1` por default; o gestor poderá ajustar reabrindo o dialog e selecionando o período correto. Adicionar uma nota no AlertDescription do bloco "Enviado ao contador" para registros antigos: "Verifique o período da venda antes de enviar ao contador."
-
----
+- Abrir a aba "Tabela Contador" e conferir que Ivone aparece com `10 (1º)` tanto no preview quanto no PDF gerado.
+- Conferir que registros sem `quinzena_venda` agora exibem `(2º)` (ou o inferido).
+- Conferir os 3 modos de período (Ambos, 1ª Quinzena, 2ª Quinzena) — em modos individuais, o sufixo confirma de qual período veio a venda.
 
 ## Detalhes técnicos
 
-- Reaproveitar `Card`/`CardHeader`/`CardTitle` já importados em `FeriasDialog.tsx` para os blocos "Enviado ao contador" e "Gozo interno (real)".
-- O seletor novo em `ExcecaoPeriodosSection` usa `Select` do shadcn (já importado no projeto). Adicionar prop `quinzenaVenda: number` + `onQuinzenaVendaChange` na interface, controlado pelo `FeriasDialog` via novo `useState` espelhando `form.watch("quinzena_venda")`.
-- Ajustar `onSubmit` (linhas ~1158-1205 em `FeriasDialog.tsx`) para sempre enviar `quinzena_venda` quando `vender_dias = true`, inclusive no caminho de exceção.
-- No PDF (`generatePDF`), formatar a célula "Dias Vend." como `${dias}${dias > 0 ? ` (${quinzena_venda}º)` : ""}` somente em `showingAmbos`.
-- Sem alterações de schema/RLS.
+```sql
+-- Backfill
+UPDATE public.ferias_ferias
+SET quinzena_venda = CASE
+  WHEN distribuicao_tipo = '1' THEN 1
+  WHEN distribuicao_tipo = '2' THEN 2
+  WHEN quinzena1_inicio IS NOT NULL AND quinzena1_fim IS NOT NULL
+       AND (quinzena1_fim - quinzena1_inicio + 1) = 5
+       AND quinzena2_inicio IS NOT NULL AND quinzena2_fim IS NOT NULL
+       AND (quinzena2_fim - quinzena2_inicio + 1) >= 15 THEN 1
+  WHEN quinzena2_inicio IS NOT NULL AND quinzena2_fim IS NOT NULL
+       AND (quinzena2_fim - quinzena2_inicio + 1) = 5
+       AND (quinzena1_fim - quinzena1_inicio + 1) >= 15 THEN 2
+  ELSE 2
+END
+WHERE dias_vendidos > 0 AND quinzena_venda IS NULL;
+```
 
----
-
-## Arquivos afetados
-
-- `src/components/ferias/ferias/FeriasDialog.tsx`
-- `src/components/ferias/ferias/ExcecaoPeriodosSection.tsx`
-- `src/components/ferias/relatorios/ContadorPDFGenerator.tsx`
+```ts
+// formatDiasVendidos novo
+const formatDiasVendidos = (f: any) => {
+  const dias = getDiasVendidosSelecionado(f);
+  if (dias <= 0) return "0";
+  if (f.quinzena_venda) return `${dias} (${f.quinzena_venda}º)`;
+  return String(dias);
+};
+```
