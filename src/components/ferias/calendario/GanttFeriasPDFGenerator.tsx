@@ -399,12 +399,8 @@ export function GanttFeriasPDFGenerator({ ferias, year, selectedMonths, isFullYe
           let lineY = rowY + 3;
           r.ferias.forEach((f) => {
             getGozoIntervals(f).forEach((iv) => {
-              const dias = Math.round((iv.end.getTime() - iv.start.getTime()) / 86400000) + 1;
-              pdf.text(
-                `  ${format(iv.start, "dd/MM/yyyy")} a ${format(iv.end, "dd/MM/yyyy")} (${dias}d)`,
-                x,
-                lineY
-              );
+              const txt = `  ${format(iv.start, "dd/MM/yyyy")} a ${format(iv.end, "dd/MM/yyyy")} — ${iv.diasGozados}d gozados${iv.diasVendidos > 0 ? ` • ${iv.diasVendidos}d vendidos` : ""}`;
+              pdf.text(txt, x, lineY);
               lineY += 3;
             });
           });
