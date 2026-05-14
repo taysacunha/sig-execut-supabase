@@ -1,32 +1,57 @@
-Plano para corrigir de vez:
+## Objetivo
 
-1. Centralizar a regra do período da venda
-- Criar/usar uma função local que sempre resolva o período da venda como:
-  - `quinzena_venda` quando estiver preenchido com 1 ou 2;
-  - senão, inferir 1 quando a distribuição cadastrada indicar venda ligada ao 1º período;
-  - em qualquer caso indefinido, usar 2º período como padrão.
-- Essa regra será usada tanto na tabela quanto no PDF, para não haver diferença entre tela e exportação.
+Criar uma **nova pasta única** com TODAS as migrations do projeto (as oficiais de `supabase/migrations/` + as soltas de `.lovable/*.sql`), sem mexer em nada do que já existe. Essa nova pasta vira a fonte de verdade para self-hosted e o padrão para migrations futuras.
 
-2. Corrigir a aba “Tabela do Contador” em `/ferias/ferias`
-- Alterar a coluna “Dias Vendidos” para mostrar sempre o sufixo do período quando houver venda, por exemplo:
-  - `10 dias (1º período)`
-  - `10 dias (2º período)`
-- Quando o filtro estiver em “1ª Quinzena”, mostrar dias vendidos somente se a venda pertencer ao 1º período.
-- Quando o filtro estiver em “2ª Quinzena”, mostrar dias vendidos somente se a venda pertencer ao 2º período.
-- Quando o filtro estiver em “Ambos”, mostrar a quantidade com o período explícito.
+## Decisões propostas
 
-3. Corrigir o PDF gerado nessa mesma aba
-- Alterar a coluna “Dias V.” para imprimir `10 (1º)` ou `10 (2º)`.
-- Aplicar a mesma regra de filtro por período usada na tabela.
-- Continuar usando o período vendido para reduzir os dias de gozo do 1º ou 2º período corretamente.
+### 1. Nome e local da nova pasta
+**`db/migrations/`** na raiz do projeto.
 
-4. Corrigir também a página de Relatórios > Contador, se ela for usada
-- Garantir que o preview e o PDF desse componente também usem a mesma regra, para não existir uma segunda tela com comportamento antigo.
+Por que não dentro de `supabase/`? Porque o Supabase CLI lê automaticamente `supabase/migrations/` — se eu duplicar conteúdo lá dentro, ele tentaria reaplicar tudo e quebraria. Uma pasta fora (`db/migrations/`) fica isolada: o Lovable/Supabase continua usando `supabase/migrations/` normalmente, e você usa `db/migrations/` quando for subir o self-hosted.
 
-5. Backfill seguro no banco
-- Criar uma migration para preencher `quinzena_venda = 2` apenas nos registros que têm dias vendidos e estão sem período definido.
-- Não alterar registros que já têm `quinzena_venda = 1` ou `quinzena_venda = 2`.
+(Se preferir outro nome — `migrations/`, `self-hosted/migrations/`, `sql/` — me diz.)
 
-6. Validação
-- Conferir no código que não sobra nenhum ponto exibindo só `10 dias` na Tabela do Contador.
-- Conferir que o PDF usa a função formatada, e não apenas `String(diasVend)`.
+### 2. O que vai dentro
+Cópia exata de:
+- Todos os ~50 arquivos de `supabase/migrations/*.sql` (mantendo o nome com timestamp).
+- Todos os 24 `.sql` de `.lovable/`, **renomeados** com prefixo de timestamp para entrarem na ordem cronológica correta de aplicação.
+
+Exemplo de renomeação:
+```
+.lovable/dev_tracker_migration.sql
+  → db/migrations/20251015000001_dev_tracker_migration.sql
+
+.lovable/backfill_quinzena_venda.sql
+  → db/migrations/20260514000001_backfill_quinzena_venda.sql
+```
+
+Os timestamps das cópias de `.lovable/` vão ser escolhidos para ficarem **antes** das migrations oficiais que dependem deles (ex: `dev_tracker_migration` antes de qualquer migration que altere `dev_tracker`).
+
+### 3. Idempotência
+As cópias dos arquivos de `.lovable/` serão ajustadas para ficarem idempotentes (`IF NOT EXISTS`, `CREATE OR REPLACE`, `DROP POLICY IF EXISTS` antes de `CREATE POLICY`, `UPDATE ... WHERE ... IS NULL`). Assim rodam com segurança num self-hosted limpo **e** num banco que já tem parte do conteúdo aplicado.
+
+As cópias de `supabase/migrations/` ficam **idênticas** ao original (não vou mexer no conteúdo, só copiar).
+
+### 4. README
+Crio `db/migrations/README.md` explicando:
+- O que é a pasta e por que existe (espelho completo para self-hosted).
+- Ordem de aplicação (alfabética por nome do arquivo).
+- Regra: **toda migration nova daqui em diante é criada também aqui**, idempotente.
+- Como aplicar num self-hosted: `psql -f` em ordem, ou `supabase db push` apontando pra essa pasta.
+
+### 5. O que NÃO vou fazer
+- Não mexo em `supabase/migrations/`.
+- Não mexo nem apago nada em `.lovable/`.
+- Não rodo nenhum SQL no banco atual (a pasta é só arquivo no repo).
+
+## Detalhes técnicos
+
+- 24 arquivos em `.lovable/*.sql` + ~50 em `supabase/migrations/` ≈ 74 arquivos copiados em `db/migrations/`.
+- Conflito de timestamp: as migrations oficiais começam em `20251020`. Vou usar `20251015xxxxxx` a `20251019xxxxxx` para enfileirar as de `.lovable/` que precisam vir antes, e timestamps posteriores às últimas oficiais para as que vieram depois (backfills, fixes recentes).
+- Ordem entre arquivos de `.lovable/` será definida lendo cada SQL e colocando dependências (criar tabela → adicionar coluna → backfill → fix policy) na sequência correta.
+
+## Confirmações antes de executar
+
+1. **Nome da pasta**: `db/migrations/` está bom, ou prefere outro?
+2. **Idempotência nas cópias de `.lovable/`**: posso ajustar pra ficarem seguras de rodar várias vezes (recomendo), ou copia exatamente igual ao original?
+3. **Migrations futuras**: confirma que daqui pra frente toda migration nova vai pra **duas** pastas (`supabase/migrations/` para o Lovable + `db/migrations/` para o self-hosted)?

@@ -1,0 +1,1 @@
+ALTER TABLE public.ferias_formulario_anual ADD COLUMN data_inicio_preferencia date;
