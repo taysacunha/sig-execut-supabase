@@ -133,6 +133,16 @@ export function ContadorPDFGenerator() {
     return diasVendidosContador;
   };
 
+  // Formata "Dias Vend." adicionando o sufixo do período (1º/2º) somente no modo "Ambos"
+  // — assim o relatório do contador deixa explícito a qual período aquisitivo a venda
+  // foi alocada, evitando ambiguidade quando os dois períodos aparecem juntos.
+  const formatDiasVendidos = (f: any) => {
+    const dias = getDiasVendidosSelecionado(f);
+    if (dias <= 0) return "0";
+    if (showingAmbos && f.quinzena_venda) return `${dias} (${f.quinzena_venda}º)`;
+    return String(dias);
+  };
+
   const getDiasGozoSelecionado = (f: any) => {
     if (showingPeriodo1) {
       return f.quinzena1_inicio && f.quinzena1_fim
