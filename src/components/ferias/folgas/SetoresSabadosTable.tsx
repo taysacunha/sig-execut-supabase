@@ -338,7 +338,7 @@ export function SetoresSabadosTable({ year, month }: SetoresSabadosTableProps) {
                             {setor.nome}
                           </span>
                         </HoverCardTrigger>
-                        <HoverCardContent side="right" align="start" className="w-80">
+                        <HoverCardContent side="right" align="start" sideOffset={8} collisionPadding={16} avoidCollisions className="w-80 z-[100]">
                           <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
                             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                               Em férias em {format(new Date(year, month - 1), "MMMM yyyy", { locale: ptBR })}
