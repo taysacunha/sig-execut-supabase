@@ -1581,9 +1581,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
               )}
               {/* Períodos oficiais (enviados ao contador) */}
               {isExcecao ? (
-                <Card className="border-primary/40 bg-primary/5">
+                <Card className="border-emerald-500/40 bg-emerald-500/5">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm flex items-center gap-2 text-primary">
+                    <CardTitle className="text-sm flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
                       <FileCheck className="h-4 w-4" /> Enviado ao contador — Períodos oficiais
                     </CardTitle>
                     <p className="text-xs text-muted-foreground">
@@ -1618,6 +1618,43 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                         </FormItem>
                       </CardContent>
                     </Card>
+
+                    {/* Período da venda (informação obrigatória para o relatório do contador) */}
+                    {excecaoTipo === "vender" && excDiasVendidos > 0 && (
+                      <div className="space-y-2 pt-2 border-t border-emerald-500/20">
+                        <Label className="text-sm font-medium flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+                          <FileCheck className="h-4 w-4" />
+                          Período da venda (enviado ao contador)
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Selecione em qual período aquisitivo os <strong>{Math.min(excDiasVendidos, 10)} dia{Math.min(excDiasVendidos, 10) !== 1 ? "s" : ""} vendidos</strong> serão alocados no relatório do contador.
+                        </p>
+                        <Select
+                          value={String(
+                            excDistribuicaoTipo === "1"
+                              ? 1
+                              : excDistribuicaoTipo === "2"
+                              ? 2
+                              : (q1JaGozada ? 2 : excQuinzenaVenda)
+                          )}
+                          onValueChange={(v) => setExcQuinzenaVenda(parseInt(v))}
+                          disabled={excDistribuicaoTipo === "1" || excDistribuicaoTipo === "2"}
+                        >
+                          <SelectTrigger className="max-w-[220px] bg-background">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {!q1JaGozada && <SelectItem value="1">1º Período</SelectItem>}
+                            <SelectItem value="2">2º Período</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {(excDistribuicaoTipo === "1" || excDistribuicaoTipo === "2") && (
+                          <p className="text-xs text-muted-foreground">
+                            Travado em <strong>{excDistribuicaoTipo}º Período</strong> pela distribuição escolhida no gozo interno.
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ) : (
