@@ -372,14 +372,17 @@ export function GanttFeriasView({ ferias, startDate, endDate, onSelectFerias }: 
                                 <div className="font-semibold">{row.nome}</div>
                                 <div className="text-xs">
                                   {row.setor && <span className="text-muted-foreground">{row.setor} • </span>}
-                                  {format(interval.start, "dd/MM/yyyy")} a {format(interval.end, "dd/MM/yyyy")} ({totalDias} dias)
+                                  {format(interval.start, "dd/MM/yyyy")} a {format(interval.end, "dd/MM/yyyy")}
+                                </div>
+                                <div className="text-xs">
+                                  <span className="font-medium">{interval.diasGozados} dia{interval.diasGozados !== 1 ? "s" : ""} gozado{interval.diasGozados !== 1 ? "s" : ""}</span>
+                                  {interval.diasVendidos > 0 && (
+                                    <span className="text-primary"> • {interval.diasVendidos} dia{interval.diasVendidos !== 1 ? "s" : ""} vendido{interval.diasVendidos !== 1 ? "s" : ""}</span>
+                                  )}
                                 </div>
                                 {row.unidade && (
                                   <div className="text-xs text-muted-foreground">Unidade: {row.unidade}</div>
                                 )}
-                                {f.vender_dias && f.dias_vendidos ? (
-                                  <div className="text-xs text-primary">{f.dias_vendidos} dias vendidos</div>
-                                ) : null}
                                 {f.is_excecao && <Badge variant="outline" className="text-[10px] text-orange-600 border-orange-300">Exceção</Badge>}
                                 {hasOverlap && (
                                   <div className="text-xs text-destructive font-medium">⚠ Sobreposição com colega do mesmo setor</div>
