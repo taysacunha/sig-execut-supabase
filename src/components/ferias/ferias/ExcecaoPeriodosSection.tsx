@@ -4,7 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
-import { Info, AlertTriangle, Plus, Trash2, DollarSign, CalendarClock, FileSearch } from "lucide-react";
+import { Info, AlertTriangle, Plus, Trash2, DollarSign, CalendarClock, FileSearch, FileCheck } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, parseISO, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -39,6 +40,11 @@ interface ExcecaoPeriodosSectionProps {
   /** True quando o 1º período oficial já foi gozado (status terminal e datas inalteradas).
    *  Quando true: limita disponibilidade a 15 dias e oculta opções "1º Período" e "Ambos". */
   q1JaGozada?: boolean;
+  /** Período (1 ou 2) ao qual os dias vendidos serão alocados no relatório do contador.
+   *  Necessário porque, em modo "ambos"/"livre", o sistema precisa saber em qual
+   *  período aquisitivo a venda foi feita para o relatório oficial. */
+  quinzenaVenda?: number;
+  onQuinzenaVendaChange?: (q: number) => void;
 }
 
 const formatDateBR = (dateStr: string) => {
