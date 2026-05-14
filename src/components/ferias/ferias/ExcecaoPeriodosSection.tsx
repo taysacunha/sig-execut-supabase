@@ -40,11 +40,6 @@ interface ExcecaoPeriodosSectionProps {
   /** True quando o 1º período oficial já foi gozado (status terminal e datas inalteradas).
    *  Quando true: limita disponibilidade a 15 dias e oculta opções "1º Período" e "Ambos". */
   q1JaGozada?: boolean;
-  /** Período (1 ou 2) ao qual os dias vendidos serão alocados no relatório do contador.
-   *  Necessário porque, em modo "ambos"/"livre", o sistema precisa saber em qual
-   *  período aquisitivo a venda foi feita para o relatório oficial. */
-  quinzenaVenda?: number;
-  onQuinzenaVendaChange?: (q: number) => void;
 }
 
 const formatDateBR = (dateStr: string) => {
