@@ -107,6 +107,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const [excDiasVendidos, setExcDiasVendidos] = useState(0);
   const [excPeriodos, setExcPeriodos] = useState<GozoPeriodo[]>([]);
   const [excHydrating, setExcHydrating] = useState(false);
+  // Período (1 ou 2) ao qual os dias vendidos serão atribuídos no relatório do contador
+  // (necessário em modo exceção quando a distribuição é "ambos" ou "livre").
+  const [excQuinzenaVenda, setExcQuinzenaVenda] = useState<number>(1);
   const [selectedPeriodoKey, setSelectedPeriodoKey] = useState<string>("");
 
   const form = useForm<FeriasFormData>({
