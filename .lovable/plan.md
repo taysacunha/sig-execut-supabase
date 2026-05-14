@@ -1,57 +1,34 @@
-## Objetivo
+Plano de correção
 
-Criar uma **nova pasta única** com TODAS as migrations do projeto (as oficiais de `supabase/migrations/` + as soltas de `.lovable/*.sql`), sem mexer em nada do que já existe. Essa nova pasta vira a fonte de verdade para self-hosted e o padrão para migrations futuras.
+1. Regras de folga de sábado por férias
+- Ajustar `GeradorFolgasDialog` para calcular o bloqueio sempre pelos períodos reais de gozo:
+  - `ferias_gozo_periodos` quando existir;
+  - senão `gozo_quinzena*_inicio/fim` quando houver gozo diferente;
+  - senão `quinzena*_inicio/fim`.
+- Unificar períodos contíguos ou sobrepostos antes de decidir o bloqueio.
+- Nova regra: se o colaborador tiver 15 dias ou mais seguidos de gozo real, ele fica bloqueado em todos os meses tocados por esse bloco contínuo. Isso cobre o caso Amally: 15/06 a 29/06 + 30/06 a 14/07 vira um bloco único de 30 dias, bloqueando junho e julho.
+- Manter liberação para férias curtas no mês: se houver apenas poucos dias de férias reais no mês, como Maria de Lourdes com 1 dia em julho, não bloquear por férias.
+- Corrigir o caso Pedro: 15 dias diretos em julho bloqueiam julho.
+- Melhorar os motivos mostrados no preview/diagnóstico para diferenciar “15+ dias seguidos”, “30 dias seguidos em dois períodos”, “férias no mês principal” e casos curtos liberados.
 
-## Decisões propostas
+2. PDF da página Colaboradores
+- Adicionar botão “PDF” na página de colaboradores ao lado de filtros/novo colaborador.
+- Gerar PDF usando os dados já filtrados e pesquisados na tela, não a lista completa bruta.
+- Colunas: colaborador, setor, cargo e admissão, respeitando a ordenação/filtros atuais.
+- Nomear o arquivo com data, por exemplo `colaboradores-filtrados-YYYY-MM-DD.pdf`.
 
-### 1. Nome e local da nova pasta
-**`db/migrations/`** na raiz do projeto.
+3. Auditoria mais útil
+- Ampliar a pesquisa da auditoria de módulos para buscar também por:
+  - usuário/e-mail;
+  - ação traduzida (`inseriu`, `alterou`, `excluiu` etc.);
+  - tabela traduzida (`colaborador`, `férias`, `folga` etc.);
+  - valores dentro de `old_data`, `new_data` e campos alterados, incluindo nome de colaborador quando estiver no JSON.
+- Traduzir nomes técnicos de campos para rótulos legíveis, evitando mostrar só `id`, `colaborador_id`, `setor_titular_id` etc. quando houver valor mais claro disponível.
+- Criar uma coluna/resumo “Registro” para mostrar o alvo tratado, por exemplo `Colaborador: Maria de Lourdes`, quando os dados do log permitirem.
+- No detalhe expandido, trocar o JSON bruto por comparação tratada campo a campo, mantendo JSON bruto apenas como fallback quando não houver tradução segura.
+- Aumentar a área útil da tabela/remover a altura fixa pequena e permitir visualizar muito mais linhas: manter paginação com opções maiores e adicionar 200 linhas por página, além de carregar até 5000 registros como já existe.
 
-Por que não dentro de `supabase/`? Porque o Supabase CLI lê automaticamente `supabase/migrations/` — se eu duplicar conteúdo lá dentro, ele tentaria reaplicar tudo e quebraria. Uma pasta fora (`db/migrations/`) fica isolada: o Lovable/Supabase continua usando `supabase/migrations/` normalmente, e você usa `db/migrations/` quando for subir o self-hosted.
-
-(Se preferir outro nome — `migrations/`, `self-hosted/migrations/`, `sql/` — me diz.)
-
-### 2. O que vai dentro
-Cópia exata de:
-- Todos os ~50 arquivos de `supabase/migrations/*.sql` (mantendo o nome com timestamp).
-- Todos os 24 `.sql` de `.lovable/`, **renomeados** com prefixo de timestamp para entrarem na ordem cronológica correta de aplicação.
-
-Exemplo de renomeação:
-```
-.lovable/dev_tracker_migration.sql
-  → db/migrations/20251015000001_dev_tracker_migration.sql
-
-.lovable/backfill_quinzena_venda.sql
-  → db/migrations/20260514000001_backfill_quinzena_venda.sql
-```
-
-Os timestamps das cópias de `.lovable/` vão ser escolhidos para ficarem **antes** das migrations oficiais que dependem deles (ex: `dev_tracker_migration` antes de qualquer migration que altere `dev_tracker`).
-
-### 3. Idempotência
-As cópias dos arquivos de `.lovable/` serão ajustadas para ficarem idempotentes (`IF NOT EXISTS`, `CREATE OR REPLACE`, `DROP POLICY IF EXISTS` antes de `CREATE POLICY`, `UPDATE ... WHERE ... IS NULL`). Assim rodam com segurança num self-hosted limpo **e** num banco que já tem parte do conteúdo aplicado.
-
-As cópias de `supabase/migrations/` ficam **idênticas** ao original (não vou mexer no conteúdo, só copiar).
-
-### 4. README
-Crio `db/migrations/README.md` explicando:
-- O que é a pasta e por que existe (espelho completo para self-hosted).
-- Ordem de aplicação (alfabética por nome do arquivo).
-- Regra: **toda migration nova daqui em diante é criada também aqui**, idempotente.
-- Como aplicar num self-hosted: `psql -f` em ordem, ou `supabase db push` apontando pra essa pasta.
-
-### 5. O que NÃO vou fazer
-- Não mexo em `supabase/migrations/`.
-- Não mexo nem apago nada em `.lovable/`.
-- Não rodo nenhum SQL no banco atual (a pasta é só arquivo no repo).
-
-## Detalhes técnicos
-
-- 24 arquivos em `.lovable/*.sql` + ~50 em `supabase/migrations/` ≈ 74 arquivos copiados em `db/migrations/`.
-- Conflito de timestamp: as migrations oficiais começam em `20251020`. Vou usar `20251015xxxxxx` a `20251019xxxxxx` para enfileirar as de `.lovable/` que precisam vir antes, e timestamps posteriores às últimas oficiais para as que vieram depois (backfills, fixes recentes).
-- Ordem entre arquivos de `.lovable/` será definida lendo cada SQL e colocando dependências (criar tabela → adicionar coluna → backfill → fix policy) na sequência correta.
-
-## Confirmações antes de executar
-
-1. **Nome da pasta**: `db/migrations/` está bom, ou prefere outro?
-2. **Idempotência nas cópias de `.lovable/`**: posso ajustar pra ficarem seguras de rodar várias vezes (recomendo), ou copia exatamente igual ao original?
-3. **Migrations futuras**: confirma que daqui pra frente toda migration nova vai pra **duas** pastas (`supabase/migrations/` para o Lovable + `db/migrations/` para o self-hosted)?
+4. Validação
+- Criar testes unitários para a função de elegibilidade/bloqueio de folgas cobrindo Amally, Maria de Lourdes e Pedro.
+- Conferir no código que a geração usa somente períodos reais de gozo e não confunde período cadastrado, venda ou exceção.
+- Validar que o PDF usa exatamente o filtro ativo e que a auditoria pesquisa pelos termos tratados.
