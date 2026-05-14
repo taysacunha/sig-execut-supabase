@@ -47,6 +47,7 @@ interface Ferias {
   is_excecao: boolean;
   dias_vendidos: number | null;
   vender_dias: boolean;
+  quinzena_venda?: number | null;
   origem: string | null;
   colaborador?: {
     nome: string;
@@ -103,6 +104,7 @@ export function CalendarioFeriasTab() {
           is_excecao,
           dias_vendidos,
           vender_dias,
+          quinzena_venda,
           origem,
           colaborador:ferias_colaboradores!ferias_ferias_colaborador_id_fkey(
             nome,
@@ -527,7 +529,7 @@ export function CalendarioFeriasTab() {
             </Button>
           </div>
           {hasActiveFilters && (
-            <Button variant="outline" size="sm" onClick={resetFilters} className="gap-1 border-destructive text-destructive hover:bg-destructive/10">
+            <Button variant="outline" size="sm" onClick={resetFilters} className="gap-1 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive">
               <X className="h-4 w-4" />
               Limpar filtros
             </Button>

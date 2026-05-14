@@ -33,6 +33,7 @@ interface Ferias {
   is_excecao: boolean;
   dias_vendidos: number | null;
   vender_dias: boolean;
+  quinzena_venda?: number | null;
   origem: string | null;
   colaborador?: {
     nome: string;
@@ -65,28 +66,68 @@ const DAY_WIDTH = 28;
 const ROW_HEIGHT = 52;
 const NAME_COL_WIDTH = 240;
 
-function getGozoIntervals(f: Ferias): Array<{ start: Date; end: Date }> {
+export interface GozoInterval {
+  start: Date;
+  end: Date;
+  diasGozados: number;
+  diasVendidos: number;
+}
+
+function build(start: Date, end: Date, diasVendidos = 0): GozoInterval {
+  const diasGozados = differenceInDays(end, start) + 1;
+  return { start, end, diasGozados, diasVendidos };
+}
+
+function shrinkByVenda(start: Date, end: Date, venda: number): { gozoEnd: Date; gozados: number; vendidos: number } | null {
+  const total = differenceInDays(end, start) + 1;
+  const gozados = Math.max(0, total - venda);
+  const vendidos = Math.min(total, venda);
+  if (gozados <= 0) return null;
+  const gozoEnd = new Date(start.getTime() + (gozados - 1) * 86400000);
+  return { gozoEnd, gozados, vendidos };
+}
+
+export function getGozoIntervals(f: Ferias): GozoInterval[] {
+  // Flexible periods: keep only internal gozo (drop "vender" entries)
   if (f.gozo_flexivel && f._gozoPeriodos && f._gozoPeriodos.length > 0) {
-    return f._gozoPeriodos.map((p) => ({
-      start: parseISO(p.data_inicio),
-      end: parseISO(p.data_fim),
-    }));
+    const internos = f._gozoPeriodos.filter((p) => p.tipo !== "vender");
+    const source = internos.length > 0 ? internos : f._gozoPeriodos;
+    return source.map((p) => build(parseISO(p.data_inicio), parseISO(p.data_fim)));
   }
+  // Legacy: gozo_diferente uses internal gozo dates
   if (f.gozo_diferente) {
-    const intervals: Array<{ start: Date; end: Date }> = [];
+    const out: GozoInterval[] = [];
     if (f.gozo_quinzena1_inicio && f.gozo_quinzena1_fim) {
-      intervals.push({ start: parseISO(f.gozo_quinzena1_inicio), end: parseISO(f.gozo_quinzena1_fim) });
+      out.push(build(parseISO(f.gozo_quinzena1_inicio), parseISO(f.gozo_quinzena1_fim)));
     }
     if (f.gozo_quinzena2_inicio && f.gozo_quinzena2_fim) {
-      intervals.push({ start: parseISO(f.gozo_quinzena2_inicio), end: parseISO(f.gozo_quinzena2_fim) });
+      out.push(build(parseISO(f.gozo_quinzena2_inicio), parseISO(f.gozo_quinzena2_fim)));
     }
-    return intervals;
+    return out;
   }
-  const intervals = [{ start: parseISO(f.quinzena1_inicio), end: parseISO(f.quinzena1_fim) }];
+  // Legacy: official quinzenas — subtract sold days from end of the sold quinzena
+  const venda = f.vender_dias && f.dias_vendidos ? f.dias_vendidos : 0;
+  const qVenda = f.quinzena_venda || 1;
+  const out: GozoInterval[] = [];
+  const q1s = parseISO(f.quinzena1_inicio);
+  const q1e = parseISO(f.quinzena1_fim);
+  if (venda > 0 && qVenda === 1) {
+    const r = shrinkByVenda(q1s, q1e, venda);
+    if (r) out.push({ start: q1s, end: r.gozoEnd, diasGozados: r.gozados, diasVendidos: r.vendidos });
+  } else {
+    out.push(build(q1s, q1e));
+  }
   if (f.quinzena2_inicio && f.quinzena2_fim) {
-    intervals.push({ start: parseISO(f.quinzena2_inicio), end: parseISO(f.quinzena2_fim) });
+    const q2s = parseISO(f.quinzena2_inicio);
+    const q2e = parseISO(f.quinzena2_fim);
+    if (venda > 0 && qVenda === 2) {
+      const r = shrinkByVenda(q2s, q2e, venda);
+      if (r) out.push({ start: q2s, end: r.gozoEnd, diasGozados: r.gozados, diasVendidos: r.vendidos });
+    } else {
+      out.push(build(q2s, q2e));
+    }
   }
-  return intervals;
+  return out;
 }
 
 export function GanttFeriasView({ ferias, startDate, endDate, onSelectFerias }: GanttFeriasViewProps) {
@@ -331,14 +372,17 @@ export function GanttFeriasView({ ferias, startDate, endDate, onSelectFerias }: 
                                 <div className="font-semibold">{row.nome}</div>
                                 <div className="text-xs">
                                   {row.setor && <span className="text-muted-foreground">{row.setor} • </span>}
-                                  {format(interval.start, "dd/MM/yyyy")} a {format(interval.end, "dd/MM/yyyy")} ({totalDias} dias)
+                                  {format(interval.start, "dd/MM/yyyy")} a {format(interval.end, "dd/MM/yyyy")}
+                                </div>
+                                <div className="text-xs">
+                                  <span className="font-medium">{interval.diasGozados} dia{interval.diasGozados !== 1 ? "s" : ""} gozado{interval.diasGozados !== 1 ? "s" : ""}</span>
+                                  {interval.diasVendidos > 0 && (
+                                    <span className="text-primary"> • {interval.diasVendidos} dia{interval.diasVendidos !== 1 ? "s" : ""} vendido{interval.diasVendidos !== 1 ? "s" : ""}</span>
+                                  )}
                                 </div>
                                 {row.unidade && (
                                   <div className="text-xs text-muted-foreground">Unidade: {row.unidade}</div>
                                 )}
-                                {f.vender_dias && f.dias_vendidos ? (
-                                  <div className="text-xs text-primary">{f.dias_vendidos} dias vendidos</div>
-                                ) : null}
                                 {f.is_excecao && <Badge variant="outline" className="text-[10px] text-orange-600 border-orange-300">Exceção</Badge>}
                                 {hasOverlap && (
                                   <div className="text-xs text-destructive font-medium">⚠ Sobreposição com colega do mesmo setor</div>

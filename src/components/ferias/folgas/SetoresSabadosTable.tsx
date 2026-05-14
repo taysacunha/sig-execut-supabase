@@ -7,8 +7,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Loader2, Grid3X3 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { parseISO, max as dateMax, min as dateMin, differenceInDays } from "date-fns";
 
 interface SetoresSabadosTableProps {
   year: number;
@@ -53,6 +55,109 @@ export function SetoresSabadosTable({ year, month }: SetoresSabadosTableProps) {
     const weekends = eachWeekendOfInterval({ start, end });
     return weekends.filter(d => isSaturday(d)).map(d => format(d, "yyyy-MM-dd"));
   }, [year, month]);
+
+  const monthRange = useMemo(() => ({
+    start: startOfMonth(new Date(year, month - 1)),
+    end: endOfMonth(new Date(year, month - 1)),
+  }), [year, month]);
+
+  // Buscar férias dos colaboradores no mês selecionado (gozo interno)
+  const { data: feriasMes = [] } = useQuery({
+    queryKey: ["ferias-folgas-mapa-setor-ferias", year, month],
+    queryFn: async () => {
+      const monthStart = format(monthRange.start, "yyyy-MM-dd");
+      const monthEnd = format(monthRange.end, "yyyy-MM-dd");
+
+      const { data, error } = await supabase
+        .from("ferias_ferias")
+        .select(`
+          id, colaborador_id,
+          quinzena1_inicio, quinzena1_fim, quinzena2_inicio, quinzena2_fim,
+          gozo_diferente, gozo_quinzena1_inicio, gozo_quinzena1_fim,
+          gozo_quinzena2_inicio, gozo_quinzena2_fim,
+          gozo_flexivel, vender_dias, dias_vendidos, quinzena_venda, status,
+          colaborador:ferias_colaboradores!ferias_ferias_colaborador_id_fkey(nome, nome_exibicao, setor_titular_id)
+        `)
+        .in("status", ["aprovada", "em_gozo_q1", "q1_concluida", "em_gozo_q2", "concluida", "em_gozo"])
+        .or(`and(quinzena1_inicio.lte.${monthEnd},quinzena1_fim.gte.${monthStart}),and(quinzena2_inicio.lte.${monthEnd},quinzena2_fim.gte.${monthStart})`);
+
+      if (error) throw error;
+      let rows = (data || []) as any[];
+      try {
+        const ids = rows.map((r) => r.id);
+        if (ids.length > 0) {
+          const { data: gp } = await supabase
+            .from("ferias_gozo_periodos" as any)
+            .select("ferias_id, tipo, data_inicio, data_fim")
+            .in("ferias_id", ids);
+          if (gp && gp.length > 0) {
+            const byF: Record<string, any[]> = {};
+            for (const p of gp as any[]) (byF[p.ferias_id] ||= []).push(p);
+            rows = rows.map((r) => ({ ...r, _gozoPeriodos: byF[r.id] || [] }));
+          }
+        }
+      } catch { /* tabela pode não existir */ }
+      return rows;
+    },
+  });
+
+  // Mapa setor_id -> [{ nome, start, end, dias }]
+  const feriasPorSetor = useMemo(() => {
+    const map = new Map<string, Array<{ nome: string; start: Date; end: Date; dias: number }>>();
+    feriasMes.forEach((f: any) => {
+      const setorId: string = f.colaborador?.setor_titular_id;
+      if (!setorId) return;
+      // Build internal gozo intervals
+      let intervals: Array<{ start: Date; end: Date }> = [];
+      if (f.gozo_flexivel && f._gozoPeriodos?.length) {
+        const internos = f._gozoPeriodos.filter((p: any) => p.tipo !== "vender");
+        const src = internos.length > 0 ? internos : f._gozoPeriodos;
+        intervals = src.map((p: any) => ({ start: parseISO(p.data_inicio), end: parseISO(p.data_fim) }));
+      } else if (f.gozo_diferente) {
+        if (f.gozo_quinzena1_inicio && f.gozo_quinzena1_fim)
+          intervals.push({ start: parseISO(f.gozo_quinzena1_inicio), end: parseISO(f.gozo_quinzena1_fim) });
+        if (f.gozo_quinzena2_inicio && f.gozo_quinzena2_fim)
+          intervals.push({ start: parseISO(f.gozo_quinzena2_inicio), end: parseISO(f.gozo_quinzena2_fim) });
+      } else {
+        const venda = f.vender_dias && f.dias_vendidos ? f.dias_vendidos : 0;
+        const qV = f.quinzena_venda || 1;
+        const q1s = parseISO(f.quinzena1_inicio);
+        let q1e = parseISO(f.quinzena1_fim);
+        if (venda > 0 && qV === 1) {
+          const total = differenceInDays(q1e, q1s) + 1;
+          const goz = Math.max(0, total - venda);
+          if (goz > 0) intervals.push({ start: q1s, end: new Date(q1s.getTime() + (goz - 1) * 86400000) });
+        } else {
+          intervals.push({ start: q1s, end: q1e });
+        }
+        if (f.quinzena2_inicio && f.quinzena2_fim) {
+          const q2s = parseISO(f.quinzena2_inicio);
+          const q2e = parseISO(f.quinzena2_fim);
+          if (venda > 0 && qV === 2) {
+            const total = differenceInDays(q2e, q2s) + 1;
+            const goz = Math.max(0, total - venda);
+            if (goz > 0) intervals.push({ start: q2s, end: new Date(q2s.getTime() + (goz - 1) * 86400000) });
+          } else {
+            intervals.push({ start: q2s, end: q2e });
+          }
+        }
+      }
+      // Intersect with month
+      intervals.forEach((iv) => {
+        const s = dateMax([iv.start, monthRange.start]);
+        const e = dateMin([iv.end, monthRange.end]);
+        if (s > e) return;
+        const dias = differenceInDays(e, s) + 1;
+        const nome = f.colaborador?.nome_exibicao || f.colaborador?.nome || "Colaborador";
+        const list = map.get(setorId) || [];
+        list.push({ nome, start: s, end: e, dias });
+        map.set(setorId, list);
+      });
+    });
+    // sort each list
+    map.forEach((list) => list.sort((a, b) => a.start.getTime() - b.start.getTime() || a.nome.localeCompare(b.nome)));
+    return map;
+  }, [feriasMes, monthRange]);
 
   // Query setores
   const { data: setores = [] } = useQuery({
@@ -227,7 +332,42 @@ export function SetoresSabadosTable({ year, month }: SetoresSabadosTableProps) {
                       "sticky left-0 font-semibold z-10 border-r-2 border-border",
                       idx % 2 === 0 ? "bg-background" : "bg-muted/30"
                     )}>
-                      {setor.nome}
+                      <HoverCard openDelay={150} closeDelay={80}>
+                        <HoverCardTrigger asChild>
+                          <span className="cursor-help underline decoration-dotted decoration-muted-foreground/40 underline-offset-4">
+                            {setor.nome}
+                          </span>
+                        </HoverCardTrigger>
+                        <HoverCardContent side="right" className="w-72">
+                          <div className="space-y-2">
+                            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                              Em férias em {format(new Date(year, month - 1), "MMMM yyyy", { locale: ptBR })}
+                            </div>
+                            {(() => {
+                              const list = feriasPorSetor.get(setor.id) || [];
+                              if (list.length === 0) {
+                                return (
+                                  <p className="text-sm text-muted-foreground">
+                                    Nenhum colaborador deste setor está de férias neste mês.
+                                  </p>
+                                );
+                              }
+                              return (
+                                <ul className="space-y-1.5 max-h-64 overflow-y-auto">
+                                  {list.map((it, i) => (
+                                    <li key={i} className="text-sm">
+                                      <div className="font-medium">{it.nome}</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {format(it.start, "dd/MM", { locale: ptBR })} – {format(it.end, "dd/MM", { locale: ptBR })} · {it.dias} dia{it.dias !== 1 ? "s" : ""} no mês
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ul>
+                              );
+                            })()}
+                          </div>
+                        </HoverCardContent>
+                      </HoverCard>
                     </TableCell>
                     {saturdaysOfMonth.map((sat, colIdx) => {
                       const folgasNaCelula = matrix[setor.id]?.[sat] || [];

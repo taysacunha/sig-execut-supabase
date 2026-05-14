@@ -10,6 +10,7 @@ interface GozoPeriodo {
   ferias_id: string;
   data_inicio: string;
   data_fim: string;
+  tipo?: string;
 }
 
 interface Ferias {
@@ -26,6 +27,9 @@ interface Ferias {
   gozo_quinzena2_fim: string | null;
   gozo_flexivel?: boolean;
   is_excecao: boolean;
+  vender_dias?: boolean;
+  dias_vendidos?: number | null;
+  quinzena_venda?: number | null;
   colaborador?: {
     nome: string;
     setor?: { id: string; nome: string } | null;
@@ -57,21 +61,54 @@ const SETOR_COLORS: Array<{ bg: [number, number, number]; border: [number, numbe
   { bg: [247, 219, 232], border: [204, 76, 142] },
 ];
 
-function getGozoIntervals(f: Ferias): Array<{ start: Date; end: Date }> {
+interface GozoInterval { start: Date; end: Date; diasGozados: number; diasVendidos: number; }
+
+const daysBetween = (a: Date, b: Date) => Math.round((b.getTime() - a.getTime()) / 86400000) + 1;
+const mk = (start: Date, end: Date, diasVendidos = 0): GozoInterval => ({ start, end, diasGozados: daysBetween(start, end), diasVendidos });
+
+function getGozoIntervals(f: Ferias): GozoInterval[] {
   if (f.gozo_flexivel && f._gozoPeriodos && f._gozoPeriodos.length > 0) {
-    return f._gozoPeriodos.map((p) => ({ start: parseISO(p.data_inicio), end: parseISO(p.data_fim) }));
+    const internos = f._gozoPeriodos.filter((p) => p.tipo !== "vender");
+    const source = internos.length > 0 ? internos : f._gozoPeriodos;
+    return source.map((p) => mk(parseISO(p.data_inicio), parseISO(p.data_fim)));
   }
   if (f.gozo_diferente) {
-    const out: Array<{ start: Date; end: Date }> = [];
+    const out: GozoInterval[] = [];
     if (f.gozo_quinzena1_inicio && f.gozo_quinzena1_fim)
-      out.push({ start: parseISO(f.gozo_quinzena1_inicio), end: parseISO(f.gozo_quinzena1_fim) });
+      out.push(mk(parseISO(f.gozo_quinzena1_inicio), parseISO(f.gozo_quinzena1_fim)));
     if (f.gozo_quinzena2_inicio && f.gozo_quinzena2_fim)
-      out.push({ start: parseISO(f.gozo_quinzena2_inicio), end: parseISO(f.gozo_quinzena2_fim) });
+      out.push(mk(parseISO(f.gozo_quinzena2_inicio), parseISO(f.gozo_quinzena2_fim)));
     return out;
   }
-  const out = [{ start: parseISO(f.quinzena1_inicio), end: parseISO(f.quinzena1_fim) }];
-  if (f.quinzena2_inicio && f.quinzena2_fim)
-    out.push({ start: parseISO(f.quinzena2_inicio), end: parseISO(f.quinzena2_fim) });
+  const venda = f.vender_dias && f.dias_vendidos ? f.dias_vendidos : 0;
+  const qV = f.quinzena_venda || 1;
+  const out: GozoInterval[] = [];
+  const q1s = parseISO(f.quinzena1_inicio);
+  const q1e = parseISO(f.quinzena1_fim);
+  if (venda > 0 && qV === 1) {
+    const total = daysBetween(q1s, q1e);
+    const goz = Math.max(0, total - venda);
+    if (goz > 0) {
+      const end = new Date(q1s.getTime() + (goz - 1) * 86400000);
+      out.push({ start: q1s, end, diasGozados: goz, diasVendidos: Math.min(total, venda) });
+    }
+  } else {
+    out.push(mk(q1s, q1e));
+  }
+  if (f.quinzena2_inicio && f.quinzena2_fim) {
+    const q2s = parseISO(f.quinzena2_inicio);
+    const q2e = parseISO(f.quinzena2_fim);
+    if (venda > 0 && qV === 2) {
+      const total = daysBetween(q2s, q2e);
+      const goz = Math.max(0, total - venda);
+      if (goz > 0) {
+        const end = new Date(q2s.getTime() + (goz - 1) * 86400000);
+        out.push({ start: q2s, end, diasGozados: goz, diasVendidos: Math.min(total, venda) });
+      }
+    } else {
+      out.push(mk(q2s, q2e));
+    }
+  }
   return out;
 }
 
@@ -362,12 +399,8 @@ export function GanttFeriasPDFGenerator({ ferias, year, selectedMonths, isFullYe
           let lineY = rowY + 3;
           r.ferias.forEach((f) => {
             getGozoIntervals(f).forEach((iv) => {
-              const dias = Math.round((iv.end.getTime() - iv.start.getTime()) / 86400000) + 1;
-              pdf.text(
-                `  ${format(iv.start, "dd/MM/yyyy")} a ${format(iv.end, "dd/MM/yyyy")} (${dias}d)`,
-                x,
-                lineY
-              );
+              const txt = `  ${format(iv.start, "dd/MM/yyyy")} a ${format(iv.end, "dd/MM/yyyy")} — ${iv.diasGozados}d gozados${iv.diasVendidos > 0 ? ` • ${iv.diasVendidos}d vendidos` : ""}`;
+              pdf.text(txt, x, lineY);
               lineY += 3;
             });
           });
