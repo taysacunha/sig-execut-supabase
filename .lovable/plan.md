@@ -1,62 +1,32 @@
-## Objetivo
+Plano para corrigir de vez:
 
-Garantir que a informação do período aquisitivo da venda (1º/2º) apareça sempre no relatório do contador (preview e PDF), e fazer um backfill nos registros antigos sem `quinzena_venda` definido.
+1. Centralizar a regra do período da venda
+- Criar/usar uma função local que sempre resolva o período da venda como:
+  - `quinzena_venda` quando estiver preenchido com 1 ou 2;
+  - senão, inferir 1 quando a distribuição cadastrada indicar venda ligada ao 1º período;
+  - em qualquer caso indefinido, usar 2º período como padrão.
+- Essa regra será usada tanto na tabela quanto no PDF, para não haver diferença entre tela e exportação.
 
-## 1. Mostrar sufixo do período sempre (não só em "Ambos")
+2. Corrigir a aba “Tabela do Contador” em `/ferias/ferias`
+- Alterar a coluna “Dias Vendidos” para mostrar sempre o sufixo do período quando houver venda, por exemplo:
+  - `10 dias (1º período)`
+  - `10 dias (2º período)`
+- Quando o filtro estiver em “1ª Quinzena”, mostrar dias vendidos somente se a venda pertencer ao 1º período.
+- Quando o filtro estiver em “2ª Quinzena”, mostrar dias vendidos somente se a venda pertencer ao 2º período.
+- Quando o filtro estiver em “Ambos”, mostrar a quantidade com o período explícito.
 
-Arquivo: `src/components/ferias/relatorios/ContadorPDFGenerator.tsx`
+3. Corrigir o PDF gerado nessa mesma aba
+- Alterar a coluna “Dias V.” para imprimir `10 (1º)` ou `10 (2º)`.
+- Aplicar a mesma regra de filtro por período usada na tabela.
+- Continuar usando o período vendido para reduzir os dias de gozo do 1º ou 2º período corretamente.
 
-- Atualizar a função `formatDiasVendidos` para sempre adicionar o sufixo `(1º)` ou `(2º)` quando `dias > 0` e `f.quinzena_venda` estiver definido — atualmente o sufixo só aparece em `showingAmbos`.
-- Resultado: no modo 1ª Quinzena, 2ª Quinzena e Ambos, a célula "Dias Vend." passa a exibir, por exemplo, `10 (1º)`.
-- Atualizar o texto do rodapé do PDF para refletir que o sufixo aparece em todos os modos.
-- O cabeçalho da coluna e o restante da lógica (`getDiasVendidosSelecionado`, filtragem por período) continuam iguais.
+4. Corrigir também a página de Relatórios > Contador, se ela for usada
+- Garantir que o preview e o PDF desse componente também usem a mesma regra, para não existir uma segunda tela com comportamento antigo.
 
-## 2. Backfill de `quinzena_venda` para registros antigos
+5. Backfill seguro no banco
+- Criar uma migration para preencher `quinzena_venda = 2` apenas nos registros que têm dias vendidos e estão sem período definido.
+- Não alterar registros que já têm `quinzena_venda = 1` ou `quinzena_venda = 2`.
 
-Criar uma migration nova (`supabase/migrations/<timestamp>_backfill_quinzena_venda.sql`) com a regra:
-
-- Aplicar somente onde `dias_vendidos > 0` AND `quinzena_venda IS NULL`.
-- Regras de inferência, na ordem:
-  1. `distribuicao_tipo = '1'` → `quinzena_venda = 1`
-  2. `distribuicao_tipo = '2'` → `quinzena_venda = 2`
-  3. Quinzena 1 com duração de exatamente 5 dias (ou seja, `quinzena1_fim - quinzena1_inicio + 1 = 5`) e quinzena 2 cheia → `quinzena_venda = 1` (caso da Ivone).
-  4. Quinzena 2 com 5 dias e quinzena 1 cheia → `quinzena_venda = 2`.
-  5. Qualquer outro caso (ambos/livre sem padrão claro, gozo flexível, gozo diferente, etc.) → `quinzena_venda = 2` (default solicitado).
-
-Registros que já têm `quinzena_venda` preenchido não são alterados.
-
-## 3. Verificação
-
-- Abrir a aba "Tabela Contador" e conferir que Ivone aparece com `10 (1º)` tanto no preview quanto no PDF gerado.
-- Conferir que registros sem `quinzena_venda` agora exibem `(2º)` (ou o inferido).
-- Conferir os 3 modos de período (Ambos, 1ª Quinzena, 2ª Quinzena) — em modos individuais, o sufixo confirma de qual período veio a venda.
-
-## Detalhes técnicos
-
-```sql
--- Backfill
-UPDATE public.ferias_ferias
-SET quinzena_venda = CASE
-  WHEN distribuicao_tipo = '1' THEN 1
-  WHEN distribuicao_tipo = '2' THEN 2
-  WHEN quinzena1_inicio IS NOT NULL AND quinzena1_fim IS NOT NULL
-       AND (quinzena1_fim - quinzena1_inicio + 1) = 5
-       AND quinzena2_inicio IS NOT NULL AND quinzena2_fim IS NOT NULL
-       AND (quinzena2_fim - quinzena2_inicio + 1) >= 15 THEN 1
-  WHEN quinzena2_inicio IS NOT NULL AND quinzena2_fim IS NOT NULL
-       AND (quinzena2_fim - quinzena2_inicio + 1) = 5
-       AND (quinzena1_fim - quinzena1_inicio + 1) >= 15 THEN 2
-  ELSE 2
-END
-WHERE dias_vendidos > 0 AND quinzena_venda IS NULL;
-```
-
-```ts
-// formatDiasVendidos novo
-const formatDiasVendidos = (f: any) => {
-  const dias = getDiasVendidosSelecionado(f);
-  if (dias <= 0) return "0";
-  if (f.quinzena_venda) return `${dias} (${f.quinzena_venda}º)`;
-  return String(dias);
-};
-```
+6. Validação
+- Conferir no código que não sobra nenhum ponto exibindo só `10 dias` na Tabela do Contador.
+- Conferir que o PDF usa a função formatada, e não apenas `String(diasVend)`.

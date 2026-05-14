@@ -456,6 +456,13 @@ export default function FeriasFerias() {
     });
   }, [contadorData, contadorMesFilter, contadorPeriodoFilter]);
 
+  // Resolve o período da venda: usa quinzena_venda quando definido,
+  // caso contrário aplica padrão = 2º período.
+  const resolveQuinzenaVenda = useCallback((f: FeriasRecord): 1 | 2 => {
+    if (f.quinzena_venda === 1 || f.quinzena_venda === 2) return f.quinzena_venda as 1 | 2;
+    return 2;
+  }, []);
+
   const contadorFilteredPagination = usePagination(contadorDataFiltered, contadorPerPage);
 
   const calcAdjustedPeriodo = (inicio: string, fim: string, diasVendidos: number) => {
@@ -529,12 +536,17 @@ export default function FeriasFerias() {
         pdf.rect(margin, yPos - 4, pageWidth - margin * 2, 6, "F");
       }
 
-      const diasVend = f.vender_dias && f.dias_vendidos ? Math.min(f.dias_vendidos, 10) : 0;
+      const diasVendTotal = f.vender_dias && f.dias_vendidos ? Math.min(f.dias_vendidos, 10) : 0;
+      const qVenda = resolveQuinzenaVenda(f);
       let vendP1 = 0, vendP2 = 0;
-      if (diasVend > 0 && f.quinzena_venda) {
-        if (f.quinzena_venda === 1) { vendP1 = diasVend; }
-        else { vendP2 = diasVend; }
+      if (diasVendTotal > 0) {
+        if (qVenda === 1) vendP1 = diasVendTotal; else vendP2 = diasVendTotal;
       }
+      // Quantidade exibida na coluna "Dias V." respeita o filtro de período
+      let diasVendExibir = diasVendTotal;
+      if (contadorPeriodoFilter === "1") diasVendExibir = vendP1;
+      else if (contadorPeriodoFilter === "2") diasVendExibir = vendP2;
+      const sufixoVenda = diasVendExibir > 0 ? ` (${qVenda}º)` : "";
 
       xPos = margin;
       pdf.text((f.colaborador?.nome || "—").substring(0, 28), xPos + 2, yPos);
@@ -553,7 +565,7 @@ export default function FeriasFerias() {
         pdf.text(f.quinzena2_inicio && f.quinzena2_fim ? calcAdjustedPeriodo(f.quinzena2_inicio, f.quinzena2_fim, vendP2) : "—", xPos + 2, yPos);
         xPos += colWidths[showP1 ? 5 : 4];
       }
-      pdf.text(diasVend > 0 ? String(diasVend) : "—", xPos + 2, yPos);
+      pdf.text(diasVendExibir > 0 ? `${diasVendExibir}${sufixoVenda}` : "—", xPos + 2, yPos);
 
       yPos += 6;
     });
@@ -564,7 +576,7 @@ export default function FeriasFerias() {
 
     pdf.save(`ferias-contador-${anoFilter}.pdf`);
     toast.success("PDF do contador exportado!");
-  }, [contadorDataFiltered, anoFilter, contadorMesFilter, contadorPeriodoFilter, formatPeriodo]);
+  }, [contadorDataFiltered, anoFilter, contadorMesFilter, contadorPeriodoFilter, formatPeriodo, resolveQuinzenaVenda]);
 
   return (
     <div className="space-y-6">
