@@ -1682,8 +1682,6 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                   q2Fim={q2Fim}
                   isHydrating={excHydrating}
                   q1JaGozada={q1JaGozada}
-                  quinzenaVenda={excQuinzenaVenda}
-                  onQuinzenaVendaChange={setExcQuinzenaVenda}
                   />
                 </CardContent>
               </Card>
