@@ -133,6 +133,16 @@ export function ContadorPDFGenerator() {
     return diasVendidosContador;
   };
 
+  // Formata "Dias Vend." adicionando o sufixo do período (1º/2º) somente no modo "Ambos"
+  // — assim o relatório do contador deixa explícito a qual período aquisitivo a venda
+  // foi alocada, evitando ambiguidade quando os dois períodos aparecem juntos.
+  const formatDiasVendidos = (f: any) => {
+    const dias = getDiasVendidosSelecionado(f);
+    if (dias <= 0) return "0";
+    if (showingAmbos && f.quinzena_venda) return `${dias} (${f.quinzena_venda}º)`;
+    return String(dias);
+  };
+
   const getDiasGozoSelecionado = (f: any) => {
     if (showingPeriodo1) {
       return f.quinzena1_inicio && f.quinzena1_fim
@@ -235,7 +245,7 @@ export function ContadorPDFGenerator() {
               formatDate(f.quinzena1_fim),
               f.quinzena2_inicio ? formatDate(f.quinzena2_inicio) : "-",
               f.quinzena2_fim ? formatDate(f.quinzena2_fim) : "-",
-              getDiasVendidosSelecionado(f).toString(),
+              formatDiasVendidos(f),
               `${getDiasGozoSelecionado(f)}`,
               f.status === "aprovada" ? "Aprovada" : f.status === "pendente" ? "Pendente" : f.status || "-",
             ]
@@ -244,7 +254,7 @@ export function ContadorPDFGenerator() {
               (f.colaborador as any)?.cpf || "-",
               formatDate(showingPeriodo1 ? f.quinzena1_inicio : f.quinzena2_inicio),
               formatDate(showingPeriodo1 ? f.quinzena1_fim : f.quinzena2_fim),
-              getDiasVendidosSelecionado(f).toString(),
+              formatDiasVendidos(f),
               `${getDiasGozoSelecionado(f)}`,
               f.status === "aprovada" ? "Aprovada" : f.status === "pendente" ? "Pendente" : f.status || "-",
             ];
@@ -261,7 +271,14 @@ export function ContadorPDFGenerator() {
       pdf.setFontSize(8);
       pdf.setTextColor(128, 128, 128);
       pdf.text(`Total de registros: ${ferias.length}`, margin, pageHeight - 10);
-      pdf.text("* Dias vendidos limitados a 10 para fins contábeis", pageWidth - margin, pageHeight - 10, { align: "right" });
+      pdf.text(
+        showingAmbos
+          ? "Dias vendidos limitados a 10. O sufixo (1º/2º) indica o período aquisitivo da venda."
+          : "Dias vendidos limitados a 10 para fins contábeis. Aparecem somente no período em que foram alocados.",
+        pageWidth - margin,
+        pageHeight - 10,
+        { align: "right" }
+      );
 
       pdf.save(`relatorio-contador-${selectedYear}.pdf`);
       toast.success("PDF gerado com sucesso!");
@@ -441,7 +458,7 @@ export function ContadorPDFGenerator() {
                       )}
                       <TableCell className="text-center">
                         <Badge variant={f.dias_vendidos && f.dias_vendidos > 10 ? "destructive" : "secondary"}>
-                          {getDiasVendidosSelecionado(f)}
+                          {formatDiasVendidos(f)}
                           {f.dias_vendidos && f.dias_vendidos > 10 && "*"}
                         </Badge>
                       </TableCell>

@@ -46,7 +46,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Loader2, AlertTriangle, Calendar, Check, ChevronsUpDown, Users, Info, ShieldAlert } from "lucide-react";
+import { Loader2, AlertTriangle, Calendar, Check, ChevronsUpDown, Users, Info, ShieldAlert, FileCheck, CalendarClock } from "lucide-react";
 import { format, parseISO, addDays, addYears, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -107,6 +107,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const [excDiasVendidos, setExcDiasVendidos] = useState(0);
   const [excPeriodos, setExcPeriodos] = useState<GozoPeriodo[]>([]);
   const [excHydrating, setExcHydrating] = useState(false);
+  // Período (1 ou 2) ao qual os dias vendidos serão atribuídos no relatório do contador
+  // (necessário em modo exceção quando a distribuição é "ambos" ou "livre").
+  const [excQuinzenaVenda, setExcQuinzenaVenda] = useState<number>(1);
   const [selectedPeriodoKey, setSelectedPeriodoKey] = useState<string>("");
 
   const form = useForm<FeriasFormData>({
@@ -559,6 +562,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       setExcDistribuicaoTipo("");
       setExcDiasVendidos(0);
       setExcPeriodos([]);
+      setExcQuinzenaVenda(1);
       setExcHydrating(false);
     } else {
       // Always try to load gozo_periodos when editing, regardless of gozo_flexivel flag
@@ -597,6 +601,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           setExcecaoTipo(inferredTipo);
           setExcDistribuicaoTipo(inferredDist);
           setExcDiasVendidos(ferias.dias_vendidos || 0);
+          setExcQuinzenaVenda(ferias.quinzena_venda || (inferredDist === "2" ? 2 : 1));
           setExcPeriodos(loaded.map((p: any) => ({
             id: p.id || crypto.randomUUID(),
             referencia_periodo: p.referencia_periodo,
@@ -681,6 +686,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
 
           setExcDistribuicaoTipo(inferredDistFallback);
           setExcDiasVendidos(ferias.dias_vendidos || 0);
+          setExcQuinzenaVenda(ferias.quinzena_venda || (inferredDistFallback === "2" ? 2 : 1));
           setExcPeriodos(sintetizados);
         }
         // Aumentar a janela de hidratação para garantir que os efeitos de
@@ -1123,7 +1129,13 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         if (excecaoTipo === "vender") {
           venderDias = true;
           diasVend = excDiasVendidos;
-          quinzenaVendaVal = excDistribuicaoTipo === "2" ? 2 : 1;
+          // Período da venda para o contador:
+          // - se distribuição é "1" ou "2", usa o próprio (consistente com o gozo)
+          // - se "ambos" ou "livre", usa o seletor explícito do gestor
+          quinzenaVendaVal =
+            excDistribuicaoTipo === "1" ? 1
+            : excDistribuicaoTipo === "2" ? 2
+            : (q1JaGozada ? 2 : (excQuinzenaVenda || 1));
           if (excPeriodos.length > 0) {
             const p1 = excPeriodos.filter(p => p.referencia_periodo === 1);
             const p2 = excPeriodos.filter(p => p.referencia_periodo === 2);
@@ -1567,42 +1579,95 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                   </AlertDescription>
                 </Alert>
               )}
-              <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-sm">1º Período (15 dias)</CardTitle></CardHeader>
-                <CardContent className="grid grid-cols-2 gap-4">
-                  <FormField control={form.control} name="quinzena1_inicio" render={({ field }) => (
-                    <FormItem><FormLabel>Data de Início *</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormItem>
-                    <FormLabel>Data de Fim (automático)</FormLabel>
-                    <Input type="date" value={q1Fim} readOnly className="bg-muted cursor-not-allowed" />
-                    {q1Inicio && q1Fim && <p className="text-xs text-muted-foreground mt-1">15 dias a partir de {formatDateBR(q1Inicio)}</p>}
-                  </FormItem>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-sm">2º Período (15 dias)</CardTitle></CardHeader>
-                <CardContent className="grid grid-cols-2 gap-4">
-                  <FormField control={form.control} name="quinzena2_inicio" render={({ field }) => (
-                    <FormItem><FormLabel>Data de Início *</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormItem>
-                    <FormLabel>Data de Fim (automático)</FormLabel>
-                    <Input type="date" value={q2Fim} readOnly className="bg-muted cursor-not-allowed" />
-                    {q2Inicio && q2Fim && <p className="text-xs text-muted-foreground mt-1">15 dias a partir de {formatDateBR(q2Inicio)}</p>}
-                  </FormItem>
-                </CardContent>
-              </Card>
+              {/* Períodos oficiais (enviados ao contador) */}
+              {isExcecao ? (
+                <Card className="border-primary/40 bg-primary/5">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm flex items-center gap-2 text-primary">
+                      <FileCheck className="h-4 w-4" /> Enviado ao contador — Períodos oficiais
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      Datas oficiais de 15 dias que constarão no relatório enviado ao contador.
+                      O gozo real (interno) é configurado abaixo.
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <Card>
+                      <CardHeader className="pb-3"><CardTitle className="text-sm">1º Período (15 dias)</CardTitle></CardHeader>
+                      <CardContent className="grid grid-cols-2 gap-4">
+                        <FormField control={form.control} name="quinzena1_inicio" render={({ field }) => (
+                          <FormItem><FormLabel>Data de Início *</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormItem>
+                          <FormLabel>Data de Fim (automático)</FormLabel>
+                          <Input type="date" value={q1Fim} readOnly className="bg-muted cursor-not-allowed" />
+                          {q1Inicio && q1Fim && <p className="text-xs text-muted-foreground mt-1">15 dias a partir de {formatDateBR(q1Inicio)}</p>}
+                        </FormItem>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="pb-3"><CardTitle className="text-sm">2º Período (15 dias)</CardTitle></CardHeader>
+                      <CardContent className="grid grid-cols-2 gap-4">
+                        <FormField control={form.control} name="quinzena2_inicio" render={({ field }) => (
+                          <FormItem><FormLabel>Data de Início *</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormItem>
+                          <FormLabel>Data de Fim (automático)</FormLabel>
+                          <Input type="date" value={q2Fim} readOnly className="bg-muted cursor-not-allowed" />
+                          {q2Inicio && q2Fim && <p className="text-xs text-muted-foreground mt-1">15 dias a partir de {formatDateBR(q2Inicio)}</p>}
+                        </FormItem>
+                      </CardContent>
+                    </Card>
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  <Card>
+                    <CardHeader className="pb-3"><CardTitle className="text-sm">1º Período (15 dias)</CardTitle></CardHeader>
+                    <CardContent className="grid grid-cols-2 gap-4">
+                      <FormField control={form.control} name="quinzena1_inicio" render={({ field }) => (
+                        <FormItem><FormLabel>Data de Início *</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormItem>
+                        <FormLabel>Data de Fim (automático)</FormLabel>
+                        <Input type="date" value={q1Fim} readOnly className="bg-muted cursor-not-allowed" />
+                        {q1Inicio && q1Fim && <p className="text-xs text-muted-foreground mt-1">15 dias a partir de {formatDateBR(q1Inicio)}</p>}
+                      </FormItem>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-3"><CardTitle className="text-sm">2º Período (15 dias)</CardTitle></CardHeader>
+                    <CardContent className="grid grid-cols-2 gap-4">
+                      <FormField control={form.control} name="quinzena2_inicio" render={({ field }) => (
+                        <FormItem><FormLabel>Data de Início *</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormItem>
+                        <FormLabel>Data de Fim (automático)</FormLabel>
+                        <Input type="date" value={q2Fim} readOnly className="bg-muted cursor-not-allowed" />
+                        {q2Inicio && q2Fim && <p className="text-xs text-muted-foreground mt-1">15 dias a partir de {formatDateBR(q2Inicio)}</p>}
+                      </FormItem>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
             </div>
 
             <Separator />
 
             {/* SEÇÃO 3: Opções adicionais */}
             {isExcecao ? (
-              <div className="space-y-4">
-                <p className="text-sm font-medium">Opções de exceção</p>
-                <ExcecaoPeriodosSection
+              <Card className="border-amber-500/40 bg-amber-500/5">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                    <CalendarClock className="h-4 w-4" /> Gozo interno (real) — Sistema interno
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Datas que o colaborador efetivamente vai gozar. Usado apenas internamente —
+                    não aparece no relatório do contador.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <ExcecaoPeriodosSection
                   excecaoTipo={excecaoTipo}
                   onExcecaoTipoChange={setExcecaoTipo}
                   distribuicaoTipo={excDistribuicaoTipo}
@@ -1617,8 +1682,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                   q2Fim={q2Fim}
                   isHydrating={excHydrating}
                   q1JaGozada={q1JaGozada}
-                />
-              </div>
+                  quinzenaVenda={excQuinzenaVenda}
+                  onQuinzenaVendaChange={setExcQuinzenaVenda}
+                  />
+                </CardContent>
+              </Card>
             ) : (
               <div className="space-y-4">
                 <p className="text-sm font-medium">Vender dias de férias</p>

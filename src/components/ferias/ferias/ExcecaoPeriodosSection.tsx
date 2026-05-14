@@ -4,7 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
-import { Info, AlertTriangle, Plus, Trash2, DollarSign, CalendarClock, FileSearch } from "lucide-react";
+import { Info, AlertTriangle, Plus, Trash2, DollarSign, CalendarClock, FileSearch, FileCheck } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, parseISO, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -39,6 +40,11 @@ interface ExcecaoPeriodosSectionProps {
   /** True quando o 1º período oficial já foi gozado (status terminal e datas inalteradas).
    *  Quando true: limita disponibilidade a 15 dias e oculta opções "1º Período" e "Ambos". */
   q1JaGozada?: boolean;
+  /** Período (1 ou 2) ao qual os dias vendidos serão alocados no relatório do contador.
+   *  Necessário porque, em modo "ambos"/"livre", o sistema precisa saber em qual
+   *  período aquisitivo a venda foi feita para o relatório oficial. */
+  quinzenaVenda?: number;
+  onQuinzenaVendaChange?: (q: number) => void;
 }
 
 const formatDateBR = (dateStr: string) => {
@@ -171,6 +177,8 @@ export function ExcecaoPeriodosSection({
   q2Fim,
   isHydrating = false,
   q1JaGozada = false,
+  quinzenaVenda,
+  onQuinzenaVendaChange,
 }: ExcecaoPeriodosSectionProps) {
   const diasDisponiveis: number = q1JaGozada ? 15 : 30;
   const diasGozo = Math.max(0, diasDisponiveis - diasVendidos);
@@ -476,6 +484,45 @@ export function ExcecaoPeriodosSection({
                   </Alert>
                 )}
               </div>
+
+              {/* Período da venda (informação obrigatória para o relatório do contador) */}
+              {onQuinzenaVendaChange && (
+                <Alert className="border-primary/30 bg-primary/5">
+                  <FileCheck className="h-4 w-4 text-primary" />
+                  <AlertTitle className="text-sm">Período da venda (enviado ao contador)</AlertTitle>
+                  <AlertDescription className="text-xs space-y-2">
+                    <p>
+                      Selecione em qual período aquisitivo os <strong>{Math.min(diasVendidos, 10)} dia
+                      {Math.min(diasVendidos, 10) !== 1 ? "s" : ""} vendidos</strong> serão alocados no
+                      relatório do contador. Essa informação é independente das datas de gozo interno.
+                    </p>
+                    <Select
+                      value={String(
+                        distribuicaoTipo === "1"
+                          ? 1
+                          : distribuicaoTipo === "2"
+                          ? 2
+                          : (q1JaGozada ? 2 : (quinzenaVenda || 1))
+                      )}
+                      onValueChange={(v) => onQuinzenaVendaChange(parseInt(v))}
+                      disabled={distribuicaoTipo === "1" || distribuicaoTipo === "2"}
+                    >
+                      <SelectTrigger className="max-w-[220px] bg-background">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {!q1JaGozada && <SelectItem value="1">1º Período</SelectItem>}
+                        <SelectItem value="2">2º Período</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {(distribuicaoTipo === "1" || distribuicaoTipo === "2") && (
+                      <p className="text-muted-foreground">
+                        Travado em <strong>{distribuicaoTipo}º Período</strong> pela distribuição escolhida acima.
+                      </p>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {/* 1º ou 2º Período: single period (ignora linhas paralelas de gozo_diferente) */}
               {(distribuicaoTipo === "1" || distribuicaoTipo === "2") && venderPeriodos.length === 1 && (
