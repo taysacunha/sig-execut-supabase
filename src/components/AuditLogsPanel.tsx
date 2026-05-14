@@ -628,7 +628,7 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
               />
             </div>
 
-            <ScrollArea className="h-[400px]">
+            <ScrollArea className="h-[700px]">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -777,7 +777,7 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
               />
             </div>
 
-            <ScrollArea className="h-[400px]">
+            <ScrollArea className="h-[700px]">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -819,7 +819,7 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                       />
                     </TableHead>
                     <TableHead>Usuário</TableHead>
-                    <TableHead>Campos</TableHead>
+                    <TableHead>Registro / Campos</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -855,7 +855,7 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                             </TableCell>
                             <TableCell className="text-sm text-muted-foreground">{log.changed_by_email || "Sistema"}</TableCell>
                             <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">
-                              {log.changed_fields?.join(", ") || "—"}
+                              {(log.changed_fields||[]).map(formatFieldLabel).join(", ") || "—"}
                             </TableCell>
                           </TableRow>
                           <CollapsibleContent asChild>
@@ -975,7 +975,7 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
               />
             </div>
 
-            <ScrollArea className="h-[400px]">
+            <ScrollArea className="h-[700px]">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1017,7 +1017,7 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                       />
                     </TableHead>
                     <TableHead>Usuário</TableHead>
-                    <TableHead>Campos</TableHead>
+                    <TableHead>Registro / Campos</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1053,7 +1053,7 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                             </TableCell>
                             <TableCell className="text-sm text-muted-foreground">{log.changed_by_email || "Sistema"}</TableCell>
                             <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">
-                              {log.changed_fields?.join(", ") || "—"}
+                              {(log.changed_fields||[]).map(formatFieldLabel).join(", ") || "—"}
                             </TableCell>
                           </TableRow>
                           <CollapsibleContent asChild>
