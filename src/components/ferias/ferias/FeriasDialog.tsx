@@ -562,6 +562,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       setExcDistribuicaoTipo("");
       setExcDiasVendidos(0);
       setExcPeriodos([]);
+      setExcQuinzenaVenda(1);
       setExcHydrating(false);
     } else {
       // Always try to load gozo_periodos when editing, regardless of gozo_flexivel flag
