@@ -686,6 +686,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
 
           setExcDistribuicaoTipo(inferredDistFallback);
           setExcDiasVendidos(ferias.dias_vendidos || 0);
+          setExcQuinzenaVenda(ferias.quinzena_venda || (inferredDistFallback === "2" ? 2 : 1));
           setExcPeriodos(sintetizados);
         }
         // Aumentar a janela de hidratação para garantir que os efeitos de
