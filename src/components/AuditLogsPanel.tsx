@@ -328,11 +328,11 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
 
   // Pagination for admin logs
   const [adminPage, setAdminPage] = useState(1);
-  const [adminItemsPerPage, setAdminItemsPerPage] = useState(20);
+  const [adminItemsPerPage, setAdminItemsPerPage] = useState(100);
 
   // Pagination for module logs
   const [modulePage, setModulePage] = useState(1);
-  const [moduleItemsPerPage, setModuleItemsPerPage] = useState(20);
+  const [moduleItemsPerPage, setModuleItemsPerPage] = useState(100);
 
   // Sorting for admin logs
   const [adminSortField, setAdminSortField] = useState<keyof AdminAuditLog | null>("created_at");
