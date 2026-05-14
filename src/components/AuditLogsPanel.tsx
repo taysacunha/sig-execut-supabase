@@ -854,8 +854,9 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                               </Badge>
                             </TableCell>
                             <TableCell className="text-sm text-muted-foreground">{log.changed_by_email || "Sistema"}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">
-                              {(log.changed_fields||[]).map(formatFieldLabel).join(", ") || "—"}
+                            <TableCell className="text-xs max-w-[260px]">
+                              <div className="font-medium text-foreground truncate">{getRecordLabel(log)}</div>
+                              <div className="text-muted-foreground truncate">{(log.changed_fields||[]).map(formatFieldLabel).join(", ") || "—"}</div>
                             </TableCell>
                           </TableRow>
                           <CollapsibleContent asChild>
@@ -871,17 +872,17 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                                           const newVal = log.new_data ? (log.new_data as Record<string, unknown>)[field] : undefined;
                                           return (
                                             <div key={field} className="flex items-start gap-2 p-2 bg-muted rounded">
-                                              <span className="font-medium min-w-[120px]">{field}:</span>
+                                              <span className="font-medium min-w-[160px]">{formatFieldLabel(field)}:</span>
                                               <div className="flex items-center gap-2 flex-wrap">
                                                 {oldVal !== undefined && (
                                                   <span className="px-2 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded text-xs line-through">
-                                                    {typeof oldVal === 'object' ? JSON.stringify(oldVal) : String(oldVal)}
+                                                    {formatFieldValue(oldVal)}
                                                   </span>
                                                 )}
                                                 <span className="text-muted-foreground">→</span>
                                                 {newVal !== undefined && (
                                                   <span className="px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded text-xs">
-                                                    {typeof newVal === 'object' ? JSON.stringify(newVal) : String(newVal)}
+                                                    {formatFieldValue(newVal)}
                                                   </span>
                                                 )}
                                               </div>
@@ -1052,8 +1053,9 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                               </Badge>
                             </TableCell>
                             <TableCell className="text-sm text-muted-foreground">{log.changed_by_email || "Sistema"}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">
-                              {(log.changed_fields||[]).map(formatFieldLabel).join(", ") || "—"}
+                            <TableCell className="text-xs max-w-[260px]">
+                              <div className="font-medium text-foreground truncate">{getRecordLabel(log)}</div>
+                              <div className="text-muted-foreground truncate">{(log.changed_fields||[]).map(formatFieldLabel).join(", ") || "—"}</div>
                             </TableCell>
                           </TableRow>
                           <CollapsibleContent asChild>
@@ -1069,17 +1071,17 @@ export function AuditLogsPanel({ defaultModule = "all", defaultTab = "admin", sh
                                           const newVal = log.new_data ? (log.new_data as Record<string, unknown>)[field] : undefined;
                                           return (
                                             <div key={field} className="flex items-start gap-2 p-2 bg-muted rounded">
-                                              <span className="font-medium min-w-[120px]">{field}:</span>
+                                              <span className="font-medium min-w-[160px]">{formatFieldLabel(field)}:</span>
                                               <div className="flex items-center gap-2 flex-wrap">
                                                 {oldVal !== undefined && (
                                                   <span className="px-2 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded text-xs line-through">
-                                                    {typeof oldVal === 'object' ? JSON.stringify(oldVal) : String(oldVal)}
+                                                    {formatFieldValue(oldVal)}
                                                   </span>
                                                 )}
                                                 <span className="text-muted-foreground">→</span>
                                                 {newVal !== undefined && (
                                                   <span className="px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded text-xs">
-                                                    {typeof newVal === 'object' ? JSON.stringify(newVal) : String(newVal)}
+                                                    {formatFieldValue(newVal)}
                                                   </span>
                                                 )}
                                               </div>
