@@ -203,26 +203,16 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
   });
 
   // Query férias ativas no mês
-  const { data: feriasAtivas = [] } = useQuery({
+  const { data: feriasAtivas = [], isLoading: loadingFerias } = useQuery({
     queryKey: ["ferias-ativas-gerador", year, month],
     queryFn: async () => {
-      // Janela ampla: mês anterior, mês atual e mês posterior.
-      // Necessário para detectar férias que atravessam meses (ex.: começa em maio e termina em junho).
-      // A sobreposição real é calculada no client usando os intervalos reais de gozo
-      // (gozo_diferente, gozo_flexivel via ferias_gozo_periodos).
-      const windowStart = format(startOfMonth(new Date(year, month - 2)), "yyyy-MM-dd");
-      const windowEnd = format(endOfMonth(new Date(year, month)), "yyyy-MM-dd");
-
+      // Carregar TODAS as férias não-terminais (qualquer ano/mês). A sobreposição real
+      // é calculada no client usando os intervalos REAIS de gozo (gozo interno via
+      // ferias_gozo_periodos quando existir; senão gozo_diferente; senão quinzenas oficiais).
+      // Filtrar por datas oficiais aqui esconde férias cujo gozo interno foi movido para outro mês.
       const { data, error } = await supabase
         .from("ferias_ferias")
         .select("id, colaborador_id, quinzena1_inicio, quinzena1_fim, quinzena2_inicio, quinzena2_fim, gozo_diferente, gozo_quinzena1_inicio, gozo_quinzena1_fim, gozo_quinzena2_inicio, gozo_quinzena2_fim, is_excecao, status, gozo_flexivel")
-        // Sobreposição real: férias.inicio <= janela.fim E férias.fim >= janela.inicio.
-        // Usamos quinzena1_inicio e COALESCE(quinzena2_fim, quinzena1_fim) via dois filtros AND
-        // para evitar problemas com .or().
-        .lte("quinzena1_inicio", windowEnd)
-        .or(`quinzena2_fim.gte.${windowStart},quinzena1_fim.gte.${windowStart}`)
-        // Bloqueia folga para QUALQUER férias agendada/em curso (incluindo "pendente" e exceções).
-        // Só liberamos quando a férias está em estado terminal: cancelada, reprovada ou concluída.
         .not("status", "in", '("cancelada","reprovada","concluida")');
 
       if (error) throw error;
@@ -232,7 +222,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
 
   // Sub-períodos reais de gozo (quando gozo_flexivel) — apenas dias de descanso, ignora venda
   const feriasIds = useMemo(() => feriasAtivas.map(f => f.id).filter(Boolean), [feriasAtivas]);
-  const { data: gozoPeriodos = [] } = useQuery({
+  const { data: gozoPeriodos = [], isLoading: loadingGozo } = useQuery({
     queryKey: ["ferias-gozo-periodos-folgas-gerador", feriasIds.sort().join(",")],
     enabled: feriasIds.length > 0,
     queryFn: async () => {
@@ -1447,9 +1437,14 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
 
             <DialogFooter>
               <Button variant="outline" onClick={handleClose}>Cancelar</Button>
-              <Button onClick={handleGeneratePreview} disabled={generating || colaboradores.length === 0}>
-                {generating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Gerar Preview
+              <Button
+                onClick={handleGeneratePreview}
+                disabled={generating || colaboradores.length === 0 || loadingFerias || (feriasIds.length > 0 && loadingGozo)}
+              >
+                {(generating || loadingFerias || (feriasIds.length > 0 && loadingGozo)) && (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                )}
+                {loadingFerias || (feriasIds.length > 0 && loadingGozo) ? "Carregando férias..." : "Gerar Preview"}
               </Button>
             </DialogFooter>
           </div>
