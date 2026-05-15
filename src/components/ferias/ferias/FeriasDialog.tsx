@@ -1143,6 +1143,48 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   // Save mutation
   const mutation = useMutation({
     mutationFn: async (data: FeriasFormData) => {
+      // ===== Modo "Edição por período": payload independente =====
+      if (perPeriodoMode) {
+        const ser = serializePerPeriodo(p1State, p2State);
+        const payloadPP: any = {
+          colaborador_id: data.colaborador_id,
+          quinzena1_inicio: ser.quinzena1_inicio,
+          quinzena1_fim: ser.quinzena1_fim,
+          quinzena2_inicio: ser.quinzena2_inicio,
+          quinzena2_fim: ser.quinzena2_fim,
+          gozo_diferente: ser.gozo_diferente,
+          gozo_quinzena1_inicio: ser.gozo_quinzena1_inicio,
+          gozo_quinzena1_fim: ser.gozo_quinzena1_fim,
+          gozo_quinzena2_inicio: ser.gozo_quinzena2_inicio,
+          gozo_quinzena2_fim: ser.gozo_quinzena2_fim,
+          vender_dias: ser.vender_dias,
+          dias_vendidos: ser.dias_vendidos,
+          quinzena_venda: ser.quinzena_venda,
+          vender_q1: ser.vender_q1,
+          vender_q2: ser.vender_q2,
+          dias_vendidos_q1: ser.dias_vendidos_q1,
+          dias_vendidos_q2: ser.dias_vendidos_q2,
+          status: isEditing ? ferias.status : "aprovada",
+          is_excecao: data.is_excecao,
+          excecao_motivo: data.is_excecao ? data.excecao_motivo : null,
+          excecao_justificativa: data.is_excecao ? data.excecao_justificativa : null,
+          periodo_aquisitivo_inicio: periodoAquisitivo?.inicio || null,
+          periodo_aquisitivo_fim: periodoAquisitivo?.fim || null,
+          gozo_flexivel: false,
+          distribuicao_tipo: null,
+        };
+        if (isEditing) {
+          const { error } = await supabase.from("ferias_ferias").update(payloadPP).eq("id", ferias.id);
+          if (error) throw error;
+          // Limpa subperíodos flexíveis (este modo não os usa)
+          await supabase.from("ferias_gozo_periodos" as any).delete().eq("ferias_id", ferias.id);
+        } else {
+          const { error } = await supabase.from("ferias_ferias").insert(payloadPP);
+          if (error) throw error;
+        }
+        return;
+      }
+
       let gozoQ1Inicio = null;
       let gozoQ1Fim = null;
       let gozoQ2Inicio = null;
