@@ -1,65 +1,63 @@
+## Refazer página de Auditoria
 
-## Problema
+Reescrever `src/components/AuditLogsPanel.tsx` para funcionar como uma auditoria de verdade: ver tudo o que cada usuário fez, em qual campo/registro, com busca livre e detalhes legíveis.
 
-Dois pontos do `FeriasDialog` apagam dados sem necessidade quando o usuário só navega entre abas/botões:
+### O que sai
 
-### Bug 1 — Aba "Padrão" zera Motivo e Justificativa da Exceção
-`src/components/ferias/ferias/FeriasDialog.tsx`, linha 1409:
+- Coluna "Registro / Campos" (a linha que mostra só o nome do registro + lista de nomes de campos truncados — confusa e inútil).
+- Seletor "Carregar últimos" (200/500/1000…) — não vai mais existir.
+- Filtros de data "De / Até" no topo — não foram pedidos e estão poluindo a barra. (Se você quiser manter, me diga.)
 
-```tsx
-onClick={() => {
-  form.setValue("is_excecao", false);
-  form.setValue("excecao_motivo", "");          // <- apaga
-  form.setValue("excecao_justificativa", "");   // <- apaga
-}}
-```
+### O que entra
 
-Clicar em "Padrão" e voltar a "Exceção" perde o que estava preenchido/salvo. Esses campos só são validados quando `is_excecao === true`, então não há razão para limpá-los aqui.
+**Tabela única de "Alterações nos Módulos" (uma linha por log)**, colunas:
 
-### Bug 2 — Em "Vender dias", alternar Ambos → 2º Período some com o card e zera as datas
-`src/components/ferias/ferias/ExcecaoPeriodosSection.tsx`:
+1. Data/Hora
+2. Usuário (nome + email; busca por nome funciona)
+3. Ação (badge: Inseriu / Atualizou / Removeu)
+4. Módulo
+5. Tabela (rótulo amigável: Colaboradores, Férias, Folgas…)
+6. Registro (nome do colaborador / data do sábado / etc. — extraído de `new_data`/`old_data`)
+7. Resumo da alteração (ex.: "Atualizou Status, Nome" — só os rótulos legíveis dos campos mudados)
+8. Seta para expandir
 
-- O botão de distribuição (linhas 446–463) só dispara `onDistribuicaoTipoChange(tipo)`. Não ajusta a lista `periodos`.
-- O efeito de inicialização (linhas 240–288) considera "compatível" qualquer estado que contenha a referência esperada — então ao sair de `"ambos"` (refs `[1, 2]`) para `"2"`, ele detecta `refsAtuais.includes(2)` e não faz nada.
-- O render do período único (linha 481) exige `venderPeriodos.length === 1`. Como ainda existem 2 períodos, nada aparece.
-- Para "consertar visualmente", o usuário clica Ambos → Livre → 2º. Ao passar por "Livre", o efeito reinicializa do zero (refs `[0]`), e ao voltar para "2" cria um novo período com `data_inicio: ""`, perdendo o que estava salvo.
+**Busca única (server-side)** — um único campo "Buscar por nome de usuário, ação, campo ou conteúdo…":
+- nome/email do usuário (`changed_by_email` + join com `profiles` para nome)
+- palavra-chave de ação ("inseriu", "alterou", "removeu" → INSERT/UPDATE/DELETE)
+- nome de campo (ex. "status", "nome")
+- conteúdo de qualquer campo (busca dentro de `old_data`/`new_data` via `ilike` em texto JSON)
+- nome do registro (ex. "Pedro")
 
-O mesmo padrão afeta a transição inversa (2º → Ambos: o segundo período renasce vazio em vez de manter o que existia).
+A busca usa debounce (300ms) e roda no Supabase com `.or(...)` sobre `changed_by_email`, `table_name`, `action` e `cast(new_data as text) ilike` / `cast(old_data as text) ilike`.
 
-## O que fazer
+**Sem limite artificial — paginação real no servidor:**
+- `range(from, to)` + `count: 'exact'` para mostrar "Página X de Y — total de N registros".
+- 50 registros por página, com seletor 25/50/100/200.
+- Nada de `limit(500)` no cliente.
 
-Reduzir a um princípio: **só limpar dados quando o usuário muda a intenção; nunca em cliques que apenas navegam.**
+**Detalhe expandido (corrigido):**
+- **UPDATE**: lista cada campo alterado em uma linha com rótulo amigável + valor antigo (vermelho riscado) → valor novo (verde). Datas formatadas dd/MM/yyyy, booleanos como Sim/Não, FKs (uuid) resolvidas para nome quando possível (colaborador, setor, unidade, cargo, equipe).
+- **INSERT**: tabela "campo → valor criado" (não JSON cru), pulando campos técnicos (`id`, `created_at`, `updated_at`, `created_by`).
+- **DELETE**: tabela "campo → valor removido", mesma formatação.
+- Sem `<pre>JSON</pre>` exposto para o usuário final.
 
-### Correção Bug 1
-Em `FeriasDialog.tsx` linha 1408–1410, remover os dois `setValue("excecao_motivo", "")` e `setValue("excecao_justificativa", "")`. Manter apenas `form.setValue("is_excecao", false)`. Os valores ficam preservados no estado do formulário e voltam a aparecer ao reabrir "Exceção". Como o schema os marca como `optional()` e a validação de obrigatoriedade só é aplicada quando `is_excecao` é true (linha 1345), não há risco de salvar lixo no banco.
+**Filtros adicionais (já úteis):**
+- Módulo (Todos / Escalas / Vendas / Estoque / Férias e Folgas / Sistema)
+- Tabela (dependente do módulo, com rótulos amigáveis)
+- Ação (Todas / Inseriu / Atualizou / Removeu)
 
-### Correção Bug 2
-Tratar a transição de `distribuicaoTipo` no próprio handler do botão (linha 459 de `ExcecaoPeriodosSection.tsx`), preservando os dados quando possível, em vez de depender do `useEffect` reinicializador.
+A aba "Ações Administrativas" continua existindo apenas onde `showAdminTab=true` (página global de auditoria), sem alteração funcional além de também ganhar paginação server-side e remover o "Carregar últimos".
 
-Lógica do novo handler para o modo `vender`:
+### Detalhes técnicos
 
-1. Se `tipo === distribuicaoTipo`: no-op.
-2. Separar `keepParalelo` (linhas com `tipo === "gozo_diferente"`) e `vender` (demais).
-3. Para o novo `tipo`:
-   - `"1"`: pegar o item existente com `referencia_periodo === 1` (se houver), ajustar `dias = diasGozo` e recalcular `data_fim` mantendo `data_inicio`. Se não houver, criar vazio.
-   - `"2"`: idem para `referencia_periodo === 2`.
-   - `"ambos"`: garantir 1 item com ref 1 e 1 item com ref 2. Se já existirem, **manter** seus `data_inicio` e recalcular `data_fim`. Se faltar algum, criar vazio com metade dos dias.
-   - `"livre"`: se já existir item com ref 0, manter; senão converter o(s) existente(s) em uma única entrada ref 0 com `diasGozo`, preservando `data_inicio` do primeiro item com data preenchida.
-4. `onPeriodosChange([...novosVender, ...keepParalelo])` e então `onDistribuicaoTipoChange(tipo)`.
+- Arquivo único alterado: `src/components/AuditLogsPanel.tsx` (rewrite). Páginas que usam (`FeriasAuditLogs`, `EscalasAuditLogs`, `VendasAuditLogs`, `EstoqueAuditLogs`) não mudam.
+- Para resolver UUIDs em nomes nos detalhes, faço lookups sob demanda em `ferias_colaboradores`, `ferias_setores`, `ferias_unidades`, `ferias_cargos`, `ferias_equipes` e `brokers`, com cache em memória por id (evita N+1).
+- Para nome do usuário (não só email), faço join via RPC ou consulta em `profiles` com cache. Se `profiles` não tiver o nome, cai no email.
+- Mantém o tema/design tokens existentes (sem cores cruas).
+- Sem mudanças de schema, sem migrations.
 
-Para o modo `gozo_diferente` (linhas 692–702), aplicar a mesma ideia mais simples: ao mudar para `"1"`, `"2"` ou `"ambos"`, manter os sub-períodos cujas `referencia_periodo` continuam relevantes e descartar apenas as referências que deixam de aparecer. Nunca zerar a lista inteira.
+### Fora de escopo
 
-Com isso, o `useEffect` da linha 240 passa a só agir em casos realmente vazios (cadastro novo) — adicionar a guarda `if (periodos.length > 0) return;` no início desse efeito reforça que nunca sobrescreve dados existentes ao mudar `distribuicaoTipo`. O efeito de reconciliação pós-hidratação (linhas 294–340) permanece como rede de segurança apenas quando a lista está realmente vazia.
-
-## Detalhes técnicos
-
-- Arquivos afetados: `src/components/ferias/ferias/FeriasDialog.tsx` (linha 1409), `src/components/ferias/ferias/ExcecaoPeriodosSection.tsx` (handlers dos botões em ~459 e ~698, e endurecimento dos `useEffect` em 240 e 294).
-- Sem mudança de schema, sem migrations, sem alteração na persistência (`onSubmit` continua lendo `excPeriodos` e os campos do form como já faz).
-- Helper `calcEndDate` já existe e é usado para recalcular `data_fim` quando `dias` muda.
-- Não mexer em outras regras (preview de folgas, bloqueio de meses, etc.) — escopo restrito a preservação de estado da UI.
-
-## Validação
-
-1. Editar férias do Pedro → ir em Exceção → preencher Motivo + Justificativa → clicar Padrão → clicar Exceção: campos continuam preenchidos.
-2. Editar férias com venda em "Ambos" com datas salvas → clicar "2º Período": card do 2º período aparece imediatamente com a `data_inicio` salva. Voltar a "Ambos": o 1º período reaparece com sua data preservada.
-3. Cadastro novo (sem dados) continua funcionando: ao escolher "Ambos" pela primeira vez, os dois períodos são criados vazios como hoje.
+- Exportação CSV/PDF da auditoria.
+- Filtro por usuário específico em dropdown (a busca por nome já cobre).
+- Logs de leitura (apenas escrita continua sendo auditada como hoje).
