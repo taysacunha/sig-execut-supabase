@@ -1533,6 +1533,27 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
 
             <Separator />
 
+            {/* Toggle modo "Edição por período" (P1/P2 independentes) */}
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-medium mr-auto">Modo de edição</p>
+              <Button
+                type="button"
+                size="sm"
+                variant={!perPeriodoMode ? "default" : "outline"}
+                onClick={() => setPerPeriodoMode(false)}
+              >
+                Padrão
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={perPeriodoMode ? "default" : "outline"}
+                onClick={() => setPerPeriodoMode(true)}
+              >
+                Por período (P1/P2)
+              </Button>
+            </div>
+
             {/* SEÇÃO 2: Colaborador e Períodos Oficiais */}
             <div className="space-y-4">
               <FormField control={form.control} name="colaborador_id" render={({ field }) => (
