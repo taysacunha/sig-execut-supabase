@@ -173,10 +173,14 @@ export function ExcecaoPeriodosSection({
   isHydrating = false,
   q1JaGozada = false,
 }: ExcecaoPeriodosSectionProps) {
-  const diasDisponiveis: number = q1JaGozada ? 15 : 30;
+  // Gozo interno é livre para editar os 30 dias completos, mesmo que o
+  // 1º período oficial já tenha sido enviado ao contador / já tenha sido
+  // gozado na prática. O card de "Enviado ao contador" continua protegido,
+  // mas aqui o usuário pode redistribuir os 30 dias como quiser.
+  const diasDisponiveis: number = 30;
   const diasGozo = Math.max(0, diasDisponiveis - diasVendidos);
-  const opcoesDistribuicao = q1JaGozada ? ["2", "livre"] : ["1", "2", "ambos", "livre"];
-  const opcoesGozoDiferente = q1JaGozada ? ["2"] : ["1", "2", "ambos"];
+  const opcoesDistribuicao = ["1", "2", "ambos", "livre"];
+  const opcoesGozoDiferente = ["1", "2", "ambos"];
 
   // Quando o gozo restante (após venda) é maior que 15 dias, é impossível
   // alocá-lo em um único período oficial (cada período tem no máximo 15 dias).
@@ -190,13 +194,8 @@ export function ExcecaoPeriodosSection({
   const venderPeriodos = periodos.filter(p => p.tipo !== "gozo_diferente");
   const hasMixedGozoDiferente = excecaoTipo === "vender" && gozoDiferentePeriodos.length > 0;
 
-  // Se Q1 ficou "consumida" e a distribuição atual era "1" ou "ambos", forçar "2".
-  useEffect(() => {
-    if (isHydrating) return;
-    if (q1JaGozada && (distribuicaoTipo === "1" || distribuicaoTipo === "ambos")) {
-      onDistribuicaoTipoChange("2");
-    }
-  }, [q1JaGozada, distribuicaoTipo, isHydrating, onDistribuicaoTipoChange]);
+  // Removido: forçar distribuição para "2" quando Q1 já gozada. O gozo interno
+  // permanece livre para distribuir entre 1º, 2º, ambos ou livre.
 
   // Se o gozo é maior que 15 dias e o usuário (ou o estado carregado) está em
   // "1" ou "2", forçar para "ambos" (única distribuição válida em períodos oficiais).
