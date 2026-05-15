@@ -1,13 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { ExcecaoPeriodosSection, type GozoPeriodo } from "./ExcecaoPeriodosSection";
-import {
-  PerPeriodoSection,
-  buildInitialPeriodos,
-  serializePerPeriodo,
-  validatePerPeriodo,
-  type PeriodoState,
-} from "./PerPeriodoSection";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -118,20 +111,6 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   // (necessário em modo exceção quando a distribuição é "ambos" ou "livre").
   const [excQuinzenaVenda, setExcQuinzenaVenda] = useState<number>(1);
   const [selectedPeriodoKey, setSelectedPeriodoKey] = useState<string>("");
-
-  // ===== Modo "Edição por período" (P1/P2 independentes) =====
-  // Auto-ativado em edição quando o registro tem qualquer período enviado ao
-  // contador OU usa venda granular (vender_q1/q2). Pode ser ligado/desligado
-  // manualmente pelo usuário ao editar.
-  const [perPeriodoMode, setPerPeriodoMode] = useState<boolean>(false);
-  const [p1State, setP1State] = useState<PeriodoState>({
-    contador_inicio: "", contador_fim: "", tipo: "gozar", dias_vendidos: 0, gozo_inicio: "", gozo_fim: "",
-  });
-  const [p2State, setP2State] = useState<PeriodoState>({
-    contador_inicio: "", contador_fim: "", tipo: "gozar", dias_vendidos: 0, gozo_inicio: "", gozo_fim: "",
-  });
-  const enviadoQ1 = !!ferias?.enviado_contador_q1 || (!!ferias?.enviado_contador && !!ferias?.quinzena1_inicio);
-  const enviadoQ2 = !!ferias?.enviado_contador_q2 || (!!ferias?.enviado_contador && !!ferias?.quinzena2_inicio);
 
   const form = useForm<FeriasFormData>({
     resolver: zodResolver(feriasSchema),
@@ -585,18 +564,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       setExcPeriodos([]);
       setExcQuinzenaVenda(1);
       setExcHydrating(false);
-      setPerPeriodoMode(false);
-      const init = buildInitialPeriodos(null);
-      setP1State(init.p1); setP2State(init.p2);
     } else {
-      // Hidrata estado P1/P2 e auto-ativa modo "por período" quando aplicável.
-      const init = buildInitialPeriodos(ferias);
-      setP1State(init.p1); setP2State(init.p2);
-      const autoOn = !!(
-        ferias.enviado_contador_q1 || ferias.enviado_contador_q2 || ferias.enviado_contador ||
-        ferias.vender_q1 || ferias.vender_q2
-      );
-      setPerPeriodoMode(autoOn);
       // Always try to load gozo_periodos when editing, regardless of gozo_flexivel flag
       setExcHydrating(true);
       (async () => {
@@ -1143,48 +1111,6 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   // Save mutation
   const mutation = useMutation({
     mutationFn: async (data: FeriasFormData) => {
-      // ===== Modo "Edição por período": payload independente =====
-      if (perPeriodoMode) {
-        const ser = serializePerPeriodo(p1State, p2State);
-        const payloadPP: any = {
-          colaborador_id: data.colaborador_id,
-          quinzena1_inicio: ser.quinzena1_inicio,
-          quinzena1_fim: ser.quinzena1_fim,
-          quinzena2_inicio: ser.quinzena2_inicio,
-          quinzena2_fim: ser.quinzena2_fim,
-          gozo_diferente: ser.gozo_diferente,
-          gozo_quinzena1_inicio: ser.gozo_quinzena1_inicio,
-          gozo_quinzena1_fim: ser.gozo_quinzena1_fim,
-          gozo_quinzena2_inicio: ser.gozo_quinzena2_inicio,
-          gozo_quinzena2_fim: ser.gozo_quinzena2_fim,
-          vender_dias: ser.vender_dias,
-          dias_vendidos: ser.dias_vendidos,
-          quinzena_venda: ser.quinzena_venda,
-          vender_q1: ser.vender_q1,
-          vender_q2: ser.vender_q2,
-          dias_vendidos_q1: ser.dias_vendidos_q1,
-          dias_vendidos_q2: ser.dias_vendidos_q2,
-          status: isEditing ? ferias.status : "aprovada",
-          is_excecao: data.is_excecao,
-          excecao_motivo: data.is_excecao ? data.excecao_motivo : null,
-          excecao_justificativa: data.is_excecao ? data.excecao_justificativa : null,
-          periodo_aquisitivo_inicio: periodoAquisitivo?.inicio || null,
-          periodo_aquisitivo_fim: periodoAquisitivo?.fim || null,
-          gozo_flexivel: false,
-          distribuicao_tipo: null,
-        };
-        if (isEditing) {
-          const { error } = await supabase.from("ferias_ferias").update(payloadPP).eq("id", ferias.id);
-          if (error) throw error;
-          // Limpa subperíodos flexíveis (este modo não os usa)
-          await supabase.from("ferias_gozo_periodos" as any).delete().eq("ferias_id", ferias.id);
-        } else {
-          const { error } = await supabase.from("ferias_ferias").insert(payloadPP);
-          if (error) throw error;
-        }
-        return;
-      }
-
       let gozoQ1Inicio = null;
       let gozoQ1Fim = null;
       let gozoQ2Inicio = null;
@@ -1401,16 +1327,6 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   }, [afastamentos, buildNewVacationIntervals, q1Inicio, q1Fim, q2Inicio, q2Fim, opcaoAdicional, diasVendidos, quinzenaVendaEfetiva, gozoVendaInicio, gozoVendaFim, form]);
 
   const onSubmit = (data: FeriasFormData) => {
-    if (perPeriodoMode) {
-      if (!data.colaborador_id) { toast.error("Selecione o colaborador."); return; }
-      const err = validatePerPeriodo(p1State, p2State, enviadoQ1, enviadoQ2, ferias?.quinzena1_fim, ferias?.quinzena2_fim);
-      if (err) { toast.error(err); return; }
-      if (data.is_excecao && (!data.excecao_motivo || !data.excecao_justificativa)) {
-        toast.error("Preencha o motivo e justificativa da exceção"); return;
-      }
-      mutation.mutate(data);
-      return;
-    }
     const validation = validateVacation(data);
     if (validation.requiresException && !data.is_excecao) {
       const motivoLabel: Record<string, string> = {
@@ -1532,27 +1448,6 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             </div>
 
             <Separator />
-
-            {/* Toggle modo "Edição por período" (P1/P2 independentes) */}
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-medium mr-auto">Modo de edição</p>
-              <Button
-                type="button"
-                size="sm"
-                variant={!perPeriodoMode ? "default" : "outline"}
-                onClick={() => setPerPeriodoMode(false)}
-              >
-                Padrão
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={perPeriodoMode ? "default" : "outline"}
-                onClick={() => setPerPeriodoMode(true)}
-              >
-                Por período (P1/P2)
-              </Button>
-            </div>
 
             {/* SEÇÃO 2: Colaborador e Períodos Oficiais */}
             <div className="space-y-4">
@@ -1685,17 +1580,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                 </Alert>
               )}
               {/* Períodos oficiais (enviados ao contador) */}
-              {perPeriodoMode ? (
-                <PerPeriodoSection
-                  p1={p1State}
-                  p2={p2State}
-                  onP1Change={setP1State}
-                  onP2Change={setP2State}
-                  enviadoQ1={enviadoQ1}
-                  enviadoQ2={enviadoQ2}
-                  enviadoEm={ferias?.enviado_contador_em}
-                />
-              ) : isExcecao ? (
+              {isExcecao ? (
                 <Card className="border-emerald-500/40 bg-emerald-500/5">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
@@ -1807,7 +1692,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             <Separator />
 
             {/* SEÇÃO 3: Opções adicionais */}
-            {perPeriodoMode ? null : isExcecao ? (
+            {isExcecao ? (
               <Card className="border-amber-500/40 bg-amber-500/5">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm flex items-center gap-2 text-amber-700 dark:text-amber-400">
