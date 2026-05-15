@@ -398,16 +398,16 @@ export function ExcecaoPeriodosSection({
         </Alert>
       )}
 
-      {/* Aviso de Q1 já gozada */}
+      {/* Aviso informativo: gozo interno é independente do que foi enviado ao contador */}
       {(excecaoTipo === "vender" || excecaoTipo === "gozo_diferente") && q1JaGozada && (
         <Alert className="border-amber-500/40 bg-amber-500/10">
           <Info className="h-4 w-4" />
-          <AlertTitle className="text-sm">1º período já gozado</AlertTitle>
+          <AlertTitle className="text-sm">Edição livre do gozo interno</AlertTitle>
           <AlertDescription className="text-xs">
-            O 1º período ({formatDateBR(q1Inicio)} a {formatDateBR(q1Fim)}) já foi gozado — restam apenas
-            <strong> 15 dias</strong> do período aquisitivo (referente ao 2º período).
-            As opções "1º Período" e "Ambos" foram ocultadas. Para reativá-las, altere a data
-            de início do 1º período no formulário acima para uma data ainda não gozada.
+            O 1º período oficial ({formatDateBR(q1Inicio)} a {formatDateBR(q1Fim)}) já foi
+            gozado / enviado ao contador. Mesmo assim, você pode ajustar livremente os 30
+            dias do gozo interno aqui — essas datas ficam apenas no sistema interno e não
+            alteram o que foi reportado ao contador.
           </AlertDescription>
         </Alert>
       )}
@@ -585,18 +585,6 @@ export function ExcecaoPeriodosSection({
                   <span>Dias totais do período aquisitivo:</span>
                   <span className="font-semibold">30 dias</span>
                 </div>
-                {q1JaGozada && (
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>Já gozados (1º período):</span>
-                    <span className="font-semibold">-15 dias</span>
-                  </div>
-                )}
-                {q1JaGozada && (
-                  <div className="flex justify-between text-sm">
-                    <span>Disponíveis:</span>
-                    <span className="font-semibold">{diasDisponiveis} dias</span>
-                  </div>
-                )}
                 <div className="flex justify-between text-sm text-destructive">
                   <span>Dias vendidos:</span>
                   <span className="font-semibold">-{diasVendidos} dias</span>
