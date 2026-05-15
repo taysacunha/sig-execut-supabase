@@ -1406,7 +1406,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
               <p className="text-sm font-medium">Tipo de cadastro</p>
               <div className="flex gap-2">
                 <Button type="button" variant={!isExcecao ? "default" : "outline"} size="sm"
-                  onClick={() => { form.setValue("is_excecao", false); form.setValue("excecao_motivo", ""); form.setValue("excecao_justificativa", ""); }}>
+                  onClick={() => { form.setValue("is_excecao", false); }}>
                   Padrão
                 </Button>
                 <Button type="button" variant={isExcecao ? "destructive" : "outline"} size="sm"
