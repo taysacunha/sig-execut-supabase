@@ -1,63 +1,48 @@
-## Refazer página de Auditoria
+## Corrigir busca por nome e "Resumo da alteração" vazio na Auditoria
 
-Reescrever `src/components/AuditLogsPanel.tsx` para funcionar como uma auditoria de verdade: ver tudo o que cada usuário fez, em qual campo/registro, com busca livre e detalhes legíveis.
+Investiguei `src/components/AuditLogsPanel.tsx` e identifiquei **duas causas distintas** para o que você relatou.
 
-### O que sai
+---
 
-- Coluna "Registro / Campos" (a linha que mostra só o nome do registro + lista de nomes de campos truncados — confusa e inútil).
-- Seletor "Carregar últimos" (200/500/1000…) — não vai mais existir.
-- Filtros de data "De / Até" no topo — não foram pedidos e estão poluindo a barra. (Se você quiser manter, me diga.)
+### Problema 1 — Busca por nome do colaborador não retorna nada
 
-### O que entra
+**Por que acontece:** o nome "Pedro" que aparece na coluna **Registro** não está salvo no log. O log armazena só o UUID (`colaborador_id`) dentro de `new_data`/`old_data`. O nome é resolvido **no navegador**, em tempo de exibição, consultando `ferias_colaboradores`. Por isso a busca server-side (que faz `ilike` em `new_data::text` / `old_data::text` / `changed_by_email`) nunca encontra "Pedro" — esse texto simplesmente não existe nos dados crus do log.
 
-**Tabela única de "Alterações nos Módulos" (uma linha por log)**, colunas:
+**Correção:**
+- Quando o usuário digita um termo, antes de chamar o Supabase, varrer os caches já carregados (`ferias_colaboradores`, `ferias_setores`, `ferias_unidades`, `ferias_cargos`, `ferias_equipes`, `brokers`, `estoque_materiais`, `estoque_locais_armazenamento`) e coletar todos os UUIDs cujo nome contém o termo (case-insensitive, sem acento).
+- Incluir esses UUIDs no `.or(...)` da query como condições adicionais: `record_id.in.(<uuids>)` e `changed_by.in.(<user_uuids>)`. O `ilike` em `new_data::text` continua, agora também batendo nos UUIDs encontrados (pois o UUID está literalmente dentro do JSON).
+- Limitar a até 200 UUIDs por busca para não estourar a URL; se passar disso, manter só os 200 melhores matches por prefixo.
+- Garantir que os caches (já pré-carregados pelo `useLookups`) estejam prontos antes da primeira busca; se ainda estiverem em "loading", aguardar e refazer o fetch.
 
-1. Data/Hora
-2. Usuário (nome + email; busca por nome funciona)
-3. Ação (badge: Inseriu / Atualizou / Removeu)
-4. Módulo
-5. Tabela (rótulo amigável: Colaboradores, Férias, Folgas…)
-6. Registro (nome do colaborador / data do sábado / etc. — extraído de `new_data`/`old_data`)
-7. Resumo da alteração (ex.: "Atualizou Status, Nome" — só os rótulos legíveis dos campos mudados)
-8. Seta para expandir
+Resultado: digitar "Pedro" passa a retornar todos os logs onde Pedro é o colaborador (via `record_id` em `ferias_colaboradores` ou `colaborador_id` dentro do JSON), e digitar parte do email/nome de um usuário do sistema também passa a funcionar via `changed_by`.
 
-**Busca única (server-side)** — um único campo "Buscar por nome de usuário, ação, campo ou conteúdo…":
-- nome/email do usuário (`changed_by_email` + join com `profiles` para nome)
-- palavra-chave de ação ("inseriu", "alterou", "removeu" → INSERT/UPDATE/DELETE)
-- nome de campo (ex. "status", "nome")
-- conteúdo de qualquer campo (busca dentro de `old_data`/`new_data` via `ilike` em texto JSON)
-- nome do registro (ex. "Pedro")
+---
 
-A busca usa debounce (300ms) e roda no Supabase com `.or(...)` sobre `changed_by_email`, `table_name`, `action` e `cast(new_data as text) ilike` / `cast(old_data as text) ilike`.
+### Problema 2 — "Resumo da alteração" vazio e "Sem campos alterados" ao expandir
 
-**Sem limite artificial — paginação real no servidor:**
-- `range(from, to)` + `count: 'exact'` para mostrar "Página X de Y — total de N registros".
-- 50 registros por página, com seletor 25/50/100/200.
-- Nada de `limit(500)` no cliente.
+**Por que acontece:** a coluna Resumo e o expandido de UPDATE dependem de `log.changed_fields` (array que o trigger SQL deveria preencher). Para muitos logs antigos esse array vem **`null` ou vazio** — seja porque foram gravados antes do trigger atual, seja porque o trigger pulou o cálculo. Hoje o componente apenas mostra "—" no resumo e "Sem campos alterados" no detalhe, mesmo quando `old_data` e `new_data` claramente diferem.
 
-**Detalhe expandido (corrigido):**
-- **UPDATE**: lista cada campo alterado em uma linha com rótulo amigável + valor antigo (vermelho riscado) → valor novo (verde). Datas formatadas dd/MM/yyyy, booleanos como Sim/Não, FKs (uuid) resolvidas para nome quando possível (colaborador, setor, unidade, cargo, equipe).
-- **INSERT**: tabela "campo → valor criado" (não JSON cru), pulando campos técnicos (`id`, `created_at`, `updated_at`, `created_by`).
-- **DELETE**: tabela "campo → valor removido", mesma formatação.
-- Sem `<pre>JSON</pre>` exposto para o usuário final.
+**Correção (puro frontend, sem mudança no banco):**
+- Criar um helper `computeChangedFields(old, neu)` que faz o diff entre `old_data` e `new_data` ignorando `id`, `created_at`, `updated_at` e campos cujo conteúdo é estritamente igual (comparação por JSON.stringify para objetos/arrays).
+- Em UPDATE, usar `log.changed_fields` se vier preenchido; caso contrário, cair no diff calculado. Mesma lógica alimenta tanto a coluna **Resumo da alteração** quanto a seção **Campos alterados** do expandido.
+- Em INSERT, usar todas as chaves de `new_data` (já é o comportamento atual no expandido) e mostrar no resumo um texto curto tipo "Cadastrou: Nome, Setor, Admissão" com os 3-4 campos mais relevantes (nome, status, datas), em vez do genérico "Registro criado".
+- Em DELETE, idem com `old_data`: "Removeu: Nome, Setor".
+- Quando, mesmo após o diff, não houver diferenças reais (ex.: update que só tocou `updated_at`), mostrar de forma honesta "Apenas timestamp atualizado" em vez de "Sem campos alterados".
 
-**Filtros adicionais (já úteis):**
-- Módulo (Todos / Escalas / Vendas / Estoque / Férias e Folgas / Sistema)
-- Tabela (dependente do módulo, com rótulos amigáveis)
-- Ação (Todas / Inseriu / Atualizou / Removeu)
+Resultado: todos os UPDATEs passam a mostrar de fato o que mudou (antigo → novo), inclusive os logs antigos com `changed_fields` nulo. INSERT e DELETE ganham um resumo legível em vez de só "Registro criado/removido".
 
-A aba "Ações Administrativas" continua existindo apenas onde `showAdminTab=true` (página global de auditoria), sem alteração funcional além de também ganhar paginação server-side e remover o "Carregar últimos".
+---
 
 ### Detalhes técnicos
 
-- Arquivo único alterado: `src/components/AuditLogsPanel.tsx` (rewrite). Páginas que usam (`FeriasAuditLogs`, `EscalasAuditLogs`, `VendasAuditLogs`, `EstoqueAuditLogs`) não mudam.
-- Para resolver UUIDs em nomes nos detalhes, faço lookups sob demanda em `ferias_colaboradores`, `ferias_setores`, `ferias_unidades`, `ferias_cargos`, `ferias_equipes` e `brokers`, com cache em memória por id (evita N+1).
-- Para nome do usuário (não só email), faço join via RPC ou consulta em `profiles` com cache. Se `profiles` não tiver o nome, cai no email.
-- Mantém o tema/design tokens existentes (sem cores cruas).
-- Sem mudanças de schema, sem migrations.
+- Arquivo único alterado: `src/components/AuditLogsPanel.tsx`.
+- Sem migração SQL, sem alteração de RLS, sem alteração nos triggers — tudo no cliente.
+- A coleta de UUIDs por nome usa os caches `Map<id, nome>` já existentes em `lookupCaches`; custo desprezível (centenas de entradas em memória).
+- O fetch refaz quando os caches terminam de carregar (novo listener no `useLookups`), garantindo que a primeira busca após login não falhe por cache vazio.
+- Mantém debounce de 350ms, paginação server-side e filtros (Módulo / Tabela / Ação) inalterados.
 
 ### Fora de escopo
 
-- Exportação CSV/PDF da auditoria.
-- Filtro por usuário específico em dropdown (a busca por nome já cobre).
-- Logs de leitura (apenas escrita continua sendo auditada como hoje).
+- Reprocessar logs antigos no banco para preencher `changed_fields` retroativamente.
+- Exportação CSV/PDF.
+- Filtro dropdown por colaborador específico (a busca por nome já cobre).

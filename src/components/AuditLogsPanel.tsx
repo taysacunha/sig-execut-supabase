@@ -316,6 +316,71 @@ function useLookups() {
   return { resolve, userName };
 }
 
+// Normaliza string para busca: lowercase + remove acentos
+const normalize = (s: string) =>
+  s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+// Coleta UUIDs cujos nomes batem com o termo, em todos os caches de lookup.
+// Retorna { recordIds, userIds } limitados a 200 cada para não estourar URL.
+function collectMatchingUuids(term: string): { recordIds: string[]; userIds: string[] } {
+  const t = normalize(term);
+  if (!t) return { recordIds: [], userIds: [] };
+  const recordIds: string[] = [];
+  const userIds: string[] = [];
+  for (const [table, cache] of Object.entries(lookupCaches)) {
+    if (!cache || cache === "loading") continue;
+    for (const [id, name] of cache.entries()) {
+      if (normalize(name).includes(t)) {
+        if (table === "user_profiles") {
+          if (userIds.length < 200) userIds.push(id);
+        } else {
+          if (recordIds.length < 200) recordIds.push(id);
+        }
+      }
+      if (recordIds.length >= 200 && userIds.length >= 200) break;
+    }
+  }
+  return { recordIds, userIds };
+}
+
+// Diff entre old_data e new_data ignorando campos técnicos / sem alteração real
+const TIMESTAMP_FIELDS = new Set(["updated_at", "created_at"]);
+function computeChangedFields(oldData: unknown, newData: unknown): string[] {
+  const o = (oldData as Record<string, unknown>) || {};
+  const n = (newData as Record<string, unknown>) || {};
+  const keys = new Set([...Object.keys(o), ...Object.keys(n)]);
+  const changed: string[] = [];
+  for (const k of keys) {
+    if (HIDDEN_FIELDS.has(k)) continue;
+    const a = o[k];
+    const b = n[k];
+    if (a === b) continue;
+    if (a == null && b == null) continue;
+    try {
+      if (JSON.stringify(a) === JSON.stringify(b)) continue;
+    } catch {
+      // se não serializa, considera mudado
+    }
+    changed.push(k);
+  }
+  return changed;
+}
+
+// Resumo curto para INSERT/DELETE com 3-4 campos relevantes
+const INSERT_SUMMARY_FIELDS = ["nome", "nome_exibicao", "status", "data_admissao", "data_inicio", "data_sabado", "data_fim", "tipo", "motivo"];
+function buildInsertDeleteSummary(action: "INSERT" | "DELETE", data: Record<string, unknown> | null, resolve: (f: string, v: unknown) => string | null): string {
+  if (!data) return action === "INSERT" ? "Registro criado" : "Registro removido";
+  const parts: string[] = [];
+  for (const k of INSERT_SUMMARY_FIELDS) {
+    if (parts.length >= 4) break;
+    const v = data[k];
+    if (v == null || v === "") continue;
+    parts.push(`${formatFieldLabel(k)}: ${formatFieldValue(v, k, resolve)}`);
+  }
+  if (parts.length === 0) return action === "INSERT" ? "Registro criado" : "Registro removido";
+  return (action === "INSERT" ? "Cadastrou — " : "Removeu — ") + parts.join("; ");
+}
+
 const formatFieldValue = (val: unknown, field?: string, resolve?: (f: string, v: unknown) => string | null): string => {
   if (val === null || val === undefined || val === "") return "—";
   if (typeof val === "boolean") return val ? "Sim" : "Não";
