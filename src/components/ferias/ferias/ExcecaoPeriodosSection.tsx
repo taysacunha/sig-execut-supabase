@@ -240,6 +240,11 @@ export function ExcecaoPeriodosSection({
   useEffect(() => {
     if (isHydrating) return;
     if (!distribuicaoTipo) return;
+    // Os handlers dos botões de distribuição já cuidam de preservar/migrar dados.
+    // Este efeito só deve agir quando NÃO há períodos (cadastro novo / pós-troca de modo).
+    const venderAtuais = periodos.filter(p => p.tipo !== "gozo_diferente");
+    if (excecaoTipo === "vender" && venderAtuais.length > 0) return;
+    if (excecaoTipo === "gozo_diferente" && periodos.length > 0) return;
     // Se já há períodos compatíveis com a distribuição escolhida, não reinicializar.
     const refsAtuais = periodos
       .filter(p => p.tipo !== "gozo_diferente")
@@ -286,6 +291,99 @@ export function ExcecaoPeriodosSection({
       }
     }
   }, [distribuicaoTipo, excecaoTipo, diasGozo, isHydrating, onPeriodosChange]);
+
+  // Handler para troca de distribuição no modo "vender": preserva data_inicio dos
+  // períodos já preenchidos sempre que possível, recalculando dias/data_fim.
+  const handleVenderDistribuicaoChange = useCallback((novo: string) => {
+    if (novo === distribuicaoTipo) return;
+    const keepParalelo = periodos.filter(p => p.tipo === "gozo_diferente");
+    const venderAtuais = periodos.filter(p => p.tipo !== "gozo_diferente");
+    const findRef = (ref: number) => venderAtuais.find(p => p.referencia_periodo === ref);
+    const firstWithDate = venderAtuais.find(p => p.data_inicio);
+    let novosVender: GozoPeriodo[] = [];
+
+    if (diasGozo <= 0) {
+      novosVender = [];
+    } else if (novo === "1" || novo === "2") {
+      const ref = novo === "1" ? 1 : 2;
+      const existing = findRef(ref) || firstWithDate;
+      const data_inicio = existing?.data_inicio || "";
+      novosVender = [{
+        id: existing?.id || genId(),
+        dias: diasGozo,
+        data_inicio,
+        data_fim: data_inicio ? calcEndDate(data_inicio, diasGozo) : "",
+        referencia_periodo: ref,
+        tipo: "vender",
+      }];
+    } else if (novo === "ambos") {
+      const d1 = Math.ceil(diasGozo / 2);
+      const d2 = diasGozo - d1;
+      const ex1 = findRef(1);
+      const ex2 = findRef(2);
+      // Caso venha de "1" ou "2" / "livre": ex1/ex2 podem faltar.
+      const fallback1 = !ex1 ? (findRef(0) || firstWithDate) : undefined;
+      const fallback2 = !ex2 ? (findRef(0) ? undefined : undefined) : undefined;
+      const i1 = ex1?.data_inicio || fallback1?.data_inicio || "";
+      const i2 = ex2?.data_inicio || "";
+      novosVender = [
+        {
+          id: ex1?.id || genId(),
+          dias: d1,
+          data_inicio: i1,
+          data_fim: i1 ? calcEndDate(i1, d1) : "",
+          referencia_periodo: 1,
+          tipo: "vender",
+        },
+        {
+          id: ex2?.id || genId(),
+          dias: d2,
+          data_inicio: i2,
+          data_fim: i2 ? calcEndDate(i2, d2) : "",
+          referencia_periodo: 2,
+          tipo: "vender",
+        },
+      ];
+    } else if (novo === "livre") {
+      const existing = venderAtuais.find(p => p.referencia_periodo === 0) || firstWithDate;
+      const data_inicio = existing?.data_inicio || "";
+      novosVender = [{
+        id: existing?.id || genId(),
+        dias: diasGozo,
+        data_inicio,
+        data_fim: data_inicio ? calcEndDate(data_inicio, diasGozo) : "",
+        referencia_periodo: 0,
+        tipo: "vender",
+      }];
+    }
+
+    onPeriodosChange([...novosVender, ...keepParalelo]);
+    onDistribuicaoTipoChange(novo);
+  }, [distribuicaoTipo, periodos, diasGozo, onPeriodosChange, onDistribuicaoTipoChange]);
+
+  // Handler para troca de distribuição no modo "gozo_diferente": preserva sub-períodos
+  // das referências que continuam visíveis. Cria entrada vazia só onde realmente faltar.
+  const handleGozoDifDistribuicaoChange = useCallback((novo: string) => {
+    if (novo === distribuicaoTipo) return;
+    const ref1 = periodos.filter(p => p.referencia_periodo === 1);
+    const ref2 = periodos.filter(p => p.referencia_periodo === 2);
+    let next: GozoPeriodo[] = [];
+    if (novo === "1") {
+      next = ref1.length > 0
+        ? ref1
+        : [{ id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 1, tipo: "gozo_diferente" }];
+    } else if (novo === "2") {
+      next = ref2.length > 0
+        ? ref2
+        : [{ id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 2, tipo: "gozo_diferente" }];
+    } else if (novo === "ambos") {
+      const left = ref1.length > 0 ? ref1 : [{ id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 1, tipo: "gozo_diferente" as const }];
+      const right = ref2.length > 0 ? ref2 : [{ id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 2, tipo: "gozo_diferente" as const }];
+      next = [...left, ...right];
+    }
+    onPeriodosChange(next);
+    onDistribuicaoTipoChange(novo);
+  }, [distribuicaoTipo, periodos, onPeriodosChange, onDistribuicaoTipoChange]);
 
   // Reconciliação pós-hidratação: se distribuicaoTipo veio definido (ex.: forçado para "2"
   // por q1JaGozada, ou herdado do registro) mas `periodos` está vazio ou tem referência
@@ -456,7 +554,7 @@ export function ExcecaoPeriodosSection({
                           ? `Gozo de ${diasGozo} dias não cabe em um único período oficial (máx. 15 dias).`
                           : undefined
                       }
-                      onClick={() => onDistribuicaoTipoChange(tipo)}
+                      onClick={() => handleVenderDistribuicaoChange(tipo)}
                     >
                       {tipo === "1" ? "1º Período" : tipo === "2" ? "2º Período" : tipo === "ambos" ? "Ambos" : "Livre"}
                     </Button>
@@ -695,7 +793,7 @@ export function ExcecaoPeriodosSection({
                   type="button"
                   variant={distribuicaoTipo === tipo ? "default" : "outline"}
                   size="sm"
-                  onClick={() => onDistribuicaoTipoChange(tipo)}
+                  onClick={() => handleGozoDifDistribuicaoChange(tipo)}
                 >
                   {tipo === "1" ? "1º Período" : tipo === "2" ? "2º Período" : "Ambos"}
                 </Button>
