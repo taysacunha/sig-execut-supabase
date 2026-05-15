@@ -585,7 +585,18 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       setExcPeriodos([]);
       setExcQuinzenaVenda(1);
       setExcHydrating(false);
+      setPerPeriodoMode(false);
+      const init = buildInitialPeriodos(null);
+      setP1State(init.p1); setP2State(init.p2);
     } else {
+      // Hidrata estado P1/P2 e auto-ativa modo "por período" quando aplicável.
+      const init = buildInitialPeriodos(ferias);
+      setP1State(init.p1); setP2State(init.p2);
+      const autoOn = !!(
+        ferias.enviado_contador_q1 || ferias.enviado_contador_q2 || ferias.enviado_contador ||
+        ferias.vender_q1 || ferias.vender_q2
+      );
+      setPerPeriodoMode(autoOn);
       // Always try to load gozo_periodos when editing, regardless of gozo_flexivel flag
       setExcHydrating(true);
       (async () => {
