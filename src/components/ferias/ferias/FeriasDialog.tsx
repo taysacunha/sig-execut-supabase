@@ -1807,7 +1807,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             <Separator />
 
             {/* SEÇÃO 3: Opções adicionais */}
-            {isExcecao ? (
+            {perPeriodoMode ? null : isExcecao ? (
               <Card className="border-amber-500/40 bg-amber-500/5">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm flex items-center gap-2 text-amber-700 dark:text-amber-400">
