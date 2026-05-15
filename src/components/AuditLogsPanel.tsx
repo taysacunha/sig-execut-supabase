@@ -728,15 +728,23 @@ function ExpandedDetails({ log, resolve }: { log: ModuleAuditLog; resolve: (f: s
   const neu = (log.new_data as Record<string, unknown>) || {};
 
   if (log.action === "UPDATE") {
-    const fields = (log.changed_fields || []).filter(f => !HIDDEN_FIELDS.has(f));
-    if (fields.length === 0) {
-      return <div className="text-sm text-muted-foreground">Sem campos alterados.</div>;
+    const raw = (log.changed_fields && log.changed_fields.length > 0)
+      ? log.changed_fields
+      : computeChangedFields(log.old_data, log.new_data);
+    const fields = raw.filter(f => !HIDDEN_FIELDS.has(f));
+    const realFields = fields.filter(f => !TIMESTAMP_FIELDS.has(f));
+    if (realFields.length === 0) {
+      return (
+        <div className="text-sm text-muted-foreground">
+          {fields.length > 0 ? "Apenas o timestamp foi atualizado." : "Sem campos alterados."}
+        </div>
+      );
     }
     return (
       <div className="space-y-2">
         <div className="text-sm font-semibold">Campos alterados</div>
         <div className="space-y-1">
-          {fields.map(field => (
+          {realFields.map(field => (
             <div key={field} className="flex flex-wrap items-start gap-2 p-2 bg-background rounded border">
               <span className="font-medium text-sm min-w-[180px]">{formatFieldLabel(field)}</span>
               <div className="flex items-center gap-2 flex-wrap text-xs">
