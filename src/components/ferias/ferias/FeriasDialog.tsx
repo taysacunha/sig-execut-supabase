@@ -119,6 +119,20 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const [excQuinzenaVenda, setExcQuinzenaVenda] = useState<number>(1);
   const [selectedPeriodoKey, setSelectedPeriodoKey] = useState<string>("");
 
+  // ===== Modo "Edição por período" (P1/P2 independentes) =====
+  // Auto-ativado em edição quando o registro tem qualquer período enviado ao
+  // contador OU usa venda granular (vender_q1/q2). Pode ser ligado/desligado
+  // manualmente pelo usuário ao editar.
+  const [perPeriodoMode, setPerPeriodoMode] = useState<boolean>(false);
+  const [p1State, setP1State] = useState<PeriodoState>({
+    contador_inicio: "", contador_fim: "", tipo: "gozar", dias_vendidos: 0, gozo_inicio: "", gozo_fim: "",
+  });
+  const [p2State, setP2State] = useState<PeriodoState>({
+    contador_inicio: "", contador_fim: "", tipo: "gozar", dias_vendidos: 0, gozo_inicio: "", gozo_fim: "",
+  });
+  const enviadoQ1 = !!ferias?.enviado_contador_q1 || (!!ferias?.enviado_contador && !!ferias?.quinzena1_inicio);
+  const enviadoQ2 = !!ferias?.enviado_contador_q2 || (!!ferias?.enviado_contador && !!ferias?.quinzena2_inicio);
+
   const form = useForm<FeriasFormData>({
     resolver: zodResolver(feriasSchema),
     defaultValues: {
