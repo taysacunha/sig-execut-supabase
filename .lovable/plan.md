@@ -1,39 +1,31 @@
-## Plano corrigido
+Vou corrigir apenas a regra de disponibilidade do preview de folgas de sábado, sem mexer no cadastro de férias nem no card de gozo interno.
 
-Vou aplicar somente a correção do comportamento do card **"Gozo interno (real) — Sistema interno"**.
+Plano:
 
-## O que será corrigido
+1. Centralizar a regra de bloqueio por férias no `GeradorFolgasDialog`
+- Usar sempre os períodos reais de gozo (`ferias_gozo_periodos`) quando existirem.
+- Continuar caindo para `gozo_diferente` ou quinzenas oficiais quando não houver subperíodos reais.
+- Mesclar períodos consecutivos/colados do mesmo colaborador para tratar corretamente 15/06–29/06 + 30/06–14/07 como um único bloco contínuo.
 
-1. **O card Gozo interno ficará livre para editar os 30 dias**
-   - Mesmo que o 1º período, o 2º período, ou ambos tenham sido marcados como enviados ao contador.
-   - O usuário poderá ajustar datas internas livremente em múltiplos subperíodos.
-   - A trava atual baseada em `q1JaGozada` não deve limitar o gozo interno a 15 dias nem esconder opções do 1º período dentro do card interno.
+2. Ajustar a decisão mensal de bloqueio
+- Bloco de férias de 15 dias ou mais dentro de um único mês: bloqueia esse mês.
+  - Exemplo: Pedro com 15 dias em julho fica indisponível em julho.
+- Bloco contínuo de 30 dias ou mais que cruza meses: bloqueia todos os meses tocados.
+  - Exemplo: Amally com 30 dias seguidos de junho a julho fica indisponível em junho e julho.
+- Bloco contínuo menor que 30 dias cruzando dois meses: bloqueia apenas o mês com mais dias de férias e libera o mês com menos dias.
+  - Exemplo: Vandermberg 20/07–03/08 fica bloqueado em julho e disponível em agosto.
+- Blocos curtos no mês, como 1 dia em julho, continuam não bloqueando o mês inteiro.
 
-2. **O card Enviado ao contador continuará protegido**
-   - Quando já tiver sido enviado ao contador, os períodos oficiais não devem ser alterados por essa edição interna.
-   - A alteração será direcionada apenas para os campos/tabela de gozo interno (`gozo_quinzena...` e `ferias_gozo_periodos`).
+3. Remover/atualizar a lógica conflitante atual
+- A regra atual `>= 15 dias contínuos que toca o mês` está errada para casos como Vandermberg, porque bloqueia também o mês com poucos dias.
+- Vou substituir por contagem de dias do bloco em cada mês tocado, mantendo a exceção dos 30 dias contínuos.
 
-3. **Validação do gozo interno**
-   - Permitir qualquer distribuição interna válida, desde que represente uma exceção real.
-   - Bloquear apenas quando o gozo interno for igual ao padrão oficial de 15 + 15, porque nesse caso não faz sentido cadastrar como exceção.
-   - Manter validações de subperíodos sobrepostos e ordem cronológica.
+4. Atualizar textos do preview/configuração para refletir a regra real
+- Trocar mensagens genéricas como “Sem folga em mês com férias” por algo alinhado à regra aplicada, evitando interpretação errada.
+- Manter o comportamento configurável existente (`Bloquear em mês com férias` e `Férias em dois meses`) sem criar novas configurações.
 
-4. **Migration já executada**
-   - Não vou criar nova migration nem desfazer a tabela/colunas já criadas.
-   - A migration de `ferias_gozo_periodos` é justamente o suporte para salvar esses períodos internos flexíveis, então ela pode permanecer.
-
-## Arquivos afetados
-
-- `src/components/ferias/ferias/ExcecaoPeriodosSection.tsx`
-  - Remover as restrições de `q1JaGozada` para edição do gozo interno.
-  - Permitir opções de distribuição interna para os 30 dias.
-  - Ajustar textos para deixar claro que o bloqueio do contador não limita o gozo interno.
-
-- `src/components/ferias/ferias/FeriasDialog.tsx`
-  - Não permitir que `q1JaGozada` remova períodos internos da validação/salvamento.
-  - Manter os campos oficiais preservados quando já enviados ao contador.
-  - Validar apenas que o gozo interno não seja igual ao padrão oficial.
-
-## Resultado esperado
-
-Ao editar uma férias já enviada ao contador, o usuário mantém intacto o que foi enviado no card **Enviado ao contador**, mas consegue ajustar o card **Gozo interno (real)** do jeito necessário para refletir o uso real dos 30 dias no sistema interno.
+5. Validar com cenários explícitos
+- Pedro: 15 dias em julho → excluído/bloqueado em julho.
+- Amally: 30 dias contínuos atravessando junho/julho → excluída/bloqueada nos dois meses.
+- Vandermberg: 20/07–03/08 → bloqueado em julho, disponível em agosto.
+- Maria de Lourdes: 1 dia em julho → disponível em julho.

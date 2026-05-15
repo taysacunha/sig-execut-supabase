@@ -362,9 +362,10 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     return totalDays;
   };
 
-  // Threshold (em dias) para considerar um bloco contínuo de gozo "longo"
-  // e portanto bloquear folgas em todos os meses por ele tocados.
-  const VACATION_BLOCK_THRESHOLD_DAYS = 15;
+  // Bloco contínuo >= 30 dias bloqueia TODOS os meses tocados (mês inteiro de férias).
+  const VACATION_FULL_MONTH_BLOCK_DAYS = 30;
+  // Para um único mês: a partir de 15 dias de férias no mês, bloqueia o mês.
+  const VACATION_SAME_MONTH_BLOCK_DAYS = 15;
 
   // Une os intervalos REAIS de gozo de TODAS as férias do colaborador,
   // mesclando blocos contíguos (gap <= 1 dia) ou sobrepostos.
@@ -394,12 +395,15 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
   };
 
   // Decide se o colaborador deve ser BLOQUEADO no mês corrente por férias.
-  // Regra nova (mais justa): bloqueia somente se houver um bloco CONTÍNUO
-  // de gozo (>=15 dias) que toque o mês corrente. Blocos curtos (ex.: 1 dia
-  // de Maria de Lourdes em julho) NÃO bloqueiam o mês.
-  // Caso Amally: 15/06–29/06 + 30/06–14/07 vira um único bloco de 30 dias
-  // que toca junho E julho — bloqueia ambos.
-  // Caso Pedro: 15 dias contínuos em julho >= 15 — bloqueia julho.
+  // Regras:
+  // - Bloco contínuo >= 30 dias que toca o mês: bloqueia (todos os meses tocados).
+  //   Ex.: Amally 15/06–29/06 + 30/06–14/07 = 30 dias → bloqueia junho e julho.
+  // - Bloco que cai majoritariamente neste mês (>= 15 dias dentro do mês,
+  //   ou bloco que cruza dois meses e tem MAIS dias neste mês que no outro):
+  //   bloqueia o mês.
+  //   Ex.: Pedro 15 dias em julho → bloqueia julho.
+  //   Ex.: Vandermberg 20/07–03/08 → julho tem 12 dias, agosto 3 → bloqueia julho, libera agosto.
+  // - Blocos curtos no mês (ex.: 1 dia de Maria de Lourdes em julho) não bloqueiam.
   const shouldBlockVacationMonth = (
     colabId: string
   ): { blocked: boolean; reason?: string } => {
@@ -410,14 +414,40 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     for (const b of blocks) {
       const overlaps = b.inicio <= monthEnd && b.fim >= monthStart;
       if (!overlaps) continue;
-      if (b.dias >= VACATION_BLOCK_THRESHOLD_DAYS) {
-        const fmt = (d: Date) => format(d, "dd/MM");
-        const touchesMultipleMonths =
-          b.inicio < monthStart || b.fim > monthEnd;
-        const motivo = touchesMultipleMonths
-          ? `Férias ${b.dias} dias contínuos (${fmt(b.inicio)}–${fmt(b.fim)})`
-          : `Férias ${b.dias} dias no mês (${fmt(b.inicio)}–${fmt(b.fim)})`;
-        return { blocked: true, reason: motivo };
+      const fmt = (d: Date) => format(d, "dd/MM");
+      // Dias do bloco que caem dentro do mês corrente
+      const overlapStart = b.inicio > monthStart ? b.inicio : monthStart;
+      const overlapEnd = b.fim < monthEnd ? b.fim : monthEnd;
+      const diasNoMes = differenceInDays(overlapEnd, overlapStart) + 1;
+      const diasForaDoMes = b.dias - diasNoMes;
+
+      // 1) Bloco contínuo >= 30 dias: bloqueia todos os meses tocados
+      if (b.dias >= VACATION_FULL_MONTH_BLOCK_DAYS) {
+        return {
+          blocked: true,
+          reason: `Férias ${b.dias} dias contínuos (${fmt(b.inicio)}–${fmt(b.fim)})`,
+        };
+      }
+
+      // 2) >= 15 dias dentro deste mês: bloqueia o mês
+      if (diasNoMes >= VACATION_SAME_MONTH_BLOCK_DAYS) {
+        return {
+          blocked: true,
+          reason: `Férias ${diasNoMes} dias no mês (${fmt(b.inicio)}–${fmt(b.fim)})`,
+        };
+      }
+
+      // 3) Bloco cruza dois meses e este mês tem MAIS dias que o outro: bloqueia
+      //    (regra "Férias em 2 meses: folga no mês com menos dias", quando habilitada)
+      if (
+        configMap.FOLGAS_FERIAS_DOIS_MESES &&
+        diasForaDoMes > 0 &&
+        diasNoMes > diasForaDoMes
+      ) {
+        return {
+          blocked: true,
+          reason: `Férias ${diasNoMes} dias neste mês vs ${diasForaDoMes} no outro (${fmt(b.inicio)}–${fmt(b.fim)})`,
+        };
       }
     }
     return { blocked: false };
