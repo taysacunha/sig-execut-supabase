@@ -1,34 +1,39 @@
-Plano de correção
+## Plano corrigido
 
-1. Regras de folga de sábado por férias
-- Ajustar `GeradorFolgasDialog` para calcular o bloqueio sempre pelos períodos reais de gozo:
-  - `ferias_gozo_periodos` quando existir;
-  - senão `gozo_quinzena*_inicio/fim` quando houver gozo diferente;
-  - senão `quinzena*_inicio/fim`.
-- Unificar períodos contíguos ou sobrepostos antes de decidir o bloqueio.
-- Nova regra: se o colaborador tiver 15 dias ou mais seguidos de gozo real, ele fica bloqueado em todos os meses tocados por esse bloco contínuo. Isso cobre o caso Amally: 15/06 a 29/06 + 30/06 a 14/07 vira um bloco único de 30 dias, bloqueando junho e julho.
-- Manter liberação para férias curtas no mês: se houver apenas poucos dias de férias reais no mês, como Maria de Lourdes com 1 dia em julho, não bloquear por férias.
-- Corrigir o caso Pedro: 15 dias diretos em julho bloqueiam julho.
-- Melhorar os motivos mostrados no preview/diagnóstico para diferenciar “15+ dias seguidos”, “30 dias seguidos em dois períodos”, “férias no mês principal” e casos curtos liberados.
+Vou aplicar somente a correção do comportamento do card **"Gozo interno (real) — Sistema interno"**.
 
-2. PDF da página Colaboradores
-- Adicionar botão “PDF” na página de colaboradores ao lado de filtros/novo colaborador.
-- Gerar PDF usando os dados já filtrados e pesquisados na tela, não a lista completa bruta.
-- Colunas: colaborador, setor, cargo e admissão, respeitando a ordenação/filtros atuais.
-- Nomear o arquivo com data, por exemplo `colaboradores-filtrados-YYYY-MM-DD.pdf`.
+## O que será corrigido
 
-3. Auditoria mais útil
-- Ampliar a pesquisa da auditoria de módulos para buscar também por:
-  - usuário/e-mail;
-  - ação traduzida (`inseriu`, `alterou`, `excluiu` etc.);
-  - tabela traduzida (`colaborador`, `férias`, `folga` etc.);
-  - valores dentro de `old_data`, `new_data` e campos alterados, incluindo nome de colaborador quando estiver no JSON.
-- Traduzir nomes técnicos de campos para rótulos legíveis, evitando mostrar só `id`, `colaborador_id`, `setor_titular_id` etc. quando houver valor mais claro disponível.
-- Criar uma coluna/resumo “Registro” para mostrar o alvo tratado, por exemplo `Colaborador: Maria de Lourdes`, quando os dados do log permitirem.
-- No detalhe expandido, trocar o JSON bruto por comparação tratada campo a campo, mantendo JSON bruto apenas como fallback quando não houver tradução segura.
-- Aumentar a área útil da tabela/remover a altura fixa pequena e permitir visualizar muito mais linhas: manter paginação com opções maiores e adicionar 200 linhas por página, além de carregar até 5000 registros como já existe.
+1. **O card Gozo interno ficará livre para editar os 30 dias**
+   - Mesmo que o 1º período, o 2º período, ou ambos tenham sido marcados como enviados ao contador.
+   - O usuário poderá ajustar datas internas livremente em múltiplos subperíodos.
+   - A trava atual baseada em `q1JaGozada` não deve limitar o gozo interno a 15 dias nem esconder opções do 1º período dentro do card interno.
 
-4. Validação
-- Criar testes unitários para a função de elegibilidade/bloqueio de folgas cobrindo Amally, Maria de Lourdes e Pedro.
-- Conferir no código que a geração usa somente períodos reais de gozo e não confunde período cadastrado, venda ou exceção.
-- Validar que o PDF usa exatamente o filtro ativo e que a auditoria pesquisa pelos termos tratados.
+2. **O card Enviado ao contador continuará protegido**
+   - Quando já tiver sido enviado ao contador, os períodos oficiais não devem ser alterados por essa edição interna.
+   - A alteração será direcionada apenas para os campos/tabela de gozo interno (`gozo_quinzena...` e `ferias_gozo_periodos`).
+
+3. **Validação do gozo interno**
+   - Permitir qualquer distribuição interna válida, desde que represente uma exceção real.
+   - Bloquear apenas quando o gozo interno for igual ao padrão oficial de 15 + 15, porque nesse caso não faz sentido cadastrar como exceção.
+   - Manter validações de subperíodos sobrepostos e ordem cronológica.
+
+4. **Migration já executada**
+   - Não vou criar nova migration nem desfazer a tabela/colunas já criadas.
+   - A migration de `ferias_gozo_periodos` é justamente o suporte para salvar esses períodos internos flexíveis, então ela pode permanecer.
+
+## Arquivos afetados
+
+- `src/components/ferias/ferias/ExcecaoPeriodosSection.tsx`
+  - Remover as restrições de `q1JaGozada` para edição do gozo interno.
+  - Permitir opções de distribuição interna para os 30 dias.
+  - Ajustar textos para deixar claro que o bloqueio do contador não limita o gozo interno.
+
+- `src/components/ferias/ferias/FeriasDialog.tsx`
+  - Não permitir que `q1JaGozada` remova períodos internos da validação/salvamento.
+  - Manter os campos oficiais preservados quando já enviados ao contador.
+  - Validar apenas que o gozo interno não seja igual ao padrão oficial.
+
+## Resultado esperado
+
+Ao editar uma férias já enviada ao contador, o usuário mantém intacto o que foi enviado no card **Enviado ao contador**, mas consegue ajustar o card **Gozo interno (real)** do jeito necessário para refletir o uso real dos 30 dias no sistema interno.

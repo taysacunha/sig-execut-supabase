@@ -1596,7 +1596,21 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                       <CardHeader className="pb-3"><CardTitle className="text-sm">1º Período (15 dias)</CardTitle></CardHeader>
                       <CardContent className="grid grid-cols-2 gap-4">
                         <FormField control={form.control} name="quinzena1_inicio" render={({ field }) => (
-                          <FormItem><FormLabel>Data de Início *</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                          <FormItem>
+                            <FormLabel>Data de Início *</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="date"
+                                {...field}
+                                disabled={!!ferias?.enviado_contador_q1}
+                                className={ferias?.enviado_contador_q1 ? "bg-muted cursor-not-allowed" : undefined}
+                              />
+                            </FormControl>
+                            {ferias?.enviado_contador_q1 && (
+                              <p className="text-xs text-muted-foreground mt-1">Já enviado ao contador — não pode ser alterado.</p>
+                            )}
+                            <FormMessage />
+                          </FormItem>
                         )} />
                         <FormItem>
                           <FormLabel>Data de Fim (automático)</FormLabel>
@@ -1609,7 +1623,21 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                       <CardHeader className="pb-3"><CardTitle className="text-sm">2º Período (15 dias)</CardTitle></CardHeader>
                       <CardContent className="grid grid-cols-2 gap-4">
                         <FormField control={form.control} name="quinzena2_inicio" render={({ field }) => (
-                          <FormItem><FormLabel>Data de Início *</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                          <FormItem>
+                            <FormLabel>Data de Início *</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="date"
+                                {...field}
+                                disabled={!!ferias?.enviado_contador_q2}
+                                className={ferias?.enviado_contador_q2 ? "bg-muted cursor-not-allowed" : undefined}
+                              />
+                            </FormControl>
+                            {ferias?.enviado_contador_q2 && (
+                              <p className="text-xs text-muted-foreground mt-1">Já enviado ao contador — não pode ser alterado.</p>
+                            )}
+                            <FormMessage />
+                          </FormItem>
                         )} />
                         <FormItem>
                           <FormLabel>Data de Fim (automático)</FormLabel>

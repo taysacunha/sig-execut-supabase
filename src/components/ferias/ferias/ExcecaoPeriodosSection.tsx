@@ -173,10 +173,14 @@ export function ExcecaoPeriodosSection({
   isHydrating = false,
   q1JaGozada = false,
 }: ExcecaoPeriodosSectionProps) {
-  const diasDisponiveis: number = q1JaGozada ? 15 : 30;
+  // Gozo interno é livre para editar os 30 dias completos, mesmo que o
+  // 1º período oficial já tenha sido enviado ao contador / já tenha sido
+  // gozado na prática. O card de "Enviado ao contador" continua protegido,
+  // mas aqui o usuário pode redistribuir os 30 dias como quiser.
+  const diasDisponiveis: number = 30;
   const diasGozo = Math.max(0, diasDisponiveis - diasVendidos);
-  const opcoesDistribuicao = q1JaGozada ? ["2", "livre"] : ["1", "2", "ambos", "livre"];
-  const opcoesGozoDiferente = q1JaGozada ? ["2"] : ["1", "2", "ambos"];
+  const opcoesDistribuicao = ["1", "2", "ambos", "livre"];
+  const opcoesGozoDiferente = ["1", "2", "ambos"];
 
   // Quando o gozo restante (após venda) é maior que 15 dias, é impossível
   // alocá-lo em um único período oficial (cada período tem no máximo 15 dias).
@@ -190,13 +194,8 @@ export function ExcecaoPeriodosSection({
   const venderPeriodos = periodos.filter(p => p.tipo !== "gozo_diferente");
   const hasMixedGozoDiferente = excecaoTipo === "vender" && gozoDiferentePeriodos.length > 0;
 
-  // Se Q1 ficou "consumida" e a distribuição atual era "1" ou "ambos", forçar "2".
-  useEffect(() => {
-    if (isHydrating) return;
-    if (q1JaGozada && (distribuicaoTipo === "1" || distribuicaoTipo === "ambos")) {
-      onDistribuicaoTipoChange("2");
-    }
-  }, [q1JaGozada, distribuicaoTipo, isHydrating, onDistribuicaoTipoChange]);
+  // Removido: forçar distribuição para "2" quando Q1 já gozada. O gozo interno
+  // permanece livre para distribuir entre 1º, 2º, ambos ou livre.
 
   // Se o gozo é maior que 15 dias e o usuário (ou o estado carregado) está em
   // "1" ou "2", forçar para "ambos" (única distribuição válida em períodos oficiais).
@@ -399,16 +398,16 @@ export function ExcecaoPeriodosSection({
         </Alert>
       )}
 
-      {/* Aviso de Q1 já gozada */}
+      {/* Aviso informativo: gozo interno é independente do que foi enviado ao contador */}
       {(excecaoTipo === "vender" || excecaoTipo === "gozo_diferente") && q1JaGozada && (
         <Alert className="border-amber-500/40 bg-amber-500/10">
           <Info className="h-4 w-4" />
-          <AlertTitle className="text-sm">1º período já gozado</AlertTitle>
+          <AlertTitle className="text-sm">Edição livre do gozo interno</AlertTitle>
           <AlertDescription className="text-xs">
-            O 1º período ({formatDateBR(q1Inicio)} a {formatDateBR(q1Fim)}) já foi gozado — restam apenas
-            <strong> 15 dias</strong> do período aquisitivo (referente ao 2º período).
-            As opções "1º Período" e "Ambos" foram ocultadas. Para reativá-las, altere a data
-            de início do 1º período no formulário acima para uma data ainda não gozada.
+            O 1º período oficial ({formatDateBR(q1Inicio)} a {formatDateBR(q1Fim)}) já foi
+            gozado / enviado ao contador. Mesmo assim, você pode ajustar livremente os 30
+            dias do gozo interno aqui — essas datas ficam apenas no sistema interno e não
+            alteram o que foi reportado ao contador.
           </AlertDescription>
         </Alert>
       )}
@@ -586,18 +585,6 @@ export function ExcecaoPeriodosSection({
                   <span>Dias totais do período aquisitivo:</span>
                   <span className="font-semibold">30 dias</span>
                 </div>
-                {q1JaGozada && (
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>Já gozados (1º período):</span>
-                    <span className="font-semibold">-15 dias</span>
-                  </div>
-                )}
-                {q1JaGozada && (
-                  <div className="flex justify-between text-sm">
-                    <span>Disponíveis:</span>
-                    <span className="font-semibold">{diasDisponiveis} dias</span>
-                  </div>
-                )}
                 <div className="flex justify-between text-sm text-destructive">
                   <span>Dias vendidos:</span>
                   <span className="font-semibold">-{diasVendidos} dias</span>
@@ -716,8 +703,8 @@ export function ExcecaoPeriodosSection({
             </div>
           </div>
 
-          {/* Sub-periods for selected period(s) */}
-          {!q1JaGozada && (distribuicaoTipo === "1" || distribuicaoTipo === "ambos") && (
+          {/* Sub-periods for selected period(s) — gozo interno livre */}
+          {(distribuicaoTipo === "1" || distribuicaoTipo === "ambos") && (
             <SubPeriodosList
               periodos={periodos.filter(p => p.referencia_periodo === 1)}
               onChange={(updated) => {
