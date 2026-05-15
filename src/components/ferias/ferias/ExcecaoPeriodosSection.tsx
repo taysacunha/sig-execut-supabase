@@ -703,8 +703,8 @@ export function ExcecaoPeriodosSection({
             </div>
           </div>
 
-          {/* Sub-periods for selected period(s) */}
-          {!q1JaGozada && (distribuicaoTipo === "1" || distribuicaoTipo === "ambos") && (
+          {/* Sub-periods for selected period(s) — gozo interno livre */}
+          {(distribuicaoTipo === "1" || distribuicaoTipo === "ambos") && (
             <SubPeriodosList
               periodos={periodos.filter(p => p.referencia_periodo === 1)}
               onChange={(updated) => {
