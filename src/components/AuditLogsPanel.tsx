@@ -463,6 +463,14 @@ function ModuleLogsTable({ defaultModule }: { defaultModule: AuditLogsPanelProps
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [refreshTick, setRefreshTick] = useState(0);
 
+  // Refaz a query quando algum cache de lookup termina de carregar
+  // (relevante para a busca por nome, que depende dos caches).
+  useEffect(() => {
+    const listener = () => setRefreshTick(t => t + 1);
+    lookupListeners.add(listener);
+    return () => { lookupListeners.delete(listener); };
+  }, []);
+
   // Reset page when filters change
   useEffect(() => { setPage(1); }, [moduleFilter, tableFilter, actionFilter, search]);
 
@@ -642,8 +650,24 @@ function ModuleLogsTable({ defaultModule }: { defaultModule: AuditLogsPanelProps
             ) : logs.map(log => {
               const isOpen = expanded.has(log.id);
               const userDisplay = userName(log.changed_by) || log.changed_by_email || "Sistema";
-              const fields = log.changed_fields || [];
-              const summaryFields = fields.filter(f => !HIDDEN_FIELDS.has(f)).slice(0, 6).map(formatFieldLabel).join(", ");
+              const rawFields = (log.changed_fields && log.changed_fields.length > 0)
+                ? log.changed_fields
+                : computeChangedFields(log.old_data, log.new_data);
+              const fields = rawFields.filter(f => !HIDDEN_FIELDS.has(f));
+              const realFields = fields.filter(f => !TIMESTAMP_FIELDS.has(f));
+              const summaryFields = realFields.slice(0, 6).map(formatFieldLabel).join(", ");
+              let summaryText: string;
+              if (log.action === "INSERT") {
+                summaryText = buildInsertDeleteSummary("INSERT", log.new_data as any, resolve);
+              } else if (log.action === "DELETE") {
+                summaryText = buildInsertDeleteSummary("DELETE", log.old_data as any, resolve);
+              } else if (realFields.length > 0) {
+                summaryText = "Alterou — " + summaryFields;
+              } else if (fields.length > 0) {
+                summaryText = "Apenas timestamp atualizado";
+              } else {
+                summaryText = "—";
+              }
               return (
                 <Collapsible key={log.id} asChild open={isOpen}>
                   <>
@@ -668,10 +692,8 @@ function ModuleLogsTable({ defaultModule }: { defaultModule: AuditLogsPanelProps
                       <TableCell><Badge variant="outline">{moduleLabels[log.module_name] || log.module_name}</Badge></TableCell>
                       <TableCell className="text-sm">{tableLabels[log.table_name] || log.table_name}</TableCell>
                       <TableCell className="text-sm font-medium">{getRecordLabel(log, resolve)}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground max-w-[280px] truncate">
-                        {log.action === "INSERT" ? "Registro criado" :
-                         log.action === "DELETE" ? "Registro removido" :
-                         summaryFields || "—"}
+                      <TableCell className="text-xs text-muted-foreground max-w-[320px] truncate" title={summaryText}>
+                        {summaryText}
                       </TableCell>
                     </TableRow>
                     <CollapsibleContent asChild>
