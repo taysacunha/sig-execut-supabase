@@ -1267,6 +1267,8 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           dias_vendidos: number | null
+          dias_vendidos_q1: number | null
+          dias_vendidos_q2: number | null
           distribuicao_tipo: string | null
           enviado_contador: boolean | null
           enviado_contador_em: string | null
@@ -1293,12 +1295,16 @@ export type Database = {
           status: string | null
           updated_at: string | null
           vender_dias: boolean | null
+          vender_q1: boolean
+          vender_q2: boolean
         }
         Insert: {
           colaborador_id?: string | null
           created_at?: string | null
           created_by?: string | null
           dias_vendidos?: number | null
+          dias_vendidos_q1?: number | null
+          dias_vendidos_q2?: number | null
           distribuicao_tipo?: string | null
           enviado_contador?: boolean | null
           enviado_contador_em?: string | null
@@ -1325,12 +1331,16 @@ export type Database = {
           status?: string | null
           updated_at?: string | null
           vender_dias?: boolean | null
+          vender_q1?: boolean
+          vender_q2?: boolean
         }
         Update: {
           colaborador_id?: string | null
           created_at?: string | null
           created_by?: string | null
           dias_vendidos?: number | null
+          dias_vendidos_q1?: number | null
+          dias_vendidos_q2?: number | null
           distribuicao_tipo?: string | null
           enviado_contador?: boolean | null
           enviado_contador_em?: string | null
@@ -1357,6 +1367,8 @@ export type Database = {
           status?: string | null
           updated_at?: string | null
           vender_dias?: boolean | null
+          vender_q1?: boolean
+          vender_q2?: boolean
         }
         Relationships: [
           {
