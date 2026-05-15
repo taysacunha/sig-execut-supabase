@@ -490,16 +490,22 @@ function ModuleLogsTable({ defaultModule }: { defaultModule: AuditLogsPanelProps
         } else {
           const safe = term.replace(/[%,()]/g, " ").trim();
           const pat = `%${safe}%`;
-          // Busca em email do usuário, nome técnico da tabela e dentro do JSON
-          // dos dados (cast do jsonb para texto via PostgREST).
-          q = q.or(
-            [
-              `changed_by_email.ilike.${pat}`,
-              `table_name.ilike.${pat}`,
-              `new_data::text.ilike.${pat}`,
-              `old_data::text.ilike.${pat}`,
-            ].join(",")
-          );
+          // Resolve o termo em UUIDs via caches em memória (nomes de
+          // colaboradores, setores, unidades, materiais, etc.)
+          const { recordIds, userIds } = collectMatchingUuids(safe);
+          const orParts: string[] = [
+            `changed_by_email.ilike.${pat}`,
+            `table_name.ilike.${pat}`,
+            `new_data::text.ilike.${pat}`,
+            `old_data::text.ilike.${pat}`,
+          ];
+          if (recordIds.length > 0) {
+            orParts.push(`record_id.in.(${recordIds.join(",")})`);
+          }
+          if (userIds.length > 0) {
+            orParts.push(`changed_by.in.(${userIds.join(",")})`);
+          }
+          q = q.or(orParts.join(","));
         }
       } else if (actionFilter !== "all") {
         q = q.eq("action", actionFilter);
