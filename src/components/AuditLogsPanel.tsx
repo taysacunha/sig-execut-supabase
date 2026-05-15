@@ -423,15 +423,16 @@ function ModuleLogsTable({ defaultModule }: { defaultModule: AuditLogsPanelProps
         } else if (actionMatch) {
           q = q.eq("action", actionMatch);
         } else {
-          // ilike em email + texto JSON dos dados
           const safe = term.replace(/[%,()]/g, " ").trim();
           const pat = `%${safe}%`;
+          // Busca em email do usuário, nome técnico da tabela e dentro do JSON
+          // dos dados (cast do jsonb para texto via PostgREST).
           q = q.or(
             [
               `changed_by_email.ilike.${pat}`,
               `table_name.ilike.${pat}`,
-              `new_data_text.ilike.${pat}`,
-              `old_data_text.ilike.${pat}`,
+              `new_data::text.ilike.${pat}`,
+              `old_data::text.ilike.${pat}`,
             ].join(",")
           );
         }
@@ -442,8 +443,8 @@ function ModuleLogsTable({ defaultModule }: { defaultModule: AuditLogsPanelProps
       q = q.range(from, to);
       const { data, error, count } = await q;
       if (error) {
-        // se a coluna *_text não existir, refaz sem busca de conteúdo
-        if (term && /column .* does not exist/i.test(error.message)) {
+        // fallback caso o cast jsonb::text não seja aceito
+        if (term) {
           let q2: any = supabase
             .from("module_audit_logs")
             .select("*", { count: "exact" })
@@ -460,13 +461,7 @@ function ModuleLogsTable({ defaultModule }: { defaultModule: AuditLogsPanelProps
           throw error;
         }
       } else {
-        let rows: ModuleAuditLog[] = data || [];
-        // Se houver busca textual, complementa client-side com match no JSON e no nome resolvido
-        if (term && actionFilter === "all" && !matchActionFromTerm(term)) {
-          // Não filtra aqui (já server-side); apenas mantém ordenação. A busca em JSON
-          // funciona via cast no DB; se a sua coluna não existir, o catch acima já tratou.
-        }
-        setLogs(rows);
+        setLogs(data || []);
         setTotal(count || 0);
       }
     } catch (e) {
