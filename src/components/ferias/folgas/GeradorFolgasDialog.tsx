@@ -1437,9 +1437,14 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
 
             <DialogFooter>
               <Button variant="outline" onClick={handleClose}>Cancelar</Button>
-              <Button onClick={handleGeneratePreview} disabled={generating || colaboradores.length === 0}>
-                {generating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Gerar Preview
+              <Button
+                onClick={handleGeneratePreview}
+                disabled={generating || colaboradores.length === 0 || loadingFerias || (feriasIds.length > 0 && loadingGozo)}
+              >
+                {(generating || loadingFerias || (feriasIds.length > 0 && loadingGozo)) && (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                )}
+                {loadingFerias || (feriasIds.length > 0 && loadingGozo) ? "Carregando férias..." : "Gerar Preview"}
               </Button>
             </DialogFooter>
           </div>
