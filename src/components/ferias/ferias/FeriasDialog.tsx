@@ -1401,6 +1401,16 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   }, [afastamentos, buildNewVacationIntervals, q1Inicio, q1Fim, q2Inicio, q2Fim, opcaoAdicional, diasVendidos, quinzenaVendaEfetiva, gozoVendaInicio, gozoVendaFim, form]);
 
   const onSubmit = (data: FeriasFormData) => {
+    if (perPeriodoMode) {
+      if (!data.colaborador_id) { toast.error("Selecione o colaborador."); return; }
+      const err = validatePerPeriodo(p1State, p2State, enviadoQ1, enviadoQ2, ferias?.quinzena1_fim, ferias?.quinzena2_fim);
+      if (err) { toast.error(err); return; }
+      if (data.is_excecao && (!data.excecao_motivo || !data.excecao_justificativa)) {
+        toast.error("Preencha o motivo e justificativa da exceção"); return;
+      }
+      mutation.mutate(data);
+      return;
+    }
     const validation = validateVacation(data);
     if (validation.requiresException && !data.is_excecao) {
       const motivoLabel: Record<string, string> = {
