@@ -1685,7 +1685,17 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                 </Alert>
               )}
               {/* Períodos oficiais (enviados ao contador) */}
-              {isExcecao ? (
+              {perPeriodoMode ? (
+                <PerPeriodoSection
+                  p1={p1State}
+                  p2={p2State}
+                  onP1Change={setP1State}
+                  onP2Change={setP2State}
+                  enviadoQ1={enviadoQ1}
+                  enviadoQ2={enviadoQ2}
+                  enviadoEm={ferias?.enviado_contador_em}
+                />
+              ) : isExcecao ? (
                 <Card className="border-emerald-500/40 bg-emerald-500/5">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
