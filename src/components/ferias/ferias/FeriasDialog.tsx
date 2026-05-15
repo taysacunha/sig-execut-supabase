@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { ExcecaoPeriodosSection, type GozoPeriodo } from "./ExcecaoPeriodosSection";
+import {
+  PerPeriodoSection,
+  buildInitialPeriodos,
+  serializePerPeriodo,
+  validatePerPeriodo,
+  type PeriodoState,
+} from "./PerPeriodoSection";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
