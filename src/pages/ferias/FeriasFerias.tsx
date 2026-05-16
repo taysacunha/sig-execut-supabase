@@ -494,12 +494,12 @@ export default function FeriasFerias() {
     const showP1 = contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1";
     const showP2 = contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2";
     const colWidths = showP1 && showP2
-      ? [50, 30, 30, 45, 45, 45, 25]
-      : [55, 35, 35, 50, 55, 30];
+      ? [48, 28, 28, 42, 42, 42, 35]
+      : [52, 32, 32, 48, 52, 40];
     const headers = ["Colaborador", "CPF", "Setor", "Per. Aquisitivo",
       ...(showP1 ? ["1º Período"] : []),
       ...(showP2 ? ["2º Período"] : []),
-      "Dias V.",
+      "Dias Vendidos",
     ];
 
     pdf.setFillColor(220, 220, 220);
@@ -539,11 +539,9 @@ export default function FeriasFerias() {
       if (diasVendTotal > 0) {
         if (qVenda === 1) vendP1 = diasVendTotal; else vendP2 = diasVendTotal;
       }
-      // Quantidade exibida na coluna "Dias V." respeita o filtro de período
-      let diasVendExibir = diasVendTotal;
-      if (contadorPeriodoFilter === "1") diasVendExibir = vendP1;
-      else if (contadorPeriodoFilter === "2") diasVendExibir = vendP2;
-      const sufixoVenda = diasVendExibir > 0 ? ` (${qVenda}º)` : "";
+      // Mostrar venda apenas se a quinzena correspondente está sendo exibida nesta linha
+      const vendaVisivel = (qVenda === 1 && f._showQ1) || (qVenda === 2 && f._showQ2);
+      const diasVendExibir = vendaVisivel ? diasVendTotal : 0;
 
       xPos = margin;
       pdf.text((f.colaborador?.nome || "—").substring(0, 28), xPos + 2, yPos);
@@ -555,14 +553,14 @@ export default function FeriasFerias() {
       pdf.text(f.periodo_aquisitivo_inicio && f.periodo_aquisitivo_fim ? formatPeriodo(f.periodo_aquisitivo_inicio, f.periodo_aquisitivo_fim) : "—", xPos + 2, yPos);
       xPos += colWidths[3];
       if (showP1) {
-        pdf.text(calcAdjustedPeriodo(f.quinzena1_inicio, f.quinzena1_fim, vendP1), xPos + 2, yPos);
+        pdf.text(f._showQ1 ? calcAdjustedPeriodo(f.quinzena1_inicio, f.quinzena1_fim, vendP1) : "—", xPos + 2, yPos);
         xPos += colWidths[4];
       }
       if (showP2) {
-        pdf.text(f.quinzena2_inicio && f.quinzena2_fim ? calcAdjustedPeriodo(f.quinzena2_inicio, f.quinzena2_fim, vendP2) : "—", xPos + 2, yPos);
+        pdf.text(f._showQ2 && f.quinzena2_inicio && f.quinzena2_fim ? calcAdjustedPeriodo(f.quinzena2_inicio, f.quinzena2_fim, vendP2) : "—", xPos + 2, yPos);
         xPos += colWidths[showP1 ? 5 : 4];
       }
-      pdf.text(diasVendExibir > 0 ? `${diasVendExibir}${sufixoVenda}` : "—", xPos + 2, yPos);
+      pdf.text(diasVendExibir > 0 ? `${diasVendExibir} dias (${qVenda}º período)` : "—", xPos + 2, yPos);
 
       yPos += 6;
     });
