@@ -481,15 +481,34 @@ export default function FeriasFerias() {
   }, [contadorSortField]);
 
   const contadorData = useMemo(() => {
-    return filteredFerias
-      .filter(f => f.status !== "cancelada")
+    // Quando há anos aquisitivos selecionados, usar query dedicada (ignora ano global de gozo).
+    // Caso contrário, usar filteredFerias (mantém comportamento atual).
+    let source: FeriasRecord[];
+    if (contadorAnosAquisitivos.length > 0) {
+      const term = normalizeText(searchTerm);
+      source = feriasPorAquisitivo.filter((f) => {
+        const matchSearch = !term || normalizeText(f.colaborador?.nome || "").includes(term);
+        const matchSetor = setorFilter === "all" || f.colaborador?.setor_titular?.id === setorFilter;
+        return matchSearch && matchSetor;
+      });
+    } else {
+      source = filteredFerias;
+    }
+    const useGroups = contadorAnosAquisitivos.length > 1;
+    return source
+      .filter((f) => f.status !== "cancelada")
       .sort((a, b) => {
+        if (useGroups) {
+          const yA = a.periodo_aquisitivo_inicio?.slice(0, 4) || "";
+          const yB = b.periodo_aquisitivo_inicio?.slice(0, 4) || "";
+          if (yA !== yB) return yA.localeCompare(yB);
+        }
         let valA = "", valB = "";
         if (contadorSortField === "nome") { valA = a.colaborador?.nome || ""; valB = b.colaborador?.nome || ""; }
         else { valA = a.colaborador?.setor_titular?.nome || ""; valB = b.colaborador?.setor_titular?.nome || ""; }
         return contadorSortDir === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
       });
-  }, [filteredFerias, contadorSortField, contadorSortDir]);
+  }, [filteredFerias, feriasPorAquisitivo, contadorAnosAquisitivos, searchTerm, setorFilter, contadorSortField, contadorSortDir]);
 
   // Filtrar contadorData por mês e período
   const contadorDataFiltered = useMemo(() => {
