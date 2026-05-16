@@ -1,63 +1,31 @@
 ## Ajustes em `src/pages/ferias/FeriasFerias.tsx`
 
-Arquivo único afetado: `src/pages/ferias/FeriasFerias.tsx` (e geração de PDF do contador no mesmo arquivo).
+### 1. Reposicionar botão "Exportar PDF" da Tabela do Contador
 
-### 1. Filtros com labels + botão "Limpar filtros" (Tabela de Férias)
+Hoje o botão fica ao lado do bloco de filtros (à direita), criando uma área vazia gigante embaixo dele. Mudança:
 
-Hoje (linhas ~648-656) os filtros são 3 inputs em grid sem labels. Padronizar igual à aba Calendário → Férias:
+- Remover o botão de fora do bloco de filtros.
+- Colocá-lo **dentro do header do bloco de filtros**, alinhado à direita, ao lado do botão "Limpar filtros". O header passa a ter: `[ícone Filtros + label]` à esquerda e `[Limpar filtros] [Exportar PDF]` à direita.
+- Bloco de filtros volta a ocupar 100% da largura (sem o `flex-1` que existia para conviver com o botão externo).
 
-- Envolver em um bloco `rounded-lg border bg-muted/40 p-3` com cabeçalho "Filtros" (ícone `SlidersHorizontal`).
-- Para cada filtro, adicionar `<Label className="text-xs font-medium text-muted-foreground">` acima:
-  - Buscar colaborador
-  - Status
-  - Setor
-- Acima/ao lado do bloco, exibir o botão **Limpar filtros** (mesmo estilo do Calendário: `variant="outline"`, borda/ texto destrutivo, ícone `X`) somente quando houver filtro ativo (`searchTerm`, `statusFilter !== "all"` ou `setorFilter !== "all"`).
-- Handler `resetFeriasFilters` zera os 3 estados.
+Resultado: layout compacto, sem espaço morto, e a ação fica próxima dos filtros que controlam o conteúdo do PDF.
 
-### 2. Filtros com labels + botão "Limpar filtros" (Tabela do Contador)
+### 2. Setor cortado no PDF do Contador
 
-Linhas ~895-903. Mesma padronização para os 4 filtros: Buscar colaborador, Setor, Mês, Período. O botão "Exportar PDF" continua à direita, fora do bloco de filtros. Mostrar "Limpar filtros" quando qualquer um (`searchTerm`, `setorFilter`, `contadorMesFilter`, `contadorPeriodoFilter`) estiver diferente do default. Handler `resetContadorFilters` zera os 4.
+Em `generateContadorPDF` o nome do setor é truncado em 15 caracteres (`substring(0, 15)`) e a coluna tem 28mm (ambos períodos) / 32mm (um período). "Cadastro de Imóvel" e similares ficam cortados.
 
-> Observação: `searchTerm` e `setorFilter` são compartilhados com a Tabela de Férias; manteremos esse comportamento (o "Limpar filtros" do Contador também limpa os dois). Isso já é o comportamento atual de filtragem.
+Mudanças:
 
-### 3. Lógica de filtro Mês × Período no Contador
-
-Hoje `contadorDataFiltered` (linhas 440-457) inclui o colaborador se Q1 OU Q2 cair no mês — mas a tabela e o PDF continuam mostrando AMBOS os períodos do colaborador, mesmo que um deles não esteja em junho.
-
-Mudança: definir, por linha, quais períodos exibir conforme o mês e o filtro de período.
-
-```text
-para cada férias f:
-  q1Match = mes == "all" || mês(q1_inicio) == mes
-  q2Match = mes == "all" || (q2_inicio && mês(q2_inicio) == mes)
-
-  showQ1Row = (periodo == "all" || periodo == "1") && q1Match
-  showQ2Row = (periodo == "all" || periodo == "2") && q2Match && tem q2
-
-  manter f apenas se showQ1Row || showQ2Row
-  guardar f._showQ1, f._showQ2 para a renderização
-```
-
-Efeitos:
-- Mês=Junho + Período=Ambos: traz colaboradores com Q1 OU Q2 em junho, e cada linha exibe só a quinzena que cai em junho (a outra fica "—" ou simplesmente não preenchida); colunas 1º/2º Período permanecem visíveis quando Período=Ambos.
-- Mês=Junho + Período=1ª: traz só quem tem Q1 em junho; só coluna 1º Período.
-- Mês=Junho + Período=2ª: traz só quem tem Q2 em junho; só coluna 2º Período.
-- Mês=Todos: comportamento atual.
-
-A coluna **Dias Vendidos** também passa a respeitar `_showQ1/_showQ2` (mostrar "—" se a venda for em uma quinzena que não está sendo exibida naquela linha).
-
-### 4. PDF do Contador (`generateContadorPDF`)
-
-Linhas 478-579:
-
-- Cabeçalho da coluna: trocar `"Dias V."` por `"Dias Vendidos"` e ampliar a largura dessa coluna para acomodar o texto (ajustar `colWidths` proporcionalmente).
-- Valor da célula de dias vendidos: trocar formato `"${diasVendExibir}${sufixoVenda}"` (hoje gera `10 (2º)`) por `"${diasVendExibir} dias (${qVenda}º período)"`, igualando ao badge da tela (`10 dias (2º período)`).
-- Aplicar a mesma regra do item 3: para cada linha, se a quinzena do mês não corresponde, escrever "—" na coluna desse período (em vez do range completo).
-- Rodapé: manter o aviso "Dias vendidos limitados a 10".
+- Aumentar a coluna **Setor** e redistribuir as larguras mantendo o total dentro da página A4 paisagem (267mm úteis):
+  - `showP1 && showP2`: `[48, 28, 28, 42, 42, 42, 35]` → `[46, 26, 42, 40, 40, 40, 33]`
+  - Só um período: `[52, 32, 32, 48, 52, 40]` → `[52, 30, 46, 46, 56, 37]`
+- Substituir `substring(0, 15)` por **quebra de linha automática** usando `pdf.splitTextToSize(nomeSetor, larguraSetor - 4)`, exibindo até 2 linhas. Quando a célula tem 2 linhas, ajustar a altura da linha (`yPos`) localmente para não sobrepor a linha seguinte (incrementar `yPos` em +3 para essa linha).
+- Aplicar a mesma técnica também ao **nome do colaborador** (que hoje também é truncado em 28 chars), para evitar regressões equivalentes em nomes longos.
+- Recalcular o gatilho de quebra de página (`if (yPos > 190)`) considerando que linhas com 2 linhas de texto ocupam mais espaço.
 
 ### Detalhes técnicos
 
-- Sem mudanças em SQL, RLS, hooks ou outros componentes.
-- Usar `Label` (`@/components/ui/label`) e `SlidersHorizontal`/`X` (`lucide-react`, já importados na codebase).
-- Manter paginação, ordenação e queries existentes inalteradas.
-- `_showQ1/_showQ2` calculados via `useMemo` dentro de `contadorDataFiltered` (retornar array de objetos `{ ferias, showQ1, showQ2 }` ou anexar como propriedades não persistidas) e propagados para a renderização da tabela e do PDF.
+- Arquivo único: `src/pages/ferias/FeriasFerias.tsx`.
+- Sem alterações em queries, hooks ou outros componentes.
+- `splitTextToSize` já é usado em outros geradores de PDF do projeto (ex.: `GanttFeriasPDFGenerator`).
+- Manter ordem das colunas e cabeçalhos atuais (`Dias Vendidos`, etc.).
