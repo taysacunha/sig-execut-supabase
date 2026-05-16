@@ -552,10 +552,18 @@ export default function FeriasFerias() {
     const pageWidth = pdf.internal.pageSize.getWidth();
     const margin = 15;
 
+    const useGroups = contadorAnosAquisitivos.length > 1;
+    const titleAnos = contadorAnosAquisitivos.length > 0
+      ? [...contadorAnosAquisitivos].sort().join(", ")
+      : anoFilter;
+    const fileAnos = contadorAnosAquisitivos.length > 0
+      ? [...contadorAnosAquisitivos].sort().join("-")
+      : anoFilter;
+
     pdf.setTextColor(0, 0, 0);
     pdf.setFontSize(16);
     pdf.setFont("helvetica", "bold");
-    pdf.text(`TABELA DE FÉRIAS - CONTADOR - ${anoFilter}`, pageWidth / 2, 15, { align: "center" });
+    pdf.text(`TABELA DE FÉRIAS - CONTADOR - ${titleAnos}`, pageWidth / 2, 15, { align: "center" });
 
     // Subtitle with filters
     pdf.setFontSize(9);
@@ -576,30 +584,46 @@ export default function FeriasFerias() {
       "Dias Vendidos",
     ];
 
-    pdf.setFillColor(220, 220, 220);
-    pdf.rect(margin, yPos - 5, pageWidth - margin * 2, 8, "F");
-    pdf.setFontSize(8);
-    pdf.setFont("helvetica", "bold");
-    let xPos = margin;
-    headers.forEach((h, i) => { pdf.text(h, xPos + 2, yPos); xPos += colWidths[i]; });
+    const drawTableHeader = () => {
+      pdf.setFillColor(220, 220, 220);
+      pdf.rect(margin, yPos - 5, pageWidth - margin * 2, 8, "F");
+      pdf.setFontSize(8);
+      pdf.setFont("helvetica", "bold");
+      let hx = margin;
+      headers.forEach((h, i) => { pdf.text(h, hx + 2, yPos); hx += colWidths[i]; });
+      yPos += 6;
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7);
+    };
+    const drawGroupHeader = (ano: string) => {
+      pdf.setFillColor(59, 130, 246);
+      pdf.rect(margin, yPos - 5, pageWidth - margin * 2, 8, "F");
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(10);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(`Período aquisitivo: ${ano}`, margin + 2, yPos + 1);
+      pdf.setTextColor(0, 0, 0);
+      yPos += 9;
+    };
 
-    yPos += 6;
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(7);
+    drawTableHeader();
+
+    let lastAno: string | null = null;
 
     contadorDataFiltered.forEach((f, idx) => {
       if (yPos > 188) {
         pdf.addPage();
         yPos = 15;
-        pdf.setFillColor(220, 220, 220);
-        pdf.rect(margin, yPos - 5, pageWidth - margin * 2, 8, "F");
-        pdf.setFontSize(8);
-        pdf.setFont("helvetica", "bold");
-        let hx = margin;
-        headers.forEach((h, i) => { pdf.text(h, hx + 2, yPos); hx += colWidths[i]; });
-        yPos += 6;
-        pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(7);
+        drawTableHeader();
+        // re-imprime cabeçalho de grupo na nova página se ainda estamos no mesmo grupo
+        if (useGroups && lastAno) drawGroupHeader(lastAno);
+      }
+
+      const ano = f.periodo_aquisitivo_inicio ? f.periodo_aquisitivo_inicio.slice(0, 4) : "—";
+      if (useGroups && ano !== lastAno) {
+        if (yPos > 180) { pdf.addPage(); yPos = 15; drawTableHeader(); }
+        drawGroupHeader(ano);
+        lastAno = ano;
       }
 
       const nomeColLines = pdf.splitTextToSize(f.colaborador?.nome || "—", colWidths[0] - 4).slice(0, 2) as string[];
@@ -648,9 +672,9 @@ export default function FeriasFerias() {
     pdf.setTextColor(120, 120, 120);
     pdf.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")} | * Dias vendidos limitados a 10 | Total: ${contadorDataFiltered.length}`, pageWidth / 2, pdf.internal.pageSize.getHeight() - 5, { align: "center" });
 
-    pdf.save(`ferias-contador-${anoFilter}.pdf`);
+    pdf.save(`ferias-contador-${fileAnos}.pdf`);
     toast.success("PDF do contador exportado!");
-  }, [contadorDataFiltered, anoFilter, contadorMesFilter, contadorPeriodoFilter, formatPeriodo, resolveQuinzenaVenda]);
+  }, [contadorDataFiltered, anoFilter, contadorMesFilter, contadorPeriodoFilter, contadorAnosAquisitivos, formatPeriodo, resolveQuinzenaVenda]);
 
   return (
     <div className="space-y-6">
