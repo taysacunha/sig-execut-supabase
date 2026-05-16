@@ -320,6 +320,57 @@ export default function FeriasFerias() {
     },
   });
 
+  // Anos aquisitivos disponíveis (para o filtro multi-seleção da aba Contador)
+  const { data: anosAquisitivosDisponiveis = [] } = useQuery({
+    queryKey: ["ferias-anos-aquisitivos-disponiveis"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ferias_ferias")
+        .select("periodo_aquisitivo_inicio")
+        .not("periodo_aquisitivo_inicio", "is", null);
+      if (error) throw error;
+      const set = new Set<string>();
+      for (const r of (data || []) as { periodo_aquisitivo_inicio: string | null }[]) {
+        if (r.periodo_aquisitivo_inicio) set.add(r.periodo_aquisitivo_inicio.slice(0, 4));
+      }
+      return Array.from(set).sort((a, b) => b.localeCompare(a));
+    },
+  });
+
+  // Férias filtradas por anos aquisitivos selecionados (sobrescreve query padrão na aba Contador)
+  const { data: feriasPorAquisitivo = [], isLoading: feriasAquisitivoLoading } = useQuery({
+    queryKey: ["ferias-contador-aquisitivos", contadorAnosAquisitivos],
+    enabled: contadorAnosAquisitivos.length > 0,
+    queryFn: async () => {
+      const anos = [...contadorAnosAquisitivos].sort();
+      const minYear = anos[0];
+      const maxYear = anos[anos.length - 1];
+      const { data, error } = await supabase
+        .from("ferias_ferias")
+        .select(`*, colaborador:ferias_colaboradores!colaborador_id (id, nome, setor_titular:ferias_setores!setor_titular_id (id, nome))`)
+        .gte("periodo_aquisitivo_inicio", `${minYear}-01-01`)
+        .lte("periodo_aquisitivo_inicio", `${maxYear}-12-31`)
+        .order("periodo_aquisitivo_inicio", { ascending: true });
+      if (error) throw error;
+      const list = ((data || []) as any[]).filter((f) => {
+        const y = f.periodo_aquisitivo_inicio ? String(f.periodo_aquisitivo_inicio).slice(0, 4) : null;
+        return y !== null && contadorAnosAquisitivos.includes(y);
+      });
+      const ids = Array.from(new Set(list.map((f) => f.colaborador?.id).filter(Boolean)));
+      const cpfMap = new Map<string, string>();
+      if (ids.length) {
+        const { data: sensiveis } = await (supabase as any)
+          .from("ferias_colaboradores_dados_sensiveis")
+          .select("colaborador_id, cpf")
+          .in("colaborador_id", ids);
+        for (const r of (sensiveis || [])) if (r.cpf) cpfMap.set(r.colaborador_id, r.cpf);
+      }
+      return list.map((f) => f.colaborador
+        ? { ...f, colaborador: { ...f.colaborador, cpf: cpfMap.get(f.colaborador.id) ?? null } }
+        : f) as unknown as FeriasRecord[];
+    },
+  });
+
   // Delete mutations
   const deleteFeriasMutation = useMutation({
     mutationFn: async (id: string) => {
