@@ -906,14 +906,40 @@ export default function FeriasFerias() {
 
         {/* ========== ABA: TABELA DO CONTADOR ========== */}
         <TabsContent value="contador" className="mt-6 space-y-6">
-          <div className="flex flex-wrap gap-4 items-end justify-between">
-            <div className="flex flex-wrap gap-4 items-end">
-              <div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar colaborador..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 w-56" /></div>
-              <Select value={setorFilter} onValueChange={setSetorFilter}><SelectTrigger className="w-48"><SelectValue placeholder="Setor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os setores</SelectItem>{setores.map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}</SelectContent></Select>
-              <Select value={contadorMesFilter} onValueChange={setContadorMesFilter}><SelectTrigger className="w-44"><SelectValue placeholder="Mês" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os meses</SelectItem>{MONTHS.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent></Select>
-              <Select value={contadorPeriodoFilter} onValueChange={setContadorPeriodoFilter}><SelectTrigger className="w-40"><SelectValue placeholder="Período" /></SelectTrigger><SelectContent><SelectItem value="all">Ambos</SelectItem><SelectItem value="1">1ª Quinzena</SelectItem><SelectItem value="2">2ª Quinzena</SelectItem></SelectContent></Select>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="rounded-lg border bg-muted/40 p-3 space-y-3 flex-1 min-w-[280px]">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Filtros</span>
+                </div>
+                {(searchTerm !== "" || setorFilter !== "all" || contadorMesFilter !== "all" || contadorPeriodoFilter !== "all") && (
+                  <Button variant="outline" size="sm" onClick={() => { setSearchTerm(""); setSetorFilter("all"); setContadorMesFilter("all"); setContadorPeriodoFilter("all"); }} className="gap-1 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive">
+                    <X className="h-4 w-4" />
+                    Limpar filtros
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <div className="flex flex-col space-y-1">
+                  <Label className="text-xs font-medium text-muted-foreground">Buscar colaborador</Label>
+                  <div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Nome do colaborador..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 h-9 w-56" /></div>
+                </div>
+                <div className="flex flex-col space-y-1">
+                  <Label className="text-xs font-medium text-muted-foreground">Setor</Label>
+                  <Select value={setorFilter} onValueChange={setSetorFilter}><SelectTrigger className="w-48 h-9"><SelectValue placeholder="Setor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os setores</SelectItem>{setores.map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}</SelectContent></Select>
+                </div>
+                <div className="flex flex-col space-y-1">
+                  <Label className="text-xs font-medium text-muted-foreground">Mês</Label>
+                  <Select value={contadorMesFilter} onValueChange={setContadorMesFilter}><SelectTrigger className="w-44 h-9"><SelectValue placeholder="Mês" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os meses</SelectItem>{MONTHS.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent></Select>
+                </div>
+                <div className="flex flex-col space-y-1">
+                  <Label className="text-xs font-medium text-muted-foreground">Período</Label>
+                  <Select value={contadorPeriodoFilter} onValueChange={setContadorPeriodoFilter}><SelectTrigger className="w-40 h-9"><SelectValue placeholder="Período" /></SelectTrigger><SelectContent><SelectItem value="all">Ambos</SelectItem><SelectItem value="1">1ª Quinzena</SelectItem><SelectItem value="2">2ª Quinzena</SelectItem></SelectContent></Select>
+                </div>
+              </div>
             </div>
-            <Button variant="outline" className="gap-2" onClick={() => generateContadorPDF()}><Printer className="h-4 w-4" />Exportar PDF</Button>
+            <Button variant="outline" className="gap-2 mt-1" onClick={() => generateContadorPDF()}><Printer className="h-4 w-4" />Exportar PDF</Button>
           </div>
 
           <Card>
