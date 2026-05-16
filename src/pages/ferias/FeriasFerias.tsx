@@ -906,20 +906,22 @@ export default function FeriasFerias() {
 
         {/* ========== ABA: TABELA DO CONTADOR ========== */}
         <TabsContent value="contador" className="mt-6 space-y-6">
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div className="rounded-lg border bg-muted/40 p-3 space-y-3 flex-1 min-w-[280px]">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Filtros</span>
-                </div>
+          <div className="rounded-lg border bg-muted/40 p-3 space-y-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Filtros</span>
+              </div>
+              <div className="flex items-center gap-2">
                 {(searchTerm !== "" || setorFilter !== "all" || contadorMesFilter !== "all" || contadorPeriodoFilter !== "all") && (
                   <Button variant="outline" size="sm" onClick={() => { setSearchTerm(""); setSetorFilter("all"); setContadorMesFilter("all"); setContadorPeriodoFilter("all"); }} className="gap-1 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive">
                     <X className="h-4 w-4" />
                     Limpar filtros
                   </Button>
                 )}
+                <Button variant="outline" size="sm" className="gap-1" onClick={() => generateContadorPDF()}><Printer className="h-4 w-4" />Exportar PDF</Button>
               </div>
+            </div>
               <div className="flex flex-wrap gap-3">
                 <div className="flex flex-col space-y-1">
                   <Label className="text-xs font-medium text-muted-foreground">Buscar colaborador</Label>
@@ -938,8 +940,6 @@ export default function FeriasFerias() {
                   <Select value={contadorPeriodoFilter} onValueChange={setContadorPeriodoFilter}><SelectTrigger className="w-40 h-9"><SelectValue placeholder="Período" /></SelectTrigger><SelectContent><SelectItem value="all">Ambos</SelectItem><SelectItem value="1">1ª Quinzena</SelectItem><SelectItem value="2">2ª Quinzena</SelectItem></SelectContent></Select>
                 </div>
               </div>
-            </div>
-            <Button variant="outline" className="gap-2 mt-1" onClick={() => generateContadorPDF()}><Printer className="h-4 w-4" />Exportar PDF</Button>
           </div>
 
           <Card>
