@@ -1,71 +1,99 @@
-## 1) Erro "Edge Function returned a non-2xx status code" ao adicionar usuário
+## Objetivo
 
-### Diagnóstico
+Tratar os registros dos "Logs de Auditoria" exibidos em `/usuarios` (componente `AuditLogsPanel` configurado com `defaultModule="sistema"` e `defaultTab="admin"`) para que tudo apareça em português e com nomes legíveis — sem mais campos em inglês, valores técnicos ou UUIDs nus.
 
-A função `invite-user` (linha 85 de `supabase/functions/invite-user/index.ts`) só permite que `super_admin` ou `admin` criem usuários — qualquer outra role recebe **403**:
+## Diagnóstico
+
+A página usa `AuditLogsPanel` com duas abas:
+
+1. **Ações Administrativas** (`admin_audit_logs`) — gerada pela edge `manage-user`. O bloco "Detalhes" mostra hoje chaves/valores crus como:
+   - `reason: user_deactivated`, `reason: user_reactivated`, `reason: user_deleted`, `reason: password_reset`
+   - `is_self: true`, `old_email`, `new_email`
+   
+2. **Alterações nos Módulos** filtrada por `module_name = 'sistema'` (`module_audit_logs`) — abrange tabelas de sistema (`user_roles`, `system_access`, `user_profiles`, etc.). Hoje exibe:
+   - Coluna "Tabela": nomes crus (`user_roles`, `system_access`, `user_profiles`) sem entrada em `tableLabels`.
+   - Coluna "Registro": cai no fallback `record_id.slice(0, 8)` porque os registros não têm `nome`/`nome_exibicao` e a função `getRecordLabel` não resolve via `user_id`.
+   - Campos alterados: `role`, `system_name`, `can_view`, `can_edit`, `user_id`, `name` aparecem em inglês.
+   - Valores de role (`super_admin`, `admin`, `manager`, `supervisor`, `collaborator`) e de `system_name` (`escalas`, `vendas`, `ferias`, `estoque`) aparecem em inglês/minúsculo.
+
+Nenhuma lógica de negócio, query, RLS ou edge function precisa mudar — apenas o mapeamento de apresentação em `src/components/AuditLogsPanel.tsx`.
+
+## Alterações em `src/components/AuditLogsPanel.tsx`
+
+### 1) Ampliar `tableLabels`
+Adicionar:
+- `user_roles` → "Permissões de Usuário"
+- `system_access` → "Acessos ao Sistema"
+- `user_profiles` → "Perfis de Usuário"
+- `admin_audit_logs` → "Logs Administrativos"
+- `module_audit_logs` → "Logs de Módulos"
+
+### 2) Ampliar `fieldLabels`
+Adicionar campos do módulo sistema e dos detalhes administrativos:
+- `user_id` → "Usuário"
+- `role` → "Permissão"
+- `system_name` → "Sistema"
+- `can_view` → "Pode visualizar"
+- `can_edit` → "Pode editar"
+- `name` → "Nome"
+- `email` → "E-mail"
+- `phone` → "Telefone"
+- `avatar_url` → "Foto"
+- `reason` → "Motivo"
+- `is_self` → "Auto-ação"
+- `old_email` → "E-mail anterior"
+- `new_email` → "Novo e-mail"
+- `actor_id` / `actor_email` / `target_id` / `target_email` → rótulos em PT
+- `granted_by`, `granted_at` → "Concedido por", "Concedido em"
+
+### 3) Criar mapas de tradução de valores
+Novo dicionário `valueLabels` por campo:
 
 ```ts
-if (roleError || !callerRole || !["super_admin", "admin"].includes(callerRole)) {
-  return ... status: 403, body: { error: "Apenas Super Administradores e Administradores podem adicionar usuários" }
-}
+const valueLabels: Record<string, Record<string, string>> = {
+  role: {
+    super_admin: "Super Administrador",
+    admin: "Administrador",
+    manager: "Gerente",
+    supervisor: "Supervisor",
+    collaborator: "Colaborador",
+  },
+  system_name: {
+    escalas: "Escalas",
+    vendas: "Vendas",
+    estoque: "Estoques",
+    ferias: "Férias e Folgas",
+    sistema: "Sistema",
+  },
+  reason: {
+    user_deactivated: "Usuário desativado",
+    user_reactivated: "Usuário reativado",
+    user_deleted: "Usuário removido",
+    password_reset: "Senha redefinida",
+  },
+};
 ```
 
-A função em si está respondendo certo. O problema é que, no frontend, `supabase.functions.invoke()` (UserManagement.tsx linhas 306/338) **engole o corpo da resposta** quando o status não é 2xx e exibe apenas a mensagem genérica "Edge Function returned a non-2xx status code". Por isso a Edneide vê esse texto em vez do motivo real.
+Em `formatFieldValue`, antes do retorno padrão para string, consultar `valueLabels[field]?.[val]` e usar quando disponível. O mesmo se aplica quando o valor é booleano dentro de `is_self` (já cai em "Sim/Não", suficiente).
 
-Os metadados dela mostram `role: "collaborator"` no convite original, mas a role efetiva é a que está em `public.user_roles`. Hipóteses prováveis, em ordem:
+### 4) Resolver UUIDs de usuário em "Registro" e em valores `user_id`
+Estender `useLookups().resolve` para reconhecer `user_id` (e variantes `actor_id`, `target_id`, `granted_by`, `changed_by`, `recebido_por_user_id`, `responsavel_user_id`) e mapear via cache `user_profiles` (já pré-carregado). Quando o campo `name` não existir no `user_profiles`, cair no e-mail (necessário expandir `loadLookup` para aceitar campos múltiplos ou criar uma função auxiliar `loadUserProfilesLookup` que monte o map combinando `name || email`).
 
-- **(A) Edneide é `collaborator` (ou `manager`/`supervisor`)** em `user_roles` → o backend está rejeitando corretamente, mas a UI não deveria nem mostrar o botão "Adicionar usuário" para ela. Hoje o gate da UI está fraco.
-- **(B) Edneide é `admin`/`super_admin**` e algum outro erro está acontecendo (rate limit, email duplicado, falha na inserção em `user_roles`). Só conseguimos confirmar olhando o log da função no momento da tentativa.
+Em `getRecordLabel`, antes do fallback de slice do UUID:
+- Se `data.user_id` existir, tentar resolver pelo cache de `user_profiles`.
+- Se `log.table_name === 'user_roles'` ou `'system_access'` e houver `user_id`, mostrar o nome resolvido + (para system_access) o sistema entre parênteses: `"Maria — Férias e Folgas"`.
 
-### Correções a implementar
+### 5) Bloco "Detalhes" da aba Administrativa
+Já passa pelo `formatFieldLabel` + `formatFieldValue`, então só com (2) e (3) as chaves e valores ficam em português. Verificar visualmente que `is_self: true` renderiza "Sim", `reason: user_deactivated` renderiza "Usuário desativado", `old_email`/`new_email` renderizam com seus rótulos.
 
-1. **Surfacing do erro real no frontend** (`src/pages/UserManagement.tsx`, ambas as chamadas a `invite-user`):
-  - Trocar o tratamento atual por: ler `data?.error` primeiro; se vier algo, exibir no toast. Como `functions.invoke` perde o body em status != 2xx, usar `fetch` direto contra a URL da função (mantendo `Authorization` e `apikey`) para preservar o JSON de erro, OU encapsular numa função utilitária que faça o `fetch` manual.
-  - Resultado: ao invés de "non-2xx status code", a Edneide veria, p.ex., "Apenas Super Administradores e Administradores podem adicionar usuários".
-2. **Reforçar o gate de UI** em `UserManagement.tsx`: o botão "Adicionar usuário" (e o formulário) só deve ser renderizado se `useUserRole()` retornar `super_admin` ou `admin`. Hoje o controle existe parcialmente; confirmar e fechar.
-3. **Pedir ao usuário** o print do log no painel de Edge Functions (link no final) referente à tentativa da Edneide, para confirmar se foi 403 (permissão), 429 (rate limit), ou 500 (outro bug). Isso decide se basta (1)+(2) ou se há um terceiro ajuste.
+### 6) Filtros de "Tabela" e busca
+Sem mudança funcional — o `tableLabels` ampliado já reflete os novos nomes no `Select` (que usa `tableLabels[t] || t`).
 
-Nenhuma migração de banco é necessária. Nenhuma mudança na lógica da própria edge function — ela está se comportando como esperado.
+## Resultado esperado
 
-## 2) Botão "Exportar PDF" na Tabela de Férias
+Na página `/usuarios` → aba "Logs de Auditoria":
 
-Hoje a aba **"Tabela do Contador"** já tem o botão `Exportar PDF` (linha 1031 de `src/pages/ferias/FeriasFerias.tsx`) que chama `generateContadorPDF`. A aba **"Tabela de Férias"** (linhas 729+) não tem botão equivalente.
+- Aba **Ações Administrativas**: detalhes mostram "Motivo: Usuário desativado", "Auto-ação: Sim", "E-mail anterior: …", "Novo e-mail: …" em vez de chaves/valores em inglês.
+- Aba **Alterações nos Módulos** (módulo Sistema): coluna "Tabela" mostra "Permissões de Usuário"/"Acessos ao Sistema"/"Perfis de Usuário"; coluna "Registro" mostra o nome (ou e-mail) do usuário afetado; campos alterados aparecem como "Permissão: Colaborador → Administrador", "Sistema: Férias e Folgas", "Pode editar: Não → Sim".
 
-### O que será feito
-
-Em `src/pages/ferias/FeriasFerias.tsx`, somente na aba `value="ferias"`:
-
-1. Criar `generateFeriasPDF` (useCallback) seguindo exatamente o padrão de `generateContadorPDF`:
-  - jsPDF em landscape A4.
-  - Título: `TABELA DE FÉRIAS — {anoFilter}`.
-  - Subtítulo: filtros ativos (Busca / Status / Setor).
-  - Colunas: **Colaborador · Setor · Períodos · Venda · Status · Origem · Exceção** (mesmas colunas da tabela na tela, sem a coluna "Ações").
-  - Coluna "Períodos": prioriza `gozo_periodos`; se não houver, usa `gozo_*` quando `gozo_diferente`; senão usa `quinzena1_*`/`quinzena2_*`. Indica "2º pendente" quando aplicável.
-  - Coluna "Venda": "{dias} dias" ou "—".
-  - Coluna "Status": label de `statusLabels`.
-  - Coluna "Origem": "Gerada" se `formulario_anual`, senão "Manual".
-  - Coluna "Exceção": "Sim ({motivo})" ou "Não"; sinaliza "Conflito afast." quando estiver em `feriasAfastamentoConflicts`.
-  - Linhas zebradas e quebra de página automáticas, como no PDF do contador.
-  - Rodapé com data de geração e total de registros.
-  - Usa `filteredFerias` (não apenas a página atual) para exportar tudo que está filtrado.
-  - `pdf.save('ferias-${anoFilter}.pdf')` e `toast.success(...)`.
-2. Adicionar o botão na barra de ações da aba (logo acima dos filtros, junto de "Gerar Férias" / "Cadastro Manual" / "Novo Formulário"):
-
-```tsx
-<Button variant="outline" className="gap-2" onClick={() => generateFeriasPDF()}>
-  <Printer className="h-4 w-4" /> Exportar PDF
-</Button>
-```
-
-- Mostrar para qualquer usuário com acesso à página (igual ao da aba do contador), não restrito a `canEditFerias`.
-- Desabilitar quando `filteredFerias.length === 0`.
-
-### Fora de escopo
-
-- Nenhuma mudança em dados, RLS, geração de férias, lógica de venda, exibição da tabela na tela, ou no PDF do contador.
-- Nenhuma alteração nas outras abas (Períodos Aquisitivos / Contador).
-
-Só dexando claro que Edneide, hoje, está com o perfil Administrador.
-
-Logs do invite-user
-&nbsp;
+Nenhum dado, política RLS, edge function ou consulta SQL é alterada.

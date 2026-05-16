@@ -111,6 +111,9 @@ const tableLabels: Record<string, string> = {
   proposals: "Propostas",
   user_roles: "Permissões",
   system_access: "Acessos ao Sistema",
+  user_profiles: "Perfis de Usuário",
+  admin_audit_logs: "Logs Administrativos",
+  module_audit_logs: "Logs de Módulos",
   estoque_materiais: "Materiais",
   estoque_locais_armazenamento: "Locais de Armazenamento",
   estoque_saldos: "Saldos",
@@ -204,6 +207,51 @@ const fieldLabels: Record<string, string> = {
   available_weekdays: "Dias disponíveis",
   weekday_shift_availability: "Turnos disponíveis",
   creci: "CRECI",
+  // Sistema / usuários
+  user_id: "Usuário",
+  role: "Permissão",
+  system_name: "Sistema",
+  can_view: "Pode visualizar",
+  can_edit: "Pode editar",
+  name: "Nome",
+  email: "E-mail",
+  phone: "Telefone",
+  avatar_url: "Foto",
+  granted_by: "Concedido por",
+  granted_at: "Concedido em",
+  // Detalhes de admin_audit_logs
+  reason: "Motivo",
+  is_self: "Auto-ação",
+  old_email: "E-mail anterior",
+  new_email: "Novo e-mail",
+  actor_id: "Ator",
+  actor_email: "E-mail do ator",
+  target_id: "Alvo",
+  target_email: "E-mail do alvo",
+};
+
+// Tradução de valores específicos por campo
+const valueLabels: Record<string, Record<string, string>> = {
+  role: {
+    super_admin: "Super Administrador",
+    admin: "Administrador",
+    manager: "Gerente",
+    supervisor: "Supervisor",
+    collaborator: "Colaborador",
+  },
+  system_name: {
+    escalas: "Escalas",
+    vendas: "Vendas",
+    estoque: "Estoques",
+    ferias: "Férias e Folgas",
+    sistema: "Sistema",
+  },
+  reason: {
+    user_deactivated: "Usuário desativado",
+    user_reactivated: "Usuário reativado",
+    user_deleted: "Usuário removido",
+    password_reset: "Senha redefinida",
+  },
 };
 
 // Campos técnicos a esconder em INSERT/DELETE expandido
