@@ -52,27 +52,41 @@ import { ptBR } from "date-fns/locale";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 
+// Aceita data vazia OU com ano entre 1990 e 2100 (evita erro de digitação tipo "0225")
+const isReasonableDate = (s: string | undefined | null) => {
+  if (!s) return true;
+  const m = /^(\d{4})-\d{2}-\d{2}$/.exec(s);
+  if (!m) return false;
+  const y = parseInt(m[1], 10);
+  return y >= 1990 && y <= 2100;
+};
+const dateYearMsg = "Ano inválido — use uma data entre 1990 e 2100";
+const reasonableDate = (required: boolean) =>
+  required
+    ? z.string().min(1, "Data de início é obrigatória").refine(isReasonableDate, dateYearMsg)
+    : z.string().optional().or(z.literal("")).refine(isReasonableDate, dateYearMsg);
+
 const feriasSchema = z.object({
   colaborador_id: z.string().min(1, "Colaborador é obrigatório"),
-  quinzena1_inicio: z.string().min(1, "Data de início é obrigatória"),
-  quinzena1_fim: z.string().min(1, "Data de fim é obrigatória"),
-  quinzena2_inicio: z.string().optional().or(z.literal("")),
-  quinzena2_fim: z.string().optional().or(z.literal("")),
+  quinzena1_inicio: reasonableDate(true),
+  quinzena1_fim: z.string().min(1, "Data de fim é obrigatória").refine(isReasonableDate, dateYearMsg),
+  quinzena2_inicio: reasonableDate(false),
+  quinzena2_fim: reasonableDate(false),
   opcao_adicional: z.enum(["nenhum", "vender", "gozo_diferente"]).default("nenhum"),
   gozo_periodos: z.enum(["1", "2", "ambos"]).default("ambos"),
-  gozo_quinzena1_inicio: z.string().optional(),
-  gozo_quinzena1_fim: z.string().optional(),
-  gozo_quinzena2_inicio: z.string().optional(),
-  gozo_quinzena2_fim: z.string().optional(),
+  gozo_quinzena1_inicio: reasonableDate(false),
+  gozo_quinzena1_fim: reasonableDate(false),
+  gozo_quinzena2_inicio: reasonableDate(false),
+  gozo_quinzena2_fim: reasonableDate(false),
   dias_vendidos: z.number().min(0).max(30).optional(),
   quinzena_venda: z.number().min(1).max(2).optional(),
-  gozo_venda_inicio: z.string().optional(),
-  gozo_venda_fim: z.string().optional(),
+  gozo_venda_inicio: reasonableDate(false),
+  gozo_venda_fim: reasonableDate(false),
   gozo_venda_periodos: z.enum(["1", "2"]).default("1"),
-  gozo_venda_q1_inicio: z.string().optional(),
-  gozo_venda_q1_fim: z.string().optional(),
-  gozo_venda_q2_inicio: z.string().optional(),
-  gozo_venda_q2_fim: z.string().optional(),
+  gozo_venda_q1_inicio: reasonableDate(false),
+  gozo_venda_q1_fim: reasonableDate(false),
+  gozo_venda_q2_inicio: reasonableDate(false),
+  gozo_venda_q2_fim: reasonableDate(false),
   is_excecao: z.boolean().default(false),
   excecao_motivo: z.string().optional(),
   excecao_justificativa: z.string().optional(),
@@ -1602,6 +1616,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                               <Input
                                 type="date"
                                 {...field}
+                                min="1990-01-01"
+                                max="2100-12-31"
                                 disabled={!!ferias?.enviado_contador_q1}
                                 className={ferias?.enviado_contador_q1 ? "bg-muted cursor-not-allowed" : undefined}
                               />
@@ -1629,6 +1645,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                               <Input
                                 type="date"
                                 {...field}
+                                min="1990-01-01"
+                                max="2100-12-31"
                                 disabled={!!ferias?.enviado_contador_q2}
                                 className={ferias?.enviado_contador_q2 ? "bg-muted cursor-not-allowed" : undefined}
                               />
@@ -1690,9 +1708,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                   <Card>
                     <CardHeader className="pb-3"><CardTitle className="text-sm">1º Período (15 dias)</CardTitle></CardHeader>
                     <CardContent className="grid grid-cols-2 gap-4">
-                      <FormField control={form.control} name="quinzena1_inicio" render={({ field }) => (
-                        <FormItem><FormLabel>Data de Início *</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
-                      )} />
+                       <FormField control={form.control} name="quinzena1_inicio" render={({ field }) => (
+                         <FormItem><FormLabel>Data de Início *</FormLabel><FormControl><Input type="date" min="1990-01-01" max="2100-12-31" {...field} /></FormControl><FormMessage /></FormItem>
+                       )} />
                       <FormItem>
                         <FormLabel>Data de Fim (automático)</FormLabel>
                         <Input type="date" value={q1Fim} readOnly className="bg-muted cursor-not-allowed" />
@@ -1703,9 +1721,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                   <Card>
                     <CardHeader className="pb-3"><CardTitle className="text-sm">2º Período (15 dias)</CardTitle></CardHeader>
                     <CardContent className="grid grid-cols-2 gap-4">
-                      <FormField control={form.control} name="quinzena2_inicio" render={({ field }) => (
-                        <FormItem><FormLabel>Data de Início *</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
-                      )} />
+                       <FormField control={form.control} name="quinzena2_inicio" render={({ field }) => (
+                         <FormItem><FormLabel>Data de Início *</FormLabel><FormControl><Input type="date" min="1990-01-01" max="2100-12-31" {...field} /></FormControl><FormMessage /></FormItem>
+                       )} />
                       <FormItem>
                         <FormLabel>Data de Fim (automático)</FormLabel>
                         <Input type="date" value={q2Fim} readOnly className="bg-muted cursor-not-allowed" />
@@ -1824,7 +1842,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                         </CardHeader>
                         <CardContent className="grid grid-cols-2 gap-4">
                           <FormField control={form.control} name="gozo_venda_inicio" render={({ field }) => (
-                            <FormItem><FormLabel>Data de Início do Gozo</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                            <FormItem><FormLabel>Data de Início do Gozo</FormLabel><FormControl><Input type="date" min="1990-01-01" max="2100-12-31" {...field} /></FormControl><FormMessage /></FormItem>
                           )} />
                           <FormItem>
                             <FormLabel>Data de Fim (automático)</FormLabel>
