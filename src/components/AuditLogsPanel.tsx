@@ -111,6 +111,9 @@ const tableLabels: Record<string, string> = {
   proposals: "Propostas",
   user_roles: "Permissões",
   system_access: "Acessos ao Sistema",
+  user_profiles: "Perfis de Usuário",
+  admin_audit_logs: "Logs Administrativos",
+  module_audit_logs: "Logs de Módulos",
   estoque_materiais: "Materiais",
   estoque_locais_armazenamento: "Locais de Armazenamento",
   estoque_saldos: "Saldos",
@@ -204,6 +207,51 @@ const fieldLabels: Record<string, string> = {
   available_weekdays: "Dias disponíveis",
   weekday_shift_availability: "Turnos disponíveis",
   creci: "CRECI",
+  // Sistema / usuários
+  user_id: "Usuário",
+  role: "Permissão",
+  system_name: "Sistema",
+  can_view: "Pode visualizar",
+  can_edit: "Pode editar",
+  name: "Nome",
+  email: "E-mail",
+  phone: "Telefone",
+  avatar_url: "Foto",
+  granted_by: "Concedido por",
+  granted_at: "Concedido em",
+  // Detalhes de admin_audit_logs
+  reason: "Motivo",
+  is_self: "Auto-ação",
+  old_email: "E-mail anterior",
+  new_email: "Novo e-mail",
+  actor_id: "Ator",
+  actor_email: "E-mail do ator",
+  target_id: "Alvo",
+  target_email: "E-mail do alvo",
+};
+
+// Tradução de valores específicos por campo
+const valueLabels: Record<string, Record<string, string>> = {
+  role: {
+    super_admin: "Super Administrador",
+    admin: "Administrador",
+    manager: "Gerente",
+    supervisor: "Supervisor",
+    collaborator: "Colaborador",
+  },
+  system_name: {
+    escalas: "Escalas",
+    vendas: "Vendas",
+    estoque: "Estoques",
+    ferias: "Férias e Folgas",
+    sistema: "Sistema",
+  },
+  reason: {
+    user_deactivated: "Usuário desativado",
+    user_reactivated: "Usuário reativado",
+    user_deleted: "Usuário removido",
+    password_reset: "Senha redefinida",
+  },
 };
 
 // Campos técnicos a esconder em INSERT/DELETE expandido
@@ -263,6 +311,37 @@ async function loadLookup(table: string, nameCol: string): Promise<LookupMap> {
   }
 }
 
+// Lookup especial para perfis de usuário: indexa por user_id (não pelo id da
+// tabela user_profiles) e cai para o e-mail quando o nome estiver vazio.
+async function loadUserProfilesLookup(): Promise<LookupMap> {
+  const key = "user_profiles";
+  if (lookupCaches[key] && lookupCaches[key] !== "loading") {
+    return lookupCaches[key] as LookupMap;
+  }
+  if (lookupCaches[key] === "loading") return new Map();
+  lookupCaches[key] = "loading";
+  try {
+    const { data } = await (supabase as any)
+      .from("user_profiles")
+      .select("user_id, name, email")
+      .limit(5000);
+    const map: LookupMap = new Map();
+    (data || []).forEach((r: any) => {
+      if (r?.user_id) {
+        const label = (r.name && String(r.name).trim()) || r.email || "";
+        if (label) map.set(r.user_id, String(label));
+      }
+    });
+    lookupCaches[key] = map;
+    lookupListeners.forEach(l => l());
+    return map;
+  } catch {
+    const empty: LookupMap = new Map();
+    lookupCaches[key] = empty;
+    return empty;
+  }
+}
+
 function useLookups() {
   const [, force] = useState(0);
   useEffect(() => {
@@ -277,7 +356,7 @@ function useLookups() {
     loadLookup("brokers", "name");
     loadLookup("estoque_materiais", "nome");
     loadLookup("estoque_locais_armazenamento", "nome");
-    loadLookup("user_profiles", "name");
+    loadUserProfilesLookup();
     return () => { lookupListeners.delete(listener); };
   }, []);
 
@@ -298,6 +377,13 @@ function useLookups() {
       local_origem_id: ["estoque_locais_armazenamento", "nome"],
       local_destino_id: ["estoque_locais_armazenamento", "nome"],
       local_armazenamento_id: ["estoque_locais_armazenamento", "nome"],
+      user_id: ["user_profiles", "name"],
+      actor_id: ["user_profiles", "name"],
+      target_id: ["user_profiles", "name"],
+      granted_by: ["user_profiles", "name"],
+      changed_by: ["user_profiles", "name"],
+      recebido_por_user_id: ["user_profiles", "name"],
+      responsavel_user_id: ["user_profiles", "name"],
     };
     const tuple = tableByField[field];
     if (!tuple) return null;
@@ -386,6 +472,7 @@ const formatFieldValue = (val: unknown, field?: string, resolve?: (f: string, v:
   if (typeof val === "boolean") return val ? "Sim" : "Não";
   if (Array.isArray(val)) return val.length === 0 ? "—" : val.map(v => formatFieldValue(v, field, resolve)).join(", ");
   if (typeof val === "string") {
+    if (field && valueLabels[field]?.[val]) return valueLabels[field][val];
     if (field && resolve) {
       const resolved = resolve(field, val);
       if (resolved) return resolved;
@@ -410,6 +497,21 @@ const getRecordLabel = (log: ModuleAuditLog, resolve: (f: string, v: unknown) =>
   if (!data) return log.record_id?.slice(0, 8) || "—";
   const nome = (data.nome || data.nome_exibicao || data.name || data.titulo) as string | undefined;
   if (nome) return nome;
+  // Registros de sistema (user_roles, system_access, user_profiles) — resolver pelo usuário
+  if (data.user_id) {
+    const u = resolve("user_id", data.user_id);
+    if (u) {
+      if (log.table_name === "system_access" && data.system_name) {
+        const sys = valueLabels.system_name?.[String(data.system_name)] || String(data.system_name);
+        return `${u} — ${sys}`;
+      }
+      if (log.table_name === "user_roles" && data.role) {
+        const r = valueLabels.role?.[String(data.role)] || String(data.role);
+        return `${u} — ${r}`;
+      }
+      return u;
+    }
+  }
   // tentar resolver pelo colaborador_id
   if (data.colaborador_id) {
     const r = resolve("colaborador_id", data.colaborador_id);
