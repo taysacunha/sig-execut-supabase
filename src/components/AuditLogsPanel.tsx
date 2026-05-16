@@ -472,6 +472,7 @@ const formatFieldValue = (val: unknown, field?: string, resolve?: (f: string, v:
   if (typeof val === "boolean") return val ? "Sim" : "Não";
   if (Array.isArray(val)) return val.length === 0 ? "—" : val.map(v => formatFieldValue(v, field, resolve)).join(", ");
   if (typeof val === "string") {
+    if (field && valueLabels[field]?.[val]) return valueLabels[field][val];
     if (field && resolve) {
       const resolved = resolve(field, val);
       if (resolved) return resolved;
@@ -496,6 +497,21 @@ const getRecordLabel = (log: ModuleAuditLog, resolve: (f: string, v: unknown) =>
   if (!data) return log.record_id?.slice(0, 8) || "—";
   const nome = (data.nome || data.nome_exibicao || data.name || data.titulo) as string | undefined;
   if (nome) return nome;
+  // Registros de sistema (user_roles, system_access, user_profiles) — resolver pelo usuário
+  if (data.user_id) {
+    const u = resolve("user_id", data.user_id);
+    if (u) {
+      if (log.table_name === "system_access" && data.system_name) {
+        const sys = valueLabels.system_name?.[String(data.system_name)] || String(data.system_name);
+        return `${u} — ${sys}`;
+      }
+      if (log.table_name === "user_roles" && data.role) {
+        const r = valueLabels.role?.[String(data.role)] || String(data.role);
+        return `${u} — ${r}`;
+      }
+      return u;
+    }
+  }
   // tentar resolver pelo colaborador_id
   if (data.colaborador_id) {
     const r = resolve("colaborador_id", data.colaborador_id);
