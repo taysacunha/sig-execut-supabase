@@ -22,6 +22,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
@@ -151,6 +154,7 @@ export default function FeriasFerias() {
   const [contadorQ2Checked, setContadorQ2Checked] = useState(false);
   const [contadorMesFilter, setContadorMesFilter] = useState<string>("all");
   const [contadorPeriodoFilter, setContadorPeriodoFilter] = useState<string>("all");
+  const [contadorAnosAquisitivos, setContadorAnosAquisitivos] = useState<string[]>([]);
 
   const [activeTab, setActiveTab] = useState("ferias");
   const [searchTerm, setSearchTerm] = useState("");
