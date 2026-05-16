@@ -774,7 +774,7 @@ export default function FeriasFerias() {
 
           <Card>
             <CardContent className="p-0">
-              {feriasLoading ? (
+              {(contadorAnosAquisitivos.length > 0 ? feriasAquisitivoLoading : feriasLoading) ? (
                 <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
               ) : filteredFerias.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
@@ -1117,8 +1117,28 @@ export default function FeriasFerias() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {contadorFilteredPagination.paginatedItems.map((f) => (
-                        <TableRow key={f.id}>
+                      {(() => {
+                        const useGroups = contadorAnosAquisitivos.length > 1;
+                        const colSpan = 4
+                          + ((contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1") ? 1 : 0)
+                          + ((contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2") ? 1 : 0)
+                          + 1; // Enviado
+                        let lastAno: string | null = null;
+                        const rows: React.ReactNode[] = [];
+                        for (const f of contadorFilteredPagination.paginatedItems) {
+                          const ano = f.periodo_aquisitivo_inicio ? f.periodo_aquisitivo_inicio.slice(0, 4) : "—";
+                          if (useGroups && ano !== lastAno) {
+                            rows.push(
+                              <TableRow key={`group-${ano}`} className="bg-muted/60 hover:bg-muted/60">
+                                <TableCell colSpan={colSpan} className="font-semibold text-sm py-2">
+                                  Período aquisitivo: {ano}
+                                </TableCell>
+                              </TableRow>
+                            );
+                            lastAno = ano;
+                          }
+                          rows.push(
+                            <TableRow key={f.id}>
                           <TableCell className="font-medium">{f.colaborador?.nome || "—"}</TableCell>
                           <TableCell>{f.colaborador?.setor_titular?.nome || "—"}</TableCell>
                           <TableCell className="text-sm">{f.periodo_aquisitivo_inicio && f.periodo_aquisitivo_fim ? formatPeriodo(f.periodo_aquisitivo_inicio, f.periodo_aquisitivo_fim) : "—"}</TableCell>
@@ -1174,8 +1194,11 @@ export default function FeriasFerias() {
                               );
                             })()}
                           </TableCell>
-                        </TableRow>
-                      ))}
+                            </TableRow>
+                          );
+                        }
+                        return rows;
+                      })()}
                     </TableBody>
                   </Table>
                   <TablePagination
