@@ -640,15 +640,34 @@ export default function FeriasFerias() {
             <Card className="border-primary/20"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-primary flex items-center gap-1"><Sparkles className="h-3 w-3" />Geradas</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-primary">{feriasStats.geradas}</div></CardContent></Card>
           </div>
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar colaborador..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" /></div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os status</SelectItem>{Object.entries(statusLabels).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent></Select>
-                <Select value={setorFilter} onValueChange={setSetorFilter}><SelectTrigger><SelectValue placeholder="Setor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os setores</SelectItem>{setores.map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}</SelectContent></Select>
+          <div className="rounded-lg border bg-muted/40 p-3 space-y-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Filtros</span>
               </div>
-            </CardContent>
-          </Card>
+              {(searchTerm !== "" || statusFilter !== "all" || setorFilter !== "all") && (
+                <Button variant="outline" size="sm" onClick={() => { setSearchTerm(""); setStatusFilter("all"); setSetorFilter("all"); }} className="gap-1 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive">
+                  <X className="h-4 w-4" />
+                  Limpar filtros
+                </Button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="flex flex-col space-y-1">
+                <Label className="text-xs font-medium text-muted-foreground">Buscar colaborador</Label>
+                <div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Nome do colaborador..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 h-9" /></div>
+              </div>
+              <div className="flex flex-col space-y-1">
+                <Label className="text-xs font-medium text-muted-foreground">Status</Label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="h-9"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os status</SelectItem>{Object.entries(statusLabels).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent></Select>
+              </div>
+              <div className="flex flex-col space-y-1">
+                <Label className="text-xs font-medium text-muted-foreground">Setor</Label>
+                <Select value={setorFilter} onValueChange={setSetorFilter}><SelectTrigger className="h-9"><SelectValue placeholder="Setor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os setores</SelectItem>{setores.map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}</SelectContent></Select>
+              </div>
+            </div>
+          </div>
 
           <Card>
             <CardContent className="p-0">
