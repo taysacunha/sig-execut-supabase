@@ -603,7 +603,9 @@ export default function FeriasFerias() {
       pdf.setFont("helvetica", "bold");
       pdf.text(`Período aquisitivo: ${ano}`, margin + 2, yPos + 1);
       pdf.setTextColor(0, 0, 0);
-      yPos += 9;
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7);
+      yPos += 11;
     };
 
     drawTableHeader();
@@ -611,6 +613,10 @@ export default function FeriasFerias() {
     let lastAno: string | null = null;
 
     contadorDataFiltered.forEach((f, idx) => {
+      // Defensivo: garante que cabeçalhos anteriores não vazem estilo para o corpo
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7);
+      pdf.setTextColor(0, 0, 0);
       if (yPos > 188) {
         pdf.addPage();
         yPos = 15;
