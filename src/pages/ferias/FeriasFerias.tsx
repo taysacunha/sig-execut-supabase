@@ -923,14 +923,14 @@ export default function FeriasFerias() {
                           <TableCell className="font-medium">{f.colaborador?.nome || "—"}</TableCell>
                           <TableCell>{f.colaborador?.setor_titular?.nome || "—"}</TableCell>
                           <TableCell className="text-sm">{f.periodo_aquisitivo_inicio && f.periodo_aquisitivo_fim ? formatPeriodo(f.periodo_aquisitivo_inicio, f.periodo_aquisitivo_fim) : "—"}</TableCell>
-                          {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1") && <TableCell className="text-sm">{formatPeriodo(f.quinzena1_inicio, f.quinzena1_fim)}</TableCell>}
-                          {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2") && <TableCell className="text-sm">{f.quinzena2_inicio && f.quinzena2_fim ? formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim) : "—"}</TableCell>}
+                          {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1") && <TableCell className="text-sm">{f._showQ1 ? formatPeriodo(f.quinzena1_inicio, f.quinzena1_fim) : "—"}</TableCell>}
+                          {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2") && <TableCell className="text-sm">{f._showQ2 && f.quinzena2_inicio && f.quinzena2_fim ? formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim) : "—"}</TableCell>}
                           <TableCell>{(() => {
                             if (!f.vender_dias || !f.dias_vendidos) return <span className="text-muted-foreground text-xs">—</span>;
                             const total = Math.min(f.dias_vendidos, 10);
                             const qv = resolveQuinzenaVenda(f);
-                            if (contadorPeriodoFilter === "1" && qv !== 1) return <span className="text-muted-foreground text-xs">—</span>;
-                            if (contadorPeriodoFilter === "2" && qv !== 2) return <span className="text-muted-foreground text-xs">—</span>;
+                            const vendaVisivel = (qv === 1 && f._showQ1) || (qv === 2 && f._showQ2);
+                            if (!vendaVisivel) return <span className="text-muted-foreground text-xs">—</span>;
                             return <Badge variant="outline" className="text-xs">{total} dias ({qv}º período)</Badge>;
                           })()}</TableCell>
                           <TableCell className="text-center">
