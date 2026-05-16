@@ -1016,8 +1016,8 @@ export default function FeriasFerias() {
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Filtros</span>
               </div>
               <div className="flex items-center gap-2">
-                {(searchTerm !== "" || setorFilter !== "all" || contadorMesFilter !== "all" || contadorPeriodoFilter !== "all") && (
-                  <Button variant="outline" size="sm" onClick={() => { setSearchTerm(""); setSetorFilter("all"); setContadorMesFilter("all"); setContadorPeriodoFilter("all"); }} className="gap-1 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive">
+                {(searchTerm !== "" || setorFilter !== "all" || contadorMesFilter !== "all" || contadorPeriodoFilter !== "all" || contadorAnosAquisitivos.length > 0) && (
+                  <Button variant="outline" size="sm" onClick={() => { setSearchTerm(""); setSetorFilter("all"); setContadorMesFilter("all"); setContadorPeriodoFilter("all"); setContadorAnosAquisitivos([]); }} className="gap-1 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive">
                     <X className="h-4 w-4" />
                     Limpar filtros
                   </Button>
@@ -1042,7 +1042,58 @@ export default function FeriasFerias() {
                   <Label className="text-xs font-medium text-muted-foreground">Período</Label>
                   <Select value={contadorPeriodoFilter} onValueChange={setContadorPeriodoFilter}><SelectTrigger className="w-40 h-9"><SelectValue placeholder="Período" /></SelectTrigger><SelectContent><SelectItem value="all">Ambos</SelectItem><SelectItem value="1">1ª Quinzena</SelectItem><SelectItem value="2">2ª Quinzena</SelectItem></SelectContent></Select>
                 </div>
+                <div className="flex flex-col space-y-1">
+                  <Label className="text-xs font-medium text-muted-foreground">Anos aquisitivos (múltiplo)</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="w-56 h-9 justify-between font-normal">
+                        <span className="truncate">
+                          {contadorAnosAquisitivos.length === 0
+                            ? "Usar ano global"
+                            : contadorAnosAquisitivos.length === 1
+                              ? contadorAnosAquisitivos[0]
+                              : contadorAnosAquisitivos.length <= 3
+                                ? [...contadorAnosAquisitivos].sort().join(", ")
+                                : `${contadorAnosAquisitivos.length} anos selecionados`}
+                        </span>
+                        <ChevronDown className="h-4 w-4 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56 p-2" align="start">
+                      <div className="space-y-1 max-h-64 overflow-y-auto">
+                        {anosAquisitivosDisponiveis.length === 0 ? (
+                          <p className="text-xs text-muted-foreground p-2">Nenhum ano disponível</p>
+                        ) : anosAquisitivosDisponiveis.map((ano) => {
+                          const checked = contadorAnosAquisitivos.includes(ano);
+                          return (
+                            <label key={ano} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(v) => {
+                                  setContadorAnosAquisitivos((prev) =>
+                                    v ? [...prev, ano] : prev.filter((y) => y !== ano)
+                                  );
+                                }}
+                              />
+                              <span>{ano}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      {contadorAnosAquisitivos.length > 0 && (
+                        <Button variant="ghost" size="sm" className="w-full mt-2 text-xs" onClick={() => setContadorAnosAquisitivos([])}>
+                          Limpar seleção
+                        </Button>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
+              {contadorAnosAquisitivos.length > 0 && (
+                <p className="text-[11px] text-muted-foreground">
+                  Filtro de anos aquisitivos ativo — o ano global do topo está sendo ignorado nesta aba.
+                </p>
+              )}
           </div>
 
           <Card>
