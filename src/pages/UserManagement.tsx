@@ -311,8 +311,17 @@ function UserManagementContent() {
           systems: inviteSystems,
         },
       });
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
+      if (error) {
+        // Recupera o corpo JSON da resposta de erro (functions.invoke não expõe por padrão)
+        try {
+          const body = await (error as any).context?.json?.();
+          if (body?.error) throw new Error(body.error);
+        } catch (inner: any) {
+          if (inner?.message && inner.message !== (error as any).message) throw inner;
+        }
+        throw error;
+      }
+      if (data?.error) throw new Error(data.error);
 
       toast.success(data.message || `Usuário ${inviteEmail} convidado!`);
       setInviteName(""); setInviteEmail(""); setInviteRole("collaborator");
@@ -338,8 +347,16 @@ function UserManagementContent() {
       const { data, error } = await supabase.functions.invoke("invite-user", {
         body: { user_id: user.id, role: user.role, resend: true },
       });
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
+      if (error) {
+        try {
+          const body = await (error as any).context?.json?.();
+          if (body?.error) throw new Error(body.error);
+        } catch (inner: any) {
+          if (inner?.message && inner.message !== (error as any).message) throw inner;
+        }
+        throw error;
+      }
+      if (data?.error) throw new Error(data.error);
       toast.success(data.message || "Convite reenviado!");
       fetchUsers();
     } catch (error: any) {
