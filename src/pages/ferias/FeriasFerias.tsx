@@ -682,6 +682,129 @@ export default function FeriasFerias() {
     toast.success("PDF do contador exportado!");
   }, [contadorDataFiltered, anoFilter, contadorMesFilter, contadorPeriodoFilter, contadorAnosAquisitivos, formatPeriodo, resolveQuinzenaVenda]);
 
+  const generateFeriasPDF = useCallback(() => {
+    if (filteredFerias.length === 0) { toast.error("Nenhum dado para exportar"); return; }
+    const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 10;
+
+    const excecaoLabels: Record<string, string> = {
+      mes_bloqueado: "Mês bloqueado",
+      venda_acima_limite: "Venda > 10 dias",
+      familiar: "Familiar",
+      conflito_setor: "Conflito setor",
+      conflito_equipe: "Conflito equipe",
+      ajuste_setor: "Ajuste setor",
+      periodo_aquisitivo: "Per. aquisitivo",
+      outro: "Outro",
+    };
+
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFontSize(16);
+    pdf.setFont("helvetica", "bold");
+    pdf.text(`TABELA DE FÉRIAS - ${anoFilter}`, pageWidth / 2, 14, { align: "center" });
+
+    pdf.setFontSize(9);
+    pdf.setFont("helvetica", "normal");
+    const statusLabel = statusFilter === "all" ? "Todos" : (statusLabels[statusFilter] || statusFilter);
+    const setorLabel = setorFilter === "all" ? "Todos" : (setores.find((s: any) => s.id === setorFilter)?.nome || "—");
+    const buscaLabel = searchTerm.trim() ? searchTerm.trim() : "—";
+    pdf.text(`Busca: ${buscaLabel} | Status: ${statusLabel} | Setor: ${setorLabel}`, pageWidth / 2, 20, { align: "center" });
+
+    const headers = ["Colaborador", "Setor", "Períodos", "Venda", "Status", "Origem", "Exceção"];
+    const colWidths = [50, 42, 70, 22, 32, 22, 39];
+    let yPos = 30;
+
+    const drawHeader = () => {
+      pdf.setFillColor(220, 220, 220);
+      pdf.rect(margin, yPos - 5, pageWidth - margin * 2, 8, "F");
+      pdf.setFontSize(8);
+      pdf.setFont("helvetica", "bold");
+      let hx = margin;
+      headers.forEach((h, i) => { pdf.text(h, hx + 2, yPos); hx += colWidths[i]; });
+      yPos += 8;
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(8);
+    };
+
+    drawHeader();
+
+    filteredFerias.forEach((f, idx) => {
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(8);
+      pdf.setTextColor(0, 0, 0);
+
+      // Build períodos lines
+      const periodosLines: string[] = [];
+      const gps = gozoPeriodosByFeriasId[f.id];
+      if (gps && gps.length) {
+        const refsUsed = new Set(gps.map(p => p.referencia_periodo));
+        for (const p of gps) periodosLines.push(`${formatPeriodo(p.data_inicio, p.data_fim)} (${p.dias}d)`);
+        if (!refsUsed.has(2) && f.quinzena2_inicio && f.quinzena2_fim) {
+          periodosLines.push(formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim));
+        } else if (!refsUsed.has(2) && !f.quinzena2_inicio) {
+          periodosLines.push("2º pendente");
+        }
+      } else if (f.gozo_diferente && f.gozo_quinzena1_inicio) {
+        periodosLines.push(formatPeriodo(f.gozo_quinzena1_inicio, f.gozo_quinzena1_fim!));
+        if (f.gozo_quinzena2_inicio && f.gozo_quinzena2_fim) periodosLines.push(formatPeriodo(f.gozo_quinzena2_inicio, f.gozo_quinzena2_fim));
+      } else {
+        periodosLines.push(formatPeriodo(f.quinzena1_inicio, f.quinzena1_fim));
+        if (f.quinzena2_inicio && f.quinzena2_fim) periodosLines.push(formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim));
+        else periodosLines.push("2º pendente");
+      }
+
+      const nomeLines = pdf.splitTextToSize(f.colaborador?.nome || "—", colWidths[0] - 4).slice(0, 2) as string[];
+      const setorLines = pdf.splitTextToSize(f.colaborador?.setor_titular?.nome || "—", colWidths[1] - 4).slice(0, 2) as string[];
+
+      const excecaoText = f.is_excecao
+        ? `Sim (${excecaoLabels[f.excecao_motivo || ""] || f.excecao_motivo || "—"})`
+        : "Não";
+      const conflito = feriasAfastamentoConflicts.has(f.id);
+      const excecaoLines: string[] = [excecaoText];
+      if (conflito) excecaoLines.push("⚠ Conflito afast.");
+
+      const lineCount = Math.max(nomeLines.length, setorLines.length, periodosLines.length, excecaoLines.length, 1);
+      const rowH = lineCount * 4 + 2;
+
+      if (yPos + rowH > pageHeight - 10) {
+        pdf.addPage();
+        yPos = 15;
+        drawHeader();
+      }
+
+      if (idx % 2 === 1) {
+        pdf.setFillColor(245, 245, 245);
+        pdf.rect(margin, yPos - 4, pageWidth - margin * 2, rowH, "F");
+      }
+
+      let xPos = margin;
+      pdf.text(nomeLines, xPos + 2, yPos);
+      xPos += colWidths[0];
+      pdf.text(setorLines, xPos + 2, yPos);
+      xPos += colWidths[1];
+      pdf.text(periodosLines, xPos + 2, yPos);
+      xPos += colWidths[2];
+      pdf.text(f.vender_dias && f.dias_vendidos ? `${f.dias_vendidos}d` : "—", xPos + 2, yPos);
+      xPos += colWidths[3];
+      pdf.text(statusLabels[f.status] || f.status, xPos + 2, yPos);
+      xPos += colWidths[4];
+      pdf.text(f.origem === "formulario_anual" ? "Gerada" : "Manual", xPos + 2, yPos);
+      xPos += colWidths[5];
+      pdf.text(excecaoLines, xPos + 2, yPos);
+
+      yPos += rowH;
+    });
+
+    pdf.setFontSize(9);
+    pdf.setTextColor(120, 120, 120);
+    pdf.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")} | Total: ${filteredFerias.length}`, pageWidth / 2, pageHeight - 5, { align: "center" });
+
+    pdf.save(`ferias-${anoFilter}.pdf`);
+    toast.success("PDF exportado!");
+  }, [filteredFerias, anoFilter, searchTerm, statusFilter, setorFilter, setores, formatPeriodo, gozoPeriodosByFeriasId, feriasAfastamentoConflicts]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -727,13 +850,18 @@ export default function FeriasFerias() {
 
         {/* ========== ABA: TABELA DE FÉRIAS ========== */}
         <TabsContent value="ferias" className="mt-6 space-y-6">
-          {canEditFerias && (
-            <div className="flex flex-wrap gap-2 justify-end">
-              <Button onClick={() => setGeradorDialogOpen(true)} className="gap-2"><Wand2 className="h-4 w-4" />Gerar Férias</Button>
-              <Button onClick={() => { setSelectedFerias(null); setDialogOpen(true); }} variant="outline" className="gap-2"><Plus className="h-4 w-4" />Cadastro Manual</Button>
-              <Button onClick={() => { setSelectedFormulario(null); setFormDialogOpen(true); }} variant="outline" className="gap-2"><FileText className="h-4 w-4" />Novo Formulário</Button>
-            </div>
-          )}
+          <div className="flex flex-wrap gap-2 justify-end">
+            {canEditFerias && (
+              <>
+                <Button onClick={() => setGeradorDialogOpen(true)} className="gap-2"><Wand2 className="h-4 w-4" />Gerar Férias</Button>
+                <Button onClick={() => { setSelectedFerias(null); setDialogOpen(true); }} variant="outline" className="gap-2"><Plus className="h-4 w-4" />Cadastro Manual</Button>
+                <Button onClick={() => { setSelectedFormulario(null); setFormDialogOpen(true); }} variant="outline" className="gap-2"><FileText className="h-4 w-4" />Novo Formulário</Button>
+              </>
+            )}
+            <Button variant="outline" className="gap-2" onClick={() => generateFeriasPDF()} disabled={filteredFerias.length === 0}>
+              <Printer className="h-4 w-4" />Exportar PDF
+            </Button>
+          </div>
 
           {feriasError && (
             <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive text-sm flex items-center gap-2">
