@@ -311,6 +311,37 @@ async function loadLookup(table: string, nameCol: string): Promise<LookupMap> {
   }
 }
 
+// Lookup especial para perfis de usuário: indexa por user_id (não pelo id da
+// tabela user_profiles) e cai para o e-mail quando o nome estiver vazio.
+async function loadUserProfilesLookup(): Promise<LookupMap> {
+  const key = "user_profiles";
+  if (lookupCaches[key] && lookupCaches[key] !== "loading") {
+    return lookupCaches[key] as LookupMap;
+  }
+  if (lookupCaches[key] === "loading") return new Map();
+  lookupCaches[key] = "loading";
+  try {
+    const { data } = await (supabase as any)
+      .from("user_profiles")
+      .select("user_id, name, email")
+      .limit(5000);
+    const map: LookupMap = new Map();
+    (data || []).forEach((r: any) => {
+      if (r?.user_id) {
+        const label = (r.name && String(r.name).trim()) || r.email || "";
+        if (label) map.set(r.user_id, String(label));
+      }
+    });
+    lookupCaches[key] = map;
+    lookupListeners.forEach(l => l());
+    return map;
+  } catch {
+    const empty: LookupMap = new Map();
+    lookupCaches[key] = empty;
+    return empty;
+  }
+}
+
 function useLookups() {
   const [, force] = useState(0);
   useEffect(() => {
@@ -325,7 +356,7 @@ function useLookups() {
     loadLookup("brokers", "name");
     loadLookup("estoque_materiais", "nome");
     loadLookup("estoque_locais_armazenamento", "nome");
-    loadLookup("user_profiles", "name");
+    loadUserProfilesLookup();
     return () => { lookupListeners.delete(listener); };
   }, []);
 
@@ -346,6 +377,13 @@ function useLookups() {
       local_origem_id: ["estoque_locais_armazenamento", "nome"],
       local_destino_id: ["estoque_locais_armazenamento", "nome"],
       local_armazenamento_id: ["estoque_locais_armazenamento", "nome"],
+      user_id: ["user_profiles", "name"],
+      actor_id: ["user_profiles", "name"],
+      target_id: ["user_profiles", "name"],
+      granted_by: ["user_profiles", "name"],
+      changed_by: ["user_profiles", "name"],
+      recebido_por_user_id: ["user_profiles", "name"],
+      responsavel_user_id: ["user_profiles", "name"],
     };
     const tuple = tableByField[field];
     if (!tuple) return null;
