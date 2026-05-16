@@ -1,52 +1,48 @@
-## Objetivo
+## Contexto
 
-Permitir que a aba **Tabela do Contador** mostre férias de **mais de um ano de período aquisitivo** ao mesmo tempo, com a tabela e o PDF agrupados por ano aquisitivo — eliminando a necessidade de gerar PDFs separados.
+Os períodos aquisitivos NÃO ficam salvos no banco — são calculados em tempo real a partir de `data_admissao` em `buildPeriodosAquisitivos` (PeriodosAquisitivosTab.tsx). Já a coluna `periodo_aquisitivo_inicio/fim` da tabela `ferias_ferias` é preenchida pelo `FeriasDialog` a partir do que o usuário escolhe.
 
-## Mudanças na UI (aba Contador)
+A origem do "0225" foi um valor digitado errado em um `<Input type="date">` (campo `quinzena1_inicio` ou similar). O HTML aceita `0225-01-15` como data válida, e a partir dessa data o cálculo do período aquisitivo gera `0225–0226`. O dropdown de períodos aquisitivos do dialog em si gera valores corretos (parte da admissão), então o caminho do bug é a digitação manual das datas das quinzenas.
 
-1. **Novo filtro multi-seleção: "Anos aquisitivos"**
-   - Posicionado dentro do bloco de filtros existente da aba Contador, ao lado de Mês e Período.
-   - Componente: `Popover` + lista de `Checkbox` (mesmo padrão visual usado em outros multi-selects do projeto), com botão que mostra "Todos" / "2024" / "2024, 2025" / "3 anos selecionados".
-   - Opções: anos derivados dinamicamente dos `periodo_aquisitivo_inicio` existentes no banco (query auxiliar leve buscando anos distintos).
-   - Estado inicial: vazio = comportamento atual (usa o `anoFilter` global de gozo, como hoje).
-   - Quando ≥ 1 ano é selecionado: o filtro **substitui** o escopo da query do Contador — passa a buscar férias cujo `periodo_aquisitivo_inicio` caia em qualquer um dos anos selecionados (independente do ano de gozo). O filtro global "Ano do período aquisitivo" do topo da página é **ignorado apenas nesta aba** quando há seleção múltipla, com um aviso discreto ("Filtro de anos aquisitivos ativo — sobrescrevendo o ano global").
-   - Botão "Limpar filtros" também zera essa seleção.
+Por isso o "0225" continua aparecendo mesmo após a correção: ainda existe pelo menos um registro em `ferias_ferias` da Rostephania com `quinzena1_inicio` (ou `periodo_aquisitivo_inicio`) com ano 0225 — provavelmente outro lançamento dela que não foi editado.
 
-2. **Tabela agrupada por ano aquisitivo**
-   - Quando há ≥ 2 anos visíveis no resultado, inserir uma linha de cabeçalho separadora antes de cada grupo: `Período aquisitivo: 2024` (linha full-width com fundo `muted`).
-   - Dentro de cada grupo: mesma estrutura atual (ordenada por nome/setor).
-   - Quando há apenas 1 ano, não exibir cabeçalhos de grupo (mantém visual atual).
+## Plano
 
-3. **Paginação**
-   - Mantida sobre o conjunto total filtrado; os cabeçalhos de grupo aparecem onde forem necessários na página atual.
+### 1. Prevenir o erro (FeriasDialog.tsx)
 
-## Mudanças no PDF (`generateContadorPDF`)
+Adicionar validação no Zod schema e atributos `min`/`max` nos inputs `type="date"` para travar anos fora da faixa 1990–2100:
 
-1. **Título do PDF**
-   - Se múltiplos anos: `TABELA DE FÉRIAS - CONTADOR - 2024, 2025`.
-   - Se um único ano: comportamento atual.
+- Helper `isReasonableDate(s: string)` → true se YYYY entre 1990 e 2100.
+- Refinar no schema:
+  - `quinzena1_inicio`: obrigatório + `refine(isReasonableDate, "Ano inválido (use entre 1990 e 2100)")`.
+  - `quinzena2_inicio`: opcional, mas se preenchido, refinar igual.
+  - Mesmos refines para `gozo_quinzena1_inicio`, `gozo_quinzena2_inicio`, `gozo_venda_inicio`, `gozo_venda_q1_inicio`, `gozo_venda_q2_inicio` (quando preenchidos).
+- Adicionar `min="1990-01-01"` e `max="2100-12-31"` em todos os `<Input type="date">` editáveis do dialog (q1/q2 início, gozo diferente, gozo venda). Os inputs `readOnly` de "fim" não precisam.
 
-2. **Agrupamento visível**
-   - Antes de cada bloco de linhas de um ano aquisitivo, inserir uma faixa de cabeçalho destacada (fundo cinza claro, fonte bold, ~7mm de altura): `Período aquisitivo: 2024`.
-   - Quebrar página automaticamente se o cabeçalho + primeira linha do grupo não couber.
+Isso bloqueia tanto digitação quanto colagem de datas com ano fora do range, em qualquer lançamento futuro.
 
-3. **Nome do arquivo**
-   - `ferias-contador-2024-2025.pdf` (anos concatenados por hífen, ordenados).
+### 2. Limpar o "0225" da Rostephania (correção de dados)
 
-## Detalhes técnicos
+Como o acesso ao banco via `exec` não está habilitado nesta sessão, não consigo localizar/excluir o registro sozinho. Duas opções:
 
-- Arquivo afetado: `src/pages/ferias/FeriasFerias.tsx` (toda a lógica do Contador já está nele).
-- Novo estado: `contadorAnosAquisitivos: string[]`.
-- Nova query (ou ampliação da existente) para o Contador:
-  - Se `contadorAnosAquisitivos.length === 0`: mantém a query atual (filtrada por `quinzena1_inicio` no `anoFilter`).
-  - Caso contrário: nova query keyed por `["ferias-contador-aquisitivos", contadorAnosAquisitivos]`, com filtro `periodo_aquisitivo_inicio` entre `${min}-01-01` e `${max}-12-31` e filtro client-side garantindo que o ano de início caia exatamente nos selecionados.
-- Query auxiliar para popular as opções: `select distinct extract(year from periodo_aquisitivo_inicio)` (via `.select("periodo_aquisitivo_inicio")` + dedup client-side, ou RPC se preferir — começarei com a abordagem client-side, leve).
-- `contadorDataFiltered` (`useMemo`) ganha uma etapa adicional: ordenar por `(anoAquisitivo asc, nome asc)` quando há múltiplos anos, para o agrupamento ser contíguo.
-- Renderização da tabela: trocar `map` simples por um `reduce`/loop que insere `<TableRow>` separador quando o `anoAquisitivo` muda em relação à linha anterior visível.
-- `generateContadorPDF`: agrupar `contadorDataFiltered` por ano aquisitivo (`Map<number, Row[]>`), iterar grupos e desenhar header de grupo + linhas.
+**Opção A — eu corrijo via migração (recomendado, definitivo):**
+Você aprova uma migração SQL que faz uma varredura geral e:
 
-## Fora de escopo
+- Lista (no log) todos os `ferias_ferias` cujo ano de `quinzena1_inicio`, `quinzena2_inicio`, `periodo_aquisitivo_inicio` ou `periodo_aquisitivo_fim` esteja fora de 1990–2100.
+- Exclui esses registros órfãos (DELETE), pois nascem de erro de digitação e não têm valor histórico.
+- Cria um CHECK via trigger (não constraint) bloqueando inserts/updates futuros com ano fora do range, como segunda camada de proteção além da validação de UI.
 
-- Não altera o filtro global de ano do topo da página (continua afetando outras abas).
-- Não altera o cálculo de dias/períodos nem regras do contador.
-- Não muda layout dos demais filtros ou do botão Exportar PDF.
+**Opção B — você corrige manualmente:**
+
+1. Abrir a aba **Férias** filtrando por Rostephania.
+2. Localizar o lançamento com data 0225-... e clicar em editar ou excluir.
+3. Se não aparecer na lista (porque o ano é 0225 e os filtros padrão escondem), eu adiciono temporariamente um botão "Mostrar registros com ano inválido" para que ele apareça.
+
+### 3. Fora de escopo
+
+- Não vou alterar `buildPeriodosAquisitivos` nem o cálculo de períodos aquisitivos — ele está correto, só reflete o lixo que entrou.
+- Não vou mexer em outros módulos (afastamentos, folgas) nesta etapa; podemos replicar o `min/max` neles depois se quiser.
+
+## Decisão necessária
+
+Confirma a **Opção A** (migração que limpa registros com ano fora de 1990–2100 + trigger de proteção)? Se preferir a **Opção B**, me avise para eu só aplicar a validação de UI e adicionar o filtro temporário. Opção A, pois a B não aparece mais 0225 no sistema. Sumiu da tela, só está no banco.
