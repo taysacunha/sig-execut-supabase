@@ -1,31 +1,52 @@
-## Ajustes em `src/pages/ferias/FeriasFerias.tsx`
+## Objetivo
 
-### 1. Reposicionar botão "Exportar PDF" da Tabela do Contador
+Permitir que a aba **Tabela do Contador** mostre férias de **mais de um ano de período aquisitivo** ao mesmo tempo, com a tabela e o PDF agrupados por ano aquisitivo — eliminando a necessidade de gerar PDFs separados.
 
-Hoje o botão fica ao lado do bloco de filtros (à direita), criando uma área vazia gigante embaixo dele. Mudança:
+## Mudanças na UI (aba Contador)
 
-- Remover o botão de fora do bloco de filtros.
-- Colocá-lo **dentro do header do bloco de filtros**, alinhado à direita, ao lado do botão "Limpar filtros". O header passa a ter: `[ícone Filtros + label]` à esquerda e `[Limpar filtros] [Exportar PDF]` à direita.
-- Bloco de filtros volta a ocupar 100% da largura (sem o `flex-1` que existia para conviver com o botão externo).
+1. **Novo filtro multi-seleção: "Anos aquisitivos"**
+   - Posicionado dentro do bloco de filtros existente da aba Contador, ao lado de Mês e Período.
+   - Componente: `Popover` + lista de `Checkbox` (mesmo padrão visual usado em outros multi-selects do projeto), com botão que mostra "Todos" / "2024" / "2024, 2025" / "3 anos selecionados".
+   - Opções: anos derivados dinamicamente dos `periodo_aquisitivo_inicio` existentes no banco (query auxiliar leve buscando anos distintos).
+   - Estado inicial: vazio = comportamento atual (usa o `anoFilter` global de gozo, como hoje).
+   - Quando ≥ 1 ano é selecionado: o filtro **substitui** o escopo da query do Contador — passa a buscar férias cujo `periodo_aquisitivo_inicio` caia em qualquer um dos anos selecionados (independente do ano de gozo). O filtro global "Ano do período aquisitivo" do topo da página é **ignorado apenas nesta aba** quando há seleção múltipla, com um aviso discreto ("Filtro de anos aquisitivos ativo — sobrescrevendo o ano global").
+   - Botão "Limpar filtros" também zera essa seleção.
 
-Resultado: layout compacto, sem espaço morto, e a ação fica próxima dos filtros que controlam o conteúdo do PDF.
+2. **Tabela agrupada por ano aquisitivo**
+   - Quando há ≥ 2 anos visíveis no resultado, inserir uma linha de cabeçalho separadora antes de cada grupo: `Período aquisitivo: 2024` (linha full-width com fundo `muted`).
+   - Dentro de cada grupo: mesma estrutura atual (ordenada por nome/setor).
+   - Quando há apenas 1 ano, não exibir cabeçalhos de grupo (mantém visual atual).
 
-### 2. Setor cortado no PDF do Contador
+3. **Paginação**
+   - Mantida sobre o conjunto total filtrado; os cabeçalhos de grupo aparecem onde forem necessários na página atual.
 
-Em `generateContadorPDF` o nome do setor é truncado em 15 caracteres (`substring(0, 15)`) e a coluna tem 28mm (ambos períodos) / 32mm (um período). "Cadastro de Imóvel" e similares ficam cortados.
+## Mudanças no PDF (`generateContadorPDF`)
 
-Mudanças:
+1. **Título do PDF**
+   - Se múltiplos anos: `TABELA DE FÉRIAS - CONTADOR - 2024, 2025`.
+   - Se um único ano: comportamento atual.
 
-- Aumentar a coluna **Setor** e redistribuir as larguras mantendo o total dentro da página A4 paisagem (267mm úteis):
-  - `showP1 && showP2`: `[48, 28, 28, 42, 42, 42, 35]` → `[46, 26, 42, 40, 40, 40, 33]`
-  - Só um período: `[52, 32, 32, 48, 52, 40]` → `[52, 30, 46, 46, 56, 37]`
-- Substituir `substring(0, 15)` por **quebra de linha automática** usando `pdf.splitTextToSize(nomeSetor, larguraSetor - 4)`, exibindo até 2 linhas. Quando a célula tem 2 linhas, ajustar a altura da linha (`yPos`) localmente para não sobrepor a linha seguinte (incrementar `yPos` em +3 para essa linha).
-- Aplicar a mesma técnica também ao **nome do colaborador** (que hoje também é truncado em 28 chars), para evitar regressões equivalentes em nomes longos.
-- Recalcular o gatilho de quebra de página (`if (yPos > 190)`) considerando que linhas com 2 linhas de texto ocupam mais espaço.
+2. **Agrupamento visível**
+   - Antes de cada bloco de linhas de um ano aquisitivo, inserir uma faixa de cabeçalho destacada (fundo cinza claro, fonte bold, ~7mm de altura): `Período aquisitivo: 2024`.
+   - Quebrar página automaticamente se o cabeçalho + primeira linha do grupo não couber.
 
-### Detalhes técnicos
+3. **Nome do arquivo**
+   - `ferias-contador-2024-2025.pdf` (anos concatenados por hífen, ordenados).
 
-- Arquivo único: `src/pages/ferias/FeriasFerias.tsx`.
-- Sem alterações em queries, hooks ou outros componentes.
-- `splitTextToSize` já é usado em outros geradores de PDF do projeto (ex.: `GanttFeriasPDFGenerator`).
-- Manter ordem das colunas e cabeçalhos atuais (`Dias Vendidos`, etc.).
+## Detalhes técnicos
+
+- Arquivo afetado: `src/pages/ferias/FeriasFerias.tsx` (toda a lógica do Contador já está nele).
+- Novo estado: `contadorAnosAquisitivos: string[]`.
+- Nova query (ou ampliação da existente) para o Contador:
+  - Se `contadorAnosAquisitivos.length === 0`: mantém a query atual (filtrada por `quinzena1_inicio` no `anoFilter`).
+  - Caso contrário: nova query keyed por `["ferias-contador-aquisitivos", contadorAnosAquisitivos]`, com filtro `periodo_aquisitivo_inicio` entre `${min}-01-01` e `${max}-12-31` e filtro client-side garantindo que o ano de início caia exatamente nos selecionados.
+- Query auxiliar para popular as opções: `select distinct extract(year from periodo_aquisitivo_inicio)` (via `.select("periodo_aquisitivo_inicio")` + dedup client-side, ou RPC se preferir — começarei com a abordagem client-side, leve).
+- `contadorDataFiltered` (`useMemo`) ganha uma etapa adicional: ordenar por `(anoAquisitivo asc, nome asc)` quando há múltiplos anos, para o agrupamento ser contíguo.
+- Renderização da tabela: trocar `map` simples por um `reduce`/loop que insere `<TableRow>` separador quando o `anoAquisitivo` muda em relação à linha anterior visível.
+- `generateContadorPDF`: agrupar `contadorDataFiltered` por ano aquisitivo (`Map<number, Row[]>`), iterar grupos e desenhar header de grupo + linhas.
+
+## Fora de escopo
+
+- Não altera o filtro global de ano do topo da página (continua afetando outras abas).
+- Não altera o cálculo de dias/períodos nem regras do contador.
+- Não muda layout dos demais filtros ou do botão Exportar PDF.

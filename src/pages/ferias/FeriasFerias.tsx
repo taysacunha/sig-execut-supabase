@@ -22,6 +22,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
@@ -151,6 +154,7 @@ export default function FeriasFerias() {
   const [contadorQ2Checked, setContadorQ2Checked] = useState(false);
   const [contadorMesFilter, setContadorMesFilter] = useState<string>("all");
   const [contadorPeriodoFilter, setContadorPeriodoFilter] = useState<string>("all");
+  const [contadorAnosAquisitivos, setContadorAnosAquisitivos] = useState<string[]>([]);
 
   const [activeTab, setActiveTab] = useState("ferias");
   const [searchTerm, setSearchTerm] = useState("");
@@ -316,6 +320,57 @@ export default function FeriasFerias() {
     },
   });
 
+  // Anos aquisitivos disponíveis (para o filtro multi-seleção da aba Contador)
+  const { data: anosAquisitivosDisponiveis = [] } = useQuery({
+    queryKey: ["ferias-anos-aquisitivos-disponiveis"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ferias_ferias")
+        .select("periodo_aquisitivo_inicio")
+        .not("periodo_aquisitivo_inicio", "is", null);
+      if (error) throw error;
+      const set = new Set<string>();
+      for (const r of (data || []) as { periodo_aquisitivo_inicio: string | null }[]) {
+        if (r.periodo_aquisitivo_inicio) set.add(r.periodo_aquisitivo_inicio.slice(0, 4));
+      }
+      return Array.from(set).sort((a, b) => b.localeCompare(a));
+    },
+  });
+
+  // Férias filtradas por anos aquisitivos selecionados (sobrescreve query padrão na aba Contador)
+  const { data: feriasPorAquisitivo = [], isLoading: feriasAquisitivoLoading } = useQuery({
+    queryKey: ["ferias-contador-aquisitivos", contadorAnosAquisitivos],
+    enabled: contadorAnosAquisitivos.length > 0,
+    queryFn: async () => {
+      const anos = [...contadorAnosAquisitivos].sort();
+      const minYear = anos[0];
+      const maxYear = anos[anos.length - 1];
+      const { data, error } = await supabase
+        .from("ferias_ferias")
+        .select(`*, colaborador:ferias_colaboradores!colaborador_id (id, nome, setor_titular:ferias_setores!setor_titular_id (id, nome))`)
+        .gte("periodo_aquisitivo_inicio", `${minYear}-01-01`)
+        .lte("periodo_aquisitivo_inicio", `${maxYear}-12-31`)
+        .order("periodo_aquisitivo_inicio", { ascending: true });
+      if (error) throw error;
+      const list = ((data || []) as any[]).filter((f) => {
+        const y = f.periodo_aquisitivo_inicio ? String(f.periodo_aquisitivo_inicio).slice(0, 4) : null;
+        return y !== null && contadorAnosAquisitivos.includes(y);
+      });
+      const ids = Array.from(new Set(list.map((f) => f.colaborador?.id).filter(Boolean)));
+      const cpfMap = new Map<string, string>();
+      if (ids.length) {
+        const { data: sensiveis } = await (supabase as any)
+          .from("ferias_colaboradores_dados_sensiveis")
+          .select("colaborador_id, cpf")
+          .in("colaborador_id", ids);
+        for (const r of (sensiveis || [])) if (r.cpf) cpfMap.set(r.colaborador_id, r.cpf);
+      }
+      return list.map((f) => f.colaborador
+        ? { ...f, colaborador: { ...f.colaborador, cpf: cpfMap.get(f.colaborador.id) ?? null } }
+        : f) as unknown as FeriasRecord[];
+    },
+  });
+
   // Delete mutations
   const deleteFeriasMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -426,15 +481,34 @@ export default function FeriasFerias() {
   }, [contadorSortField]);
 
   const contadorData = useMemo(() => {
-    return filteredFerias
-      .filter(f => f.status !== "cancelada")
+    // Quando há anos aquisitivos selecionados, usar query dedicada (ignora ano global de gozo).
+    // Caso contrário, usar filteredFerias (mantém comportamento atual).
+    let source: FeriasRecord[];
+    if (contadorAnosAquisitivos.length > 0) {
+      const term = normalizeText(searchTerm);
+      source = feriasPorAquisitivo.filter((f) => {
+        const matchSearch = !term || normalizeText(f.colaborador?.nome || "").includes(term);
+        const matchSetor = setorFilter === "all" || f.colaborador?.setor_titular?.id === setorFilter;
+        return matchSearch && matchSetor;
+      });
+    } else {
+      source = filteredFerias;
+    }
+    const useGroups = contadorAnosAquisitivos.length > 1;
+    return source
+      .filter((f) => f.status !== "cancelada")
       .sort((a, b) => {
+        if (useGroups) {
+          const yA = a.periodo_aquisitivo_inicio?.slice(0, 4) || "";
+          const yB = b.periodo_aquisitivo_inicio?.slice(0, 4) || "";
+          if (yA !== yB) return yA.localeCompare(yB);
+        }
         let valA = "", valB = "";
         if (contadorSortField === "nome") { valA = a.colaborador?.nome || ""; valB = b.colaborador?.nome || ""; }
         else { valA = a.colaborador?.setor_titular?.nome || ""; valB = b.colaborador?.setor_titular?.nome || ""; }
         return contadorSortDir === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
       });
-  }, [filteredFerias, contadorSortField, contadorSortDir]);
+  }, [filteredFerias, feriasPorAquisitivo, contadorAnosAquisitivos, searchTerm, setorFilter, contadorSortField, contadorSortDir]);
 
   // Filtrar contadorData por mês e período
   const contadorDataFiltered = useMemo(() => {
@@ -478,10 +552,18 @@ export default function FeriasFerias() {
     const pageWidth = pdf.internal.pageSize.getWidth();
     const margin = 15;
 
+    const useGroups = contadorAnosAquisitivos.length > 1;
+    const titleAnos = contadorAnosAquisitivos.length > 0
+      ? [...contadorAnosAquisitivos].sort().join(", ")
+      : anoFilter;
+    const fileAnos = contadorAnosAquisitivos.length > 0
+      ? [...contadorAnosAquisitivos].sort().join("-")
+      : anoFilter;
+
     pdf.setTextColor(0, 0, 0);
     pdf.setFontSize(16);
     pdf.setFont("helvetica", "bold");
-    pdf.text(`TABELA DE FÉRIAS - CONTADOR - ${anoFilter}`, pageWidth / 2, 15, { align: "center" });
+    pdf.text(`TABELA DE FÉRIAS - CONTADOR - ${titleAnos}`, pageWidth / 2, 15, { align: "center" });
 
     // Subtitle with filters
     pdf.setFontSize(9);
@@ -502,30 +584,46 @@ export default function FeriasFerias() {
       "Dias Vendidos",
     ];
 
-    pdf.setFillColor(220, 220, 220);
-    pdf.rect(margin, yPos - 5, pageWidth - margin * 2, 8, "F");
-    pdf.setFontSize(8);
-    pdf.setFont("helvetica", "bold");
-    let xPos = margin;
-    headers.forEach((h, i) => { pdf.text(h, xPos + 2, yPos); xPos += colWidths[i]; });
+    const drawTableHeader = () => {
+      pdf.setFillColor(220, 220, 220);
+      pdf.rect(margin, yPos - 5, pageWidth - margin * 2, 8, "F");
+      pdf.setFontSize(8);
+      pdf.setFont("helvetica", "bold");
+      let hx = margin;
+      headers.forEach((h, i) => { pdf.text(h, hx + 2, yPos); hx += colWidths[i]; });
+      yPos += 6;
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7);
+    };
+    const drawGroupHeader = (ano: string) => {
+      pdf.setFillColor(59, 130, 246);
+      pdf.rect(margin, yPos - 5, pageWidth - margin * 2, 8, "F");
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(10);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(`Período aquisitivo: ${ano}`, margin + 2, yPos + 1);
+      pdf.setTextColor(0, 0, 0);
+      yPos += 9;
+    };
 
-    yPos += 6;
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(7);
+    drawTableHeader();
+
+    let lastAno: string | null = null;
 
     contadorDataFiltered.forEach((f, idx) => {
       if (yPos > 188) {
         pdf.addPage();
         yPos = 15;
-        pdf.setFillColor(220, 220, 220);
-        pdf.rect(margin, yPos - 5, pageWidth - margin * 2, 8, "F");
-        pdf.setFontSize(8);
-        pdf.setFont("helvetica", "bold");
-        let hx = margin;
-        headers.forEach((h, i) => { pdf.text(h, hx + 2, yPos); hx += colWidths[i]; });
-        yPos += 6;
-        pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(7);
+        drawTableHeader();
+        // re-imprime cabeçalho de grupo na nova página se ainda estamos no mesmo grupo
+        if (useGroups && lastAno) drawGroupHeader(lastAno);
+      }
+
+      const ano = f.periodo_aquisitivo_inicio ? f.periodo_aquisitivo_inicio.slice(0, 4) : "—";
+      if (useGroups && ano !== lastAno) {
+        if (yPos > 180) { pdf.addPage(); yPos = 15; drawTableHeader(); }
+        drawGroupHeader(ano);
+        lastAno = ano;
       }
 
       const nomeColLines = pdf.splitTextToSize(f.colaborador?.nome || "—", colWidths[0] - 4).slice(0, 2) as string[];
@@ -548,7 +646,7 @@ export default function FeriasFerias() {
       const vendaVisivel = (qVenda === 1 && f._showQ1) || (qVenda === 2 && f._showQ2);
       const diasVendExibir = vendaVisivel ? diasVendTotal : 0;
 
-      xPos = margin;
+      let xPos = margin;
       pdf.text(nomeColLines, xPos + 2, yPos);
       xPos += colWidths[0];
       pdf.text((f.colaborador?.cpf || "—").substring(0, 14), xPos + 2, yPos);
@@ -574,9 +672,9 @@ export default function FeriasFerias() {
     pdf.setTextColor(120, 120, 120);
     pdf.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")} | * Dias vendidos limitados a 10 | Total: ${contadorDataFiltered.length}`, pageWidth / 2, pdf.internal.pageSize.getHeight() - 5, { align: "center" });
 
-    pdf.save(`ferias-contador-${anoFilter}.pdf`);
+    pdf.save(`ferias-contador-${fileAnos}.pdf`);
     toast.success("PDF do contador exportado!");
-  }, [contadorDataFiltered, anoFilter, contadorMesFilter, contadorPeriodoFilter, formatPeriodo, resolveQuinzenaVenda]);
+  }, [contadorDataFiltered, anoFilter, contadorMesFilter, contadorPeriodoFilter, contadorAnosAquisitivos, formatPeriodo, resolveQuinzenaVenda]);
 
   return (
     <div className="space-y-6">
@@ -676,7 +774,7 @@ export default function FeriasFerias() {
 
           <Card>
             <CardContent className="p-0">
-              {feriasLoading ? (
+              {(contadorAnosAquisitivos.length > 0 ? feriasAquisitivoLoading : feriasLoading) ? (
                 <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
               ) : filteredFerias.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
@@ -918,8 +1016,8 @@ export default function FeriasFerias() {
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Filtros</span>
               </div>
               <div className="flex items-center gap-2">
-                {(searchTerm !== "" || setorFilter !== "all" || contadorMesFilter !== "all" || contadorPeriodoFilter !== "all") && (
-                  <Button variant="outline" size="sm" onClick={() => { setSearchTerm(""); setSetorFilter("all"); setContadorMesFilter("all"); setContadorPeriodoFilter("all"); }} className="gap-1 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive">
+                {(searchTerm !== "" || setorFilter !== "all" || contadorMesFilter !== "all" || contadorPeriodoFilter !== "all" || contadorAnosAquisitivos.length > 0) && (
+                  <Button variant="outline" size="sm" onClick={() => { setSearchTerm(""); setSetorFilter("all"); setContadorMesFilter("all"); setContadorPeriodoFilter("all"); setContadorAnosAquisitivos([]); }} className="gap-1 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive">
                     <X className="h-4 w-4" />
                     Limpar filtros
                   </Button>
@@ -944,7 +1042,58 @@ export default function FeriasFerias() {
                   <Label className="text-xs font-medium text-muted-foreground">Período</Label>
                   <Select value={contadorPeriodoFilter} onValueChange={setContadorPeriodoFilter}><SelectTrigger className="w-40 h-9"><SelectValue placeholder="Período" /></SelectTrigger><SelectContent><SelectItem value="all">Ambos</SelectItem><SelectItem value="1">1ª Quinzena</SelectItem><SelectItem value="2">2ª Quinzena</SelectItem></SelectContent></Select>
                 </div>
+                <div className="flex flex-col space-y-1">
+                  <Label className="text-xs font-medium text-muted-foreground">Anos aquisitivos (múltiplo)</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="w-56 h-9 justify-between font-normal">
+                        <span className="truncate">
+                          {contadorAnosAquisitivos.length === 0
+                            ? "Usar ano global"
+                            : contadorAnosAquisitivos.length === 1
+                              ? contadorAnosAquisitivos[0]
+                              : contadorAnosAquisitivos.length <= 3
+                                ? [...contadorAnosAquisitivos].sort().join(", ")
+                                : `${contadorAnosAquisitivos.length} anos selecionados`}
+                        </span>
+                        <ChevronDown className="h-4 w-4 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56 p-2" align="start">
+                      <div className="space-y-1 max-h-64 overflow-y-auto">
+                        {anosAquisitivosDisponiveis.length === 0 ? (
+                          <p className="text-xs text-muted-foreground p-2">Nenhum ano disponível</p>
+                        ) : anosAquisitivosDisponiveis.map((ano) => {
+                          const checked = contadorAnosAquisitivos.includes(ano);
+                          return (
+                            <label key={ano} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(v) => {
+                                  setContadorAnosAquisitivos((prev) =>
+                                    v ? [...prev, ano] : prev.filter((y) => y !== ano)
+                                  );
+                                }}
+                              />
+                              <span>{ano}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      {contadorAnosAquisitivos.length > 0 && (
+                        <Button variant="ghost" size="sm" className="w-full mt-2 text-xs" onClick={() => setContadorAnosAquisitivos([])}>
+                          Limpar seleção
+                        </Button>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
+              {contadorAnosAquisitivos.length > 0 && (
+                <p className="text-[11px] text-muted-foreground">
+                  Filtro de anos aquisitivos ativo — o ano global do topo está sendo ignorado nesta aba.
+                </p>
+              )}
           </div>
 
           <Card>
@@ -968,8 +1117,28 @@ export default function FeriasFerias() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {contadorFilteredPagination.paginatedItems.map((f) => (
-                        <TableRow key={f.id}>
+                      {(() => {
+                        const useGroups = contadorAnosAquisitivos.length > 1;
+                        const colSpan = 4
+                          + ((contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1") ? 1 : 0)
+                          + ((contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2") ? 1 : 0)
+                          + 1; // Enviado
+                        let lastAno: string | null = null;
+                        const rows: React.ReactNode[] = [];
+                        for (const f of contadorFilteredPagination.paginatedItems) {
+                          const ano = f.periodo_aquisitivo_inicio ? f.periodo_aquisitivo_inicio.slice(0, 4) : "—";
+                          if (useGroups && ano !== lastAno) {
+                            rows.push(
+                              <TableRow key={`group-${ano}`} className="bg-muted/60 hover:bg-muted/60">
+                                <TableCell colSpan={colSpan} className="font-semibold text-sm py-2">
+                                  Período aquisitivo: {ano}
+                                </TableCell>
+                              </TableRow>
+                            );
+                            lastAno = ano;
+                          }
+                          rows.push(
+                            <TableRow key={f.id}>
                           <TableCell className="font-medium">{f.colaborador?.nome || "—"}</TableCell>
                           <TableCell>{f.colaborador?.setor_titular?.nome || "—"}</TableCell>
                           <TableCell className="text-sm">{f.periodo_aquisitivo_inicio && f.periodo_aquisitivo_fim ? formatPeriodo(f.periodo_aquisitivo_inicio, f.periodo_aquisitivo_fim) : "—"}</TableCell>
@@ -1025,8 +1194,11 @@ export default function FeriasFerias() {
                               );
                             })()}
                           </TableCell>
-                        </TableRow>
-                      ))}
+                            </TableRow>
+                          );
+                        }
+                        return rows;
+                      })()}
                     </TableBody>
                   </Table>
                   <TablePagination
