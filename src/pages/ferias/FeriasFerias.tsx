@@ -438,22 +438,19 @@ export default function FeriasFerias() {
 
   // Filtrar contadorData por mês e período
   const contadorDataFiltered = useMemo(() => {
-    return contadorData.filter((f) => {
-      if (contadorMesFilter !== "all") {
-        const mes = parseInt(contadorMesFilter);
-        const q1Month = f.quinzena1_inicio ? new Date(f.quinzena1_inicio + "T00:00:00").getMonth() + 1 : null;
-        const q2Month = f.quinzena2_inicio ? new Date(f.quinzena2_inicio + "T00:00:00").getMonth() + 1 : null;
-        if (contadorPeriodoFilter === "1") {
-          if (q1Month !== mes) return false;
-        } else if (contadorPeriodoFilter === "2") {
-          if (q2Month !== mes) return false;
-        } else {
-          if (q1Month !== mes && q2Month !== mes) return false;
-        }
-      }
-      if (contadorPeriodoFilter === "2" && !f.quinzena2_inicio) return false;
-      return true;
-    });
+    const mes = contadorMesFilter !== "all" ? parseInt(contadorMesFilter) : null;
+    const result: Array<FeriasRecord & { _showQ1: boolean; _showQ2: boolean }> = [];
+    for (const f of contadorData) {
+      const q1Month = f.quinzena1_inicio ? new Date(f.quinzena1_inicio + "T00:00:00").getMonth() + 1 : null;
+      const q2Month = f.quinzena2_inicio ? new Date(f.quinzena2_inicio + "T00:00:00").getMonth() + 1 : null;
+      const q1Match = mes === null || q1Month === mes;
+      const q2Match = mes === null || (!!f.quinzena2_inicio && q2Month === mes);
+      const showQ1 = (contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1") && q1Match;
+      const showQ2 = (contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2") && q2Match && !!f.quinzena2_inicio;
+      if (!showQ1 && !showQ2) continue;
+      result.push({ ...f, _showQ1: showQ1, _showQ2: showQ2 });
+    }
+    return result;
   }, [contadorData, contadorMesFilter, contadorPeriodoFilter]);
 
   // Resolve o período da venda: usa quinzena_venda quando definido,
