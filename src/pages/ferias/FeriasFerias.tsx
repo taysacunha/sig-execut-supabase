@@ -646,7 +646,7 @@ export default function FeriasFerias() {
       const vendaVisivel = (qVenda === 1 && f._showQ1) || (qVenda === 2 && f._showQ2);
       const diasVendExibir = vendaVisivel ? diasVendTotal : 0;
 
-      xPos = margin;
+      let xPos = margin;
       pdf.text(nomeColLines, xPos + 2, yPos);
       xPos += colWidths[0];
       pdf.text((f.colaborador?.cpf || "—").substring(0, 14), xPos + 2, yPos);
