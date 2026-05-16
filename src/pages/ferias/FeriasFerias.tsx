@@ -494,8 +494,8 @@ export default function FeriasFerias() {
     const showP1 = contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1";
     const showP2 = contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2";
     const colWidths = showP1 && showP2
-      ? [48, 28, 28, 42, 42, 42, 35]
-      : [52, 32, 32, 48, 52, 40];
+      ? [46, 26, 42, 40, 40, 40, 33]
+      : [52, 30, 46, 46, 56, 37];
     const headers = ["Colaborador", "CPF", "Setor", "Per. Aquisitivo",
       ...(showP1 ? ["1º Período"] : []),
       ...(showP2 ? ["2º Período"] : []),
@@ -514,7 +514,7 @@ export default function FeriasFerias() {
     pdf.setFontSize(7);
 
     contadorDataFiltered.forEach((f, idx) => {
-      if (yPos > 190) {
+      if (yPos > 188) {
         pdf.addPage();
         yPos = 15;
         pdf.setFillColor(220, 220, 220);
@@ -528,9 +528,14 @@ export default function FeriasFerias() {
         pdf.setFontSize(7);
       }
 
+      const nomeColLines = pdf.splitTextToSize(f.colaborador?.nome || "—", colWidths[0] - 4).slice(0, 2) as string[];
+      const setorColLines = pdf.splitTextToSize(f.colaborador?.setor_titular?.nome || "—", colWidths[2] - 4).slice(0, 2) as string[];
+      const lineCount = Math.max(1, nomeColLines.length, setorColLines.length);
+      const rowH = lineCount === 2 ? 9 : 6;
+
       if (idx % 2 === 1) {
         pdf.setFillColor(245, 245, 245);
-        pdf.rect(margin, yPos - 4, pageWidth - margin * 2, 6, "F");
+        pdf.rect(margin, yPos - 4, pageWidth - margin * 2, rowH, "F");
       }
 
       const diasVendTotal = f.vender_dias && f.dias_vendidos ? Math.min(f.dias_vendidos, 10) : 0;
@@ -544,11 +549,11 @@ export default function FeriasFerias() {
       const diasVendExibir = vendaVisivel ? diasVendTotal : 0;
 
       xPos = margin;
-      pdf.text((f.colaborador?.nome || "—").substring(0, 28), xPos + 2, yPos);
+      pdf.text(nomeColLines, xPos + 2, yPos);
       xPos += colWidths[0];
       pdf.text((f.colaborador?.cpf || "—").substring(0, 14), xPos + 2, yPos);
       xPos += colWidths[1];
-      pdf.text((f.colaborador?.setor_titular?.nome || "—").substring(0, 15), xPos + 2, yPos);
+      pdf.text(setorColLines, xPos + 2, yPos);
       xPos += colWidths[2];
       pdf.text(f.periodo_aquisitivo_inicio && f.periodo_aquisitivo_fim ? formatPeriodo(f.periodo_aquisitivo_inicio, f.periodo_aquisitivo_fim) : "—", xPos + 2, yPos);
       xPos += colWidths[3];
@@ -562,7 +567,7 @@ export default function FeriasFerias() {
       }
       pdf.text(diasVendExibir > 0 ? `${diasVendExibir} dias (${qVenda}º período)` : "—", xPos + 2, yPos);
 
-      yPos += 6;
+      yPos += rowH;
     });
 
     pdf.setFontSize(7);
