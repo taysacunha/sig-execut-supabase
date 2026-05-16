@@ -1,48 +1,63 @@
-## Corrigir busca por nome e "Resumo da alteração" vazio na Auditoria
+## Ajustes em `src/pages/ferias/FeriasFerias.tsx`
 
-Investiguei `src/components/AuditLogsPanel.tsx` e identifiquei **duas causas distintas** para o que você relatou.
+Arquivo único afetado: `src/pages/ferias/FeriasFerias.tsx` (e geração de PDF do contador no mesmo arquivo).
 
----
+### 1. Filtros com labels + botão "Limpar filtros" (Tabela de Férias)
 
-### Problema 1 — Busca por nome do colaborador não retorna nada
+Hoje (linhas ~648-656) os filtros são 3 inputs em grid sem labels. Padronizar igual à aba Calendário → Férias:
 
-**Por que acontece:** o nome "Pedro" que aparece na coluna **Registro** não está salvo no log. O log armazena só o UUID (`colaborador_id`) dentro de `new_data`/`old_data`. O nome é resolvido **no navegador**, em tempo de exibição, consultando `ferias_colaboradores`. Por isso a busca server-side (que faz `ilike` em `new_data::text` / `old_data::text` / `changed_by_email`) nunca encontra "Pedro" — esse texto simplesmente não existe nos dados crus do log.
+- Envolver em um bloco `rounded-lg border bg-muted/40 p-3` com cabeçalho "Filtros" (ícone `SlidersHorizontal`).
+- Para cada filtro, adicionar `<Label className="text-xs font-medium text-muted-foreground">` acima:
+  - Buscar colaborador
+  - Status
+  - Setor
+- Acima/ao lado do bloco, exibir o botão **Limpar filtros** (mesmo estilo do Calendário: `variant="outline"`, borda/ texto destrutivo, ícone `X`) somente quando houver filtro ativo (`searchTerm`, `statusFilter !== "all"` ou `setorFilter !== "all"`).
+- Handler `resetFeriasFilters` zera os 3 estados.
 
-**Correção:**
-- Quando o usuário digita um termo, antes de chamar o Supabase, varrer os caches já carregados (`ferias_colaboradores`, `ferias_setores`, `ferias_unidades`, `ferias_cargos`, `ferias_equipes`, `brokers`, `estoque_materiais`, `estoque_locais_armazenamento`) e coletar todos os UUIDs cujo nome contém o termo (case-insensitive, sem acento).
-- Incluir esses UUIDs no `.or(...)` da query como condições adicionais: `record_id.in.(<uuids>)` e `changed_by.in.(<user_uuids>)`. O `ilike` em `new_data::text` continua, agora também batendo nos UUIDs encontrados (pois o UUID está literalmente dentro do JSON).
-- Limitar a até 200 UUIDs por busca para não estourar a URL; se passar disso, manter só os 200 melhores matches por prefixo.
-- Garantir que os caches (já pré-carregados pelo `useLookups`) estejam prontos antes da primeira busca; se ainda estiverem em "loading", aguardar e refazer o fetch.
+### 2. Filtros com labels + botão "Limpar filtros" (Tabela do Contador)
 
-Resultado: digitar "Pedro" passa a retornar todos os logs onde Pedro é o colaborador (via `record_id` em `ferias_colaboradores` ou `colaborador_id` dentro do JSON), e digitar parte do email/nome de um usuário do sistema também passa a funcionar via `changed_by`.
+Linhas ~895-903. Mesma padronização para os 4 filtros: Buscar colaborador, Setor, Mês, Período. O botão "Exportar PDF" continua à direita, fora do bloco de filtros. Mostrar "Limpar filtros" quando qualquer um (`searchTerm`, `setorFilter`, `contadorMesFilter`, `contadorPeriodoFilter`) estiver diferente do default. Handler `resetContadorFilters` zera os 4.
 
----
+> Observação: `searchTerm` e `setorFilter` são compartilhados com a Tabela de Férias; manteremos esse comportamento (o "Limpar filtros" do Contador também limpa os dois). Isso já é o comportamento atual de filtragem.
 
-### Problema 2 — "Resumo da alteração" vazio e "Sem campos alterados" ao expandir
+### 3. Lógica de filtro Mês × Período no Contador
 
-**Por que acontece:** a coluna Resumo e o expandido de UPDATE dependem de `log.changed_fields` (array que o trigger SQL deveria preencher). Para muitos logs antigos esse array vem **`null` ou vazio** — seja porque foram gravados antes do trigger atual, seja porque o trigger pulou o cálculo. Hoje o componente apenas mostra "—" no resumo e "Sem campos alterados" no detalhe, mesmo quando `old_data` e `new_data` claramente diferem.
+Hoje `contadorDataFiltered` (linhas 440-457) inclui o colaborador se Q1 OU Q2 cair no mês — mas a tabela e o PDF continuam mostrando AMBOS os períodos do colaborador, mesmo que um deles não esteja em junho.
 
-**Correção (puro frontend, sem mudança no banco):**
-- Criar um helper `computeChangedFields(old, neu)` que faz o diff entre `old_data` e `new_data` ignorando `id`, `created_at`, `updated_at` e campos cujo conteúdo é estritamente igual (comparação por JSON.stringify para objetos/arrays).
-- Em UPDATE, usar `log.changed_fields` se vier preenchido; caso contrário, cair no diff calculado. Mesma lógica alimenta tanto a coluna **Resumo da alteração** quanto a seção **Campos alterados** do expandido.
-- Em INSERT, usar todas as chaves de `new_data` (já é o comportamento atual no expandido) e mostrar no resumo um texto curto tipo "Cadastrou: Nome, Setor, Admissão" com os 3-4 campos mais relevantes (nome, status, datas), em vez do genérico "Registro criado".
-- Em DELETE, idem com `old_data`: "Removeu: Nome, Setor".
-- Quando, mesmo após o diff, não houver diferenças reais (ex.: update que só tocou `updated_at`), mostrar de forma honesta "Apenas timestamp atualizado" em vez de "Sem campos alterados".
+Mudança: definir, por linha, quais períodos exibir conforme o mês e o filtro de período.
 
-Resultado: todos os UPDATEs passam a mostrar de fato o que mudou (antigo → novo), inclusive os logs antigos com `changed_fields` nulo. INSERT e DELETE ganham um resumo legível em vez de só "Registro criado/removido".
+```text
+para cada férias f:
+  q1Match = mes == "all" || mês(q1_inicio) == mes
+  q2Match = mes == "all" || (q2_inicio && mês(q2_inicio) == mes)
 
----
+  showQ1Row = (periodo == "all" || periodo == "1") && q1Match
+  showQ2Row = (periodo == "all" || periodo == "2") && q2Match && tem q2
+
+  manter f apenas se showQ1Row || showQ2Row
+  guardar f._showQ1, f._showQ2 para a renderização
+```
+
+Efeitos:
+- Mês=Junho + Período=Ambos: traz colaboradores com Q1 OU Q2 em junho, e cada linha exibe só a quinzena que cai em junho (a outra fica "—" ou simplesmente não preenchida); colunas 1º/2º Período permanecem visíveis quando Período=Ambos.
+- Mês=Junho + Período=1ª: traz só quem tem Q1 em junho; só coluna 1º Período.
+- Mês=Junho + Período=2ª: traz só quem tem Q2 em junho; só coluna 2º Período.
+- Mês=Todos: comportamento atual.
+
+A coluna **Dias Vendidos** também passa a respeitar `_showQ1/_showQ2` (mostrar "—" se a venda for em uma quinzena que não está sendo exibida naquela linha).
+
+### 4. PDF do Contador (`generateContadorPDF`)
+
+Linhas 478-579:
+
+- Cabeçalho da coluna: trocar `"Dias V."` por `"Dias Vendidos"` e ampliar a largura dessa coluna para acomodar o texto (ajustar `colWidths` proporcionalmente).
+- Valor da célula de dias vendidos: trocar formato `"${diasVendExibir}${sufixoVenda}"` (hoje gera `10 (2º)`) por `"${diasVendExibir} dias (${qVenda}º período)"`, igualando ao badge da tela (`10 dias (2º período)`).
+- Aplicar a mesma regra do item 3: para cada linha, se a quinzena do mês não corresponde, escrever "—" na coluna desse período (em vez do range completo).
+- Rodapé: manter o aviso "Dias vendidos limitados a 10".
 
 ### Detalhes técnicos
 
-- Arquivo único alterado: `src/components/AuditLogsPanel.tsx`.
-- Sem migração SQL, sem alteração de RLS, sem alteração nos triggers — tudo no cliente.
-- A coleta de UUIDs por nome usa os caches `Map<id, nome>` já existentes em `lookupCaches`; custo desprezível (centenas de entradas em memória).
-- O fetch refaz quando os caches terminam de carregar (novo listener no `useLookups`), garantindo que a primeira busca após login não falhe por cache vazio.
-- Mantém debounce de 350ms, paginação server-side e filtros (Módulo / Tabela / Ação) inalterados.
-
-### Fora de escopo
-
-- Reprocessar logs antigos no banco para preencher `changed_fields` retroativamente.
-- Exportação CSV/PDF.
-- Filtro dropdown por colaborador específico (a busca por nome já cobre).
+- Sem mudanças em SQL, RLS, hooks ou outros componentes.
+- Usar `Label` (`@/components/ui/label`) e `SlidersHorizontal`/`X` (`lucide-react`, já importados na codebase).
+- Manter paginação, ordenação e queries existentes inalteradas.
+- `_showQ1/_showQ2` calculados via `useMemo` dentro de `contadorDataFiltered` (retornar array de objetos `{ ferias, showQ1, showQ2 }` ou anexar como propriedades não persistidas) e propagados para a renderização da tabela e do PDF.

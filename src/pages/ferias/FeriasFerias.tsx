@@ -13,7 +13,7 @@ import {
   Loader2, Edit, Eye, Plus, Sparkles, CalendarMinus,
   FileText, Clock, XCircle, Download, ArrowUpDown, Printer,
   ChevronLeft, ChevronRight, Trash2, ChevronDown, ChevronUp,
-  Send, Undo2, AlertCircle, HelpCircle
+  Send, Undo2, AlertCircle, HelpCircle, SlidersHorizontal, X
 } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -438,22 +438,19 @@ export default function FeriasFerias() {
 
   // Filtrar contadorData por mês e período
   const contadorDataFiltered = useMemo(() => {
-    return contadorData.filter((f) => {
-      if (contadorMesFilter !== "all") {
-        const mes = parseInt(contadorMesFilter);
-        const q1Month = f.quinzena1_inicio ? new Date(f.quinzena1_inicio + "T00:00:00").getMonth() + 1 : null;
-        const q2Month = f.quinzena2_inicio ? new Date(f.quinzena2_inicio + "T00:00:00").getMonth() + 1 : null;
-        if (contadorPeriodoFilter === "1") {
-          if (q1Month !== mes) return false;
-        } else if (contadorPeriodoFilter === "2") {
-          if (q2Month !== mes) return false;
-        } else {
-          if (q1Month !== mes && q2Month !== mes) return false;
-        }
-      }
-      if (contadorPeriodoFilter === "2" && !f.quinzena2_inicio) return false;
-      return true;
-    });
+    const mes = contadorMesFilter !== "all" ? parseInt(contadorMesFilter) : null;
+    const result: Array<FeriasRecord & { _showQ1: boolean; _showQ2: boolean }> = [];
+    for (const f of contadorData) {
+      const q1Month = f.quinzena1_inicio ? new Date(f.quinzena1_inicio + "T00:00:00").getMonth() + 1 : null;
+      const q2Month = f.quinzena2_inicio ? new Date(f.quinzena2_inicio + "T00:00:00").getMonth() + 1 : null;
+      const q1Match = mes === null || q1Month === mes;
+      const q2Match = mes === null || (!!f.quinzena2_inicio && q2Month === mes);
+      const showQ1 = (contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1") && q1Match;
+      const showQ2 = (contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2") && q2Match && !!f.quinzena2_inicio;
+      if (!showQ1 && !showQ2) continue;
+      result.push({ ...f, _showQ1: showQ1, _showQ2: showQ2 });
+    }
+    return result;
   }, [contadorData, contadorMesFilter, contadorPeriodoFilter]);
 
   // Resolve o período da venda: usa quinzena_venda quando definido,
@@ -497,12 +494,12 @@ export default function FeriasFerias() {
     const showP1 = contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1";
     const showP2 = contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2";
     const colWidths = showP1 && showP2
-      ? [50, 30, 30, 45, 45, 45, 25]
-      : [55, 35, 35, 50, 55, 30];
+      ? [48, 28, 28, 42, 42, 42, 35]
+      : [52, 32, 32, 48, 52, 40];
     const headers = ["Colaborador", "CPF", "Setor", "Per. Aquisitivo",
       ...(showP1 ? ["1º Período"] : []),
       ...(showP2 ? ["2º Período"] : []),
-      "Dias V.",
+      "Dias Vendidos",
     ];
 
     pdf.setFillColor(220, 220, 220);
@@ -542,11 +539,9 @@ export default function FeriasFerias() {
       if (diasVendTotal > 0) {
         if (qVenda === 1) vendP1 = diasVendTotal; else vendP2 = diasVendTotal;
       }
-      // Quantidade exibida na coluna "Dias V." respeita o filtro de período
-      let diasVendExibir = diasVendTotal;
-      if (contadorPeriodoFilter === "1") diasVendExibir = vendP1;
-      else if (contadorPeriodoFilter === "2") diasVendExibir = vendP2;
-      const sufixoVenda = diasVendExibir > 0 ? ` (${qVenda}º)` : "";
+      // Mostrar venda apenas se a quinzena correspondente está sendo exibida nesta linha
+      const vendaVisivel = (qVenda === 1 && f._showQ1) || (qVenda === 2 && f._showQ2);
+      const diasVendExibir = vendaVisivel ? diasVendTotal : 0;
 
       xPos = margin;
       pdf.text((f.colaborador?.nome || "—").substring(0, 28), xPos + 2, yPos);
@@ -558,14 +553,14 @@ export default function FeriasFerias() {
       pdf.text(f.periodo_aquisitivo_inicio && f.periodo_aquisitivo_fim ? formatPeriodo(f.periodo_aquisitivo_inicio, f.periodo_aquisitivo_fim) : "—", xPos + 2, yPos);
       xPos += colWidths[3];
       if (showP1) {
-        pdf.text(calcAdjustedPeriodo(f.quinzena1_inicio, f.quinzena1_fim, vendP1), xPos + 2, yPos);
+        pdf.text(f._showQ1 ? calcAdjustedPeriodo(f.quinzena1_inicio, f.quinzena1_fim, vendP1) : "—", xPos + 2, yPos);
         xPos += colWidths[4];
       }
       if (showP2) {
-        pdf.text(f.quinzena2_inicio && f.quinzena2_fim ? calcAdjustedPeriodo(f.quinzena2_inicio, f.quinzena2_fim, vendP2) : "—", xPos + 2, yPos);
+        pdf.text(f._showQ2 && f.quinzena2_inicio && f.quinzena2_fim ? calcAdjustedPeriodo(f.quinzena2_inicio, f.quinzena2_fim, vendP2) : "—", xPos + 2, yPos);
         xPos += colWidths[showP1 ? 5 : 4];
       }
-      pdf.text(diasVendExibir > 0 ? `${diasVendExibir}${sufixoVenda}` : "—", xPos + 2, yPos);
+      pdf.text(diasVendExibir > 0 ? `${diasVendExibir} dias (${qVenda}º período)` : "—", xPos + 2, yPos);
 
       yPos += 6;
     });
@@ -645,15 +640,34 @@ export default function FeriasFerias() {
             <Card className="border-primary/20"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-primary flex items-center gap-1"><Sparkles className="h-3 w-3" />Geradas</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-primary">{feriasStats.geradas}</div></CardContent></Card>
           </div>
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar colaborador..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" /></div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os status</SelectItem>{Object.entries(statusLabels).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent></Select>
-                <Select value={setorFilter} onValueChange={setSetorFilter}><SelectTrigger><SelectValue placeholder="Setor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os setores</SelectItem>{setores.map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}</SelectContent></Select>
+          <div className="rounded-lg border bg-muted/40 p-3 space-y-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Filtros</span>
               </div>
-            </CardContent>
-          </Card>
+              {(searchTerm !== "" || statusFilter !== "all" || setorFilter !== "all") && (
+                <Button variant="outline" size="sm" onClick={() => { setSearchTerm(""); setStatusFilter("all"); setSetorFilter("all"); }} className="gap-1 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive">
+                  <X className="h-4 w-4" />
+                  Limpar filtros
+                </Button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="flex flex-col space-y-1">
+                <Label className="text-xs font-medium text-muted-foreground">Buscar colaborador</Label>
+                <div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Nome do colaborador..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 h-9" /></div>
+              </div>
+              <div className="flex flex-col space-y-1">
+                <Label className="text-xs font-medium text-muted-foreground">Status</Label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="h-9"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os status</SelectItem>{Object.entries(statusLabels).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent></Select>
+              </div>
+              <div className="flex flex-col space-y-1">
+                <Label className="text-xs font-medium text-muted-foreground">Setor</Label>
+                <Select value={setorFilter} onValueChange={setSetorFilter}><SelectTrigger className="h-9"><SelectValue placeholder="Setor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os setores</SelectItem>{setores.map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}</SelectContent></Select>
+              </div>
+            </div>
+          </div>
 
           <Card>
             <CardContent className="p-0">
@@ -892,14 +906,40 @@ export default function FeriasFerias() {
 
         {/* ========== ABA: TABELA DO CONTADOR ========== */}
         <TabsContent value="contador" className="mt-6 space-y-6">
-          <div className="flex flex-wrap gap-4 items-end justify-between">
-            <div className="flex flex-wrap gap-4 items-end">
-              <div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar colaborador..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 w-56" /></div>
-              <Select value={setorFilter} onValueChange={setSetorFilter}><SelectTrigger className="w-48"><SelectValue placeholder="Setor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os setores</SelectItem>{setores.map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}</SelectContent></Select>
-              <Select value={contadorMesFilter} onValueChange={setContadorMesFilter}><SelectTrigger className="w-44"><SelectValue placeholder="Mês" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os meses</SelectItem>{MONTHS.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent></Select>
-              <Select value={contadorPeriodoFilter} onValueChange={setContadorPeriodoFilter}><SelectTrigger className="w-40"><SelectValue placeholder="Período" /></SelectTrigger><SelectContent><SelectItem value="all">Ambos</SelectItem><SelectItem value="1">1ª Quinzena</SelectItem><SelectItem value="2">2ª Quinzena</SelectItem></SelectContent></Select>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="rounded-lg border bg-muted/40 p-3 space-y-3 flex-1 min-w-[280px]">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Filtros</span>
+                </div>
+                {(searchTerm !== "" || setorFilter !== "all" || contadorMesFilter !== "all" || contadorPeriodoFilter !== "all") && (
+                  <Button variant="outline" size="sm" onClick={() => { setSearchTerm(""); setSetorFilter("all"); setContadorMesFilter("all"); setContadorPeriodoFilter("all"); }} className="gap-1 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive">
+                    <X className="h-4 w-4" />
+                    Limpar filtros
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <div className="flex flex-col space-y-1">
+                  <Label className="text-xs font-medium text-muted-foreground">Buscar colaborador</Label>
+                  <div className="relative"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Nome do colaborador..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 h-9 w-56" /></div>
+                </div>
+                <div className="flex flex-col space-y-1">
+                  <Label className="text-xs font-medium text-muted-foreground">Setor</Label>
+                  <Select value={setorFilter} onValueChange={setSetorFilter}><SelectTrigger className="w-48 h-9"><SelectValue placeholder="Setor" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os setores</SelectItem>{setores.map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}</SelectContent></Select>
+                </div>
+                <div className="flex flex-col space-y-1">
+                  <Label className="text-xs font-medium text-muted-foreground">Mês</Label>
+                  <Select value={contadorMesFilter} onValueChange={setContadorMesFilter}><SelectTrigger className="w-44 h-9"><SelectValue placeholder="Mês" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os meses</SelectItem>{MONTHS.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent></Select>
+                </div>
+                <div className="flex flex-col space-y-1">
+                  <Label className="text-xs font-medium text-muted-foreground">Período</Label>
+                  <Select value={contadorPeriodoFilter} onValueChange={setContadorPeriodoFilter}><SelectTrigger className="w-40 h-9"><SelectValue placeholder="Período" /></SelectTrigger><SelectContent><SelectItem value="all">Ambos</SelectItem><SelectItem value="1">1ª Quinzena</SelectItem><SelectItem value="2">2ª Quinzena</SelectItem></SelectContent></Select>
+                </div>
+              </div>
             </div>
-            <Button variant="outline" className="gap-2" onClick={() => generateContadorPDF()}><Printer className="h-4 w-4" />Exportar PDF</Button>
+            <Button variant="outline" className="gap-2 mt-1" onClick={() => generateContadorPDF()}><Printer className="h-4 w-4" />Exportar PDF</Button>
           </div>
 
           <Card>
@@ -928,14 +968,14 @@ export default function FeriasFerias() {
                           <TableCell className="font-medium">{f.colaborador?.nome || "—"}</TableCell>
                           <TableCell>{f.colaborador?.setor_titular?.nome || "—"}</TableCell>
                           <TableCell className="text-sm">{f.periodo_aquisitivo_inicio && f.periodo_aquisitivo_fim ? formatPeriodo(f.periodo_aquisitivo_inicio, f.periodo_aquisitivo_fim) : "—"}</TableCell>
-                          {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1") && <TableCell className="text-sm">{formatPeriodo(f.quinzena1_inicio, f.quinzena1_fim)}</TableCell>}
-                          {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2") && <TableCell className="text-sm">{f.quinzena2_inicio && f.quinzena2_fim ? formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim) : "—"}</TableCell>}
+                          {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1") && <TableCell className="text-sm">{f._showQ1 ? formatPeriodo(f.quinzena1_inicio, f.quinzena1_fim) : "—"}</TableCell>}
+                          {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2") && <TableCell className="text-sm">{f._showQ2 && f.quinzena2_inicio && f.quinzena2_fim ? formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim) : "—"}</TableCell>}
                           <TableCell>{(() => {
                             if (!f.vender_dias || !f.dias_vendidos) return <span className="text-muted-foreground text-xs">—</span>;
                             const total = Math.min(f.dias_vendidos, 10);
                             const qv = resolveQuinzenaVenda(f);
-                            if (contadorPeriodoFilter === "1" && qv !== 1) return <span className="text-muted-foreground text-xs">—</span>;
-                            if (contadorPeriodoFilter === "2" && qv !== 2) return <span className="text-muted-foreground text-xs">—</span>;
+                            const vendaVisivel = (qv === 1 && f._showQ1) || (qv === 2 && f._showQ2);
+                            if (!vendaVisivel) return <span className="text-muted-foreground text-xs">—</span>;
                             return <Badge variant="outline" className="text-xs">{total} dias ({qv}º período)</Badge>;
                           })()}</TableCell>
                           <TableCell className="text-center">
