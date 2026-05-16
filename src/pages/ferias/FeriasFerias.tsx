@@ -1165,8 +1165,19 @@ export default function FeriasFerias() {
                           <TableCell className="font-medium">{f.colaborador?.nome || "—"}</TableCell>
                           <TableCell>{f.colaborador?.setor_titular?.nome || "—"}</TableCell>
                           <TableCell className="text-sm">{f.periodo_aquisitivo_inicio && f.periodo_aquisitivo_fim ? formatPeriodo(f.periodo_aquisitivo_inicio, f.periodo_aquisitivo_fim) : "—"}</TableCell>
-                          {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1") && <TableCell className="text-sm">{f._showQ1 ? formatPeriodo(f.quinzena1_inicio, f.quinzena1_fim) : "—"}</TableCell>}
-                          {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2") && <TableCell className="text-sm">{f._showQ2 && f.quinzena2_inicio && f.quinzena2_fim ? formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim) : "—"}</TableCell>}
+                          {(() => null)()}
+                          {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1") && (() => {
+                            const diasVendTotal = f.vender_dias && f.dias_vendidos ? Math.min(f.dias_vendidos, 10) : 0;
+                            const qVenda = resolveQuinzenaVenda(f);
+                            const vendP1 = qVenda === 1 ? diasVendTotal : 0;
+                            return <TableCell className="text-sm">{f._showQ1 ? calcAdjustedPeriodo(f.quinzena1_inicio, f.quinzena1_fim, vendP1) : "—"}</TableCell>;
+                          })()}
+                          {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2") && (() => {
+                            const diasVendTotal = f.vender_dias && f.dias_vendidos ? Math.min(f.dias_vendidos, 10) : 0;
+                            const qVenda = resolveQuinzenaVenda(f);
+                            const vendP2 = qVenda === 2 ? diasVendTotal : 0;
+                            return <TableCell className="text-sm">{f._showQ2 && f.quinzena2_inicio && f.quinzena2_fim ? calcAdjustedPeriodo(f.quinzena2_inicio, f.quinzena2_fim, vendP2) : "—"}</TableCell>;
+                          })()}
                           <TableCell>{(() => {
                             if (!f.vender_dias || !f.dias_vendidos) return <span className="text-muted-foreground text-xs">—</span>;
                             const total = Math.min(f.dias_vendidos, 10);
