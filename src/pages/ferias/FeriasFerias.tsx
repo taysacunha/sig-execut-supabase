@@ -1063,22 +1063,39 @@ export default function FeriasFerias() {
                       <div className="space-y-1 max-h-64 overflow-y-auto">
                         {anosAquisitivosDisponiveis.length === 0 ? (
                           <p className="text-xs text-muted-foreground p-2">Nenhum ano disponível</p>
-                        ) : anosAquisitivosDisponiveis.map((ano) => {
-                          const checked = contadorAnosAquisitivos.includes(ano);
-                          return (
-                            <label key={ano} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                        ) : (
+                          <>
+                            <label className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer text-sm border-b border-border pb-2 mb-1">
                               <Checkbox
-                                checked={checked}
+                                checked={contadorAnosAquisitivos.length === anosAquisitivosDisponiveis.length && anosAquisitivosDisponiveis.length > 0}
                                 onCheckedChange={(v) => {
-                                  setContadorAnosAquisitivos((prev) =>
-                                    v ? [...prev, ano] : prev.filter((y) => y !== ano)
-                                  );
+                                  setContadorAnosAquisitivos(v ? [...anosAquisitivosDisponiveis] : []);
                                 }}
                               />
-                              <span>{ano}</span>
+                              <span className="font-medium">
+                                {contadorAnosAquisitivos.length === anosAquisitivosDisponiveis.length && anosAquisitivosDisponiveis.length > 0
+                                  ? "Desselecionar todos"
+                                  : "Selecionar todos"}
+                              </span>
                             </label>
-                          );
-                        })}
+                            {anosAquisitivosDisponiveis.map((ano) => {
+                              const checked = contadorAnosAquisitivos.includes(ano);
+                              return (
+                                <label key={ano} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                                  <Checkbox
+                                    checked={checked}
+                                    onCheckedChange={(v) => {
+                                      setContadorAnosAquisitivos((prev) =>
+                                        v ? [...prev, ano] : prev.filter((y) => y !== ano)
+                                      );
+                                    }}
+                                  />
+                                  <span>{ano}</span>
+                                </label>
+                              );
+                            })}
+                          </>
+                        )}
                       </div>
                       {contadorAnosAquisitivos.length > 0 && (
                         <Button variant="ghost" size="sm" className="w-full mt-2 text-xs" onClick={() => setContadorAnosAquisitivos([])}>
