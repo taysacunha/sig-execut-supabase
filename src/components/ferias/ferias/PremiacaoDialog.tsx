@@ -56,24 +56,24 @@ function periodoGozoReal(f: FeriasLite, gozoPeriodos: GozoPeriodo[], periodo: 1 
   return null;
 }
 
-function diasVendidosPorPeriodo(f: FeriasLite, periodo: 1 | 2): CenarioVenda {
+// Quantos dias foram vendidos no período (número real).
+function diasVendidosRealPorPeriodo(f: FeriasLite, periodo: 1 | 2): number {
   if (!f.vender_dias || !f.dias_vendidos) return 0;
-  const totalVend = f.dias_vendidos;
-  // Por padrão, a venda fica na quinzena indicada (quinzena_venda, default 2 quando não há)
-  const quinzenaVenda = f.quinzena_venda ?? 2;
-  // Cada quinzena tem no máx 10 dias de venda; o que passar vai para a outra.
-  let vendidosQ: number;
-  if (totalVend <= 10) {
-    vendidosQ = periodo === quinzenaVenda ? totalVend : 0;
-  } else {
-    // Excedente vai para a outra quinzena
-    if (periodo === quinzenaVenda) vendidosQ = 10;
-    else vendidosQ = totalVend - 10;
-  }
-  if (vendidosQ <= 0) return 0;
-  if (vendidosQ >= 15) return 15;
-  if (vendidosQ >= 10) return 10;
-  if (vendidosQ >= 5) return 5;
+  const total = f.dias_vendidos;
+  const qVenda = (f.quinzena_venda ?? 1) as 1 | 2;
+  // Caso normal (≤15): toda a venda fica na quinzena_venda.
+  if (total <= 15) return periodo === qVenda ? total : 0;
+  // Exceção (>15): venda atravessa as duas quinzenas — 15 na quinzena_venda, restante na outra.
+  if (periodo === qVenda) return 15;
+  return Math.min(15, total - 15);
+}
+
+// Mapeia o número real para o cenário aceito por calcularPremiacao (0|5|10|15).
+function diasVendidosPorPeriodo(f: FeriasLite, periodo: 1 | 2): CenarioVenda {
+  const v = diasVendidosRealPorPeriodo(f, periodo);
+  if (v >= 15) return 15;
+  if (v >= 10) return 10;
+  if (v >= 5) return 5;
   return 0;
 }
 
