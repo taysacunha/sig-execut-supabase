@@ -77,9 +77,10 @@ export async function gerarPremiacaoPDF(input: PremiacaoPdfInput): Promise<void>
   }
 
   if (calc.cenario === 0) {
-    // Não vende — recebe 1/3 da premiação
+    // Não vende — comissão de 15 dias = B4/2; 1/3 sobre a comissão é o valor recebido
     row("PREMIAÇÃO", formatBRL(calc.valorPremiacao));
-    row("Acréscimo de 1/3", formatBRL(calc.acrescimoUmTerco));
+    row("COMISSÃO 15 DIAS DE FÉRIAS", formatBRL(calc.comissao15));
+    row("1/3 SOBRE A COMISSÃO", formatBRL(calc.umTercoComissao));
     row(`RECEBIDO DIA ${fmtDate(input.dataRecebimento)}`, formatBRL(calc.recebe), true);
   } else {
     // Vende 5 / 10 / 15
