@@ -1,76 +1,50 @@
-## Diagnóstico
+## Motivo do erro
 
-### Caso 1 — Rejane (10 vendidos no 1º + 5 vendidos no 2º)
+O problema não parece ser instrução do usuário: é lógica do sistema.
 
-**Causa: limitação do modelo de dados, não bug de cálculo.**
+Hoje o cadastro salva `dias_vendidos` como total, mas a tela tenta descobrir a divisão por período indiretamente a partir de `ferias_gozo_periodos`. Essa tabela guarda os dias de gozo real, não os dias vendidos. Por isso, no caso do Diego:
 
-A tabela `ferias_ferias` só guarda **um único** par `dias_vendidos` + `quinzena_venda`. Não existe campo para "vendeu X dias na Q1 e Y dias na Q2 ao mesmo tempo". O `FeriasDialog.tsx` reflete isso: o usuário escolhe **uma** quinzena de venda e **um** total de dias vendidos.
+```text
+Venda correta: 1º período = 5 dias vendidos; 2º período = 15 dias vendidos
+Gozo real:     1º período = 10 dias gozados; 2º período = 0 dias gozados
+```
 
-O que provavelmente foi cadastrado para a Rejane: `dias_vendidos = 15` com `quinzena_venda = 1` (ou 2). Quando isso chega no `PremiacaoDialog`, a função `diasVendidosRealPorPeriodo` decide assim:
+A regra atual faz `15 - dias_gozo` por período, mas sem gravar/usar `dias_vendidos_q1` e `dias_vendidos_q2` de forma confiável. Além disso, a consulta da página de férias não está buscando o campo `tipo` de `ferias_gozo_periodos`, então qualquer período pode ser tratado como venda por fallback. O resultado é que a exibição pode inverter ou cair no comportamento legado, mostrando “15 dias no 1º período”.
 
-- `total = 15` → coloca os 15 inteiros na quinzena marcada como venda; a outra fica com 0 vendidos e 15 usufruídos.
+## Plano de correção
 
-Por isso ao abrir a premiação do 1º período aparece "15 usufruídos": o sistema acredita que a venda inteira foi do outro período. Não há como, no estado atual, dizer "10 vendidos aqui, 5 vendidos lá" — só "15 num lado só".
+1. **Criar uma função única para resolver venda por período**
+   - Prioridade 1: usar `dias_vendidos_q1` e `dias_vendidos_q2`, quando existirem.
+   - Prioridade 2: quando não existirem, inferir pelo gozo real apenas se a soma bater com `dias_vendidos`.
+   - Prioridade 3: fallback legado usando `quinzena_venda`, mas com venda acima de 15 distribuída corretamente.
 
-### Caso 2 — Diego (vendeu 20 dias, mas a tela mostra dois períodos)
+2. **Corrigir o salvamento no `FeriasDialog`**
+   - Ao salvar férias com venda, gravar explicitamente:
+     - `dias_vendidos_q1`
+     - `dias_vendidos_q2`
+   - Para o Diego, o payload deve ficar:
+     - `dias_vendidos = 20`
+     - `dias_vendidos_q1 = 5`
+     - `dias_vendidos_q2 = 15`
+   - Isso remove a ambiguidade e impede inversões futuras.
 
-**Causa: ao salvar venda > 15 dias, o sistema mantém as datas oficiais da Q2 no registro, mesmo que toda a Q2 esteja vendida.**
+3. **Corrigir a página `/ferias/ferias`**
+   - Buscar também o campo `tipo` em `ferias_gozo_periodos`.
+   - Usar a função única para exibir o campo “Venda”.
+   - O Diego passará a aparecer como:
+     - `1º período: 5 dias`
+     - `2º período: 15 dias`
 
-No `FeriasDialog.tsx` (linhas 1218-1240) o payload sempre grava `quinzena2_inicio`/`quinzena2_fim` com as datas oficiais do 2º período, independente da venda. Quando a venda é > 15:
+4. **Corrigir o diálogo de premiação**
+   - Usar a mesma regra única de venda por período.
+   - Assim o lançamento de premiação vai considerar o período certo, sem inverter gozo e venda.
 
-- `gozo_venda_periodos` é forçado para `"1"` (única faixa de gozo, na Q1).
-- `gozo_quinzena1_*` recebe os 10 dias de gozo real.
-- `gozo_quinzena2_*` fica `null`.
-- Mas `quinzena2_inicio/fim` continua preenchido.
+5. **Corrigir registros antigos já inconsistentes**
+   - Para registros antigos sem `dias_vendidos_q1/q2`, a tela continuará inferindo quando possível.
+   - Se os dados antigos forem ambíguos, o sistema não deve inventar o contrário: deve usar o fallback legado ou exigir edição/salvamento do registro para preencher a divisão explícita.
 
-A listagem da página de férias (`FeriasFerias.tsx`) usa `quinzena2_inicio` para renderizar a coluna do 2º período. Resultado: aparecem dois períodos visuais, sendo que o 2º já foi 100% vendido.
+## Resultado esperado
 
----
-
-## Resolução proposta
-
-### Ajuste 1 — Suportar venda dividida entre Q1 e Q2 (caso Rejane)
-
-Estender o modelo para permitir venda em **ambas** as quinzenas simultaneamente.
-
-Opções (escolher 1 — preciso da sua decisão antes de implementar):
-
-**A. Campos adicionais (mais simples)**
-
-- Adicionar `dias_vendidos_q1` e `dias_vendidos_q2` em `ferias_ferias`.
-- Manter `dias_vendidos`/`quinzena_venda` como derivados/legados.
-- Ajustar `FeriasDialog` para, quando "vender", permitir distribuir os dias entre Q1 e Q2 (ex.: dois inputs com soma ≤ 20 e respeitando a regra do "exceção" se > 10).
-- `PremiacaoDialog` passa a ler diretamente o valor por quinzena, sem inferência.
-
-**B. Tabela auxiliar `ferias_vendas_periodos**` (mais flexível, mais trabalho)
-
-- Cada linha = (ferias_id, quinzena, dias_vendidos).
-- Útil se no futuro vierem outros desdobramentos.
-
-Recomendação: **A** — resolve o caso real com mudança mínima.
-
-### Ajuste 2 — Diego (vendeu 20)
-
-Na hora de salvar venda > 15 em `FeriasDialog.tsx`:
-
-- Se `gozo_venda_periodos === "1"` (todo o gozo na Q1), zerar `quinzena2_inicio/fim` no payload (ou marcá-los como "vendidos").
-- Se `gozo_venda_periodos === "2"` (todo o gozo na Q2), zerar `quinzena1_inicio/fim`.
-
-Na listagem de `FeriasFerias.tsx`:
-
-- Ao montar a linha, se a quinzena correspondente tiver 0 dias de gozo real (toda vendida), exibir "—" ou um badge "Vendida" em vez do período.
-
-Também rodar um pequeno backfill para registros existentes onde `dias_vendidos > 15` e o lado não-vendido continua com datas oficiais sem `gozo_*`.
-
-### Arquivos impactados
-
-- `db/migrations/` — nova migration para colunas `dias_vendidos_q1`/`dias_vendidos_q2` (caso opção A).
-- `src/components/ferias/ferias/FeriasDialog.tsx` — UI de venda dividida + correção do payload para venda > 15.
-- `src/components/ferias/ferias/PremiacaoDialog.tsx` — ler dias vendidos por quinzena direto dos novos campos.
-- `src/pages/ferias/FeriasFerias.tsx` — render correto da quinzena totalmente vendida.
-- `src/integrations/supabase/types.ts` — regenerado após migration.
-
-### O que preciso de você
-
-1. Confirmar a **opção A** (campos `dias_vendidos_q1`/`dias_vendidos_q2`) ou pedir B. Siga com A.
-2. Confirmar que, para o caso Diego, a quinzena 100% vendida deve sumir do display (em vez de aparecer como "Vendida"). Acho interessante aparecer os dias e de que períodos foram vendidos. No caso de Diego, ele vendeu 5 dias do primeiro período e os 15 dias do segundo período, porém isso não fica claro e acaba confundido. Então quero que mostre isso. Os dois período devem aparecer, mas que fique claro os dias de cada período que foram vendidos.
+- Diego com 20 dias vendidos será exibido como `1º período: 5 dias` e `2º período: 15 dias`.
+- Rejane com 10 dias vendidos no primeiro e 5 no segundo será exibida e premiada corretamente.
+- A lógica deixa de depender de interpretação invertida entre “dias gozados” e “dias vendidos”.
