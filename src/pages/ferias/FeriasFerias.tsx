@@ -1512,6 +1512,17 @@ export default function FeriasFerias() {
       <FormularioAnualDialog open={formDialogOpen} onOpenChange={setFormDialogOpen} formulario={selectedFormulario} anoReferencia={parseInt(formAnoFilter)} onSuccess={() => { queryClient.invalidateQueries({ queryKey: ["ferias-formularios"] }); queryClient.invalidateQueries({ queryKey: ["ferias-colaboradores-com-formulario"] }); setFormDialogOpen(false); }} />
       <FormularioAnualViewDialog open={formViewDialogOpen} onOpenChange={setFormViewDialogOpen} formulario={selectedFormulario} />
 
+      {premiacaoFerias && (
+        <PremiacaoDialog
+          open={premiacaoDialogOpen}
+          onOpenChange={(o) => { setPremiacaoDialogOpen(o); if (!o) setPremiacaoEditing(null); }}
+          ferias={premiacaoFerias as any}
+          gozoPeriodos={gozoPeriodosByFeriasId[premiacaoFerias.id] || []}
+          existingPremiacoes={premiacoesByFeriasId[premiacaoFerias.id] || []}
+          editing={premiacaoEditing}
+        />
+      )}
+
       {/* Confirm dialog for managing enviado_contador */}
       {(() => {
         const confirmFerias = contadorConfirmId ? contadorDataFiltered.find(f => f.id === contadorConfirmId) || ferias.find(f => f.id === contadorConfirmId) : null;
