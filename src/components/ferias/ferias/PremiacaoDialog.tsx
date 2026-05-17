@@ -47,10 +47,10 @@ function periodoGozoReal(f: FeriasLite, gozoPeriodos: GozoPeriodo[], periodo: 1 
     const fim = flex.reduce((a, b) => a.data_fim > b.data_fim ? a : b).data_fim;
     return { inicio: ini, fim };
   }
-  if (f.gozo_diferente) {
-    if (periodo === 1 && f.gozo_quinzena1_inicio) return { inicio: f.gozo_quinzena1_inicio, fim: f.gozo_quinzena1_fim! };
-    if (periodo === 2 && f.gozo_quinzena2_inicio) return { inicio: f.gozo_quinzena2_inicio, fim: f.gozo_quinzena2_fim! };
-  }
+  // gozo_quinzenaN_* pode ser preenchido tanto em "gozo diferente" quanto em venda parcial
+  // (lado da quinzena_venda em que sobram dias de gozo). Em ambos casos, refletem o gozo real.
+  if (periodo === 1 && f.gozo_quinzena1_inicio) return { inicio: f.gozo_quinzena1_inicio, fim: f.gozo_quinzena1_fim! };
+  if (periodo === 2 && f.gozo_quinzena2_inicio) return { inicio: f.gozo_quinzena2_inicio, fim: f.gozo_quinzena2_fim! };
   if (periodo === 1) return { inicio: f.quinzena1_inicio, fim: f.quinzena1_fim };
   if (periodo === 2 && f.quinzena2_inicio) return { inicio: f.quinzena2_inicio, fim: f.quinzena2_fim! };
   return null;
