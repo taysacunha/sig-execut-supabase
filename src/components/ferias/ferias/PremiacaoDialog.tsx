@@ -29,6 +29,8 @@ interface FeriasLite {
   vender_dias: boolean;
   dias_vendidos: number | null;
   quinzena_venda: number | null;
+  dias_vendidos_q1?: number | null;
+  dias_vendidos_q2?: number | null;
 }
 
 interface Props {
@@ -71,6 +73,10 @@ function resolveQuinzenaVenda(f: FeriasLite, gozoPeriodos: GozoPeriodo[]): 1 | 2
   return qRegistrada;
 }
 
+function temVendaPorQuinzena(f: FeriasLite): boolean {
+  return f.dias_vendidos_q1 != null || f.dias_vendidos_q2 != null;
+}
+
 function periodoGozoReal(f: FeriasLite, gozoPeriodos: GozoPeriodo[], periodo: 1 | 2): { inicio: string; fim: string } | null {
   if (diasVendidosRealPorPeriodo(f, gozoPeriodos, periodo) >= 15) return periodoOficial(f, periodo);
 
@@ -90,6 +96,11 @@ function periodoGozoReal(f: FeriasLite, gozoPeriodos: GozoPeriodo[], periodo: 1 
 // Quantos dias foram vendidos no período (número real).
 function diasVendidosRealPorPeriodo(f: FeriasLite, gozoPeriodos: GozoPeriodo[], periodo: 1 | 2): number {
   if (!f.vender_dias || !f.dias_vendidos) return 0;
+  // Modelo novo: dias por quinzena gravados explicitamente.
+  if (temVendaPorQuinzena(f)) {
+    if (periodo === 1) return Math.max(0, Math.min(15, f.dias_vendidos_q1 || 0));
+    return Math.max(0, Math.min(15, f.dias_vendidos_q2 || 0));
+  }
   const total = f.dias_vendidos;
   const qVenda = resolveQuinzenaVenda(f, gozoPeriodos);
   // Caso normal (≤15): toda a venda fica na quinzena_venda.
