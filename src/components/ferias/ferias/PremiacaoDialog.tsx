@@ -136,7 +136,7 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
       await upsert.mutateAsync({
         id: editing?.id,
         ferias_id: ferias.id,
-        periodo,
+        periodo: (editing ? editing.periodo : periodo) as 1 | 2,
         data_inicio: dataInicio,
         data_fim: dataFim,
         dias_gozados: (15 - diasVendidos) as 0 | 5 | 10 | 15,
