@@ -45,7 +45,12 @@ import { FormularioAnualViewDialog } from "@/components/ferias/formulario/Formul
 import { FormularioPDFGenerator } from "@/components/ferias/relatorios/FormularioPDFGenerator";
 import { PeriodosAquisitivosTab } from "@/components/ferias/ferias/PeriodosAquisitivosTab";
 import { PremiacaoDialog } from "@/components/ferias/ferias/PremiacaoDialog";
-import { useFeriasPremiacoes, useDeletePremiacao, type FeriasPremiacao } from "@/hooks/ferias/useFeriasPremiacoes";
+import {
+  useFeriasPremiacoes, useDeletePremiacao,
+  useSetExportacaoPremiacao, useSetRecebimentoPremiacao,
+  type FeriasPremiacao,
+} from "@/hooks/ferias/useFeriasPremiacoes";
+import { ExportacaoCell, RecebimentoCell } from "@/components/ferias/ferias/PremiacaoSubRow";
 import { gerarPremiacaoPDF } from "@/lib/premiacaoPdf";
 import { formatBRL } from "@/lib/premiacaoCalc";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
@@ -285,7 +290,10 @@ export default function FeriasFerias() {
     });
   }, []);
 
-  async function reprintPremiacao(p: FeriasPremiacao, colaboradorNome: string) {
+  const setExportacao = useSetExportacaoPremiacao();
+  const setRecebimento = useSetRecebimentoPremiacao();
+
+  async function reprintPremiacao(p: FeriasPremiacao, colaboradorNome: string, dataEmissao: string) {
     await gerarPremiacaoPDF({
       colaborador: colaboradorNome,
       periodo: p.periodo,
@@ -295,6 +303,7 @@ export default function FeriasFerias() {
       valorMensal: Number(p.valor_premiacao),
       diasVendidos: p.dias_vendidos as 0 | 5 | 10 | 15,
     });
+    await setExportacao.mutateAsync({ id: p.id, data: dataEmissao });
   }
 
   // Fetch all afastamentos for the year to detect conflicts
@@ -974,14 +983,29 @@ export default function FeriasFerias() {
                         const allDone = hasP1 && hasP2;
                         return (
                         <>
-                        <TableRow key={f.id}>
+                         <TableRow key={f.id}>
                           <TableCell className="p-1">
                             <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => toggleExpand(f.id)} title={premList.length ? `${premList.length} premiação(ões)` : "Sem premiações"}>
                               {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
                               {premList.length > 0 && <span className="sr-only">{premList.length}</span>}
                             </Button>
                           </TableCell>
-                          <TableCell className="font-medium">{f.colaborador?.nome || "—"}</TableCell>
+                           <TableCell className="font-medium">
+                             <div className="flex items-center gap-2 flex-wrap">
+                               <span>{f.colaborador?.nome || "—"}</span>
+                               {(() => {
+                                 if (premList.length === 0) return null;
+                                 const allConf = allDone && premList.every(p => p.recebimento_confirmado);
+                                 if (allConf) {
+                                   return <Badge variant="outline" className="bg-green-500/10 text-green-700 border-green-500/30 text-[10px] gap-1"><CheckCircle2 className="h-3 w-3" />Premiação quitada</Badge>;
+                                 }
+                                 if (allDone) {
+                                   return <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[10px] gap-1"><Award className="h-3 w-3" />Premiação lançada</Badge>;
+                                 }
+                                 return <Badge variant="outline" className="bg-amber-500/10 text-amber-700 border-amber-500/30 text-[10px] gap-1"><Award className="h-3 w-3" />1/2 premiação</Badge>;
+                               })()}
+                             </div>
+                           </TableCell>
                           <TableCell>{f.colaborador?.setor_titular?.nome || "—"}</TableCell>
                           <TableCell className="text-sm">
                             {gozoPeriodosByFeriasId[f.id]?.length
@@ -1089,7 +1113,8 @@ export default function FeriasFerias() {
                                         <TableHead>Vendidos / Gozados</TableHead>
                                         <TableHead>Valor mensal</TableHead>
                                         <TableHead>Recebimento</TableHead>
-                                        <TableHead>Lançado em</TableHead>
+                                        <TableHead>Última exportação</TableHead>
+                                        <TableHead>Recebimento atestado</TableHead>
                                         <TableHead className="text-right">Ações</TableHead>
                                       </TableRow>
                                     </TableHeader>
@@ -1103,10 +1128,23 @@ export default function FeriasFerias() {
                                             <TableCell className="text-sm">{p.dias_vendidos}d / {p.dias_gozados}d</TableCell>
                                             <TableCell className="text-sm">{formatBRL(Number(p.valor_premiacao))}</TableCell>
                                             <TableCell className="text-sm">{format(parseISO(p.data_recebimento), "dd/MM/yyyy")}</TableCell>
-                                            <TableCell className="text-xs text-muted-foreground">{format(parseISO(p.created_at), "dd/MM/yyyy HH:mm")}</TableCell>
+                                            <TableCell>
+                                              <ExportacaoCell
+                                                p={p}
+                                                canEdit={canEditFerias}
+                                                onGerar={(d) => reprintPremiacao(p, f.colaborador?.nome || "—", d)}
+                                              />
+                                            </TableCell>
+                                            <TableCell>
+                                              <RecebimentoCell
+                                                p={p}
+                                                canEdit={canEditFerias}
+                                                onConfirmar={(d) => setRecebimento.mutateAsync({ id: p.id, confirmado: true, data: d })}
+                                                onRemover={() => setRecebimento.mutateAsync({ id: p.id, confirmado: false })}
+                                              />
+                                            </TableCell>
                                             <TableCell className="text-right">
                                               <div className="flex justify-end gap-1">
-                                                <Button variant="ghost" size="sm" title="Gerar PDF" onClick={() => reprintPremiacao(p, f.colaborador?.nome || "—")}><Download className="h-4 w-4" /></Button>
                                                 {canEditFerias && (
                                                   <>
                                                     <Button variant="ghost" size="sm" title="Editar" onClick={() => { setPremiacaoFerias(f); setPremiacaoEditing(p); setPremiacaoDialogOpen(true); }}><Edit className="h-4 w-4" /></Button>

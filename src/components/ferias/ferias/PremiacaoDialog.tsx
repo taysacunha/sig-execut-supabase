@@ -90,6 +90,7 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
   const [dataRecebimento, setDataRecebimento] = useState<string>(editing?.data_recebimento ?? new Date().toISOString().slice(0, 10));
   const [dataInicio, setDataInicio] = useState<string>(editing?.data_inicio ?? "");
   const [dataFim, setDataFim] = useState<string>(editing?.data_fim ?? "");
+  const [dataEmissao, setDataEmissao] = useState<string>(editing?.ultima_exportacao_pdf ?? new Date().toISOString().slice(0, 10));
 
   const upsert = useUpsertPremiacao();
 
@@ -102,11 +103,13 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
       setDataRecebimento(editing.data_recebimento);
       setDataInicio(editing.data_inicio);
       setDataFim(editing.data_fim);
+      setDataEmissao(editing.ultima_exportacao_pdf ?? new Date().toISOString().slice(0, 10));
     } else {
       const initialPeriodo = hasP1 ? (hasP2 ? 1 : 2) : 1;
       setPeriodo(initialPeriodo);
       setValor("");
       setDataRecebimento(new Date().toISOString().slice(0, 10));
+      setDataEmissao(new Date().toISOString().slice(0, 10));
       const real = periodoGozoReal(ferias, gozoPeriodos, initialPeriodo);
       setDataInicio(real?.inicio || "");
       setDataFim(real?.fim || "");
@@ -143,6 +146,7 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
         dias_vendidos: diasVendidos,
         valor_premiacao: valorNum,
         data_recebimento: dataRecebimento,
+        ultima_exportacao_pdf: gerar ? dataEmissao : (editing?.ultima_exportacao_pdf ?? null),
       } as any);
 
       if (gerar) {
@@ -229,6 +233,14 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
               <Input type="date" value={dataRecebimento} onChange={(e) => setDataRecebimento(e.target.value)} />
             </div>
           </div>
+
+  <div>
+    <Label>Data de emissão do PDF</Label>
+    <Input type="date" value={dataEmissao} onChange={(e) => setDataEmissao(e.target.value)} />
+    <p className="text-xs text-muted-foreground mt-1">
+      Data que ficará registrada como "última exportação" e usada como referência para o atesto de recebimento.
+    </p>
+  </div>
 
           {/* Valor */}
           <div>
