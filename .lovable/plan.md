@@ -1,41 +1,25 @@
-## Correção do cenário "não vende" na premiação
+## Ajustes no atesto de recebimento (premiação)
 
-### Problema
-Para colaborador que não vende dias (goza os 15), o cálculo atual usa B5 = B4/3 (1.600/3 = 533,33) como valor recebido. Está errado.
+### Comportamento desejado
+1. **Desmarcar atesto**: ao clicar no checkbox marcado, abrir `AlertDialog` de confirmação ("Deseja desmarcar o atesto de recebimento? Esta ação removerá a data e o usuário responsáveis."). Confirmando, executar `setRecebimento({ confirmado: false })`.
+2. **Editar premiação**: o botão "Editar" (lápis) fica **desabilitado** enquanto `recebimento_confirmado === true`. Tooltip: "Desmarque o atesto para editar".
+3. **Apagar premiação**: o botão "Apagar" continua habilitado independentemente do atesto (mantendo apenas a regra existente de "apagar o 2º antes do 1º"). Mantém o `AlertDialog` de confirmação atual.
 
-### Regra correta
-Para `dias_vendidos = 0`, partindo da premiação base B4 = 1.600:
-- **Comissão de 15 dias** = B4 / 2 → 800,00
-- **1/3 sobre a comissão** = 800 / 3 → 266,67
-- **RECEBIDO** = 266,67
+### Alterações em arquivos
 
-O recibo deve continuar exibindo `PREMIAÇÃO = 1.600,00` (valor base), mas a linha de cálculo e o valor recebido devem usar os novos valores.
+**`src/components/ferias/ferias/PremiacaoSubRow.tsx` (RecebimentoCell)**
+- Quando `recebimento_confirmado` for `true`:
+  - Remover o `Popover` de editar data / botão "Remover" interno.
+  - Renderizar o `Checkbox` marcado dentro de um `AlertDialog`. Ao clicar (`onCheckedChange` → false), abrir o dialog de confirmação.
+  - Continuar mostrando a data e o nome ao lado do checkbox (texto não clicável, sem popover).
+  - Confirmando, chamar `onRemover()`.
+- Quando não confirmado: comportamento atual (popover para atestar) mantido.
 
-### Layout do PDF/preview no cenário "não vende"
-```
-PREMIAÇÃO                                       R$ 1.600,00
-COMISSÃO 15 DIAS DE FÉRIAS                      R$   800,00
-1/3 SOBRE A COMISSÃO                            R$   266,67
-RECEBIDO DIA dd/mm/aaaa                         R$   266,67
-```
-
-### Alterações
-**`src/lib/premiacaoCalc.ts`**
-- Adicionar campos: `comissao15` (B4/2) e `umTercoComissao` (comissao15/3) usados somente quando `cenario === 0`.
-- Para `cenario === 0`: `recebe = umTercoComissao` (≈ 266,67), sem alterar B4 exibido.
-- Manter intactos cenários 5/10/15 (lógica B4–B9 atual permanece).
-
-**`src/lib/premiacaoPdf.ts`**
-- No bloco `if (calc.cenario === 0)`, substituir as linhas atuais por:
-  - `PREMIAÇÃO` → `formatBRL(valorPremiacao)` (1.600)
-  - `COMISSÃO 15 DIAS DE FÉRIAS` → `formatBRL(comissao15)` (800)
-  - `1/3 SOBRE A COMISSÃO` → `formatBRL(umTercoComissao)` (266,67)
-  - `RECEBIDO DIA …` → `formatBRL(recebe)` (266,67, em negrito)
-
-**Preview no `PremiacaoDialog.tsx`**
-- Atualizar a tabela de preview do cenário "não vende" para refletir as quatro linhas acima, espelhando o PDF.
+**`src/pages/ferias/FeriasFerias.tsx`** (linha ~1150)
+- Adicionar `disabled={!canEditFerias || p.recebimento_confirmado}` no botão "Editar".
+- Ajustar `title` para "Desmarque o atesto para editar" quando atestado.
+- Botão "Apagar": remover dependência do atesto (já não tem); manter apenas `canDelete` para regra 1º/2º. `AlertDialog` permanece.
 
 ### Não muda
-- Cenários vende 5/10/15.
-- Dialog "Lançar Premiação" (campos, datas).
-- Hooks, schema, badges, coluna "Recebimento atestado", "Última exportação".
+- Hook `useSetRecebimentoPremiacao` (já suporta `confirmado: false`).
+- Cálculo, PDF, badges, coluna de exportação.
