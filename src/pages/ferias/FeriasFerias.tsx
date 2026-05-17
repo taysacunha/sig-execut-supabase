@@ -1128,6 +1128,7 @@ export default function FeriasFerias() {
                                             <TableCell className="text-sm">{formatPeriodo(p.data_inicio, p.data_fim)}</TableCell>
                                             <TableCell className="text-sm">{p.dias_vendidos}d / {p.dias_gozados}d</TableCell>
                                             <TableCell className="text-sm">{formatBRL(Number(p.valor_premiacao))}</TableCell>
+                                            <TableCell className="text-sm">{formatBRL(calcularPremiacao(Number(p.valor_premiacao), p.dias_vendidos as any).recebe)}</TableCell>
                                             <TableCell className="text-sm">{format(parseISO(p.data_recebimento), "dd/MM/yyyy")}</TableCell>
                                             <TableCell>
                                               <ExportacaoCell
