@@ -77,6 +77,19 @@ function temVendaPorQuinzena(f: FeriasLite): boolean {
   return f.dias_vendidos_q1 != null || f.dias_vendidos_q2 != null;
 }
 
+// Soma os dias de gozo (tipo "vender") cadastrados em ferias_gozo_periodos para
+// uma quinzena específica. Esses dias representam o que o colaborador efetivamente
+// vai usufruir; o restante (15 - gozo) é o que foi vendido naquela quinzena.
+function diasGozoCadastradosPorPeriodo(gozoPeriodos: GozoPeriodo[], periodo: 1 | 2): number {
+  return gozoPeriodos
+    .filter(p => p.referencia_periodo === periodo && p.dias > 0)
+    .reduce((sum, p) => sum + p.dias, 0);
+}
+
+function temGozoCadastrado(gozoPeriodos: GozoPeriodo[]): boolean {
+  return gozoPeriodos.some(p => p.dias > 0 && (p.referencia_periodo === 1 || p.referencia_periodo === 2));
+}
+
 function periodoGozoReal(f: FeriasLite, gozoPeriodos: GozoPeriodo[], periodo: 1 | 2): { inicio: string; fim: string } | null {
   if (diasVendidosRealPorPeriodo(f, gozoPeriodos, periodo) >= 15) return periodoOficial(f, periodo);
 
@@ -100,6 +113,19 @@ function diasVendidosRealPorPeriodo(f: FeriasLite, gozoPeriodos: GozoPeriodo[], 
   if (temVendaPorQuinzena(f)) {
     if (periodo === 1) return Math.max(0, Math.min(15, f.dias_vendidos_q1 || 0));
     return Math.max(0, Math.min(15, f.dias_vendidos_q2 || 0));
+  }
+  // Modelo via ferias_gozo_periodos: derivar a venda como 15 - dias_gozo da quinzena.
+  if (temGozoCadastrado(gozoPeriodos)) {
+    const gozoNoPeriodo = diasGozoCadastradosPorPeriodo(gozoPeriodos, periodo);
+    const vendaNoPeriodo = Math.max(0, 15 - gozoNoPeriodo);
+    // Garantir que a soma das vendas inferidas não exceda o total vendido.
+    const gozoOutro = diasGozoCadastradosPorPeriodo(gozoPeriodos, outroPeriodo(periodo));
+    const vendaOutro = Math.max(0, 15 - gozoOutro);
+    const totalInferido = vendaNoPeriodo + vendaOutro;
+    if (totalInferido === f.dias_vendidos || Math.abs(totalInferido - f.dias_vendidos) <= 1) {
+      return Math.min(15, vendaNoPeriodo);
+    }
+    // Discrepância: cai no comportamento legado abaixo.
   }
   const total = f.dias_vendidos;
   const qVenda = resolveQuinzenaVenda(f, gozoPeriodos);
