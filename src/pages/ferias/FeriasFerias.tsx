@@ -1046,7 +1046,21 @@ export default function FeriasFerias() {
                                 )
                             }
                           </TableCell>
-                          <TableCell>{f.vender_dias && f.dias_vendidos ? <Badge variant="outline" className="text-xs">{f.dias_vendidos} dias</Badge> : <span className="text-muted-foreground text-xs">—</span>}</TableCell>
+                          <TableCell>{(() => {
+                            if (!f.vender_dias || !f.dias_vendidos) return <span className="text-muted-foreground text-xs">—</span>;
+                            const q1 = (f as any).dias_vendidos_q1 as number | null | undefined;
+                            const q2 = (f as any).dias_vendidos_q2 as number | null | undefined;
+                            if (q1 != null || q2 != null) {
+                              return (
+                                <div className="flex flex-col gap-1">
+                                  {(q1 || 0) > 0 && <Badge variant="outline" className="text-xs w-fit">1º período: {q1} dias</Badge>}
+                                  {(q2 || 0) > 0 && <Badge variant="outline" className="text-xs w-fit">2º período: {q2} dias</Badge>}
+                                </div>
+                              );
+                            }
+                            const qv = f.quinzena_venda === 1 || f.quinzena_venda === 2 ? f.quinzena_venda : null;
+                            return <Badge variant="outline" className="text-xs">{f.dias_vendidos} dias{qv ? ` (${qv}º período)` : ""}</Badge>;
+                          })()}</TableCell>
                           <TableCell><Badge variant="outline" className={statusColors[f.status]}>{statusLabels[f.status] || f.status}</Badge></TableCell>
                           <TableCell>{f.origem === "formulario_anual" ? <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 gap-1"><Sparkles className="h-3 w-3" />Gerada</Badge> : <span className="text-muted-foreground text-xs">Manual</span>}</TableCell>
                           <TableCell>
