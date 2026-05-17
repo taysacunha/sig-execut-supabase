@@ -1147,7 +1147,13 @@ export default function FeriasFerias() {
                                               <div className="flex justify-end gap-1">
                                                 {canEditFerias && (
                                                   <>
-                                                    <Button variant="ghost" size="sm" title="Editar" onClick={() => { setPremiacaoFerias(f); setPremiacaoEditing(p); setPremiacaoDialogOpen(true); }}><Edit className="h-4 w-4" /></Button>
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      disabled={p.recebimento_confirmado}
+                                                      title={p.recebimento_confirmado ? "Desmarque o atesto para editar" : "Editar"}
+                                                      onClick={() => { setPremiacaoFerias(f); setPremiacaoEditing(p); setPremiacaoDialogOpen(true); }}
+                                                    ><Edit className="h-4 w-4" /></Button>
                                                     <AlertDialog>
                                                       <AlertDialogTrigger asChild>
                                                         <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" disabled={!canDelete} title={canDelete ? "Apagar" : "Apague o 2º antes do 1º"}><Trash2 className="h-4 w-4" /></Button>
