@@ -1,25 +1,26 @@
-## Ajustes no atesto de recebimento (premiação)
+## Diagnóstico
 
-### Comportamento desejado
-1. **Desmarcar atesto**: ao clicar no checkbox marcado, abrir `AlertDialog` de confirmação ("Deseja desmarcar o atesto de recebimento? Esta ação removerá a data e o usuário responsáveis."). Confirmando, executar `setRecebimento({ confirmado: false })`.
-2. **Editar premiação**: o botão "Editar" (lápis) fica **desabilitado** enquanto `recebimento_confirmado === true`. Tooltip: "Desmarque o atesto para editar".
-3. **Apagar premiação**: o botão "Apagar" continua habilitado independentemente do atesto (mantendo apenas a regra existente de "apagar o 2º antes do 1º"). Mantém o `AlertDialog` de confirmação atual.
+O warning continua porque a migration anterior corrigiu apenas `public.ferias_premiacoes_check_atesto()`, mas o linter do Supabase ainda encontrou pelo menos uma função no banco sem `search_path` configurado.
 
-### Alterações em arquivos
+Pela análise das migrations, as candidatas restantes são:
 
-**`src/components/ferias/ferias/PremiacaoSubRow.tsx` (RecebimentoCell)**
-- Quando `recebimento_confirmado` for `true`:
-  - Remover o `Popover` de editar data / botão "Remover" interno.
-  - Renderizar o `Checkbox` marcado dentro de um `AlertDialog`. Ao clicar (`onCheckedChange` → false), abrir o dialog de confirmação.
-  - Continuar mostrando a data e o nome ao lado do checkbox (texto não clicável, sem popover).
-  - Confirmando, chamar `onRemover()`.
-- Quando não confirmado: comportamento atual (popover para atestar) mantido.
+- `public.handle_updated_at()` — migration antiga criou sem `SET search_path`, embora o contexto atual mostre uma versão com `public, pg_temp`.
+- `public.audit_module_changes()` — houve uma definição antiga sem schema/search_path; depois há correção com `public.audit_module_changes()` e `SET search_path`.
+- `public.atualizar_status_ferias()` — a versão no banco atual já aparece com `SET search_path = public` no contexto, mas havia migration antiga sem isso.
 
-**`src/pages/ferias/FeriasFerias.tsx`** (linha ~1150)
-- Adicionar `disabled={!canEditFerias || p.recebimento_confirmado}` no botão "Editar".
-- Ajustar `title` para "Desmarque o atesto para editar" quando atestado.
-- Botão "Apagar": remover dependência do atesto (já não tem); manter apenas `canDelete` para regra 1º/2º. `AlertDialog` permanece.
+Como o scanner do Supabase não informa o nome da função no resumo, o caminho mais seguro é aplicar uma migration idempotente que força `search_path` nas funções conhecidas/candidatas sem alterar a lógica delas.
 
-### Não muda
-- Hook `useSetRecebimentoPremiacao` (já suporta `confirmado: false`).
-- Cálculo, PDF, badges, coluna de exportação.
+## Plano
+
+1. Criar uma nova migration SQL de correção geral para `Function Search Path Mutable`.
+2. Na migration, usar `ALTER FUNCTION ... SET search_path = ...` para as funções candidatas, sem recriar o corpo e sem mudar regras de negócio:
+   - `public.handle_updated_at()` com `public, pg_temp`.
+   - `public.audit_module_changes()` com `public`.
+   - `public.atualizar_status_ferias()` com `public`.
+   - manter também `public.ferias_premiacoes_check_atesto()` com `public`, como reforço idempotente.
+3. Validar localmente que a migration foi criada com os comandos corretos.
+4. Depois que você executar a migration, rodar novamente o scanner de segurança para confirmar se o warning desapareceu.
+
+## Observação técnica
+
+`CREATE OR REPLACE FUNCTION` nem sempre é o melhor para correções amplas porque pode sobrescrever lógica atual se houver versões diferentes. Para este caso, `ALTER FUNCTION ... SET search_path` é mais seguro: ajusta apenas a configuração da função existente.
