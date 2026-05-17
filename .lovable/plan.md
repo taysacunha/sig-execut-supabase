@@ -1,26 +1,64 @@
-## Diagnóstico
+# Remover logs de auditoria sem alterações reais
 
-O warning continua porque a migration anterior corrigiu apenas `public.ferias_premiacoes_check_atesto()`, mas o linter do Supabase ainda encontrou pelo menos uma função no banco sem `search_path` configurado.
+## Causa raiz
 
-Pela análise das migrations, as candidatas restantes são:
+A função PostgreSQL `audit_module_changes()` calcula `v_changed_fields` comparando `to_jsonb(NEW)` com `to_jsonb(OLD)` sem nenhum filtro. Toda tabela do módulo Férias possui um trigger `BEFORE UPDATE` (`set_..._updated_at`) que executa `handle_updated_at()` e força `NEW.updated_at = now()`.
 
-- `public.handle_updated_at()` — migration antiga criou sem `SET search_path`, embora o contexto atual mostre uma versão com `public, pg_temp`.
-- `public.audit_module_changes()` — houve uma definição antiga sem schema/search_path; depois há correção com `public.audit_module_changes()` e `SET search_path`.
-- `public.atualizar_status_ferias()` — a versão no banco atual já aparece com `SET search_path = public` no contexto, mas havia migration antiga sem isso.
+Resultado: qualquer `UPDATE` (mesmo quando o usuário submete o formulário do colaborador sem mudar nada de fato, ou quando uma rotina interna toca a linha) sempre tem ao menos um campo "alterado" (`updated_at`), e a auditoria grava o log. No painel, o componente `AuditLogsPanel` filtra `updated_at`/`created_at` e mostra "Apenas o timestamp foi atualizado" ou "Sem campos alterados" — exatamente o que o Bruno está vendo.
 
-Como o scanner do Supabase não informa o nome da função no resumo, o caminho mais seguro é aplicar uma migration idempotente que força `search_path` nas funções conhecidas/candidatas sem alterar a lógica delas.
+Isso afeta todas as tabelas auditadas (Férias, Vendas, Escalas, Estoque), não apenas `ferias_colaboradores`.
 
-## Plano
+## Solução
 
-1. Criar uma nova migration SQL de correção geral para `Function Search Path Mutable`.
-2. Na migration, usar `ALTER FUNCTION ... SET search_path = ...` para as funções candidatas, sem recriar o corpo e sem mudar regras de negócio:
-   - `public.handle_updated_at()` com `public, pg_temp`.
-   - `public.audit_module_changes()` com `public`.
-   - `public.atualizar_status_ferias()` com `public`.
-   - manter também `public.ferias_premiacoes_check_atesto()` com `public`, como reforço idempotente.
-3. Validar localmente que a migration foi criada com os comandos corretos.
-4. Depois que você executar a migration, rodar novamente o scanner de segurança para confirmar se o warning desapareceu.
+### 1. Atualizar `audit_module_changes()` para ignorar campos técnicos
 
-## Observação técnica
+Nova migration que recria a função filtrando do array `v_changed_fields` os campos:
+`id`, `created_at`, `updated_at`, `created_by`.
 
-`CREATE OR REPLACE FUNCTION` nem sempre é o melhor para correções amplas porque pode sobrescrever lógica atual se houver versões diferentes. Para este caso, `ALTER FUNCTION ... SET search_path` é mais seguro: ajusta apenas a configuração da função existente.
+Após o filtro, se o array ficar vazio em um `UPDATE`, **não insere log**. Mantém todo o resto da lógica atual (classificação de módulo, captura de usuário, INSERT/DELETE inalterados, `SECURITY DEFINER`, `SET search_path = public`).
+
+Esboço da mudança no bloco `UPDATE`:
+
+```sql
+SELECT ARRAY_AGG(changes.key) INTO v_changed_fields
+FROM (
+  SELECT key
+  FROM jsonb_each(v_new_data)
+  WHERE v_old_data->key IS DISTINCT FROM v_new_data->key
+    AND key NOT IN ('id', 'created_at', 'updated_at', 'created_by')
+) AS changes;
+```
+
+E a guarda final:
+
+```sql
+IF TG_OP <> 'UPDATE'
+   OR (v_changed_fields IS NOT NULL AND array_length(v_changed_fields, 1) > 0) THEN
+  INSERT INTO public.module_audit_logs (...) VALUES (...);
+END IF;
+```
+
+### 2. Limpar logs históricos inúteis
+
+Na mesma migration, remover registros já gravados onde nenhum campo relevante mudou:
+
+```sql
+DELETE FROM public.module_audit_logs
+WHERE action = 'UPDATE'
+  AND (
+    changed_fields IS NULL
+    OR changed_fields <@ ARRAY['id','created_at','updated_at','created_by']::text[]
+  );
+```
+
+Isso esvazia a poluição visível na tela de Auditoria — Férias e Folgas (e nos outros módulos), sem afetar logs reais.
+
+### 3. Validação
+
+- Após a migration, abrir a página `/ferias/auditoria` e confirmar que os logs "Sem campos alterados" / "Apenas timestamp atualizado" do Bruno desapareceram.
+- Editar um colaborador alterando um campo real → o log aparece normalmente.
+- Editar um colaborador e salvar sem mudar nada → nenhum log novo é gerado.
+
+## Sem alterações no frontend
+
+`AuditLogsPanel.tsx` já trata os dois cenários corretamente; nenhuma mudança em React é necessária. O ajuste é puramente na função SQL + limpeza de dados.
