@@ -9,7 +9,7 @@ export interface PremiacaoPdfInput {
   dataInicio: string;   // yyyy-mm-dd
   dataFim: string;
   dataRecebimento: string;
-  valorMensal: number;
+  valorPremiacao: number;
   diasVendidos: CenarioVenda;
 }
 
@@ -30,7 +30,7 @@ async function loadLogo(): Promise<string | null> {
 }
 
 export async function gerarPremiacaoPDF(input: PremiacaoPdfInput): Promise<void> {
-  const calc = calcularPremiacao(input.valorMensal, input.diasVendidos);
+  const calc = calcularPremiacao(input.valorPremiacao, input.diasVendidos);
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 20;
