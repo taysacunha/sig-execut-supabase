@@ -1135,6 +1135,13 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       let gozoDiferente = false;
       let gozoFlexivel = false;
       let distribuicaoTipoVal: string | null = null;
+      let diasVendQ1: number | null = null;
+      let diasVendQ2: number | null = null;
+
+      const diasInclusive = (ini?: string | null, fim?: string | null) => {
+        if (!ini || !fim) return 0;
+        try { return Math.max(0, differenceInDays(parseISO(fim), parseISO(ini)) + 1); } catch { return 0; }
+      };
 
       if (data.is_excecao && excecaoTipo) {
         gozoFlexivel = true;
@@ -1167,6 +1174,22 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
               gozoQ1Fim = livres[livres.length - 1].data_fim || null;
             }
           }
+          // Calcular dias vendidos explícitos por quinzena a partir do gozo cadastrado
+          // (tipo "vender"). Venda no período = 15 - dias_gozo_no_período.
+          {
+            const venderRows = excPeriodos.filter(p => (p.tipo || "vender") === "vender");
+            const gozo1 = venderRows.filter(p => p.referencia_periodo === 1).reduce((s, p) => s + (p.dias || 0), 0);
+            const gozo2 = venderRows.filter(p => p.referencia_periodo === 2).reduce((s, p) => s + (p.dias || 0), 0);
+            const hasRef1 = venderRows.some(p => p.referencia_periodo === 1);
+            const hasRef2 = venderRows.some(p => p.referencia_periodo === 2);
+            const v1 = hasRef1 ? Math.max(0, 15 - gozo1) : (excDistribuicaoTipo === "2" ? 15 : 0);
+            const v2 = hasRef2 ? Math.max(0, 15 - gozo2) : (excDistribuicaoTipo === "1" ? 15 : 0);
+            // Só grava se a soma bater (com tolerância 1) com o total declarado.
+            if (Math.abs((v1 + v2) - diasVend) <= 1) {
+              diasVendQ1 = v1;
+              diasVendQ2 = v2;
+            }
+          }
         } else if (excecaoTipo === "gozo_diferente") {
           gozoDiferente = true;
           const p1 = excPeriodos.filter(p => p.referencia_periodo === 1);
@@ -1194,12 +1217,25 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
               gozoQ2Inicio = data.gozo_venda_inicio || null;
               gozoQ2Fim = data.gozo_venda_fim || null;
             }
+            // Venda padrão: tudo na quinzena escolhida.
+            diasVendQ1 = quinzenaVendaVal === 1 ? diasVend : 0;
+            diasVendQ2 = quinzenaVendaVal === 2 ? diasVend : 0;
           } else {
             gozoQ1Inicio = data.gozo_venda_q1_inicio || null;
             gozoQ1Fim = data.gozo_venda_q1_fim || null;
             if (data.gozo_venda_periodos === "2") {
               gozoQ2Inicio = data.gozo_venda_q2_inicio || null;
               gozoQ2Fim = data.gozo_venda_q2_fim || null;
+            }
+            // Venda exceção (>10): venda por quinzena = 15 - gozo daquela quinzena.
+            // Se gozo_venda_periodos === "1": só Q1 tem gozo (Q2 100% vendida).
+            const gozoDiasQ1 = diasInclusive(gozoQ1Inicio, gozoQ1Fim);
+            const gozoDiasQ2 = data.gozo_venda_periodos === "2" ? diasInclusive(gozoQ2Inicio, gozoQ2Fim) : 0;
+            const v1 = Math.max(0, 15 - gozoDiasQ1);
+            const v2 = Math.max(0, 15 - gozoDiasQ2);
+            if (Math.abs((v1 + v2) - diasVend) <= 1) {
+              diasVendQ1 = v1;
+              diasVendQ2 = v2;
             }
           }
         } else if (data.opcao_adicional === "gozo_diferente") {
@@ -1229,6 +1265,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         vender_dias: venderDias,
         dias_vendidos: venderDias ? diasVend : null,
         quinzena_venda: venderDias ? quinzenaVendaVal : null,
+        dias_vendidos_q1: venderDias ? diasVendQ1 : null,
+        dias_vendidos_q2: venderDias ? diasVendQ2 : null,
         status: isEditing ? ferias.status : "aprovada",
         is_excecao: data.is_excecao,
         excecao_motivo: data.is_excecao ? data.excecao_motivo : null,
