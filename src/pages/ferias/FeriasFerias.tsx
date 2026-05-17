@@ -177,6 +177,12 @@ export default function FeriasFerias() {
   const [reducaoDialogOpen, setReducaoDialogOpen] = useState(false);
   const [reducaoFerias, setReducaoFerias] = useState<FeriasRecord | null>(null);
 
+  // Premiação
+  const [premiacaoDialogOpen, setPremiacaoDialogOpen] = useState(false);
+  const [premiacaoFerias, setPremiacaoFerias] = useState<FeriasRecord | null>(null);
+  const [premiacaoEditing, setPremiacaoEditing] = useState<FeriasPremiacao | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
   // Formulários state
   const [formSearchTerm, setFormSearchTerm] = useState("");
   const [formAnoFilter, setFormAnoFilter] = useState<string>((currentYear + 1).toString());
