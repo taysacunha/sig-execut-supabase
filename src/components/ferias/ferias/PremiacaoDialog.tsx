@@ -100,8 +100,8 @@ function diasVendidosRealPorPeriodo(f: FeriasLite, gozoPeriodos: GozoPeriodo[], 
 }
 
 // Mapeia o número real para o cenário aceito por calcularPremiacao (0|5|10|15).
-function diasVendidosPorPeriodo(f: FeriasLite, periodo: 1 | 2): CenarioVenda {
-  const v = diasVendidosRealPorPeriodo(f, periodo);
+function diasVendidosPorPeriodo(f: FeriasLite, gozoPeriodos: GozoPeriodo[], periodo: 1 | 2): CenarioVenda {
+  const v = diasVendidosRealPorPeriodo(f, gozoPeriodos, periodo);
   if (v >= 15) return 15;
   if (v >= 10) return 10;
   if (v >= 5) return 5;
@@ -151,8 +151,8 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
     if (real) { setDataInicio(real.inicio); setDataFim(real.fim); }
   }, [periodo, editing]);
 
-  const diasVendidos = useMemo(() => diasVendidosPorPeriodo(ferias, periodo), [ferias, periodo]);
-  const diasVendidosReal = useMemo(() => diasVendidosRealPorPeriodo(ferias, periodo), [ferias, periodo]);
+  const diasVendidos = useMemo(() => diasVendidosPorPeriodo(ferias, gozoPeriodos, periodo), [ferias, gozoPeriodos, periodo]);
+  const diasVendidosReal = useMemo(() => diasVendidosRealPorPeriodo(ferias, gozoPeriodos, periodo), [ferias, gozoPeriodos, periodo]);
   const diasGozadosReal = Math.max(0, 15 - diasVendidosReal);
   const valorNum = Number((valor || "0").replace(",", "."));
   const calc = useMemo(() => valorNum > 0 ? calcularPremiacao(valorNum, diasVendidos) : null, [valorNum, diasVendidos]);
@@ -244,11 +244,11 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
           {/* Datas */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Data de início (gozo)</Label>
+              <Label>Data de início do período</Label>
               <Input type="date" value={dataInicio} readOnly disabled className="bg-muted/30" />
             </div>
             <div>
-              <Label>Data de fim (gozo)</Label>
+              <Label>Data de fim do período</Label>
               <Input type="date" value={dataFim} readOnly disabled className="bg-muted/30" />
             </div>
           </div>
@@ -268,7 +268,7 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
 
           {/* Valor */}
           <div>
-            <Label>Valor da premiação (B4) R$</Label>
+            <Label>Valor da premiação R$</Label>
             <Input
               inputMode="decimal"
               placeholder="Ex: 1600.00"
@@ -276,7 +276,7 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
               onChange={(e) => setValor(e.target.value)}
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Valor base da quinzena (B4) — equivale a "PREMIAÇÃO" da planilha.
+              Informe o valor base da premiação para esta quinzena.
             </p>
           </div>
 
