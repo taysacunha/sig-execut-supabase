@@ -293,17 +293,17 @@ export default function FeriasFerias() {
   const setExportacao = useSetExportacaoPremiacao();
   const setRecebimento = useSetRecebimentoPremiacao();
 
-  async function reprintPremiacao(p: FeriasPremiacao, colaboradorNome: string, dataEmissao: string) {
+  async function reprintPremiacao(p: FeriasPremiacao, colaboradorNome: string) {
     await gerarPremiacaoPDF({
       colaborador: colaboradorNome,
       periodo: p.periodo,
       dataInicio: p.data_inicio,
       dataFim: p.data_fim,
       dataRecebimento: p.data_recebimento,
-      valorMensal: Number(p.valor_premiacao),
+      valorPremiacao: Number(p.valor_premiacao),
       diasVendidos: p.dias_vendidos as 0 | 5 | 10 | 15,
     });
-    await setExportacao.mutateAsync({ id: p.id, data: dataEmissao });
+    await setExportacao.mutateAsync({ id: p.id, data: p.data_recebimento });
   }
 
   // Fetch all afastamentos for the year to detect conflicts
@@ -1132,7 +1132,7 @@ export default function FeriasFerias() {
                                               <ExportacaoCell
                                                 p={p}
                                                 canEdit={canEditFerias}
-                                                onGerar={(d) => reprintPremiacao(p, f.colaborador?.nome || "—", d)}
+                                                onGerar={() => reprintPremiacao(p, f.colaborador?.nome || "—")}
                                               />
                                             </TableCell>
                                             <TableCell>
