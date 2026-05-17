@@ -94,7 +94,7 @@ export function RecebimentoCell({
     <Popover open={pop} onOpenChange={(v) => { setPop(v); if (v) setData(minDate || TODAY()); }}>
       <PopoverTrigger asChild disabled={!canEdit}>
         <div className="flex items-center gap-2 cursor-pointer">
-          <Checkbox disabled={!canEdit} />
+          <Checkbox checked={false} disabled={!canEdit} onCheckedChange={() => {}} />
           <span className="text-xs text-muted-foreground">Pendente</span>
         </div>
       </PopoverTrigger>
