@@ -136,7 +136,7 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
       await upsert.mutateAsync({
         id: editing?.id,
         ferias_id: ferias.id,
-        periodo,
+        periodo: (editing ? editing.periodo : periodo) as 1 | 2,
         data_inicio: dataInicio,
         data_fim: dataFim,
         dias_gozados: (15 - diasVendidos) as 0 | 5 | 10 | 15,
@@ -187,20 +187,22 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
               onValueChange={(v) => setPeriodo(Number(v) as 1 | 2)}
               className="flex gap-4"
             >
-              <label className={`flex items-center gap-2 border rounded-md p-3 cursor-pointer flex-1 ${(!editing && hasP1) ? "opacity-60" : ""}`}>
-                <RadioGroupItem value="1" disabled={!editing && hasP1} />
+              <label className={`flex items-center gap-2 border rounded-md p-3 flex-1 ${editing ? "opacity-60 cursor-not-allowed" : "cursor-pointer"} ${(!editing && hasP1) ? "opacity-60" : ""}`}>
+                <RadioGroupItem value="1" disabled={!!editing || (!editing && hasP1)} />
                 <div>
                   <div className="font-medium">1ª Quinzena</div>
                   {hasP1 && !editing && <Badge variant="outline" className="text-xs mt-1">Já lançada</Badge>}
+                  {editing && editing.periodo === 1 && <Badge variant="outline" className="text-xs mt-1">Editando</Badge>}
                 </div>
               </label>
-              <label className={`flex items-center gap-2 border rounded-md p-3 cursor-pointer flex-1 ${(!podeSelecionarP2 || !periodoP2Disponivel || (!editing && hasP2)) ? "opacity-60" : ""}`}>
-                <RadioGroupItem value="2" disabled={!podeSelecionarP2 || !periodoP2Disponivel || (!editing && hasP2)} />
+              <label className={`flex items-center gap-2 border rounded-md p-3 flex-1 ${editing ? "opacity-60 cursor-not-allowed" : "cursor-pointer"} ${(!podeSelecionarP2 || !periodoP2Disponivel || (!editing && hasP2)) ? "opacity-60" : ""}`}>
+                <RadioGroupItem value="2" disabled={!!editing || !podeSelecionarP2 || !periodoP2Disponivel || (!editing && hasP2)} />
                 <div>
                   <div className="font-medium">2ª Quinzena</div>
                   {!periodoP2Disponivel && <Badge variant="outline" className="text-xs mt-1">Sem 2º período</Badge>}
                   {periodoP2Disponivel && !hasP1 && !editing && <Badge variant="outline" className="text-xs mt-1">Lance o 1º primeiro</Badge>}
                   {hasP2 && !editing && <Badge variant="outline" className="text-xs mt-1">Já lançada</Badge>}
+                  {editing && editing.periodo === 2 && <Badge variant="outline" className="text-xs mt-1">Editando</Badge>}
                 </div>
               </label>
             </RadioGroup>
