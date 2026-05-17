@@ -40,7 +40,40 @@ interface Props {
   editing?: FeriasPremiacao | null;
 }
 
+function periodoOficial(f: FeriasLite, periodo: 1 | 2): { inicio: string; fim: string } | null {
+  if (periodo === 1) return { inicio: f.quinzena1_inicio, fim: f.quinzena1_fim };
+  if (f.quinzena2_inicio && f.quinzena2_fim) return { inicio: f.quinzena2_inicio, fim: f.quinzena2_fim };
+  return null;
+}
+
+function outroPeriodo(periodo: 1 | 2): 1 | 2 {
+  return periodo === 1 ? 2 : 1;
+}
+
+function periodoTemGozoReal(f: FeriasLite, gozoPeriodos: GozoPeriodo[], periodo: 1 | 2): boolean {
+  if (gozoPeriodos.some(p => p.referencia_periodo === periodo && p.dias > 0)) return true;
+  if (periodo === 1) return !!(f.gozo_quinzena1_inicio && f.gozo_quinzena1_fim);
+  return !!(f.gozo_quinzena2_inicio && f.gozo_quinzena2_fim);
+}
+
+function resolveQuinzenaVenda(f: FeriasLite, gozoPeriodos: GozoPeriodo[]): 1 | 2 {
+  const qRegistrada = (f.quinzena_venda === 1 || f.quinzena_venda === 2 ? f.quinzena_venda : 2) as 1 | 2;
+  const total = f.vender_dias ? (f.dias_vendidos || 0) : 0;
+
+  // Quando vende exatamente uma quinzena inteira, o único período com gozo real
+  // representa a quinzena usufruída; a venda pertence à outra quinzena.
+  if (total === 15) {
+    const temGozo1 = periodoTemGozoReal(f, gozoPeriodos, 1);
+    const temGozo2 = periodoTemGozoReal(f, gozoPeriodos, 2);
+    if (temGozo1 !== temGozo2) return temGozo1 ? 2 : 1;
+  }
+
+  return qRegistrada;
+}
+
 function periodoGozoReal(f: FeriasLite, gozoPeriodos: GozoPeriodo[], periodo: 1 | 2): { inicio: string; fim: string } | null {
+  if (diasVendidosRealPorPeriodo(f, gozoPeriodos, periodo) >= 15) return periodoOficial(f, periodo);
+
   const flex = gozoPeriodos.filter(p => p.referencia_periodo === periodo);
   if (flex.length) {
     const ini = flex.reduce((a, b) => a.data_inicio < b.data_inicio ? a : b).data_inicio;
@@ -51,16 +84,14 @@ function periodoGozoReal(f: FeriasLite, gozoPeriodos: GozoPeriodo[], periodo: 1 
   // (lado da quinzena_venda em que sobram dias de gozo). Em ambos casos, refletem o gozo real.
   if (periodo === 1 && f.gozo_quinzena1_inicio) return { inicio: f.gozo_quinzena1_inicio, fim: f.gozo_quinzena1_fim! };
   if (periodo === 2 && f.gozo_quinzena2_inicio) return { inicio: f.gozo_quinzena2_inicio, fim: f.gozo_quinzena2_fim! };
-  if (periodo === 1) return { inicio: f.quinzena1_inicio, fim: f.quinzena1_fim };
-  if (periodo === 2 && f.quinzena2_inicio) return { inicio: f.quinzena2_inicio, fim: f.quinzena2_fim! };
-  return null;
+  return periodoOficial(f, periodo);
 }
 
 // Quantos dias foram vendidos no período (número real).
-function diasVendidosRealPorPeriodo(f: FeriasLite, periodo: 1 | 2): number {
+function diasVendidosRealPorPeriodo(f: FeriasLite, gozoPeriodos: GozoPeriodo[], periodo: 1 | 2): number {
   if (!f.vender_dias || !f.dias_vendidos) return 0;
   const total = f.dias_vendidos;
-  const qVenda = (f.quinzena_venda ?? 1) as 1 | 2;
+  const qVenda = resolveQuinzenaVenda(f, gozoPeriodos);
   // Caso normal (≤15): toda a venda fica na quinzena_venda.
   if (total <= 15) return periodo === qVenda ? total : 0;
   // Exceção (>15): venda atravessa as duas quinzenas — 15 na quinzena_venda, restante na outra.
@@ -69,8 +100,8 @@ function diasVendidosRealPorPeriodo(f: FeriasLite, periodo: 1 | 2): number {
 }
 
 // Mapeia o número real para o cenário aceito por calcularPremiacao (0|5|10|15).
-function diasVendidosPorPeriodo(f: FeriasLite, periodo: 1 | 2): CenarioVenda {
-  const v = diasVendidosRealPorPeriodo(f, periodo);
+function diasVendidosPorPeriodo(f: FeriasLite, gozoPeriodos: GozoPeriodo[], periodo: 1 | 2): CenarioVenda {
+  const v = diasVendidosRealPorPeriodo(f, gozoPeriodos, periodo);
   if (v >= 15) return 15;
   if (v >= 10) return 10;
   if (v >= 5) return 5;
@@ -120,8 +151,8 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
     if (real) { setDataInicio(real.inicio); setDataFim(real.fim); }
   }, [periodo, editing]);
 
-  const diasVendidos = useMemo(() => diasVendidosPorPeriodo(ferias, periodo), [ferias, periodo]);
-  const diasVendidosReal = useMemo(() => diasVendidosRealPorPeriodo(ferias, periodo), [ferias, periodo]);
+  const diasVendidos = useMemo(() => diasVendidosPorPeriodo(ferias, gozoPeriodos, periodo), [ferias, gozoPeriodos, periodo]);
+  const diasVendidosReal = useMemo(() => diasVendidosRealPorPeriodo(ferias, gozoPeriodos, periodo), [ferias, gozoPeriodos, periodo]);
   const diasGozadosReal = Math.max(0, 15 - diasVendidosReal);
   const valorNum = Number((valor || "0").replace(",", "."));
   const calc = useMemo(() => valorNum > 0 ? calcularPremiacao(valorNum, diasVendidos) : null, [valorNum, diasVendidos]);
@@ -146,7 +177,7 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
         valor_premiacao: valorNum,
         data_recebimento: dataRecebimento,
         ultima_exportacao_pdf: gerar ? dataRecebimento : (editing?.ultima_exportacao_pdf ?? null),
-      } as any);
+      });
 
       if (gerar) {
         await gerarPremiacaoPDF({
@@ -160,7 +191,7 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
         });
       }
       onOpenChange(false);
-    } catch {}
+    } catch { return; }
   }
 
   async function handleApenasPdf() {
@@ -213,11 +244,11 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
           {/* Datas */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Data de início (gozo)</Label>
+              <Label>Data de início do período</Label>
               <Input type="date" value={dataInicio} readOnly disabled className="bg-muted/30" />
             </div>
             <div>
-              <Label>Data de fim (gozo)</Label>
+              <Label>Data de fim do período</Label>
               <Input type="date" value={dataFim} readOnly disabled className="bg-muted/30" />
             </div>
           </div>
@@ -237,7 +268,7 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
 
           {/* Valor */}
           <div>
-            <Label>Valor da premiação (B4) R$</Label>
+            <Label>Valor da premiação R$</Label>
             <Input
               inputMode="decimal"
               placeholder="Ex: 1600.00"
@@ -245,7 +276,7 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
               onChange={(e) => setValor(e.target.value)}
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Valor base da quinzena (B4) — equivale a "PREMIAÇÃO" da planilha.
+              Informe o valor base da premiação para esta quinzena.
             </p>
           </div>
 

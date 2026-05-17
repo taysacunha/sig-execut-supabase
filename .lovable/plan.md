@@ -1,66 +1,27 @@
-## Bug confirmado
+## Plano de correção
 
-No `PremiacaoDialog`, a função `diasVendidosPorPeriodo` calcula errado quando há venda concentrada em uma única quinzena. Ela assume "máximo 10 vendidos por quinzena, excedente vai para a outra" — mas esse não é o modelo real do sistema.
+Corrigir a premiação para que ela use a quinzena de venda como fonte principal dos dias vendidos, sem inverter venda e gozo.
 
-**Modelo real (visto em `FeriasDialog.tsx` linhas 1184-1204):**
-- `dias_vendidos` ≤ 15 → **todos** os dias vendidos ficam na quinzena indicada por `quinzena_venda`. A outra quinzena tem 0 vendidos e 15 dias de gozo cheios.
-- `dias_vendidos` > 15 (exceção) → venda atravessa as duas quinzenas e os dias de gozo de cada uma ficam em `gozo_venda_q1_*` / `gozo_venda_q2_*` (controlado por `gozo_venda_periodos`).
+### Comportamento esperado no caso do Pedro
 
-**Caso Pedro:** `dias_vendidos = 15`, `quinzena_venda = 1`.
-- Esperado Q1: 15 vendidos / 0 gozados; Q2: 0 vendidos / 15 gozados.
-- Atual (errado): Q1: 5 vendidos / 10 gozados; Q2: 10 vendidos / 5 gozados.
+- **1º período**: 15 dias vendidos, 0 dias usufruídos, usando as datas oficiais do 1º período como referência da venda.
+- **2º período**: 0 dias vendidos, 15 dias usufruídos, usando as datas reais/oficiais do 2º período como referência do gozo.
 
-Além disso, `periodoGozoReal` devolve as datas da `quinzena1` (que, quando vendida integralmente, são datas de venda, não de gozo). Precisa diferenciar o que é gozo e o que é venda por período.
+### Ajustes propostos
 
-## Correções no `PremiacaoDialog.tsx`
-
-### 1) `diasVendidosPorPeriodo(f, periodo)` — usar `quinzena_venda` corretamente
-
-```ts
-function diasVendidosPorPeriodo(f, periodo) {
-  if (!f.vender_dias || !f.dias_vendidos) return 0;
-  const total = f.dias_vendidos;
-  const qVenda = f.quinzena_venda ?? 1;
-
-  // Caso normal: até 15 dias, tudo na quinzena_venda.
-  if (total <= 15) {
-    return (periodo === qVenda ? total : 0) as CenarioVenda;
-  }
-  // Exceção (> 15 dias): venda atravessa quinzenas.
-  // Q da venda recebe 15; restante na outra.
-  if (periodo === qVenda) return 15;
-  return Math.min(15, total - 15) as CenarioVenda;
-}
-```
-
-Normalizar o retorno para um `CenarioVenda` válido (0|5|10|15) apenas para o `calcularPremiacao`; o número exato (ex.: 7) deve aparecer no badge "X dias vendidos · Y dias usufruídos".
-
-### 2) `periodoGozoReal(f, gozoPeriodos, periodo)` — devolver as datas certas
-
-Regras:
-- Se `gozo_periodos` flexíveis existirem para o `periodo` → usar min/max desses (mantém o comportamento atual).
-- Senão, se a quinzena foi **totalmente vendida** (`vendidosNoPeriodo === 15`) → não há "gozo" naquela quinzena: usar as datas da própria `quinzenaN` como referência do período do recibo (mostrar como o período da venda) e marcar visualmente que não há gozo (badge "venda integral, sem gozo").
-- Caso contrário (gozo parcial após venda ou gozo padrão):
-  - Se `gozo_diferente` e há `gozo_quinzenaN_*` → usar.
-  - Senão → `quinzenaN_inicio/fim`.
-
-### 3) Texto do resumo
-Substituir "X dias vendidos · Y dias usufruídos" para refletir o resultado real:
-- 15 vendidos → "15 dias vendidos · 0 dias usufruídos".
-- 0 vendidos → "0 dias vendidos · 15 dias usufruídos".
-
-### 4) Botões/UX
-- Se `vendidosNoPeriodo === 0` e `vender_dias = false` (ou periodo sem venda), o cálculo entra no "cenário 0" já existente — sem mudanças.
-- Se `vendidosNoPeriodo === 15`, o `calcularPremiacao` cai no ramo "vende 15" (omite linha "1/3 dos dias usufruídos"). Já suportado.
-
-## Sem migração
-
-Mudança puramente de frontend (`src/components/ferias/ferias/PremiacaoDialog.tsx`). Nada no banco, nada nas outras telas. Não afeta cadastro de férias nem geração de PDF (o PDF lê dos mesmos valores; ficará correto automaticamente).
-
-## Validação manual após implementação
-
-1. Pedro (15 vendidos em Q1, 15 gozados em Q2):
-   - Premiação Q1: badge "15 dias vendidos · 0 usufruídos", datas = quinzena1 (venda).
-   - Premiação Q2: badge "0 vendidos · 15 usufruídos", datas = quinzena2.
-2. Caso 10 vendidos em Q2 (padrão): Q1 0/15, Q2 10/5 nas datas certas (`quinzena2_inicio/fim` venda; `gozo_quinzena2_*` ou `quinzena2_*` para os 5 de gozo).
-3. Caso sem venda: ambos 0/15 (cenário 0 mantém recibo "PREMIAÇÃO + COMISSÃO 15 DIAS").
+1. **Corrigir cálculo de dias vendidos por período em `PremiacaoDialog.tsx**`
+  - Se `quinzena_venda = 1` e `dias_vendidos = 15`, a 1ª quinzena recebe os 15 dias vendidos.
+  - A 2ª quinzena recebe 0 vendidos e 15 usufruídos.
+  - Manter fallback seguro para registros antigos sem `quinzena_venda`, respeitando o padrão já usado no módulo de Férias.
+2. **Corrigir datas exibidas na premiação**
+  - Para período totalmente vendido: preencher as datas com o período oficial vendido, não com uma data de gozo do outro período.
+  - Para período usufruído: preencher as datas reais de gozo quando existirem; caso contrário, usar a quinzena oficial correspondente.
+3. **Corrigir valores salvos e PDF**
+  - Salvar `dias_vendidos` e `dias_gozados` coerentes com o período selecionado.
+  - Gerar o PDF usando o mesmo cenário exibido no preview.
+4. **Validação manual focada**
+  - Conferir no fluxo de premiação que o caso Pedro fica: 1º período vendido 15/0 usufruído e 2º período vendido 0/15 usufruído.
+  - Sem alterar cadastro de férias, banco, RLS ou edge functions.
+5. Remoção da referência das células da tabela.
+  1. Remova do dialog as referências as células da tabela, como por exemplo B4. Não precisa referenciar isso. Então remova os textos que mostrar isso do dialog, tanto de inclusão com de edição.
+    &nbsp;
