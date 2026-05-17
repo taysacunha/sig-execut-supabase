@@ -1113,7 +1113,8 @@ export default function FeriasFerias() {
                                         <TableHead>Vendidos / Gozados</TableHead>
                                         <TableHead>Valor mensal</TableHead>
                                         <TableHead>Recebimento</TableHead>
-                                        <TableHead>Lançado em</TableHead>
+                                        <TableHead>Última exportação</TableHead>
+                                        <TableHead>Recebimento atestado</TableHead>
                                         <TableHead className="text-right">Ações</TableHead>
                                       </TableRow>
                                     </TableHeader>
@@ -1127,10 +1128,23 @@ export default function FeriasFerias() {
                                             <TableCell className="text-sm">{p.dias_vendidos}d / {p.dias_gozados}d</TableCell>
                                             <TableCell className="text-sm">{formatBRL(Number(p.valor_premiacao))}</TableCell>
                                             <TableCell className="text-sm">{format(parseISO(p.data_recebimento), "dd/MM/yyyy")}</TableCell>
-                                            <TableCell className="text-xs text-muted-foreground">{format(parseISO(p.created_at), "dd/MM/yyyy HH:mm")}</TableCell>
+                                            <TableCell>
+                                              <ExportacaoCell
+                                                p={p}
+                                                canEdit={canEditFerias}
+                                                onGerar={(d) => reprintPremiacao(p, f.colaborador?.nome || "—", d)}
+                                              />
+                                            </TableCell>
+                                            <TableCell>
+                                              <RecebimentoCell
+                                                p={p}
+                                                canEdit={canEditFerias}
+                                                onConfirmar={(d) => setRecebimento.mutateAsync({ id: p.id, confirmado: true, data: d })}
+                                                onRemover={() => setRecebimento.mutateAsync({ id: p.id, confirmado: false })}
+                                              />
+                                            </TableCell>
                                             <TableCell className="text-right">
                                               <div className="flex justify-end gap-1">
-                                                <Button variant="ghost" size="sm" title="Gerar PDF" onClick={() => reprintPremiacao(p, f.colaborador?.nome || "—")}><Download className="h-4 w-4" /></Button>
                                                 {canEditFerias && (
                                                   <>
                                                     <Button variant="ghost" size="sm" title="Editar" onClick={() => { setPremiacaoFerias(f); setPremiacaoEditing(p); setPremiacaoDialogOpen(true); }}><Edit className="h-4 w-4" /></Button>
