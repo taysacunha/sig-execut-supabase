@@ -1,50 +1,80 @@
-## Motivo do erro
+## Análise dos achados de segurança
 
-O problema não parece ser instrução do usuário: é lógica do sistema.
+Verifiquei as três descobertas contra o código do projeto (políticas RLS, funções `can_view_system`/`can_edit_system`, e como o frontend consome essas RPCs). **Nenhuma delas é falso positivo** — todas são reais e devem ser tratadas. Abaixo, a análise e o plano de correção.
 
-Hoje o cadastro salva `dias_vendidos` como total, mas a tela tenta descobrir a divisão por período indiretamente a partir de `ferias_gozo_periodos`. Essa tabela guarda os dias de gozo real, não os dias vendidos. Por isso, no caso do Diego:
+---
 
-```text
-Venda correta: 1º período = 5 dias vendidos; 2º período = 15 dias vendidos
-Gozo real:     1º período = 10 dias gozados; 2º período = 0 dias gozados
-```
+### 1. ERROR — Escalas Queue/Stats Mutation RPCs (crítico)
 
-A regra atual faz `15 - dias_gozo` por período, mas sem gravar/usar `dias_vendidos_q1` e `dias_vendidos_q2` de forma confiável. Além disso, a consulta da página de férias não está buscando o campo `tipo` de `ferias_gozo_periodos`, então qualquer período pode ser tratado como venda por fallback. O resultado é que a exibição pode inverter ou cair no comportamento legado, mostrando “15 dias no 1º período”.
+**Funções afetadas (8):**
+- `sync_saturday_queue`, `update_saturday_queue_after_allocation`
+- `save_broker_weekly_stats`, `delete_weekly_stats_for_period`
+- `sync_location_rotation_queue`, `update_location_queue_after_allocation`, `bulk_update_location_queues_after_allocation`
+- `aggregate_month_data`
+
+**Por que é real:** todas são `SECURITY DEFINER` (rodam como owner, ignoram RLS) e não checam `auth.uid()`. Qualquer usuário autenticado — mesmo sem acesso ao módulo Escalas — pode chamá-las via PostgREST e reescrever filas de rotação, apagar estatísticas semanais e reagregar histórico mensal. Isso quebra a integridade operacional do módulo.
+
+**Veredicto:** **NÃO é falso positivo. Tratar como erro.**
+
+---
+
+### 2. WARN — Escalas Read RPCs (4 funções de leitura)
+
+**Funções afetadas:**
+- `get_saturday_queue`, `get_previous_week_stats`
+- `get_location_rotation_queue`, `get_weekday_distribution_hybrid`
+
+**Por que é real:** mesma classe do anterior, mas apenas leitura. Expõem nomes de corretores, posições de fila e contagens de plantões a qualquer usuário autenticado, ignorando `can_view_system('escalas')`. Como o restante do módulo usa esse guard, manter essas 4 funções abertas é inconsistente e vazamento de dados operacionais.
+
+**Veredicto:** **NÃO é falso positivo. Tratar.**
+
+---
+
+### 3. WARN — Vendas Dashboard RPCs (3 funções)
+
+**Funções afetadas:**
+- `get_sales_dashboard_summary_flexible`
+- `get_sales_team_vgv_ranking_flexible`
+- `get_sales_broker_vgv_ranking_flexible`
+
+**Por que é real:** expõem VGV (faturamento), rankings de equipes e de corretores. Um usuário com acesso apenas a Férias ou Escalas pode ler todo o desempenho comercial chamando essas RPCs diretamente. Dado que Vendas é justamente o módulo com regra de visibilidade de VGV (memória do projeto), essa exposição contradiz a política existente.
+
+**Veredicto:** **NÃO é falso positivo. Tratar.**
+
+---
 
 ## Plano de correção
 
-1. **Criar uma função única para resolver venda por período**
-   - Prioridade 1: usar `dias_vendidos_q1` e `dias_vendidos_q2`, quando existirem.
-   - Prioridade 2: quando não existirem, inferir pelo gozo real apenas se a soma bater com `dias_vendidos`.
-   - Prioridade 3: fallback legado usando `quinzena_venda`, mas com venda acima de 15 distribuída corretamente.
+Criar **uma única migration** que adiciona um guard de autorização no topo de cada função, mantendo a assinatura e o comportamento atual:
 
-2. **Corrigir o salvamento no `FeriasDialog`**
-   - Ao salvar férias com venda, gravar explicitamente:
-     - `dias_vendidos_q1`
-     - `dias_vendidos_q2`
-   - Para o Diego, o payload deve ficar:
-     - `dias_vendidos = 20`
-     - `dias_vendidos_q1 = 5`
-     - `dias_vendidos_q2 = 15`
-   - Isso remove a ambiguidade e impede inversões futuras.
+### Padrão para funções de escrita (Escalas)
+```sql
+IF NOT public.can_edit_system(auth.uid(), 'escalas') THEN
+  RAISE EXCEPTION 'Acesso negado: permissão de edição do módulo Escalas necessária';
+END IF;
+```
 
-3. **Corrigir a página `/ferias/ferias`**
-   - Buscar também o campo `tipo` em `ferias_gozo_periodos`.
-   - Usar a função única para exibir o campo “Venda”.
-   - O Diego passará a aparecer como:
-     - `1º período: 5 dias`
-     - `2º período: 15 dias`
+### Padrão para funções de leitura (Escalas)
+```sql
+IF NOT public.can_view_system(auth.uid(), 'escalas') THEN
+  RAISE EXCEPTION 'Acesso negado: acesso ao módulo Escalas necessário';
+END IF;
+```
 
-4. **Corrigir o diálogo de premiação**
-   - Usar a mesma regra única de venda por período.
-   - Assim o lançamento de premiação vai considerar o período certo, sem inverter gozo e venda.
+### Padrão para funções de Vendas
+```sql
+IF NOT public.can_view_system(auth.uid(), 'vendas') THEN
+  RAISE EXCEPTION 'Acesso negado: acesso ao módulo Vendas necessário';
+END IF;
+```
 
-5. **Corrigir registros antigos já inconsistentes**
-   - Para registros antigos sem `dias_vendidos_q1/q2`, a tela continuará inferindo quando possível.
-   - Se os dados antigos forem ambíguos, o sistema não deve inventar o contrário: deve usar o fallback legado ou exigir edição/salvamento do registro para preencher a divisão explícita.
+### Passos
+1. **Migration única** com `CREATE OR REPLACE FUNCTION` para as 15 funções listadas, preservando corpo atual + adicionando o guard como primeira instrução do `BEGIN`.
+2. **Verificação no frontend:** as chamadas existentes (hooks `useSaturdayQueue`, `useLocationRotationQueue`, dashboards de Vendas, etc.) já são feitas por usuários com acesso ao respectivo módulo — nenhuma alteração de UI necessária. Apenas usuários sem permissão receberão erro, que é o comportamento desejado.
+3. **Atualizar memória de segurança** após aplicar, registrando que esses RPCs agora exigem `can_view_system`/`can_edit_system`.
+4. **Marcar findings como fixed** após confirmação do usuário.
 
-## Resultado esperado
+### Observação
+Nenhuma quebra funcional esperada: o app já usa `ProtectedRoute` + `SystemGuard` para garantir que só quem tem acesso ao módulo abra as telas que chamam essas RPCs. O guard no banco apenas fecha o bypass via API direta (PostgREST).
 
-- Diego com 20 dias vendidos será exibido como `1º período: 5 dias` e `2º período: 15 dias`.
-- Rejane com 10 dias vendidos no primeiro e 5 no segundo será exibida e premiada corretamente.
-- A lógica deixa de depender de interpretação invertida entre “dias gozados” e “dias vendidos”.
+Se aprovado, implemento a migration e atualizo a memória de segurança.
