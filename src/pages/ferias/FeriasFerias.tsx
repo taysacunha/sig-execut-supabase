@@ -13,7 +13,8 @@ import {
   Loader2, Edit, Eye, Plus, Sparkles, CalendarMinus,
   FileText, Clock, XCircle, Download, ArrowUpDown, Printer,
   ChevronLeft, ChevronRight, Trash2, ChevronDown, ChevronUp,
-  Send, Undo2, AlertCircle, HelpCircle, SlidersHorizontal, X
+  Send, Undo2, AlertCircle, HelpCircle, SlidersHorizontal, X,
+  Award, ChevronRight as ChevronRightIcon
 } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -43,6 +44,10 @@ import { FormularioAnualDialog } from "@/components/ferias/formulario/Formulario
 import { FormularioAnualViewDialog } from "@/components/ferias/formulario/FormularioAnualViewDialog";
 import { FormularioPDFGenerator } from "@/components/ferias/relatorios/FormularioPDFGenerator";
 import { PeriodosAquisitivosTab } from "@/components/ferias/ferias/PeriodosAquisitivosTab";
+import { PremiacaoDialog } from "@/components/ferias/ferias/PremiacaoDialog";
+import { useFeriasPremiacoes, useDeletePremiacao, type FeriasPremiacao } from "@/hooks/ferias/useFeriasPremiacoes";
+import { gerarPremiacaoPDF } from "@/lib/premiacaoPdf";
+import { formatBRL } from "@/lib/premiacaoCalc";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { useUserRole } from "@/hooks/useUserRole";
 import { usePagination } from "@/hooks/usePagination";
