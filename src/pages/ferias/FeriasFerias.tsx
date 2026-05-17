@@ -52,7 +52,7 @@ import {
 } from "@/hooks/ferias/useFeriasPremiacoes";
 import { ExportacaoCell, RecebimentoCell } from "@/components/ferias/ferias/PremiacaoSubRow";
 import { gerarPremiacaoPDF } from "@/lib/premiacaoPdf";
-import { formatBRL } from "@/lib/premiacaoCalc";
+import { formatBRL, calcularPremiacao } from "@/lib/premiacaoCalc";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { useUserRole } from "@/hooks/useUserRole";
 import { usePagination } from "@/hooks/usePagination";
@@ -1112,6 +1112,7 @@ export default function FeriasFerias() {
                                         <TableHead>Datas de gozo</TableHead>
                                         <TableHead>Vendidos / Gozados</TableHead>
                                         <TableHead>Valor mensal</TableHead>
+                                        <TableHead>Valor recebido</TableHead>
                                         <TableHead>Recebimento</TableHead>
                                         <TableHead>Última exportação</TableHead>
                                         <TableHead>Recebimento atestado</TableHead>
@@ -1127,6 +1128,7 @@ export default function FeriasFerias() {
                                             <TableCell className="text-sm">{formatPeriodo(p.data_inicio, p.data_fim)}</TableCell>
                                             <TableCell className="text-sm">{p.dias_vendidos}d / {p.dias_gozados}d</TableCell>
                                             <TableCell className="text-sm">{formatBRL(Number(p.valor_premiacao))}</TableCell>
+                                            <TableCell className="text-sm">{formatBRL(calcularPremiacao(Number(p.valor_premiacao), p.dias_vendidos as any).recebe)}</TableCell>
                                             <TableCell className="text-sm">{format(parseISO(p.data_recebimento), "dd/MM/yyyy")}</TableCell>
                                             <TableCell>
                                               <ExportacaoCell
