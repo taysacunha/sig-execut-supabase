@@ -273,6 +273,30 @@ export default function FeriasFerias() {
     return map;
   }, [gozoPeriodos]);
 
+  // Premiações por férias
+  const { data: premiacoesByFeriasId = {} } = useFeriasPremiacoes(allFeriasIds);
+  const deletePremiacao = useDeletePremiacao();
+
+  const toggleExpand = useCallback((id: string) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  async function reprintPremiacao(p: FeriasPremiacao, colaboradorNome: string) {
+    await gerarPremiacaoPDF({
+      colaborador: colaboradorNome,
+      periodo: p.periodo,
+      dataInicio: p.data_inicio,
+      dataFim: p.data_fim,
+      dataRecebimento: p.data_recebimento,
+      valorMensal: Number(p.valor_premiacao),
+      diasVendidos: p.dias_vendidos as 0 | 5 | 10 | 15,
+    });
+  }
+
   // Fetch all afastamentos for the year to detect conflicts
   const feriasColabIds = useMemo(() => [...new Set(ferias.map(f => f.colaborador_id).filter(Boolean))], [ferias]);
   const { data: allAfastamentos = [] } = useQuery({
