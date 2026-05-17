@@ -77,25 +77,26 @@ export async function gerarPremiacaoPDF(input: PremiacaoPdfInput): Promise<void>
   }
 
   if (calc.cenario === 0) {
-    // Não vende — modelo página 1
-    row("PREMIAÇÃO", formatBRL(calc.valorMensal));
-    row("Comissão 15 dias", formatBRL(calc.quinzena));
-    row("1/3 da Comissão", formatBRL(calc.quinzena / 3));
-    row(`RECEBE DIA ${fmtDate(input.dataRecebimento)}`, formatBRL(calc.recebe), true);
+    // Não vende — recebe 1/3 da premiação
+    row("PREMIAÇÃO", formatBRL(calc.valorPremiacao));
+    row("Acréscimo de 1/3", formatBRL(calc.acrescimoUmTerco));
+    row(`RECEBIDO DIA ${fmtDate(input.dataRecebimento)}`, formatBRL(calc.recebe), true);
   } else {
-    // Vende 5 / 10 / 15 — modelos páginas 2/3/4
-    row("PREMIAÇÃO", formatBRL(calc.quinzena));
+    // Vende 5 / 10 / 15
+    row("PREMIAÇÃO", formatBRL(calc.valorPremiacao));
     row("Mais Acréscimo 1/3", formatBRL(calc.acrescimoUmTerco));
     row("TOTAL", formatBRL(calc.total), true);
     row(
       `VENDA DE ${calc.cenario} DIAS DE FÉRIAS (${quinzenaLabel} QUINZENA) + 1/3`,
-      formatBRL(calc.vendaParcelaComUmTerco)
+      formatBRL(calc.vendaParcela)
     );
-    row(
-      `1/3 DE FÉRIAS - REFERENTE A ${calc.diasGozados} DIAS USUFRUÍDO`,
-      formatBRL(calc.umTercoDiasGozados)
-    );
-    row(`RECEBE DIA ${fmtDate(input.dataRecebimento)}`, formatBRL(calc.recebe), true);
+    if (calc.cenario !== 15) {
+      row(
+        `1/3 DE FÉRIAS - REFERENTE A ${calc.diasGozados} DIAS USUFRUÍDO`,
+        formatBRL(calc.umTercoGozados)
+      );
+    }
+    row(`RECEBIDO DIA ${fmtDate(input.dataRecebimento)}`, formatBRL(calc.recebe), true);
   }
 
   // Assinatura
