@@ -257,7 +257,8 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
                   {calc.cenario === 0 ? (
                     <>
                       <tr><td>PREMIAÇÃO</td><td className="text-right">{formatBRL(calc.valorPremiacao)}</td></tr>
-                      <tr><td>Acréscimo de 1/3</td><td className="text-right">{formatBRL(calc.acrescimoUmTerco)}</td></tr>
+                      <tr><td>COMISSÃO 15 DIAS DE FÉRIAS</td><td className="text-right">{formatBRL(calc.comissao15)}</td></tr>
+                      <tr><td>1/3 SOBRE A COMISSÃO</td><td className="text-right">{formatBRL(calc.umTercoComissao)}</td></tr>
                       <tr className="font-bold"><td>RECEBIDO DIA {fmtDate(dataRecebimento)}</td><td className="text-right">{formatBRL(calc.recebe)}</td></tr>
                     </>
                   ) : (
