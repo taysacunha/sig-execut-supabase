@@ -259,7 +259,7 @@ export default function FeriasFerias() {
       if (allFeriasIds.length === 0) return [];
       const { data, error } = await supabase
         .from("ferias_gozo_periodos" as any)
-        .select("id, ferias_id, numero, dias, data_inicio, data_fim, referencia_periodo")
+        .select("id, ferias_id, numero, dias, data_inicio, data_fim, referencia_periodo, tipo")
         .in("ferias_id", allFeriasIds)
         .order("numero");
       if (error) throw error;
