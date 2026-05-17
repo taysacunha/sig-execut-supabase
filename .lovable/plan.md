@@ -1,32 +1,39 @@
 ## Problema
 
-Na aba **Férias** (tabela principal em `FeriasFerias.tsx`, coluna "Períodos"), quando o registro é padrão (não-flexível, não-exceção) e o colaborador vendeu dias de um período, as datas exibidas continuam sendo a quinzena inteira (15 dias). Exemplo: Lidiane vendeu 5 dias do 1º período — deveria aparecer `04/05/2026 a 13/05/2026` (10 dias de gozo), mas aparece `04/05/2026 a 18/05/2026` (15 dias).
+Quando um período é totalmente vendido (15 dias), ele desaparece da coluna "Períodos" da aba Férias:
 
-A aba **Contador** (na mesma página e no `ContadorPDFGenerator.tsx`) já trata isso via `calcAdjustedPeriodo` / `calcularDiasContador` — daí a inconsistência entre abas.
+- **Ramo padrão**: `calcAdjustedPeriodo` retorna apenas `"Vendido"` (sem o intervalo de datas).
+- **Ramo flexível**: só são listados os sub-períodos de gozo cadastrados em `ferias_gozo_periodos`. Se o colaborador vendeu o 1º período inteiro, não existe sub-período de gozo para ele → o 1º período não é exibido (caso do Pedro).
+- **Ramo `gozo_diferente`**: omite o período se `gozo_quinzenaN_*` estiver vazio.
+
+O usuário quer que os **dois períodos sempre apareçam**, com suas datas oficiais, e a venda seja sinalizada ao lado — sem substituir o intervalo.
 
 ## Correção
 
-Aplicar a mesma lógica de ajuste de data no render da coluna "Períodos" da aba Férias (linhas 1038-1046 de `src/pages/ferias/FeriasFerias.tsx`) e no `FeriasViewDialog.tsx` (cards "1º Período / 2º Período (Direito)").
+### `src/pages/ferias/FeriasFerias.tsx` — coluna "Períodos" (linhas 1038-1064)
 
-Regra de cálculo de dias vendidos por período (em ordem de prioridade, igual à coluna "Venda"):
+Reestruturar para sempre renderizar dois blocos (1º e 2º período). Por bloco:
 
-1. `dias_vendidos_q1` / `dias_vendidos_q2` (colunas explícitas)
-2. Derivar de `ferias_gozo_periodos` (tipo `vender`) — `15 - gozo_ref_n`
-3. Legado: `dias_vendidos` + `quinzena_venda` (1 ou 2)
+1. Rótulo fino `1º período` / `2º período` (texto pequeno, `text-muted-foreground`).
+2. Datas oficiais (`quinzenaN_inicio` – `quinzenaN_fim`).
+   - Se `quinzena2_inicio` estiver vazio → badge `2º pendente` (mantém).
+3. Linha auxiliar:
+   - Se `v === 15` → badge `Vendido (15d)`.
+   - Se `0 < v < 15` → texto `Gozo: DD/MM a DD/MM · Vendido: Y dias` (usa `calcAdjustedPeriodo`).
+   - **Ramo flexível**: listar sub-períodos de `ferias_gozo_periodos` que referenciam aquele período, mantendo o formato atual de cada linha.
+   - **Ramo `gozo_diferente`**: mostrar linha "Gozo: `gozo_quinzenaN_inicio`–`gozo_quinzenaN_fim`".
 
-Para cada quinzena (Q1 e Q2):
-- `dias_gozo = 15 - dias_vendidos_do_periodo`
-- Se `dias_gozo <= 0` → exibir badge "Vendido (15 dias)"
-- Senão → `inicio` a `addDays(inicio, dias_gozo - 1)` usando `parseISO` + `format` (mesmo padrão do `calcAdjustedPeriodo`)
+Isso unifica padrão, flexível e gozo_diferente sob a mesma estrutura visual.
 
-## Arquivos afetados
+### `src/components/ferias/ferias/FeriasViewDialog.tsx`
 
-1. `src/pages/ferias/FeriasFerias.tsx` — extrair helper `getVendaPorPeriodo(f)` (retorna `{ v1, v2 }`) reaproveitando a lógica já existente na célula "Venda" (linhas 1049-1084), e usar tanto na coluna "Períodos" (linhas 1038-1046) quanto na coluna "Venda" — eliminando duplicação. Reusar `calcAdjustedPeriodo` (já existe, linha 583) para renderizar as datas ajustadas.
-
-2. `src/components/ferias/ferias/FeriasViewDialog.tsx` — nos cards "1º Período (Direito)" e "2º Período (Direito)" (linhas 109-127), aplicar o mesmo ajuste: exibir a data final encurtada e um sub-texto "(N dias vendidos)" quando aplicável. Reusar o mesmo helper (copiar/inline a lógica, pois o dialog não tem acesso direto a hooks da página).
+Aplicar o mesmo padrão nos cards "1º Período (Direito)" e "2º Período (Direito)":
+- Sempre exibir as datas oficiais completas.
+- Se `v ≥ 1` → badge `Vendido (Nd)`.
+- Se `0 < v < 15` → segunda linha com intervalo de gozo via `renderPeriodoAjustado`.
 
 ## Fora do escopo
 
-- Aba Contador (já está correta).
-- Aba Exceção (já tratada anteriormente).
-- Estrutura de dados / migrations (apenas apresentação).
+- `getVendaPorPeriodo` (cálculo) — já correto.
+- Aba Contador / PDF — já consistente.
+- Migrations e dados.

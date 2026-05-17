@@ -1035,48 +1035,67 @@ export default function FeriasFerias() {
                            </TableCell>
                           <TableCell>{f.colaborador?.setor_titular?.nome || "—"}</TableCell>
                           <TableCell className="text-sm">
-                            {gozoPeriodosByFeriasId[f.id]?.length
-                              ? (() => {
-                                  const periods = gozoPeriodosByFeriasId[f.id];
-                                  const refsUsed = new Set(periods.map(p => p.referencia_periodo));
-                                  return (
-                                    <>
-                                      {periods.map((p) => (
-                                        <div key={p.id}>{formatPeriodo(p.data_inicio, p.data_fim)} <span className="text-muted-foreground">({p.dias}d)</span></div>
-                                      ))}
-                                      {!refsUsed.has(2) && f.quinzena2_inicio && f.quinzena2_fim && (
-                                        <div>{formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim)}</div>
-                                      )}
-                                      {!refsUsed.has(2) && !f.quinzena2_inicio && (
-                                        <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 gap-1 text-xs mt-1"><Clock className="h-3 w-3" />2º pendente</Badge>
-                                      )}
-                                    </>
-                                  );
-                                })()
-                              : f.gozo_diferente && f.gozo_quinzena1_inicio
-                                ? (
-                                  <>
-                                    <div>{formatPeriodo(f.gozo_quinzena1_inicio, f.gozo_quinzena1_fim!)}</div>
-                                    {f.gozo_quinzena2_inicio && f.gozo_quinzena2_fim && (
-                                      <div>{formatPeriodo(f.gozo_quinzena2_inicio, f.gozo_quinzena2_fim)}</div>
+                            {(() => {
+                              const { v1, v2 } = getVendaPorPeriodo(f);
+                              const flexPeriods = gozoPeriodosByFeriasId[f.id] || [];
+                              const isFlex = flexPeriods.length > 0;
+                              const isGozoDif = !isFlex && !!f.gozo_diferente && !!f.gozo_quinzena1_inicio;
+
+                              const renderBloco = (
+                                num: 1 | 2,
+                                oficialIni: string | null,
+                                oficialFim: string | null,
+                                vendido: number,
+                                gozoDifIni: string | null,
+                                gozoDifFim: string | null,
+                              ) => {
+                                const subs = flexPeriods.filter((p: any) => p.referencia_periodo === num);
+                                return (
+                                  <div className="space-y-0.5">
+                                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{num}º período</div>
+                                    {oficialIni && oficialFim ? (
+                                      <div>{formatPeriodo(oficialIni, oficialFim)}</div>
+                                    ) : (
+                                      <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 gap-1 text-xs">
+                                        <Clock className="h-3 w-3" />{num}º pendente
+                                      </Badge>
                                     )}
-                                  </>
-                                )
-                                : (
-                                  (() => {
-                                    const { v1, v2 } = getVendaPorPeriodo(f);
-                                    return (
-                                      <>
-                                        <div>{calcAdjustedPeriodo(f.quinzena1_inicio, f.quinzena1_fim, v1)}</div>
-                                        {f.quinzena2_inicio && f.quinzena2_fim
-                                          ? <div>{calcAdjustedPeriodo(f.quinzena2_inicio, f.quinzena2_fim, v2)}</div>
-                                          : <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 gap-1 text-xs mt-1"><Clock className="h-3 w-3" />2º pendente</Badge>
-                                        }
-                                      </>
-                                    );
-                                  })()
-                                )
-                            }
+                                    {/* Sub-períodos flexíveis (gozo) */}
+                                    {subs.map((p: any) => (
+                                      <div key={p.id} className="text-xs text-muted-foreground">
+                                        Gozo: {formatPeriodo(p.data_inicio, p.data_fim)} ({p.dias}d)
+                                      </div>
+                                    ))}
+                                    {/* Gozo em datas diferentes (legado) */}
+                                    {isGozoDif && gozoDifIni && gozoDifFim && (
+                                      <div className="text-xs text-muted-foreground">
+                                        Gozo: {formatPeriodo(gozoDifIni, gozoDifFim)}
+                                      </div>
+                                    )}
+                                    {/* Gozo ajustado (ramo padrão, venda parcial) */}
+                                    {!isFlex && !isGozoDif && oficialIni && oficialFim && vendido > 0 && vendido < 15 && (
+                                      <div className="text-xs text-muted-foreground">
+                                        Gozo: {calcAdjustedPeriodo(oficialIni, oficialFim, vendido)}
+                                      </div>
+                                    )}
+                                    {/* Sinalização de venda */}
+                                    {vendido >= 15 && (
+                                      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px]">Vendido (15d)</Badge>
+                                    )}
+                                    {vendido > 0 && vendido < 15 && (
+                                      <div className="text-[10px] text-primary">Vendido: {vendido} dias</div>
+                                    )}
+                                  </div>
+                                );
+                              };
+
+                              return (
+                                <div className="space-y-2">
+                                  {renderBloco(1, f.quinzena1_inicio, f.quinzena1_fim, v1, f.gozo_quinzena1_inicio, f.gozo_quinzena1_fim)}
+                                  {renderBloco(2, f.quinzena2_inicio, f.quinzena2_fim, v2, f.gozo_quinzena2_inicio, f.gozo_quinzena2_fim)}
+                                </div>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>{(() => {
                             if (!f.vender_dias || !f.dias_vendidos) return <span className="text-muted-foreground text-xs">—</span>;
