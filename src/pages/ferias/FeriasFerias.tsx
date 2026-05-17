@@ -1046,7 +1046,43 @@ export default function FeriasFerias() {
                                 )
                             }
                           </TableCell>
-                          <TableCell>{f.vender_dias && f.dias_vendidos ? <Badge variant="outline" className="text-xs">{f.dias_vendidos} dias</Badge> : <span className="text-muted-foreground text-xs">—</span>}</TableCell>
+                          <TableCell>{(() => {
+                            if (!f.vender_dias || !f.dias_vendidos) return <span className="text-muted-foreground text-xs">—</span>;
+                            const q1Col = (f as any).dias_vendidos_q1 as number | null | undefined;
+                            const q2Col = (f as any).dias_vendidos_q2 as number | null | undefined;
+                            // Prioridade 1: colunas explícitas dias_vendidos_q1/q2.
+                            let v1: number | null = null;
+                            let v2: number | null = null;
+                            if (q1Col != null || q2Col != null) {
+                              v1 = Math.max(0, q1Col || 0);
+                              v2 = Math.max(0, q2Col || 0);
+                            } else {
+                              // Prioridade 2: derivar de ferias_gozo_periodos (tipo 'vender').
+                              const periods = (gozoPeriodosByFeriasId[f.id] || []) as any[];
+                              const venderPeriods = periods.filter((p: any) => (p.tipo ?? "vender") === "vender");
+                              if (venderPeriods.length > 0) {
+                                const gozo1 = venderPeriods.filter((p: any) => p.referencia_periodo === 1).reduce((s: number, p: any) => s + (p.dias || 0), 0);
+                                const gozo2 = venderPeriods.filter((p: any) => p.referencia_periodo === 2).reduce((s: number, p: any) => s + (p.dias || 0), 0);
+                                const venda1 = Math.max(0, 15 - gozo1);
+                                const venda2 = Math.max(0, 15 - gozo2);
+                                if (venda1 + venda2 > 0 && Math.abs((venda1 + venda2) - f.dias_vendidos) <= 1) {
+                                  v1 = venda1;
+                                  v2 = venda2;
+                                }
+                              }
+                            }
+                            if (v1 != null && v2 != null) {
+                              return (
+                                <div className="flex flex-col gap-1">
+                                  {v1 > 0 && <Badge variant="outline" className="text-xs w-fit">1º período: {v1} dias</Badge>}
+                                  {v2 > 0 && <Badge variant="outline" className="text-xs w-fit">2º período: {v2} dias</Badge>}
+                                </div>
+                              );
+                            }
+                            // Fallback: comportamento legado.
+                            const qv = f.quinzena_venda === 1 || f.quinzena_venda === 2 ? f.quinzena_venda : null;
+                            return <Badge variant="outline" className="text-xs">{f.dias_vendidos} dias{qv ? ` (${qv}º período)` : ""}</Badge>;
+                          })()}</TableCell>
                           <TableCell><Badge variant="outline" className={statusColors[f.status]}>{statusLabels[f.status] || f.status}</Badge></TableCell>
                           <TableCell>{f.origem === "formulario_anual" ? <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 gap-1"><Sparkles className="h-3 w-3" />Gerada</Badge> : <span className="text-muted-foreground text-xs">Manual</span>}</TableCell>
                           <TableCell>
