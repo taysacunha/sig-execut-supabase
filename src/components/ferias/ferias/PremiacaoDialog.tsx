@@ -121,6 +121,8 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
   }, [periodo, editing]);
 
   const diasVendidos = useMemo(() => diasVendidosPorPeriodo(ferias, periodo), [ferias, periodo]);
+  const diasVendidosReal = useMemo(() => diasVendidosRealPorPeriodo(ferias, periodo), [ferias, periodo]);
+  const diasGozadosReal = Math.max(0, 15 - diasVendidosReal);
   const valorNum = Number((valor || "0").replace(",", "."));
   const calc = useMemo(() => valorNum > 0 ? calcularPremiacao(valorNum, diasVendidos) : null, [valorNum, diasVendidos]);
 
@@ -224,7 +226,7 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
             <div>
               <Label>Dias vendidos nesta quinzena</Label>
               <div className="h-10 flex items-center px-3 border rounded-md bg-muted/30 text-sm">
-                {diasVendidos} dias vendidos · {15 - diasVendidos} dias usufruídos
+                {diasVendidosReal} dias vendidos · {diasGozadosReal} dias usufruídos
               </div>
             </div>
             <div>
