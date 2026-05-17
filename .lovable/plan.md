@@ -1,64 +1,62 @@
-# Remover logs de auditoria sem alterações reais
+# Plano: validar correções de segurança sem quebrar o sistema
 
-## Causa raiz
+## Contexto
 
-A função PostgreSQL `audit_module_changes()` calcula `v_changed_fields` comparando `to_jsonb(NEW)` com `to_jsonb(OLD)` sem nenhum filtro. Toda tabela do módulo Férias possui um trigger `BEFORE UPDATE` (`set_..._updated_at`) que executa `handle_updated_at()` e força `NEW.updated_at = now()`.
+As últimas migrations de segurança adicionaram guards `can_view_system(auth.uid(), 'escalas')` em 10 funções RPC do dashboard. O risco é bloquear usuários que hoje veem o dashboard mas **não** têm linha em `system_access` para `escalas` (por exemplo, super_admin/admin que só dependem de `has_role`).
 
-Resultado: qualquer `UPDATE` (mesmo quando o usuário submete o formulário do colaborador sem mudar nada de fato, ou quando uma rotina interna toca a linha) sempre tem ao menos um campo "alterado" (`updated_at`), e a auditoria grava o log. No painel, o componente `AuditLogsPanel` filtra `updated_at`/`created_at` e mostra "Apenas o timestamp foi atualizado" ou "Sem campos alterados" — exatamente o que o Bruno está vendo.
+Edge functions `log-dev-work` e `deactivate-expired-notice` foram protegidas com secrets. Como você não tem certeza se são usadas, vamos tratá-las separadamente.
 
-Isso afeta todas as tabelas auditadas (Férias, Vendas, Escalas, Estoque), não apenas `ferias_colaboradores`.
+## Etapa 1 — Você testa o dashboard de Escalas (manual, 2 min)
 
-## Solução
+1. Abra `/escalas` logado com seu usuário admin.
+2. Abra `/escalas` logado com um usuário comum que normalmente vê escalas.
+3. Me reporte:
+  - Os cards/gráficos carregam normalmente? OU
+  - Aparece erro "Access denied: escalas system access required" / dados vazios / spinner infinito? Cerregaram normalmente. Tanto com o usuário admin quando com usuário comum.
 
-### 1. Atualizar `audit_module_changes()` para ignorar campos técnicos
+## Etapa 2 — Ajustar guards (só se Etapa 1 acusar bloqueio)
 
-Nova migration que recria a função filtrando do array `v_changed_fields` os campos:
-`id`, `created_at`, `updated_at`, `created_by`.
-
-Após o filtro, se o array ficar vazio em um `UPDATE`, **não insere log**. Mantém todo o resto da lógica atual (classificação de módulo, captura de usuário, INSERT/DELETE inalterados, `SECURITY DEFINER`, `SET search_path = public`).
-
-Esboço da mudança no bloco `UPDATE`:
-
-```sql
-SELECT ARRAY_AGG(changes.key) INTO v_changed_fields
-FROM (
-  SELECT key
-  FROM jsonb_each(v_new_data)
-  WHERE v_old_data->key IS DISTINCT FROM v_new_data->key
-    AND key NOT IN ('id', 'created_at', 'updated_at', 'created_by')
-) AS changes;
-```
-
-E a guarda final:
+Trocar o guard restritivo por um permissivo que cobre todos os perfis legítimos:
 
 ```sql
-IF TG_OP <> 'UPDATE'
-   OR (v_changed_fields IS NOT NULL AND array_length(v_changed_fields, 1) > 0) THEN
-  INSERT INTO public.module_audit_logs (...) VALUES (...);
+IF NOT (
+  public.can_view_system(auth.uid(), 'escalas')
+  OR public.has_role(auth.uid(), 'admin')
+  OR public.has_role(auth.uid(), 'super_admin')
+  OR public.has_role(auth.uid(), 'manager')
+) THEN
+  RAISE EXCEPTION 'Access denied: escalas system access required';
 END IF;
 ```
 
-### 2. Limpar logs históricos inúteis
+Aplicado nas 10 funções: `get_top_brokers`, `get_top_locations`, `get_shift_stats`, `get_weekly_assignments`, `get_dashboard_counts`, `get_top_brokers_hybrid`, `get_top_locations_hybrid`, `get_broker_performance_hybrid`, `get_location_performance_hybrid`, `get_dashboard_stats_hybrid`.
 
-Na mesma migration, remover registros já gravados onde nenhum campo relevante mudou:
+Migration nova, não edita as anteriores.
 
-```sql
-DELETE FROM public.module_audit_logs
-WHERE action = 'UPDATE'
-  AND (
-    changed_fields IS NULL
-    OR changed_fields <@ ARRAY['id','created_at','updated_at','created_by']::text[]
-  );
-```
+## Etapa 3 — Edge functions órfãs
 
-Isso esvazia a poluição visível na tela de Auditoria — Férias e Folgas (e nos outros módulos), sem afetar logs reais.
+Como você não usa ativamente:
 
-### 3. Validação
+- `**log-dev-work**` — utilitária de log de desenvolvimento. Recomendo **deletar**: não tem chamadas no frontend e não há motivo para manter uma function exposta com chave.
+- `**deactivate-expired-notice**` — provável job de cron. Se não estiver agendada no `pg_cron`, pode deletar também. Vou verificar antes se há job agendado.
 
-- Após a migration, abrir a página `/ferias/auditoria` e confirmar que os logs "Sem campos alterados" / "Apenas timestamp atualizado" do Bruno desapareceram.
-- Editar um colaborador alterando um campo real → o log aparece normalmente.
-- Editar um colaborador e salvar sem mudar nada → nenhum log novo é gerado.
+Se preferir manter "por garantia", deixamos como está — só não funcionará sem os secrets `LOG_DEV_WORK_KEY` / `CRON_SECRET` cadastrados, o que é o estado seguro.
 
-## Sem alterações no frontend
+## Por que isso não vai quebrar mais nada
 
-`AuditLogsPanel.tsx` já trata os dois cenários corretamente; nenhuma mudança em React é necessária. O ajuste é puramente na função SQL + limpeza de dados.
+- Etapa 1 é só observação, não muda código.
+- Etapa 2 só **amplia** quem tem acesso, nunca restringe mais.
+- Etapa 3 remove código não usado; o sistema "que roda 100% hoje" não depende dele.
+- As migrations de `search_path` já aplicadas são neutras em comportamento — só fixam o schema padrão.
+
+## Detalhes técnicos
+
+- Nenhuma migration existente será editada (são read-only). Tudo via nova migration timestamped.
+- Nenhum código frontend muda nesta rodada.
+- Se Etapa 1 estiver 100% OK, pulamos Etapa 2 e fechamos só a Etapa 3.
+
+## O que eu preciso de você antes de implementar
+
+- Resultado do teste da Etapa 1.
+- Confirmação de que posso deletar as duas edge functions (ou se prefere manter).
+- Não faço ideia se utilizo a `log-dev-work e deactivate-expired-notice. Verifique tudo antes de qualquer ação que possa prejudicar. Já que a etapa 1 passou, a etapa 2 não será executada, confirma?`
