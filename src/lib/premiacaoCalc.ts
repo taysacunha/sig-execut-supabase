@@ -1,60 +1,56 @@
 // Cálculos da premiação por quinzena, conforme planilha "FÉRIAS_PREMIAÇÃO_CÁLCULOS".
-// O usuário digita o VALOR MENSAL da premiação. O valor por quinzena = mensal / 2.
+// Mapeamento das células da planilha:
+//   B4 = valor da premiação (input do usuário)
+//   B5 = B4 / 3                 (acréscimo de 1/3)
+//   B6 = B4 + B5                (total)
+//   B7 = B6 / 30 * dias_vendidos
+//   B8 = B5 / 30 * dias_gozados (omitido quando dias_vendidos = 15)
+//   B9 = B7 + B8                (total a receber)
 //
-// Cenários (por quinzena):
-// - Vende 0 (gozo 15): comissão 15d = quinzena; Recebe = quinzena / 3
-// - Vende 5 (gozo 10): base=quinzena; +1/3=quinzena/3; total=base+1/3=quinzena*4/3
-//                       venda5+1/3 = total*5/30; 1/3·10d = (quinzena/3)*10/30
-//                       Recebe = venda5+1/3 + 1/3·10d  (≈ quinzena/3)
-// - Vende 10 (gozo 5): venda10+1/3 = total*10/30; 1/3·5d = (quinzena/3)*5/30
-//                       Recebe = venda10+1/3 + 1/3·5d
-// - Vende 15 (gozo 0): venda15+1/3 = total*15/30 = total/2
-//                       Recebe = total/2
+// Cenário "não vende" (dias_vendidos = 0, gozo 15):
+//   PREMIAÇÃO = B4, Acréscimo 1/3 = B5, Recebe = B5.
 
 export type CenarioVenda = 0 | 5 | 10 | 15;
 
 export interface PremiacaoCalculo {
   cenario: CenarioVenda;
   diasGozados: 0 | 5 | 10 | 15;
-  valorMensal: number;
-  quinzena: number;       // mensal / 2
-  acrescimoUmTerco: number; // quinzena / 3
-  total: number;          // quinzena + 1/3 = quinzena*4/3
-  vendaParcelaComUmTerco: number; // 0 se vende 0
-  umTercoDiasGozados: number;     // 0 se vende 15
-  recebe: number;         // total a receber
+  valorPremiacao: number;     // B4
+  acrescimoUmTerco: number;   // B5
+  total: number;              // B6
+  vendaParcela: number;       // B7
+  umTercoGozados: number;     // B8 (0 quando vende 15)
+  recebe: number;             // B9
 }
 
 function r2(n: number) { return Math.round(n * 100) / 100; }
 
-export function calcularPremiacao(valorMensal: number, dias_vendidos: CenarioVenda): PremiacaoCalculo {
-  const quinzena = valorMensal / 2;
-  const acrescimoUmTerco = quinzena / 3;
-  const total = quinzena + acrescimoUmTerco; // quinzena * 4/3
+export function calcularPremiacao(valorPremiacao: number, dias_vendidos: CenarioVenda): PremiacaoCalculo {
+  const b4 = valorPremiacao;
+  const b5 = b4 / 3;
+  const b6 = b4 + b5;
   const diasGozados = (15 - dias_vendidos) as 0 | 5 | 10 | 15;
 
-  let vendaParcelaComUmTerco = 0;
-  let umTercoDiasGozados = 0;
+  let b7 = 0;
+  let b8 = 0;
   let recebe = 0;
 
   if (dias_vendidos === 0) {
-    // Não vende: recebe 1/3 da comissão (= quinzena)
-    recebe = quinzena / 3;
+    recebe = b5;
   } else {
-    vendaParcelaComUmTerco = (total * dias_vendidos) / 30;
-    umTercoDiasGozados = (acrescimoUmTerco * diasGozados) / 30;
-    recebe = vendaParcelaComUmTerco + umTercoDiasGozados;
+    b7 = (b6 / 30) * dias_vendidos;
+    b8 = dias_vendidos === 15 ? 0 : (b5 / 30) * diasGozados;
+    recebe = b7 + b8;
   }
 
   return {
     cenario: dias_vendidos,
     diasGozados,
-    valorMensal: r2(valorMensal),
-    quinzena: r2(quinzena),
-    acrescimoUmTerco: r2(acrescimoUmTerco),
-    total: r2(total),
-    vendaParcelaComUmTerco: r2(vendaParcelaComUmTerco),
-    umTercoDiasGozados: r2(umTercoDiasGozados),
+    valorPremiacao: r2(b4),
+    acrescimoUmTerco: r2(b5),
+    total: r2(b6),
+    vendaParcela: r2(b7),
+    umTercoGozados: r2(b8),
     recebe: r2(recebe),
   };
 }

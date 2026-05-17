@@ -1,60 +1,63 @@
-## Indicadores visuais e confirmação de recebimento da Premiação
+## Correções na Premiação de Férias
 
-### 1. Banco de dados (nova migração)
+### 1) Erro "Could not find the table 'public.ferias_premiacoes' in the schema cache"
 
-Adicionar colunas em `ferias_premiacoes`:
+A tabela `ferias_premiacoes` (e as colunas de recebimento/exportação) ainda não foram aplicadas no Supabase — os arquivos em `db/migrations/` e `supabase/migrations/` existem, mas nunca foram executados.
 
-- `ultima_exportacao_pdf timestamptz NULL` — atualizado toda vez que o PDF é gerado (no lançamento e nas reimpressões). Pensando melhor é melhor abrir um campo para o usuário colocar qual data ele quer que apareça e é essa data que vai aparecer.
-- `recebimento_confirmado boolean NOT NULL DEFAULT false` — checkbox de atesto.
-- `recebimento_confirmado_em date NULL` — data preenchida pelo usuário ao marcar o checkbox.
-- `recebimento_confirmado_por uuid NULL` — registra quem confirmou (auditoria).
+**Ação:** rodar as duas migrações via ferramenta de migração do Supabase (em vez de só deixar o `.sql` no repositório), o que também regenera os types:
 
-Regra: ao desmarcar, `recebimento_confirmado_em` e `recebimento_confirmado_por` voltam a `NULL`.
+- `20260516120000_ferias_premiacoes.sql` (cria a tabela + RLS + triggers de ordem + auditoria)
+- `20260517120000_premiacao_recebimento.sql` (colunas `ultima_exportacao_pdf`, `recebimento_confirmado*` + trigger de validação)
 
-### 2. Hook `useFeriasPremiacoes`
+### 2) Cálculos corretos (planilha)
 
-- Novo mutation `touchExportacao(id)` → atualiza `ultima_exportacao_pdf = now()`.
-- Novo mutation `setRecebimento(id, confirmado, data)` → grava/limpa as três colunas.
-- Invalidar a query após cada mutation.
+Reescrever `src/lib/premiacaoCalc.ts` para refletir exatamente a planilha. O input passa a ser o **valor da premiação por quinzena (B4)** — não o valor mensal — porque é assim que a planilha trata.
 
-### 3. UI — Tabela de Férias (`FeriasFerias.tsx`)
+Fórmulas por cenário:
 
-**Indicador visual na linha do colaborador** (ao lado do nome):
 
-- Sem premiação lançada: nada.
-- 1 período lançado: badge âmbar `1/2 premiação`.
-- 2 períodos lançados, algum pendente de confirmação: badge azul `Premiação lançada`.
-- 2 períodos lançados e ambos confirmados: badge verde com check `Premiação quitada`.
-- Tooltip resume datas das últimas exportações e confirmações.
+| Célula | Fórmula                        | Vende 0  | Vende 5  | Vende 10 | Vende 15   |
+| ------ | ------------------------------ | -------- | -------- | -------- | ---------- |
+| B4     | input do usuário               | 1600     | 1600     | 1600     | 1600       |
+| B5     | B4 / 3                         | 533,33   | 533,33   | 533,33   | 533,33     |
+| B6     | B4 + B5                        | 2.133,33 | 2.133,33 | 2.133,33 | 2.133,33   |
+| B7     | B6 / 30 × `dias_vendidos`      | —        | 355,56   | 711,11   | 1.066,67   |
+| B8     | B5 / 30 × `dias_gozados`       | —        | 177,78   | 88,89    | 0 (omitir) |
+| B9     | B7 + B8 (ou B5 quando vende 0) | 533,33   | 533,33   | 800,00   | 1.066,67   |
 
-O botão `Award` já existente continua desabilitando quando `allDone`.
 
-**Dropdown (sub-tabela de premiações):** adicionar duas novas colunas após "Lançado em":
+Regras:
 
-- **Última exportação** — `dd/MM/yyyy HH:mm` ou `—`.
-- **Recebimento atestado** — Checkbox + DatePicker inline:
-  - Checkbox marca/desmarca a confirmação.
-  - Ao marcar, abre popover com `Input type="date"` (default = hoje) e botão Salvar; grava data e usuário.
-  - Ao desmarcar, AlertDialog pedindo confirmação; limpa os campos.
-  - Só habilitado para quem tem `can_edit_system('ferias')`.
-  - Exibido como `✓ 17/05/2026 (por Fulano)` quando confirmado.
+- `dias_gozados = 15 - dias_vendidos`.
+- Vende 0: PDF mostra apenas PREMIAÇÃO (B4), Acréscimo 1/3 (B5) e RECEBIDO DIA = B5.
+- Vende 15: omitir a linha "1/3 DE FÉRIAS REFERENTE A 0 DIAS USUFRUÍDO" (multiplicação por zero).
+- Atualizar `PremiacaoCalculo` (remover `valorMensal`/`quinzena`, renomear para `valorPremiacao`/`acrescimoUmTerco`/`total`/`vendaParcela`/`umTercoGozados`/`recebe`).
 
-**Geração de PDF:** o handler `reprintPremiacao` e o fluxo de lançamento inicial chamam `touchExportacao(p.id)` após `gerarPremiacaoPDF`, atualizando o timestamp em tela.
+### 3) Dialog "Lançar Premiação" + PDF
 
-### 4. Detalhes técnicos
-
-- A confirmação não bloqueia exclusão; apenas o gatilho de ordem (P2 antes de P1) continua valendo.
-- Auditoria automática via triggers existentes em `ferias_premiacoes` registra as mudanças no checkbox.
-- Tipos do Supabase serão regenerados após a migração.
+- **Remover** o campo "Data de emissão do PDF" do `PremiacaoDialog.tsx` e do payload.
+- A `data_recebimento` passa a ser usada também como `ultima_exportacao_pdf` ao gerar o PDF (já que ela é a referência única de quando foi emitido/recebido).
+- O label do input de valor muda de "Valor mensal da premiação" para **"Valor da premiação (B4)"** com placeholder de exemplo `1600,00`.
+- Em `premiacaoPdf.ts` e no preview, substituir `RECEBE DIA dd/mm/aaaa` por `**RECEBIDO DIA dd/mm/aaaa**` (mantendo caixa alta).
+- Em `useSetExportacaoPremiacao`, manter o uso da `data_recebimento` informada no momento do PDF (atualiza `ultima_exportacao_pdf` para essa data).
 
 ### Arquivos afetados
 
-- `db/migrations/<timestamp>_ferias_premiacoes_recebimento.sql` (+ espelho em `supabase/migrations/`)
-- `src/hooks/ferias/useFeriasPremiacoes.ts` — novos mutations.
-- `src/pages/ferias/FeriasFerias.tsx` — badge no nome, colunas no dropdown, chamada a `touchExportacao` após cada PDF.
-- `src/components/ferias/ferias/PremiacaoDialog.tsx` — após salvar, chama `touchExportacao` ao gerar o PDF.
+- `supabase/migrations/20260516120000_ferias_premiacoes.sql` — aplicar (já existente)
+- `supabase/migrations/20260517120000_premiacao_recebimento.sql` — aplicar (já existente)
+- `src/lib/premiacaoCalc.ts` — novas fórmulas
+- `src/lib/premiacaoPdf.ts` — usar novas chaves, omitir B8 quando vende 15, trocar "RECEBE" por "RECEBIDO"
+- `src/components/ferias/ferias/PremiacaoDialog.tsx` — remover campo de data de emissão; label do valor; preview com novas fórmulas e "RECEBIDO DIA"
+- `src/pages/ferias/FeriasFerias.tsx` — ao reimprimir PDF, passar `data_recebimento` como referência (sem popover separado de data de emissão)
 
-### Perguntas
+### Pergunta única
 
-1. O atesto de recebimento deve ser **por período** (uma linha = um checkbox, como proposto) ou **um único atesto por férias** cobrindo as duas quinzenas? Por período.
-2. Posso permitir **editar a data atestada** depois de confirmada (clicando na data exibida), ou só é possível desmarcar e marcar de novo? Sim. Não podendo ser a data de atesto menor do que a data de emissão.
+Para o cenário **"não vende" (gozo 15 dias)**, confirma que o recibo deve mostrar apenas:
+
+- PREMIAÇÃO = B4
+- Acréscimo 1/3 = B5
+- RECEBIDO DIA = **B5** (ou seja, 1/3 da premiação)? Sim. O cálculo de não vende está correto.
+
+É como já estava antes (e bate com a aba 1 da planilha), mas como você só descreveu as abas de 5/10/15, quero confirmar antes de mexer.
+
+Para finalizar, acabei de executar as duas migrations manualmente no supabase e passaram sem erros.

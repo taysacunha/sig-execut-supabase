@@ -90,7 +90,6 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
   const [dataRecebimento, setDataRecebimento] = useState<string>(editing?.data_recebimento ?? new Date().toISOString().slice(0, 10));
   const [dataInicio, setDataInicio] = useState<string>(editing?.data_inicio ?? "");
   const [dataFim, setDataFim] = useState<string>(editing?.data_fim ?? "");
-  const [dataEmissao, setDataEmissao] = useState<string>(editing?.ultima_exportacao_pdf ?? new Date().toISOString().slice(0, 10));
 
   const upsert = useUpsertPremiacao();
 
@@ -103,13 +102,11 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
       setDataRecebimento(editing.data_recebimento);
       setDataInicio(editing.data_inicio);
       setDataFim(editing.data_fim);
-      setDataEmissao(editing.ultima_exportacao_pdf ?? new Date().toISOString().slice(0, 10));
     } else {
       const initialPeriodo = hasP1 ? (hasP2 ? 1 : 2) : 1;
       setPeriodo(initialPeriodo);
       setValor("");
       setDataRecebimento(new Date().toISOString().slice(0, 10));
-      setDataEmissao(new Date().toISOString().slice(0, 10));
       const real = periodoGozoReal(ferias, gozoPeriodos, initialPeriodo);
       setDataInicio(real?.inicio || "");
       setDataFim(real?.fim || "");
@@ -146,7 +143,7 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
         dias_vendidos: diasVendidos,
         valor_premiacao: valorNum,
         data_recebimento: dataRecebimento,
-        ultima_exportacao_pdf: gerar ? dataEmissao : (editing?.ultima_exportacao_pdf ?? null),
+        ultima_exportacao_pdf: gerar ? dataRecebimento : (editing?.ultima_exportacao_pdf ?? null),
       } as any);
 
       if (gerar) {
@@ -156,7 +153,7 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
           dataInicio,
           dataFim,
           dataRecebimento,
-          valorMensal: valorNum,
+          valorPremiacao: valorNum,
           diasVendidos,
         });
       }
@@ -169,7 +166,7 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
     await gerarPremiacaoPDF({
       colaborador: ferias.colaborador?.nome || "—",
       periodo, dataInicio, dataFim, dataRecebimento,
-      valorMensal: valorNum, diasVendidos,
+      valorPremiacao: valorNum, diasVendidos,
     });
   }
 
@@ -234,25 +231,17 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
             </div>
           </div>
 
-  <div>
-    <Label>Data de emissão do PDF</Label>
-    <Input type="date" value={dataEmissao} onChange={(e) => setDataEmissao(e.target.value)} />
-    <p className="text-xs text-muted-foreground mt-1">
-      Data que ficará registrada como "última exportação" e usada como referência para o atesto de recebimento.
-    </p>
-  </div>
-
           {/* Valor */}
           <div>
-            <Label>Valor da premiação (mensal) R$</Label>
+            <Label>Valor da premiação (B4) R$</Label>
             <Input
               inputMode="decimal"
-              placeholder="Ex: 680.00"
+              placeholder="Ex: 1600.00"
               value={valor}
               onChange={(e) => setValor(e.target.value)}
             />
             <p className="text-xs text-muted-foreground mt-1">
-              O sistema divide por 2 para obter a comissão da quinzena.
+              Valor base da quinzena (B4) — equivale a "PREMIAÇÃO" da planilha.
             </p>
           </div>
 
@@ -267,19 +256,20 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
                 <tbody className="[&>tr>td]:border [&>tr>td]:px-2 [&>tr>td]:py-1.5">
                   {calc.cenario === 0 ? (
                     <>
-                      <tr><td>PREMIAÇÃO</td><td className="text-right">{formatBRL(calc.valorMensal)}</td></tr>
-                      <tr><td>Comissão 15 dias</td><td className="text-right">{formatBRL(calc.quinzena)}</td></tr>
-                      <tr><td>1/3 da Comissão</td><td className="text-right">{formatBRL(calc.quinzena / 3)}</td></tr>
-                      <tr className="font-bold"><td>RECEBE DIA {fmtDate(dataRecebimento)}</td><td className="text-right">{formatBRL(calc.recebe)}</td></tr>
+                      <tr><td>PREMIAÇÃO</td><td className="text-right">{formatBRL(calc.valorPremiacao)}</td></tr>
+                      <tr><td>Acréscimo de 1/3</td><td className="text-right">{formatBRL(calc.acrescimoUmTerco)}</td></tr>
+                      <tr className="font-bold"><td>RECEBIDO DIA {fmtDate(dataRecebimento)}</td><td className="text-right">{formatBRL(calc.recebe)}</td></tr>
                     </>
                   ) : (
                     <>
-                      <tr><td>PREMIAÇÃO</td><td className="text-right">{formatBRL(calc.quinzena)}</td></tr>
+                      <tr><td>PREMIAÇÃO</td><td className="text-right">{formatBRL(calc.valorPremiacao)}</td></tr>
                       <tr><td>Mais Acréscimo 1/3</td><td className="text-right">{formatBRL(calc.acrescimoUmTerco)}</td></tr>
                       <tr className="font-semibold"><td>TOTAL</td><td className="text-right">{formatBRL(calc.total)}</td></tr>
-                      <tr><td>VENDA DE {calc.cenario} DIAS DE FÉRIAS ({periodo === 1 ? "1ª" : "2ª"} QUINZENA) + 1/3</td><td className="text-right">{formatBRL(calc.vendaParcelaComUmTerco)}</td></tr>
-                      <tr><td>1/3 DE FÉRIAS - REFERENTE A {calc.diasGozados} DIAS USUFRUÍDO</td><td className="text-right">{formatBRL(calc.umTercoDiasGozados)}</td></tr>
-                      <tr className="font-bold"><td>RECEBE DIA {fmtDate(dataRecebimento)}</td><td className="text-right">{formatBRL(calc.recebe)}</td></tr>
+                      <tr><td>VENDA DE {calc.cenario} DIAS DE FÉRIAS ({periodo === 1 ? "1ª" : "2ª"} QUINZENA) + 1/3</td><td className="text-right">{formatBRL(calc.vendaParcela)}</td></tr>
+                      {calc.cenario !== 15 && (
+                        <tr><td>1/3 DE FÉRIAS - REFERENTE A {calc.diasGozados} DIAS USUFRUÍDO</td><td className="text-right">{formatBRL(calc.umTercoGozados)}</td></tr>
+                      )}
+                      <tr className="font-bold"><td>RECEBIDO DIA {fmtDate(dataRecebimento)}</td><td className="text-right">{formatBRL(calc.recebe)}</td></tr>
                     </>
                   )}
                 </tbody>
