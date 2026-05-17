@@ -209,11 +209,11 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Data de início (gozo)</Label>
-              <Input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
+              <Input type="date" value={dataInicio} readOnly disabled className="bg-muted/30" />
             </div>
             <div>
               <Label>Data de fim (gozo)</Label>
-              <Input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
+              <Input type="date" value={dataFim} readOnly disabled className="bg-muted/30" />
             </div>
           </div>
 
