@@ -21,6 +21,8 @@ export interface PremiacaoCalculo {
   vendaParcela: number;       // B7
   umTercoGozados: number;     // B8 (0 quando vende 15)
   recebe: number;             // B9
+  comissao15: number;         // B4/2 — usado apenas no cenário "não vende"
+  umTercoComissao: number;    // comissao15/3 — usado apenas no cenário "não vende"
 }
 
 function r2(n: number) { return Math.round(n * 100) / 100; }
@@ -34,9 +36,13 @@ export function calcularPremiacao(valorPremiacao: number, dias_vendidos: Cenario
   let b7 = 0;
   let b8 = 0;
   let recebe = 0;
+  let comissao15 = 0;
+  let umTercoComissao = 0;
 
   if (dias_vendidos === 0) {
-    recebe = b5;
+    comissao15 = b4 / 2;
+    umTercoComissao = comissao15 / 3;
+    recebe = umTercoComissao;
   } else {
     b7 = (b6 / 30) * dias_vendidos;
     b8 = dias_vendidos === 15 ? 0 : (b5 / 30) * diasGozados;
@@ -52,6 +58,8 @@ export function calcularPremiacao(valorPremiacao: number, dias_vendidos: Cenario
     vendaParcela: r2(b7),
     umTercoGozados: r2(b8),
     recebe: r2(recebe),
+    comissao15: r2(comissao15),
+    umTercoComissao: r2(umTercoComissao),
   };
 }
 
