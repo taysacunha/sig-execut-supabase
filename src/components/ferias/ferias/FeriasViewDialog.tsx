@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Calendar, User, Building2, AlertTriangle, DollarSign, Layers, Send } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -71,6 +71,44 @@ export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialo
   const hasVenda = ferias.vender_dias && diasVendidos > 0;
   const isFlexivel = !!ferias.gozo_flexivel;
 
+  // Calcula dias vendidos por quinzena (mesma lógica de FeriasFerias.getVendaPorPeriodo)
+  const getVendaPorPeriodo = (): { v1: number; v2: number } => {
+    if (!ferias.vender_dias || !diasVendidos) return { v1: 0, v2: 0 };
+    const q1Col = ferias.dias_vendidos_q1 as number | null | undefined;
+    const q2Col = ferias.dias_vendidos_q2 as number | null | undefined;
+    if (q1Col != null || q2Col != null) {
+      return { v1: Math.max(0, q1Col || 0), v2: Math.max(0, q2Col || 0) };
+    }
+    const venderPeriods = gozoPeriodos.filter((p: any) => (p.tipo ?? "vender") === "vender");
+    if (venderPeriods.length > 0) {
+      const gozo1 = venderPeriods.filter((p: any) => p.referencia_periodo === 1).reduce((s: number, p: any) => s + (p.dias || 0), 0);
+      const gozo2 = venderPeriods.filter((p: any) => p.referencia_periodo === 2).reduce((s: number, p: any) => s + (p.dias || 0), 0);
+      const v1 = Math.max(0, 15 - gozo1);
+      const v2 = Math.max(0, 15 - gozo2);
+      if (v1 + v2 > 0 && Math.abs((v1 + v2) - diasVendidos) <= 1) return { v1, v2 };
+    }
+    const qv = ferias.quinzena_venda === 1 || ferias.quinzena_venda === 2 ? ferias.quinzena_venda : null;
+    if (qv === 1) return { v1: diasVendidos, v2: 0 };
+    if (qv === 2) return { v1: 0, v2: diasVendidos };
+    return { v1: 0, v2: 0 };
+  };
+
+  const renderPeriodoAjustado = (inicio: string | null, fim: string | null, vendidos: number) => {
+    if (!inicio || !fim) return "—";
+    if (vendidos <= 0) return `${formatDate(inicio)} a ${formatDate(fim)}`;
+    const restantes = 15 - vendidos;
+    if (restantes <= 0) return "Vendido";
+    try {
+      const adjustedEnd = addDays(parseISO(inicio), restantes - 1);
+      return `${formatDate(inicio)} a ${format(adjustedEnd, "dd/MM/yyyy", { locale: ptBR })}`;
+    } catch {
+      return `${formatDate(inicio)} a ${formatDate(fim)}`;
+    }
+  };
+
+  const { v1: vendaQ1, v2: vendaQ2 } = getVendaPorPeriodo();
+  const ajustarOficial = !isFlexivel && !ferias.gozo_diferente;
+
   // Group flexible periods by referencia_periodo
   const periodosByRef = gozoPeriodos.reduce((acc: Record<string, any[]>, p: any) => {
     const key = p.referencia_periodo ? String(p.referencia_periodo) : "livre";
@@ -117,8 +155,13 @@ export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialo
               </CardHeader>
               <CardContent>
                 <p className="text-sm">
-                  {formatDate(ferias.quinzena1_inicio)} a {formatDate(ferias.quinzena1_fim)}
+                  {ajustarOficial
+                    ? renderPeriodoAjustado(ferias.quinzena1_inicio, ferias.quinzena1_fim, vendaQ1)
+                    : `${formatDate(ferias.quinzena1_inicio)} a ${formatDate(ferias.quinzena1_fim)}`}
                 </p>
+                {ajustarOficial && vendaQ1 > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">{vendaQ1} dia{vendaQ1 > 1 ? "s" : ""} vendido{vendaQ1 > 1 ? "s" : ""}</p>
+                )}
               </CardContent>
             </Card>
 
@@ -128,9 +171,16 @@ export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialo
               </CardHeader>
               <CardContent>
                 {ferias.quinzena2_inicio ? (
-                  <p className="text-sm">
-                    {formatDate(ferias.quinzena2_inicio)} a {formatDate(ferias.quinzena2_fim)}
-                  </p>
+                  <>
+                    <p className="text-sm">
+                      {ajustarOficial
+                        ? renderPeriodoAjustado(ferias.quinzena2_inicio, ferias.quinzena2_fim, vendaQ2)
+                        : `${formatDate(ferias.quinzena2_inicio)} a ${formatDate(ferias.quinzena2_fim)}`}
+                    </p>
+                    {ajustarOficial && vendaQ2 > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">{vendaQ2} dia{vendaQ2 > 1 ? "s" : ""} vendido{vendaQ2 > 1 ? "s" : ""}</p>
+                    )}
+                  </>
                 ) : (
                   <p className="text-sm text-amber-600 italic">Ainda não definido</p>
                 )}
