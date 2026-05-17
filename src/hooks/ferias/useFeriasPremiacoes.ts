@@ -15,6 +15,10 @@ export interface FeriasPremiacao {
   observacao: string | null;
   created_at: string;
   updated_at: string;
+  ultima_exportacao_pdf: string | null;
+  recebimento_confirmado: boolean;
+  recebimento_confirmado_em: string | null;
+  recebimento_confirmado_por: string | null;
 }
 
 export function useFeriasPremiacoes(feriasIds: string[]) {
@@ -73,5 +77,44 @@ export function useDeletePremiacao() {
       toast.success("Premiação removida");
     },
     onError: (e: any) => toast.error(e?.message || "Erro ao remover premiação"),
+  });
+}
+
+export function useSetExportacaoPremiacao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: string }) => {
+      const { error } = await (supabase as any)
+        .from("ferias_premiacoes")
+        .update({ ultima_exportacao_pdf: data })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ferias-premiacoes"] });
+    },
+    onError: (e: any) => toast.error(e?.message || "Erro ao registrar emissão"),
+  });
+}
+
+export function useSetRecebimentoPremiacao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, confirmado, data }: { id: string; confirmado: boolean; data?: string | null }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const payload: any = confirmado
+        ? { recebimento_confirmado: true, recebimento_confirmado_em: data, recebimento_confirmado_por: user?.id }
+        : { recebimento_confirmado: false, recebimento_confirmado_em: null, recebimento_confirmado_por: null };
+      const { error } = await (supabase as any)
+        .from("ferias_premiacoes")
+        .update(payload)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["ferias-premiacoes"] });
+      toast.success(vars.confirmado ? "Recebimento atestado" : "Atesto removido");
+    },
+    onError: (e: any) => toast.error(e?.message || "Erro ao atualizar atesto"),
   });
 }
