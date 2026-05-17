@@ -177,7 +177,7 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
         valor_premiacao: valorNum,
         data_recebimento: dataRecebimento,
         ultima_exportacao_pdf: gerar ? dataRecebimento : (editing?.ultima_exportacao_pdf ?? null),
-      } as any);
+      });
 
       if (gerar) {
         await gerarPremiacaoPDF({
@@ -191,7 +191,7 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
         });
       }
       onOpenChange(false);
-    } catch {}
+    } catch { return; }
   }
 
   async function handleApenasPdf() {
