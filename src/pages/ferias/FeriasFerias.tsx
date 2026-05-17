@@ -983,14 +983,29 @@ export default function FeriasFerias() {
                         const allDone = hasP1 && hasP2;
                         return (
                         <>
-                        <TableRow key={f.id}>
+                         <TableRow key={f.id}>
                           <TableCell className="p-1">
                             <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => toggleExpand(f.id)} title={premList.length ? `${premList.length} premiação(ões)` : "Sem premiações"}>
                               {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
                               {premList.length > 0 && <span className="sr-only">{premList.length}</span>}
                             </Button>
                           </TableCell>
-                          <TableCell className="font-medium">{f.colaborador?.nome || "—"}</TableCell>
+                           <TableCell className="font-medium">
+                             <div className="flex items-center gap-2 flex-wrap">
+                               <span>{f.colaborador?.nome || "—"}</span>
+                               {(() => {
+                                 if (premList.length === 0) return null;
+                                 const allConf = allDone && premList.every(p => p.recebimento_confirmado);
+                                 if (allConf) {
+                                   return <Badge variant="outline" className="bg-green-500/10 text-green-700 border-green-500/30 text-[10px] gap-1"><CheckCircle2 className="h-3 w-3" />Premiação quitada</Badge>;
+                                 }
+                                 if (allDone) {
+                                   return <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[10px] gap-1"><Award className="h-3 w-3" />Premiação lançada</Badge>;
+                                 }
+                                 return <Badge variant="outline" className="bg-amber-500/10 text-amber-700 border-amber-500/30 text-[10px] gap-1"><Award className="h-3 w-3" />1/2 premiação</Badge>;
+                               })()}
+                             </div>
+                           </TableCell>
                           <TableCell>{f.colaborador?.setor_titular?.nome || "—"}</TableCell>
                           <TableCell className="text-sm">
                             {gozoPeriodosByFeriasId[f.id]?.length
