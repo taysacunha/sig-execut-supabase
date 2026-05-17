@@ -52,7 +52,7 @@ import {
 } from "@/hooks/ferias/useFeriasPremiacoes";
 import { ExportacaoCell, RecebimentoCell } from "@/components/ferias/ferias/PremiacaoSubRow";
 import { gerarPremiacaoPDF } from "@/lib/premiacaoPdf";
-import { formatBRL } from "@/lib/premiacaoCalc";
+import { formatBRL, calcularPremiacao } from "@/lib/premiacaoCalc";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { useUserRole } from "@/hooks/useUserRole";
 import { usePagination } from "@/hooks/usePagination";
