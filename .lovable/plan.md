@@ -1,80 +1,32 @@
-## Análise dos achados de segurança
+## Problema
 
-Verifiquei as três descobertas contra o código do projeto (políticas RLS, funções `can_view_system`/`can_edit_system`, e como o frontend consome essas RPCs). **Nenhuma delas é falso positivo** — todas são reais e devem ser tratadas. Abaixo, a análise e o plano de correção.
+Na aba **Férias** (tabela principal em `FeriasFerias.tsx`, coluna "Períodos"), quando o registro é padrão (não-flexível, não-exceção) e o colaborador vendeu dias de um período, as datas exibidas continuam sendo a quinzena inteira (15 dias). Exemplo: Lidiane vendeu 5 dias do 1º período — deveria aparecer `04/05/2026 a 13/05/2026` (10 dias de gozo), mas aparece `04/05/2026 a 18/05/2026` (15 dias).
 
----
+A aba **Contador** (na mesma página e no `ContadorPDFGenerator.tsx`) já trata isso via `calcAdjustedPeriodo` / `calcularDiasContador` — daí a inconsistência entre abas.
 
-### 1. ERROR — Escalas Queue/Stats Mutation RPCs (crítico)
+## Correção
 
-**Funções afetadas (8):**
-- `sync_saturday_queue`, `update_saturday_queue_after_allocation`
-- `save_broker_weekly_stats`, `delete_weekly_stats_for_period`
-- `sync_location_rotation_queue`, `update_location_queue_after_allocation`, `bulk_update_location_queues_after_allocation`
-- `aggregate_month_data`
+Aplicar a mesma lógica de ajuste de data no render da coluna "Períodos" da aba Férias (linhas 1038-1046 de `src/pages/ferias/FeriasFerias.tsx`) e no `FeriasViewDialog.tsx` (cards "1º Período / 2º Período (Direito)").
 
-**Por que é real:** todas são `SECURITY DEFINER` (rodam como owner, ignoram RLS) e não checam `auth.uid()`. Qualquer usuário autenticado — mesmo sem acesso ao módulo Escalas — pode chamá-las via PostgREST e reescrever filas de rotação, apagar estatísticas semanais e reagregar histórico mensal. Isso quebra a integridade operacional do módulo.
+Regra de cálculo de dias vendidos por período (em ordem de prioridade, igual à coluna "Venda"):
 
-**Veredicto:** **NÃO é falso positivo. Tratar como erro.**
+1. `dias_vendidos_q1` / `dias_vendidos_q2` (colunas explícitas)
+2. Derivar de `ferias_gozo_periodos` (tipo `vender`) — `15 - gozo_ref_n`
+3. Legado: `dias_vendidos` + `quinzena_venda` (1 ou 2)
 
----
+Para cada quinzena (Q1 e Q2):
+- `dias_gozo = 15 - dias_vendidos_do_periodo`
+- Se `dias_gozo <= 0` → exibir badge "Vendido (15 dias)"
+- Senão → `inicio` a `addDays(inicio, dias_gozo - 1)` usando `parseISO` + `format` (mesmo padrão do `calcAdjustedPeriodo`)
 
-### 2. WARN — Escalas Read RPCs (4 funções de leitura)
+## Arquivos afetados
 
-**Funções afetadas:**
-- `get_saturday_queue`, `get_previous_week_stats`
-- `get_location_rotation_queue`, `get_weekday_distribution_hybrid`
+1. `src/pages/ferias/FeriasFerias.tsx` — extrair helper `getVendaPorPeriodo(f)` (retorna `{ v1, v2 }`) reaproveitando a lógica já existente na célula "Venda" (linhas 1049-1084), e usar tanto na coluna "Períodos" (linhas 1038-1046) quanto na coluna "Venda" — eliminando duplicação. Reusar `calcAdjustedPeriodo` (já existe, linha 583) para renderizar as datas ajustadas.
 
-**Por que é real:** mesma classe do anterior, mas apenas leitura. Expõem nomes de corretores, posições de fila e contagens de plantões a qualquer usuário autenticado, ignorando `can_view_system('escalas')`. Como o restante do módulo usa esse guard, manter essas 4 funções abertas é inconsistente e vazamento de dados operacionais.
+2. `src/components/ferias/ferias/FeriasViewDialog.tsx` — nos cards "1º Período (Direito)" e "2º Período (Direito)" (linhas 109-127), aplicar o mesmo ajuste: exibir a data final encurtada e um sub-texto "(N dias vendidos)" quando aplicável. Reusar o mesmo helper (copiar/inline a lógica, pois o dialog não tem acesso direto a hooks da página).
 
-**Veredicto:** **NÃO é falso positivo. Tratar.**
+## Fora do escopo
 
----
-
-### 3. WARN — Vendas Dashboard RPCs (3 funções)
-
-**Funções afetadas:**
-- `get_sales_dashboard_summary_flexible`
-- `get_sales_team_vgv_ranking_flexible`
-- `get_sales_broker_vgv_ranking_flexible`
-
-**Por que é real:** expõem VGV (faturamento), rankings de equipes e de corretores. Um usuário com acesso apenas a Férias ou Escalas pode ler todo o desempenho comercial chamando essas RPCs diretamente. Dado que Vendas é justamente o módulo com regra de visibilidade de VGV (memória do projeto), essa exposição contradiz a política existente.
-
-**Veredicto:** **NÃO é falso positivo. Tratar.**
-
----
-
-## Plano de correção
-
-Criar **uma única migration** que adiciona um guard de autorização no topo de cada função, mantendo a assinatura e o comportamento atual:
-
-### Padrão para funções de escrita (Escalas)
-```sql
-IF NOT public.can_edit_system(auth.uid(), 'escalas') THEN
-  RAISE EXCEPTION 'Acesso negado: permissão de edição do módulo Escalas necessária';
-END IF;
-```
-
-### Padrão para funções de leitura (Escalas)
-```sql
-IF NOT public.can_view_system(auth.uid(), 'escalas') THEN
-  RAISE EXCEPTION 'Acesso negado: acesso ao módulo Escalas necessário';
-END IF;
-```
-
-### Padrão para funções de Vendas
-```sql
-IF NOT public.can_view_system(auth.uid(), 'vendas') THEN
-  RAISE EXCEPTION 'Acesso negado: acesso ao módulo Vendas necessário';
-END IF;
-```
-
-### Passos
-1. **Migration única** com `CREATE OR REPLACE FUNCTION` para as 15 funções listadas, preservando corpo atual + adicionando o guard como primeira instrução do `BEGIN`.
-2. **Verificação no frontend:** as chamadas existentes (hooks `useSaturdayQueue`, `useLocationRotationQueue`, dashboards de Vendas, etc.) já são feitas por usuários com acesso ao respectivo módulo — nenhuma alteração de UI necessária. Apenas usuários sem permissão receberão erro, que é o comportamento desejado.
-3. **Atualizar memória de segurança** após aplicar, registrando que esses RPCs agora exigem `can_view_system`/`can_edit_system`.
-4. **Marcar findings como fixed** após confirmação do usuário.
-
-### Observação
-Nenhuma quebra funcional esperada: o app já usa `ProtectedRoute` + `SystemGuard` para garantir que só quem tem acesso ao módulo abra as telas que chamam essas RPCs. O guard no banco apenas fecha o bypass via API direta (PostgREST).
-
-Se aprovado, implemento a migration e atualizo a memória de segurança.
+- Aba Contador (já está correta).
+- Aba Exceção (já tratada anteriormente).
+- Estrutura de dados / migrations (apenas apresentação).
