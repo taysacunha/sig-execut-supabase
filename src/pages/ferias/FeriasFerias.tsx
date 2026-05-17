@@ -45,7 +45,12 @@ import { FormularioAnualViewDialog } from "@/components/ferias/formulario/Formul
 import { FormularioPDFGenerator } from "@/components/ferias/relatorios/FormularioPDFGenerator";
 import { PeriodosAquisitivosTab } from "@/components/ferias/ferias/PeriodosAquisitivosTab";
 import { PremiacaoDialog } from "@/components/ferias/ferias/PremiacaoDialog";
-import { useFeriasPremiacoes, useDeletePremiacao, type FeriasPremiacao } from "@/hooks/ferias/useFeriasPremiacoes";
+import {
+  useFeriasPremiacoes, useDeletePremiacao,
+  useSetExportacaoPremiacao, useSetRecebimentoPremiacao,
+  type FeriasPremiacao,
+} from "@/hooks/ferias/useFeriasPremiacoes";
+import { ExportacaoCell, RecebimentoCell } from "@/components/ferias/ferias/PremiacaoSubRow";
 import { gerarPremiacaoPDF } from "@/lib/premiacaoPdf";
 import { formatBRL } from "@/lib/premiacaoCalc";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
@@ -285,7 +290,10 @@ export default function FeriasFerias() {
     });
   }, []);
 
-  async function reprintPremiacao(p: FeriasPremiacao, colaboradorNome: string) {
+  const setExportacao = useSetExportacaoPremiacao();
+  const setRecebimento = useSetRecebimentoPremiacao();
+
+  async function reprintPremiacao(p: FeriasPremiacao, colaboradorNome: string, dataEmissao: string) {
     await gerarPremiacaoPDF({
       colaborador: colaboradorNome,
       periodo: p.periodo,
@@ -295,6 +303,7 @@ export default function FeriasFerias() {
       valorMensal: Number(p.valor_premiacao),
       diasVendidos: p.dias_vendidos as 0 | 5 | 10 | 15,
     });
+    await setExportacao.mutateAsync({ id: p.id, data: dataEmissao });
   }
 
   // Fetch all afastamentos for the year to detect conflicts
