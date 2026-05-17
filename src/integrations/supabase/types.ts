@@ -1722,6 +1722,77 @@ export type Database = {
           },
         ]
       }
+      ferias_premiacoes: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data_fim: string
+          data_inicio: string
+          data_recebimento: string
+          dias_gozados: number
+          dias_vendidos: number
+          ferias_id: string
+          id: string
+          observacao: string | null
+          periodo: number
+          recebimento_confirmado: boolean
+          recebimento_confirmado_em: string | null
+          recebimento_confirmado_por: string | null
+          ultima_exportacao_pdf: string | null
+          updated_at: string
+          updated_by: string | null
+          valor_premiacao: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data_fim: string
+          data_inicio: string
+          data_recebimento: string
+          dias_gozados: number
+          dias_vendidos?: number
+          ferias_id: string
+          id?: string
+          observacao?: string | null
+          periodo: number
+          recebimento_confirmado?: boolean
+          recebimento_confirmado_em?: string | null
+          recebimento_confirmado_por?: string | null
+          ultima_exportacao_pdf?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          valor_premiacao: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data_fim?: string
+          data_inicio?: string
+          data_recebimento?: string
+          dias_gozados?: number
+          dias_vendidos?: number
+          ferias_id?: string
+          id?: string
+          observacao?: string | null
+          periodo?: number
+          recebimento_confirmado?: boolean
+          recebimento_confirmado_em?: string | null
+          recebimento_confirmado_por?: string | null
+          ultima_exportacao_pdf?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          valor_premiacao?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ferias_premiacoes_ferias_id_fkey"
+            columns: ["ferias_id"]
+            isOneToOne: false
+            referencedRelation: "ferias_ferias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ferias_quinzenas: {
         Row: {
           ano: number
