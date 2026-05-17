@@ -13,7 +13,8 @@ import {
   Loader2, Edit, Eye, Plus, Sparkles, CalendarMinus,
   FileText, Clock, XCircle, Download, ArrowUpDown, Printer,
   ChevronLeft, ChevronRight, Trash2, ChevronDown, ChevronUp,
-  Send, Undo2, AlertCircle, HelpCircle, SlidersHorizontal, X
+  Send, Undo2, AlertCircle, HelpCircle, SlidersHorizontal, X,
+  Award, ChevronRight as ChevronRightIcon
 } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -43,6 +44,10 @@ import { FormularioAnualDialog } from "@/components/ferias/formulario/Formulario
 import { FormularioAnualViewDialog } from "@/components/ferias/formulario/FormularioAnualViewDialog";
 import { FormularioPDFGenerator } from "@/components/ferias/relatorios/FormularioPDFGenerator";
 import { PeriodosAquisitivosTab } from "@/components/ferias/ferias/PeriodosAquisitivosTab";
+import { PremiacaoDialog } from "@/components/ferias/ferias/PremiacaoDialog";
+import { useFeriasPremiacoes, useDeletePremiacao, type FeriasPremiacao } from "@/hooks/ferias/useFeriasPremiacoes";
+import { gerarPremiacaoPDF } from "@/lib/premiacaoPdf";
+import { formatBRL } from "@/lib/premiacaoCalc";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { useUserRole } from "@/hooks/useUserRole";
 import { usePagination } from "@/hooks/usePagination";
@@ -172,6 +177,12 @@ export default function FeriasFerias() {
   const [reducaoDialogOpen, setReducaoDialogOpen] = useState(false);
   const [reducaoFerias, setReducaoFerias] = useState<FeriasRecord | null>(null);
 
+  // Premiação
+  const [premiacaoDialogOpen, setPremiacaoDialogOpen] = useState(false);
+  const [premiacaoFerias, setPremiacaoFerias] = useState<FeriasRecord | null>(null);
+  const [premiacaoEditing, setPremiacaoEditing] = useState<FeriasPremiacao | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
   // Formulários state
   const [formSearchTerm, setFormSearchTerm] = useState("");
   const [formAnoFilter, setFormAnoFilter] = useState<string>((currentYear + 1).toString());
@@ -261,6 +272,30 @@ export default function FeriasFerias() {
     }
     return map;
   }, [gozoPeriodos]);
+
+  // Premiações por férias
+  const { data: premiacoesByFeriasId = {} } = useFeriasPremiacoes(allFeriasIds);
+  const deletePremiacao = useDeletePremiacao();
+
+  const toggleExpand = useCallback((id: string) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  async function reprintPremiacao(p: FeriasPremiacao, colaboradorNome: string) {
+    await gerarPremiacaoPDF({
+      colaborador: colaboradorNome,
+      periodo: p.periodo,
+      dataInicio: p.data_inicio,
+      dataFim: p.data_fim,
+      dataRecebimento: p.data_recebimento,
+      valorMensal: Number(p.valor_premiacao),
+      diasVendidos: p.dias_vendidos as 0 | 5 | 10 | 15,
+    });
+  }
 
   // Fetch all afastamentos for the year to detect conflicts
   const feriasColabIds = useMemo(() => [...new Set(ferias.map(f => f.colaborador_id).filter(Boolean))], [ferias]);
@@ -919,6 +954,7 @@ export default function FeriasFerias() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-8"></TableHead>
                         <TableHead className="cursor-pointer select-none" onClick={() => handleFeriasSort("nome")}>Colaborador <ArrowUpDown className="inline h-3 w-3 ml-1" /></TableHead>
                         <TableHead className="cursor-pointer select-none" onClick={() => handleFeriasSort("setor")}>Setor <ArrowUpDown className="inline h-3 w-3 ml-1" /></TableHead>
                         <TableHead>Períodos</TableHead>
@@ -930,8 +966,21 @@ export default function FeriasFerias() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {feriasPagination.paginatedItems.map((f) => (
+                      {feriasPagination.paginatedItems.map((f) => {
+                        const premList = premiacoesByFeriasId[f.id] || [];
+                        const isExpanded = expandedRows.has(f.id);
+                        const hasP1 = premList.some(p => p.periodo === 1);
+                        const hasP2 = premList.some(p => p.periodo === 2);
+                        const allDone = hasP1 && hasP2;
+                        return (
+                        <>
                         <TableRow key={f.id}>
+                          <TableCell className="p-1">
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => toggleExpand(f.id)} title={premList.length ? `${premList.length} premiação(ões)` : "Sem premiações"}>
+                              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
+                              {premList.length > 0 && <span className="sr-only">{premList.length}</span>}
+                            </Button>
+                          </TableCell>
                           <TableCell className="font-medium">{f.colaborador?.nome || "—"}</TableCell>
                           <TableCell>{f.colaborador?.setor_titular?.nome || "—"}</TableCell>
                           <TableCell className="text-sm">
@@ -995,6 +1044,15 @@ export default function FeriasFerias() {
                                   {f.status !== "concluida" && f.status !== "cancelada" && (
                                     <Button variant="ghost" size="sm" title="Reduzir dias" onClick={() => { setReducaoFerias(f); setReducaoDialogOpen(true); }}><CalendarMinus className="h-4 w-4 text-warning" /></Button>
                                   )}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    title={allDone ? "Premiações já lançadas" : "Lançar premiação"}
+                                    disabled={allDone}
+                                    onClick={() => { setPremiacaoFerias(f); setPremiacaoEditing(null); setPremiacaoDialogOpen(true); }}
+                                  >
+                                    <Award className={`h-4 w-4 ${allDone ? "text-muted-foreground" : "text-primary"}`} />
+                                  </Button>
                                   <AlertDialog>
                                     <AlertDialogTrigger asChild>
                                       <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
@@ -1015,7 +1073,75 @@ export default function FeriasFerias() {
                             </div>
                           </TableCell>
                         </TableRow>
-                      ))}
+                        {isExpanded && (
+                          <TableRow key={f.id + "-prem"} className="bg-muted/20">
+                            <TableCell colSpan={9} className="p-3">
+                              {premList.length === 0 ? (
+                                <p className="text-sm text-muted-foreground text-center py-2">Nenhuma premiação lançada para estas férias.</p>
+                              ) : (
+                                <div className="space-y-2">
+                                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Premiações lançadas</div>
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow>
+                                        <TableHead>Período</TableHead>
+                                        <TableHead>Datas de gozo</TableHead>
+                                        <TableHead>Vendidos / Gozados</TableHead>
+                                        <TableHead>Valor mensal</TableHead>
+                                        <TableHead>Recebimento</TableHead>
+                                        <TableHead>Lançado em</TableHead>
+                                        <TableHead className="text-right">Ações</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {premList.map(p => {
+                                        const canDelete = !(p.periodo === 1 && hasP2);
+                                        return (
+                                          <TableRow key={p.id}>
+                                            <TableCell><Badge variant="outline">{p.periodo === 1 ? "1ª Quinzena" : "2ª Quinzena"}</Badge></TableCell>
+                                            <TableCell className="text-sm">{formatPeriodo(p.data_inicio, p.data_fim)}</TableCell>
+                                            <TableCell className="text-sm">{p.dias_vendidos}d / {p.dias_gozados}d</TableCell>
+                                            <TableCell className="text-sm">{formatBRL(Number(p.valor_premiacao))}</TableCell>
+                                            <TableCell className="text-sm">{format(parseISO(p.data_recebimento), "dd/MM/yyyy")}</TableCell>
+                                            <TableCell className="text-xs text-muted-foreground">{format(parseISO(p.created_at), "dd/MM/yyyy HH:mm")}</TableCell>
+                                            <TableCell className="text-right">
+                                              <div className="flex justify-end gap-1">
+                                                <Button variant="ghost" size="sm" title="Gerar PDF" onClick={() => reprintPremiacao(p, f.colaborador?.nome || "—")}><Download className="h-4 w-4" /></Button>
+                                                {canEditFerias && (
+                                                  <>
+                                                    <Button variant="ghost" size="sm" title="Editar" onClick={() => { setPremiacaoFerias(f); setPremiacaoEditing(p); setPremiacaoDialogOpen(true); }}><Edit className="h-4 w-4" /></Button>
+                                                    <AlertDialog>
+                                                      <AlertDialogTrigger asChild>
+                                                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" disabled={!canDelete} title={canDelete ? "Apagar" : "Apague o 2º antes do 1º"}><Trash2 className="h-4 w-4" /></Button>
+                                                      </AlertDialogTrigger>
+                                                      <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                          <AlertDialogTitle>Apagar premiação</AlertDialogTitle>
+                                                          <AlertDialogDescription>Apagar a premiação do {p.periodo === 1 ? "1º" : "2º"} período de <strong>{f.colaborador?.nome}</strong>? Esta ação não pode ser desfeita.</AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                          <AlertDialogAction onClick={() => deletePremiacao.mutate(p.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Apagar</AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                      </AlertDialogContent>
+                                                    </AlertDialog>
+                                                  </>
+                                                )}
+                                              </div>
+                                            </TableCell>
+                                          </TableRow>
+                                        );
+                                      })}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        </>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                   <TablePagination
@@ -1385,6 +1511,17 @@ export default function FeriasFerias() {
       <ReducaoFeriasDialog open={reducaoDialogOpen} onOpenChange={setReducaoDialogOpen} ferias={reducaoFerias} colaboradorNome={reducaoFerias?.colaborador?.nome || ""} onSuccess={() => queryClient.invalidateQueries({ queryKey: ["ferias-ferias"] })} />
       <FormularioAnualDialog open={formDialogOpen} onOpenChange={setFormDialogOpen} formulario={selectedFormulario} anoReferencia={parseInt(formAnoFilter)} onSuccess={() => { queryClient.invalidateQueries({ queryKey: ["ferias-formularios"] }); queryClient.invalidateQueries({ queryKey: ["ferias-colaboradores-com-formulario"] }); setFormDialogOpen(false); }} />
       <FormularioAnualViewDialog open={formViewDialogOpen} onOpenChange={setFormViewDialogOpen} formulario={selectedFormulario} />
+
+      {premiacaoFerias && (
+        <PremiacaoDialog
+          open={premiacaoDialogOpen}
+          onOpenChange={(o) => { setPremiacaoDialogOpen(o); if (!o) setPremiacaoEditing(null); }}
+          ferias={premiacaoFerias as any}
+          gozoPeriodos={gozoPeriodosByFeriasId[premiacaoFerias.id] || []}
+          existingPremiacoes={premiacoesByFeriasId[premiacaoFerias.id] || []}
+          editing={premiacaoEditing}
+        />
+      )}
 
       {/* Confirm dialog for managing enviado_contador */}
       {(() => {
