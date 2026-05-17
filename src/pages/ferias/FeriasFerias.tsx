@@ -590,6 +590,33 @@ export default function FeriasFerias() {
     } catch { return formatPeriodo(inicio, fim); }
   };
 
+  // Calcula dias vendidos por quinzena (Q1 e Q2) usando, em ordem:
+  // 1) colunas explícitas dias_vendidos_q1 / dias_vendidos_q2
+  // 2) ferias_gozo_periodos tipo 'vender' (15 - gozo_ref_n)
+  // 3) legado: dias_vendidos + quinzena_venda
+  const getVendaPorPeriodo = useCallback((f: FeriasRecord): { v1: number; v2: number } => {
+    if (!f.vender_dias || !f.dias_vendidos) return { v1: 0, v2: 0 };
+    const q1Col = (f as any).dias_vendidos_q1 as number | null | undefined;
+    const q2Col = (f as any).dias_vendidos_q2 as number | null | undefined;
+    if (q1Col != null || q2Col != null) {
+      return { v1: Math.max(0, q1Col || 0), v2: Math.max(0, q2Col || 0) };
+    }
+    const periods = (gozoPeriodosByFeriasId[f.id] || []) as any[];
+    const venderPeriods = periods.filter((p: any) => (p.tipo ?? "vender") === "vender");
+    if (venderPeriods.length > 0) {
+      const gozo1 = venderPeriods.filter((p: any) => p.referencia_periodo === 1).reduce((s: number, p: any) => s + (p.dias || 0), 0);
+      const gozo2 = venderPeriods.filter((p: any) => p.referencia_periodo === 2).reduce((s: number, p: any) => s + (p.dias || 0), 0);
+      const v1 = Math.max(0, 15 - gozo1);
+      const v2 = Math.max(0, 15 - gozo2);
+      if (v1 + v2 > 0 && Math.abs((v1 + v2) - f.dias_vendidos) <= 1) return { v1, v2 };
+    }
+    const qv = f.quinzena_venda === 1 || f.quinzena_venda === 2 ? f.quinzena_venda : null;
+    const total = f.dias_vendidos;
+    if (qv === 1) return { v1: total, v2: 0 };
+    if (qv === 2) return { v1: 0, v2: total };
+    return { v1: 0, v2: 0 };
+  }, [gozoPeriodosByFeriasId]);
+
   const generateContadorPDF = useCallback(() => {
     if (contadorDataFiltered.length === 0) { toast.error("Nenhum dado para exportar"); return; }
     const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
