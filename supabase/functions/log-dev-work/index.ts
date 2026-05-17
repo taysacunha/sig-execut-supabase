@@ -5,16 +5,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-dev-key",
 };
 
-const DEV_KEY = "S1g.D3v!Sup4b4s3";
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Auth via x-dev-key
+  // Auth via x-dev-key (compared to a secret stored in env)
+  const expected = Deno.env.get("LOG_DEV_WORK_KEY");
   const key = req.headers.get("x-dev-key");
-  if (key !== DEV_KEY) {
+  if (!expected || !key || key !== expected) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
