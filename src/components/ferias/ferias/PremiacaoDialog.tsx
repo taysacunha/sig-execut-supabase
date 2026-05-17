@@ -40,7 +40,40 @@ interface Props {
   editing?: FeriasPremiacao | null;
 }
 
+function periodoOficial(f: FeriasLite, periodo: 1 | 2): { inicio: string; fim: string } | null {
+  if (periodo === 1) return { inicio: f.quinzena1_inicio, fim: f.quinzena1_fim };
+  if (f.quinzena2_inicio && f.quinzena2_fim) return { inicio: f.quinzena2_inicio, fim: f.quinzena2_fim };
+  return null;
+}
+
+function outroPeriodo(periodo: 1 | 2): 1 | 2 {
+  return periodo === 1 ? 2 : 1;
+}
+
+function periodoTemGozoReal(f: FeriasLite, gozoPeriodos: GozoPeriodo[], periodo: 1 | 2): boolean {
+  if (gozoPeriodos.some(p => p.referencia_periodo === periodo && p.dias > 0)) return true;
+  if (periodo === 1) return !!(f.gozo_quinzena1_inicio && f.gozo_quinzena1_fim);
+  return !!(f.gozo_quinzena2_inicio && f.gozo_quinzena2_fim);
+}
+
+function resolveQuinzenaVenda(f: FeriasLite, gozoPeriodos: GozoPeriodo[]): 1 | 2 {
+  const qRegistrada = (f.quinzena_venda === 1 || f.quinzena_venda === 2 ? f.quinzena_venda : 2) as 1 | 2;
+  const total = f.vender_dias ? (f.dias_vendidos || 0) : 0;
+
+  // Quando vende exatamente uma quinzena inteira, o único período com gozo real
+  // representa a quinzena usufruída; a venda pertence à outra quinzena.
+  if (total === 15) {
+    const temGozo1 = periodoTemGozoReal(f, gozoPeriodos, 1);
+    const temGozo2 = periodoTemGozoReal(f, gozoPeriodos, 2);
+    if (temGozo1 !== temGozo2) return temGozo1 ? 2 : 1;
+  }
+
+  return qRegistrada;
+}
+
 function periodoGozoReal(f: FeriasLite, gozoPeriodos: GozoPeriodo[], periodo: 1 | 2): { inicio: string; fim: string } | null {
+  if (diasVendidosRealPorPeriodo(f, gozoPeriodos, periodo) >= 15) return periodoOficial(f, periodo);
+
   const flex = gozoPeriodos.filter(p => p.referencia_periodo === periodo);
   if (flex.length) {
     const ini = flex.reduce((a, b) => a.data_inicio < b.data_inicio ? a : b).data_inicio;
@@ -51,16 +84,14 @@ function periodoGozoReal(f: FeriasLite, gozoPeriodos: GozoPeriodo[], periodo: 1 
   // (lado da quinzena_venda em que sobram dias de gozo). Em ambos casos, refletem o gozo real.
   if (periodo === 1 && f.gozo_quinzena1_inicio) return { inicio: f.gozo_quinzena1_inicio, fim: f.gozo_quinzena1_fim! };
   if (periodo === 2 && f.gozo_quinzena2_inicio) return { inicio: f.gozo_quinzena2_inicio, fim: f.gozo_quinzena2_fim! };
-  if (periodo === 1) return { inicio: f.quinzena1_inicio, fim: f.quinzena1_fim };
-  if (periodo === 2 && f.quinzena2_inicio) return { inicio: f.quinzena2_inicio, fim: f.quinzena2_fim! };
-  return null;
+  return periodoOficial(f, periodo);
 }
 
 // Quantos dias foram vendidos no período (número real).
-function diasVendidosRealPorPeriodo(f: FeriasLite, periodo: 1 | 2): number {
+function diasVendidosRealPorPeriodo(f: FeriasLite, gozoPeriodos: GozoPeriodo[], periodo: 1 | 2): number {
   if (!f.vender_dias || !f.dias_vendidos) return 0;
   const total = f.dias_vendidos;
-  const qVenda = (f.quinzena_venda ?? 1) as 1 | 2;
+  const qVenda = resolveQuinzenaVenda(f, gozoPeriodos);
   // Caso normal (≤15): toda a venda fica na quinzena_venda.
   if (total <= 15) return periodo === qVenda ? total : 0;
   // Exceção (>15): venda atravessa as duas quinzenas — 15 na quinzena_venda, restante na outra.
