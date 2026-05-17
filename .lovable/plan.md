@@ -1,62 +1,66 @@
-# Plano: validar correções de segurança sem quebrar o sistema
+## Bug confirmado
 
-## Contexto
+No `PremiacaoDialog`, a função `diasVendidosPorPeriodo` calcula errado quando há venda concentrada em uma única quinzena. Ela assume "máximo 10 vendidos por quinzena, excedente vai para a outra" — mas esse não é o modelo real do sistema.
 
-As últimas migrations de segurança adicionaram guards `can_view_system(auth.uid(), 'escalas')` em 10 funções RPC do dashboard. O risco é bloquear usuários que hoje veem o dashboard mas **não** têm linha em `system_access` para `escalas` (por exemplo, super_admin/admin que só dependem de `has_role`).
+**Modelo real (visto em `FeriasDialog.tsx` linhas 1184-1204):**
+- `dias_vendidos` ≤ 15 → **todos** os dias vendidos ficam na quinzena indicada por `quinzena_venda`. A outra quinzena tem 0 vendidos e 15 dias de gozo cheios.
+- `dias_vendidos` > 15 (exceção) → venda atravessa as duas quinzenas e os dias de gozo de cada uma ficam em `gozo_venda_q1_*` / `gozo_venda_q2_*` (controlado por `gozo_venda_periodos`).
 
-Edge functions `log-dev-work` e `deactivate-expired-notice` foram protegidas com secrets. Como você não tem certeza se são usadas, vamos tratá-las separadamente.
+**Caso Pedro:** `dias_vendidos = 15`, `quinzena_venda = 1`.
+- Esperado Q1: 15 vendidos / 0 gozados; Q2: 0 vendidos / 15 gozados.
+- Atual (errado): Q1: 5 vendidos / 10 gozados; Q2: 10 vendidos / 5 gozados.
 
-## Etapa 1 — Você testa o dashboard de Escalas (manual, 2 min)
+Além disso, `periodoGozoReal` devolve as datas da `quinzena1` (que, quando vendida integralmente, são datas de venda, não de gozo). Precisa diferenciar o que é gozo e o que é venda por período.
 
-1. Abra `/escalas` logado com seu usuário admin.
-2. Abra `/escalas` logado com um usuário comum que normalmente vê escalas.
-3. Me reporte:
-  - Os cards/gráficos carregam normalmente? OU
-  - Aparece erro "Access denied: escalas system access required" / dados vazios / spinner infinito? Cerregaram normalmente. Tanto com o usuário admin quando com usuário comum.
+## Correções no `PremiacaoDialog.tsx`
 
-## Etapa 2 — Ajustar guards (só se Etapa 1 acusar bloqueio)
+### 1) `diasVendidosPorPeriodo(f, periodo)` — usar `quinzena_venda` corretamente
 
-Trocar o guard restritivo por um permissivo que cobre todos os perfis legítimos:
+```ts
+function diasVendidosPorPeriodo(f, periodo) {
+  if (!f.vender_dias || !f.dias_vendidos) return 0;
+  const total = f.dias_vendidos;
+  const qVenda = f.quinzena_venda ?? 1;
 
-```sql
-IF NOT (
-  public.can_view_system(auth.uid(), 'escalas')
-  OR public.has_role(auth.uid(), 'admin')
-  OR public.has_role(auth.uid(), 'super_admin')
-  OR public.has_role(auth.uid(), 'manager')
-) THEN
-  RAISE EXCEPTION 'Access denied: escalas system access required';
-END IF;
+  // Caso normal: até 15 dias, tudo na quinzena_venda.
+  if (total <= 15) {
+    return (periodo === qVenda ? total : 0) as CenarioVenda;
+  }
+  // Exceção (> 15 dias): venda atravessa quinzenas.
+  // Q da venda recebe 15; restante na outra.
+  if (periodo === qVenda) return 15;
+  return Math.min(15, total - 15) as CenarioVenda;
+}
 ```
 
-Aplicado nas 10 funções: `get_top_brokers`, `get_top_locations`, `get_shift_stats`, `get_weekly_assignments`, `get_dashboard_counts`, `get_top_brokers_hybrid`, `get_top_locations_hybrid`, `get_broker_performance_hybrid`, `get_location_performance_hybrid`, `get_dashboard_stats_hybrid`.
+Normalizar o retorno para um `CenarioVenda` válido (0|5|10|15) apenas para o `calcularPremiacao`; o número exato (ex.: 7) deve aparecer no badge "X dias vendidos · Y dias usufruídos".
 
-Migration nova, não edita as anteriores.
+### 2) `periodoGozoReal(f, gozoPeriodos, periodo)` — devolver as datas certas
 
-## Etapa 3 — Edge functions órfãs
+Regras:
+- Se `gozo_periodos` flexíveis existirem para o `periodo` → usar min/max desses (mantém o comportamento atual).
+- Senão, se a quinzena foi **totalmente vendida** (`vendidosNoPeriodo === 15`) → não há "gozo" naquela quinzena: usar as datas da própria `quinzenaN` como referência do período do recibo (mostrar como o período da venda) e marcar visualmente que não há gozo (badge "venda integral, sem gozo").
+- Caso contrário (gozo parcial após venda ou gozo padrão):
+  - Se `gozo_diferente` e há `gozo_quinzenaN_*` → usar.
+  - Senão → `quinzenaN_inicio/fim`.
 
-Como você não usa ativamente:
+### 3) Texto do resumo
+Substituir "X dias vendidos · Y dias usufruídos" para refletir o resultado real:
+- 15 vendidos → "15 dias vendidos · 0 dias usufruídos".
+- 0 vendidos → "0 dias vendidos · 15 dias usufruídos".
 
-- `**log-dev-work**` — utilitária de log de desenvolvimento. Recomendo **deletar**: não tem chamadas no frontend e não há motivo para manter uma function exposta com chave.
-- `**deactivate-expired-notice**` — provável job de cron. Se não estiver agendada no `pg_cron`, pode deletar também. Vou verificar antes se há job agendado.
+### 4) Botões/UX
+- Se `vendidosNoPeriodo === 0` e `vender_dias = false` (ou periodo sem venda), o cálculo entra no "cenário 0" já existente — sem mudanças.
+- Se `vendidosNoPeriodo === 15`, o `calcularPremiacao` cai no ramo "vende 15" (omite linha "1/3 dos dias usufruídos"). Já suportado.
 
-Se preferir manter "por garantia", deixamos como está — só não funcionará sem os secrets `LOG_DEV_WORK_KEY` / `CRON_SECRET` cadastrados, o que é o estado seguro.
+## Sem migração
 
-## Por que isso não vai quebrar mais nada
+Mudança puramente de frontend (`src/components/ferias/ferias/PremiacaoDialog.tsx`). Nada no banco, nada nas outras telas. Não afeta cadastro de férias nem geração de PDF (o PDF lê dos mesmos valores; ficará correto automaticamente).
 
-- Etapa 1 é só observação, não muda código.
-- Etapa 2 só **amplia** quem tem acesso, nunca restringe mais.
-- Etapa 3 remove código não usado; o sistema "que roda 100% hoje" não depende dele.
-- As migrations de `search_path` já aplicadas são neutras em comportamento — só fixam o schema padrão.
+## Validação manual após implementação
 
-## Detalhes técnicos
-
-- Nenhuma migration existente será editada (são read-only). Tudo via nova migration timestamped.
-- Nenhum código frontend muda nesta rodada.
-- Se Etapa 1 estiver 100% OK, pulamos Etapa 2 e fechamos só a Etapa 3.
-
-## O que eu preciso de você antes de implementar
-
-- Resultado do teste da Etapa 1.
-- Confirmação de que posso deletar as duas edge functions (ou se prefere manter).
-- Não faço ideia se utilizo a `log-dev-work e deactivate-expired-notice. Verifique tudo antes de qualquer ação que possa prejudicar. Já que a etapa 1 passou, a etapa 2 não será executada, confirma?`
+1. Pedro (15 vendidos em Q1, 15 gozados em Q2):
+   - Premiação Q1: badge "15 dias vendidos · 0 usufruídos", datas = quinzena1 (venda).
+   - Premiação Q2: badge "0 vendidos · 15 usufruídos", datas = quinzena2.
+2. Caso 10 vendidos em Q2 (padrão): Q1 0/15, Q2 10/5 nas datas certas (`quinzena2_inicio/fim` venda; `gozo_quinzena2_*` ou `quinzena2_*` para os 5 de gozo).
+3. Caso sem venda: ambos 0/15 (cenário 0 mantém recibo "PREMIAÇÃO + COMISSÃO 15 DIAS").

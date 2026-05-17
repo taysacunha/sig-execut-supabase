@@ -47,33 +47,33 @@ function periodoGozoReal(f: FeriasLite, gozoPeriodos: GozoPeriodo[], periodo: 1 
     const fim = flex.reduce((a, b) => a.data_fim > b.data_fim ? a : b).data_fim;
     return { inicio: ini, fim };
   }
-  if (f.gozo_diferente) {
-    if (periodo === 1 && f.gozo_quinzena1_inicio) return { inicio: f.gozo_quinzena1_inicio, fim: f.gozo_quinzena1_fim! };
-    if (periodo === 2 && f.gozo_quinzena2_inicio) return { inicio: f.gozo_quinzena2_inicio, fim: f.gozo_quinzena2_fim! };
-  }
+  // gozo_quinzenaN_* pode ser preenchido tanto em "gozo diferente" quanto em venda parcial
+  // (lado da quinzena_venda em que sobram dias de gozo). Em ambos casos, refletem o gozo real.
+  if (periodo === 1 && f.gozo_quinzena1_inicio) return { inicio: f.gozo_quinzena1_inicio, fim: f.gozo_quinzena1_fim! };
+  if (periodo === 2 && f.gozo_quinzena2_inicio) return { inicio: f.gozo_quinzena2_inicio, fim: f.gozo_quinzena2_fim! };
   if (periodo === 1) return { inicio: f.quinzena1_inicio, fim: f.quinzena1_fim };
   if (periodo === 2 && f.quinzena2_inicio) return { inicio: f.quinzena2_inicio, fim: f.quinzena2_fim! };
   return null;
 }
 
-function diasVendidosPorPeriodo(f: FeriasLite, periodo: 1 | 2): CenarioVenda {
+// Quantos dias foram vendidos no período (número real).
+function diasVendidosRealPorPeriodo(f: FeriasLite, periodo: 1 | 2): number {
   if (!f.vender_dias || !f.dias_vendidos) return 0;
-  const totalVend = f.dias_vendidos;
-  // Por padrão, a venda fica na quinzena indicada (quinzena_venda, default 2 quando não há)
-  const quinzenaVenda = f.quinzena_venda ?? 2;
-  // Cada quinzena tem no máx 10 dias de venda; o que passar vai para a outra.
-  let vendidosQ: number;
-  if (totalVend <= 10) {
-    vendidosQ = periodo === quinzenaVenda ? totalVend : 0;
-  } else {
-    // Excedente vai para a outra quinzena
-    if (periodo === quinzenaVenda) vendidosQ = 10;
-    else vendidosQ = totalVend - 10;
-  }
-  if (vendidosQ <= 0) return 0;
-  if (vendidosQ >= 15) return 15;
-  if (vendidosQ >= 10) return 10;
-  if (vendidosQ >= 5) return 5;
+  const total = f.dias_vendidos;
+  const qVenda = (f.quinzena_venda ?? 1) as 1 | 2;
+  // Caso normal (≤15): toda a venda fica na quinzena_venda.
+  if (total <= 15) return periodo === qVenda ? total : 0;
+  // Exceção (>15): venda atravessa as duas quinzenas — 15 na quinzena_venda, restante na outra.
+  if (periodo === qVenda) return 15;
+  return Math.min(15, total - 15);
+}
+
+// Mapeia o número real para o cenário aceito por calcularPremiacao (0|5|10|15).
+function diasVendidosPorPeriodo(f: FeriasLite, periodo: 1 | 2): CenarioVenda {
+  const v = diasVendidosRealPorPeriodo(f, periodo);
+  if (v >= 15) return 15;
+  if (v >= 10) return 10;
+  if (v >= 5) return 5;
   return 0;
 }
 
@@ -121,6 +121,8 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
   }, [periodo, editing]);
 
   const diasVendidos = useMemo(() => diasVendidosPorPeriodo(ferias, periodo), [ferias, periodo]);
+  const diasVendidosReal = useMemo(() => diasVendidosRealPorPeriodo(ferias, periodo), [ferias, periodo]);
+  const diasGozadosReal = Math.max(0, 15 - diasVendidosReal);
   const valorNum = Number((valor || "0").replace(",", "."));
   const calc = useMemo(() => valorNum > 0 ? calcularPremiacao(valorNum, diasVendidos) : null, [valorNum, diasVendidos]);
 
@@ -224,7 +226,7 @@ export function PremiacaoDialog({ open, onOpenChange, ferias, gozoPeriodos, exis
             <div>
               <Label>Dias vendidos nesta quinzena</Label>
               <div className="h-10 flex items-center px-3 border rounded-md bg-muted/30 text-sm">
-                {diasVendidos} dias vendidos · {15 - diasVendidos} dias usufruídos
+                {diasVendidosReal} dias vendidos · {diasGozadosReal} dias usufruídos
               </div>
             </div>
             <div>
