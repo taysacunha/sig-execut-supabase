@@ -1112,6 +1112,7 @@ export default function FeriasFerias() {
                                         <TableHead>Datas de gozo</TableHead>
                                         <TableHead>Vendidos / Gozados</TableHead>
                                         <TableHead>Valor mensal</TableHead>
+                                        <TableHead>Valor recebido</TableHead>
                                         <TableHead>Recebimento</TableHead>
                                         <TableHead>Última exportação</TableHead>
                                         <TableHead>Recebimento atestado</TableHead>
