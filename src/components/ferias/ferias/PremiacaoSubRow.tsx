@@ -24,32 +24,21 @@ export function ExportacaoCell({
 }: {
   p: FeriasPremiacao;
   canEdit: boolean;
-  onGerar: (data: string) => Promise<void> | void;
+  onGerar: () => Promise<void> | void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [data, setData] = useState<string>(p.ultima_exportacao_pdf || TODAY());
-
   return (
     <div className="flex items-center gap-2">
       <span className="text-sm">{fmt(p.ultima_exportacao_pdf)}</span>
       {canEdit && (
-        <Popover open={open} onOpenChange={(v) => { setOpen(v); if (v) setData(p.ultima_exportacao_pdf || TODAY()); }}>
-          <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Gerar PDF / atualizar emissão">
-              <Download className="h-3.5 w-3.5" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-64 space-y-2" align="end">
-            <div className="text-xs font-semibold">Data de emissão</div>
-            <Input type="date" value={data} onChange={(e) => setData(e.target.value)} />
-            <p className="text-[11px] text-muted-foreground">Será gravada como "última exportação".</p>
-            <Button size="sm" className="w-full" onClick={async () => {
-              if (!data) { toast.error("Informe a data"); return; }
-              await onGerar(data);
-              setOpen(false);
-            }}>Gerar PDF</Button>
-          </PopoverContent>
-        </Popover>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0"
+          title="Gerar PDF (usa a data de recebimento como emissão)"
+          onClick={() => onGerar()}
+        >
+          <Download className="h-3.5 w-3.5" />
+        </Button>
       )}
     </div>
   );
