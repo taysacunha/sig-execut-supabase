@@ -60,42 +60,32 @@ export function RecebimentoCell({
   if (p.recebimento_confirmado && p.recebimento_confirmado_em) {
     const nome = p.recebimento_confirmado_por && userNamesById?.[p.recebimento_confirmado_por];
     return (
-      <div className="flex items-center gap-1">
-        <Checkbox checked disabled={!canEdit} className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600" />
-        <Popover open={pop} onOpenChange={(v) => { setPop(v); if (v) setData(p.recebimento_confirmado_em!); }}>
-          <PopoverTrigger asChild disabled={!canEdit}>
-            <button className="text-xs underline-offset-2 hover:underline text-green-700 dark:text-green-400" title={nome ? `Atestado por ${nome}` : undefined}>
-              ✓ {fmt(p.recebimento_confirmado_em)}{nome ? ` · ${nome}` : ""}
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-64 space-y-2" align="end">
-            <div className="text-xs font-semibold">Editar data do atesto</div>
-            <Input type="date" value={data} min={minDate} onChange={(e) => setData(e.target.value)} />
-            {minDate && <p className="text-[11px] text-muted-foreground">Não pode ser anterior a {fmt(minDate)}.</p>}
-            <div className="flex gap-2">
-              <Button size="sm" className="flex-1" onClick={async () => {
-                if (minDate && data < minDate) { toast.error("Data anterior à emissão"); return; }
-                await onConfirmar(data);
-                setPop(false);
-              }}>Salvar</Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button size="sm" variant="outline" className="text-destructive">Remover</Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Remover atesto</AlertDialogTitle>
-                    <AlertDialogDescription>Deseja remover o atesto de recebimento?</AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={async () => { await onRemover(); setPop(false); }}>Remover</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          </PopoverContent>
-        </Popover>
+      <div className="flex items-center gap-2">
+        <AlertDialog>
+          <AlertDialogTrigger asChild disabled={!canEdit}>
+            <Checkbox
+              checked
+              disabled={!canEdit}
+              onCheckedChange={() => { /* AlertDialogTrigger cuida da abertura */ }}
+              className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600 cursor-pointer"
+            />
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Desmarcar atesto de recebimento</AlertDialogTitle>
+              <AlertDialogDescription>
+                Deseja desmarcar o atesto de recebimento? Esta ação removerá a data e o usuário responsáveis pela confirmação.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={async () => { await onRemover(); }}>Desmarcar</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        <span className="text-xs text-green-700 dark:text-green-400" title={nome ? `Atestado por ${nome}` : undefined}>
+          ✓ {fmt(p.recebimento_confirmado_em)}{nome ? ` · ${nome}` : ""}
+        </span>
       </div>
     );
   }
