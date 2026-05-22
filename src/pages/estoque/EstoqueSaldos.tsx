@@ -569,57 +569,11 @@ export default function EstoqueSaldos() {
           <div className="space-y-4">
             <div>
               <Label>Material</Label>
-              <Popover open={materialPopoverOpen} onOpenChange={setMaterialPopoverOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={materialPopoverOpen}
-                    className="w-full justify-between font-normal"
-                  >
-                    <span className="truncate">
-                      {materialId
-                        ? materiais.find((m) => m.id === materialId)?.nome ?? "Selecione..."
-                        : "Selecione..."}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                  <Command
-                    filter={(value, search) => {
-                      const v = normalizeText(value);
-                      const s = normalizeText(search);
-                      return v.includes(s) ? 1 : 0;
-                    }}
-                  >
-                    <CommandInput placeholder="Buscar material..." />
-                    <CommandList>
-                      <CommandEmpty>Nenhum material encontrado.</CommandEmpty>
-                      <CommandGroup>
-                        {materiais.map((m) => (
-                          <CommandItem
-                            key={m.id}
-                            value={m.nome}
-                            onSelect={() => {
-                              setMaterialId(m.id);
-                              setMaterialPopoverOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                materialId === m.id ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {m.nome}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <MaterialCombobox
+                materiais={materiais}
+                value={materialId}
+                onChange={setMaterialId}
+              />
             </div>
             <div>
               <Label>Local de Armazenamento</Label>
