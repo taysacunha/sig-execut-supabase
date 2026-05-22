@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Loader2, AlertTriangle, PackageOpen, ArrowRightLeft, Pencil, Trash2, Check, ChevronsUpDown } from "lucide-react";
+import { Plus, Loader2, AlertTriangle, PackageOpen, ArrowRightLeft, Pencil, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,14 +14,11 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
-import { normalizeText } from "@/lib/textUtils";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { useTableControls } from "@/hooks/useTableControls";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
 import { verificarEstoqueBaixo } from "@/hooks/useEstoqueNotificacoes";
+import { MaterialCombobox } from "@/components/estoque/MaterialCombobox";
 
 const fromEstoque = (table: string) => supabase.from(table as any);
 
