@@ -464,12 +464,44 @@ export default function EstoqueSaldos() {
 
       {/* Low stock alert */}
       {lowStockCount > 0 && (
-        <Card className="border-amber-600 bg-amber-100 dark:bg-amber-950/40 dark:border-amber-500/60">
+        <Card
+          role="button"
+          tabIndex={0}
+          onClick={() => setLowStockOnly((v) => !v)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setLowStockOnly((v) => !v);
+            }
+          }}
+          className={`cursor-pointer transition-colors border-amber-600 bg-amber-100 hover:bg-amber-200/70 dark:bg-amber-950/40 dark:border-amber-500/60 dark:hover:bg-amber-900/50 ${
+            lowStockOnly ? "ring-2 ring-amber-600" : ""
+          }`}
+        >
           <CardContent className="py-3 flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-700 dark:text-amber-400" />
-            <span className="text-sm font-medium text-amber-900 dark:text-amber-200">
-              <strong>{lowStockCount}</strong> {lowStockCount === 1 ? "material abaixo" : "materiais abaixo"} do estoque mínimo
+            <AlertTriangle className="h-5 w-5 text-amber-700 dark:text-amber-400 shrink-0" />
+            <span className="text-sm font-medium text-amber-900 dark:text-amber-200 flex-1">
+              <strong>{lowStockCount}</strong>{" "}
+              {lowStockCount === 1 ? "material abaixo" : "materiais abaixo"} do estoque mínimo.{" "}
+              {lowStockOnly ? (
+                <span className="underline">Filtro ativo — clique para mostrar todos</span>
+              ) : (
+                <span className="underline">Clique para filtrar somente esses</span>
+              )}
             </span>
+            {lowStockOnly && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-700 text-amber-900 hover:bg-amber-200 dark:text-amber-200"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLowStockOnly(false);
+                }}
+              >
+                <X className="h-3.5 w-3.5 mr-1" /> Limpar filtro
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}
