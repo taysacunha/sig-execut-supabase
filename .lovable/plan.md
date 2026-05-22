@@ -1,31 +1,31 @@
-## Tornar visíveis os materiais abaixo do estoque mínimo
+## Tratar 5 avisos de segurança
 
-### Contexto
+### 1. Ignorar 4 falsos positivos no scanner
+Marcar como "ignore" via `security--manage_security_finding`, com justificativa registrada:
 
-Na página `EstoqueSaldos.tsx`, o card amarelo mostra apenas a contagem ("4 materiais abaixo do estoque mínimo"), sem indicar quais. Já existe uma aba "Por material" com a coluna Status (Baixo/OK), mas o usuário precisa rolar e identificar manualmente.
+- **`dev_tracker_no_select_policy`** — Tabela protegida por política `ALL` restrita a admin/super_admin. A ausência de SELECT separado é intencional (tudo bloqueado para os demais).
+- **`ferias_colaborador_setores_substitutos_missing_update`** — Tabela append/delete-only por design; o app não edita, apenas recria.
+- **`ferias_folgas_perdas_missing_update`** — Idem: registros de perda são lançados/apagados, nunca editados.
+- **`ferias_setor_chefes_missing_update`** — Idem: vínculos de chefia são removidos e recriados.
 
-### Solução
+### 2. Atualizar `mem://security-memory`
+Registrar os 4 padrões aceitos para que scanners futuros não voltem a sinalizá-los como problema.
 
-Tornar o card de alerta clicável: ao clicar, abre um `Dialog` listando os materiais com saldo total abaixo do mínimo, consolidados em todas as unidades/locais.
+### 3. Migration: guard NULL em `is_admin_or_super`
+Criar `db/migrations/<timestamp>_is_admin_or_super_null_guard.sql` com `CREATE OR REPLACE FUNCTION` mantendo a assinatura atual e adicionando:
 
-### Alterações em `src/pages/estoque/EstoqueSaldos.tsx`
+```sql
+SELECT CASE
+  WHEN _user_id IS NULL THEN FALSE
+  ELSE EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_id = _user_id AND role IN ('super_admin','admin')
+  )
+END;
+```
 
-1. **Adicionar estado** `lowStockDialog: boolean`.
-2. **Computar `materiaisAbaixoMinimo**` a partir de `consolidadoPorMaterial` (já existe), filtrando `total <= estoque_minimo && estoque_minimo > 0`. Cada item já tem: nome, unidade, total, mínimo, nº de locais.
-3. **Transformar o card de alerta em botão**:
-  - Adicionar `cursor-pointer hover:bg-amber-200/60` e `onClick={() => setLowStockDialog(true)}`.
-  - Adicionar ícone `ChevronRight` no fim + texto "Ver lista" para deixar claro que é clicável.
-4. **Criar `Dialog**` com:
-  - Título: "Materiais abaixo do estoque mínimo"
-  - Tabela com colunas: Material | Saldo atual | Mínimo | Falta | Locais
-    - "Falta" = `estoque_minimo - total` (mostrado em vermelho)
-  - Ordenada pela maior diferença (mais crítico primeiro)
-  - Linha clicável que fecha o dialog e (opcional) faz scroll/filtro — nesta rodada apenas exibir.
-  - Botão "Fechar".
+Mantém `STABLE SECURITY DEFINER` e `search_path = public`. Marcar o finding `is_admin_or_super_null_uid` como `mark_as_fixed` depois.
 
 ### Escopo
-
-- Apenas `EstoqueSaldos.tsx`. Sem mudanças de backend, sem nova rota.
-- Reutilizar componentes shadcn já importados (`Dialog`, `Table`, `Badge`).
-
-Já que vai virar botão, coloque algo que possa voltar a mostrar tudo. Tipo um limpa filtro.
+- Sem mudanças no app frontend.
+- Sem alteração de comportamento — apenas robustez explícita e silenciamento de falsos positivos.
