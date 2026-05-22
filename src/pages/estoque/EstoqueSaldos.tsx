@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Loader2, AlertTriangle, PackageOpen, ArrowRightLeft, Pencil, Trash2, Check, ChevronsUpDown } from "lucide-react";
+import { Plus, Loader2, AlertTriangle, PackageOpen, ArrowRightLeft, Pencil, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,14 +14,11 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
-import { normalizeText } from "@/lib/textUtils";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { useTableControls } from "@/hooks/useTableControls";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
 import { verificarEstoqueBaixo } from "@/hooks/useEstoqueNotificacoes";
+import { MaterialCombobox } from "@/components/estoque/MaterialCombobox";
 
 const fromEstoque = (table: string) => supabase.from(table as any);
 
@@ -173,7 +170,6 @@ export default function EstoqueSaldos() {
   const [ajusteDialog, setAjusteDialog] = useState(false);
   const [transferenciaDialog, setTransferenciaDialog] = useState(false);
   const [excluirDialog, setExcluirDialog] = useState(false);
-  const [materialPopoverOpen, setMaterialPopoverOpen] = useState(false);
 
   // Form state
   const [materialId, setMaterialId] = useState("");
@@ -452,10 +448,10 @@ export default function EstoqueSaldos() {
 
       {/* Low stock alert */}
       {lowStockCount > 0 && (
-        <Card className="border-yellow-500/30 bg-yellow-500/5">
+        <Card className="border-amber-600 bg-amber-100 dark:bg-amber-950/40 dark:border-amber-500/60">
           <CardContent className="py-3 flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-yellow-500" />
-            <span className="text-sm text-yellow-400">
+            <AlertTriangle className="h-5 w-5 text-amber-700 dark:text-amber-400" />
+            <span className="text-sm font-medium text-amber-900 dark:text-amber-200">
               <strong>{lowStockCount}</strong> {lowStockCount === 1 ? "material abaixo" : "materiais abaixo"} do estoque mínimo
             </span>
           </CardContent>
@@ -572,57 +568,11 @@ export default function EstoqueSaldos() {
           <div className="space-y-4">
             <div>
               <Label>Material</Label>
-              <Popover open={materialPopoverOpen} onOpenChange={setMaterialPopoverOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={materialPopoverOpen}
-                    className="w-full justify-between font-normal"
-                  >
-                    <span className="truncate">
-                      {materialId
-                        ? materiais.find((m) => m.id === materialId)?.nome ?? "Selecione..."
-                        : "Selecione..."}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                  <Command
-                    filter={(value, search) => {
-                      const v = normalizeText(value);
-                      const s = normalizeText(search);
-                      return v.includes(s) ? 1 : 0;
-                    }}
-                  >
-                    <CommandInput placeholder="Buscar material..." />
-                    <CommandList>
-                      <CommandEmpty>Nenhum material encontrado.</CommandEmpty>
-                      <CommandGroup>
-                        {materiais.map((m) => (
-                          <CommandItem
-                            key={m.id}
-                            value={m.nome}
-                            onSelect={() => {
-                              setMaterialId(m.id);
-                              setMaterialPopoverOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                materialId === m.id ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {m.nome}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <MaterialCombobox
+                materiais={materiais}
+                value={materialId}
+                onChange={setMaterialId}
+              />
             </div>
             <div>
               <Label>Local de Armazenamento</Label>
