@@ -181,6 +181,7 @@ export default function EstoqueSaldos() {
   // Context for row-level actions
   const [selectedSaldo, setSelectedSaldo] = useState<Saldo | null>(null);
   const [justificativa, setJustificativa] = useState("");
+  const [lowStockOnly, setLowStockOnly] = useState(false);
 
   const { data: unidades = [] } = useQuery({
     queryKey: ["estoque-unidades"],
