@@ -32,7 +32,7 @@ export function CurrentUserInfo() {
   return (
     <div className="px-2 py-2 border-b border-sidebar-border mb-2 text-sidebar-foreground">
       {name && (
-        <div className="text-sm font-medium truncate" title={name}>
+        <div className="text-sm font-medium break-words leading-tight" title={name}>
           {name}
         </div>
       )}
