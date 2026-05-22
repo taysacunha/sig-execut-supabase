@@ -173,6 +173,7 @@ export default function EstoqueSaldos() {
   const [ajusteDialog, setAjusteDialog] = useState(false);
   const [transferenciaDialog, setTransferenciaDialog] = useState(false);
   const [excluirDialog, setExcluirDialog] = useState(false);
+  const [materialPopoverOpen, setMaterialPopoverOpen] = useState(false);
 
   // Form state
   const [materialId, setMaterialId] = useState("");
