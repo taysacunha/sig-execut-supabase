@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CurrentUserInfo } from "@/components/CurrentUserInfo";
 import executLogo from "@/assets/execut-logo.jpg";
 
 interface MenuItem {
@@ -168,6 +169,7 @@ export function FeriasSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="p-4 space-y-2">
+        <CurrentUserInfo />
         <Button 
           variant="secondary" 
           className="w-full justify-start bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent/80" 
