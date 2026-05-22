@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Loader2, AlertTriangle, PackageOpen, ArrowRightLeft, Pencil, Trash2 } from "lucide-react";
+import { Plus, Loader2, AlertTriangle, PackageOpen, ArrowRightLeft, Pencil, Trash2, X, Filter } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -181,6 +181,7 @@ export default function EstoqueSaldos() {
   // Context for row-level actions
   const [selectedSaldo, setSelectedSaldo] = useState<Saldo | null>(null);
   const [justificativa, setJustificativa] = useState("");
+  const [lowStockOnly, setLowStockOnly] = useState(false);
 
   const { data: unidades = [] } = useQuery({
     queryKey: ["estoque-unidades"],
@@ -241,16 +242,25 @@ export default function EstoqueSaldos() {
     enabled: materiais.length > 0 && locais.length > 0,
   });
 
+  const isSaldoBaixo = (s: Saldo) =>
+    s.quantidade <= (s.material_estoque_minimo || 0) && (s.material_estoque_minimo || 0) > 0;
+
+  // Saldos visíveis (respeita filtro "somente abaixo do mínimo")
+  const saldosVisiveis = useMemo(
+    () => (lowStockOnly ? saldos.filter(isSaldoBaixo) : saldos),
+    [saldos, lowStockOnly]
+  );
+
   // Group saldos by unidade
   const saldosByUnidade = useMemo(() => {
     const map: Record<string, Saldo[]> = {};
-    for (const s of saldos) {
+    for (const s of saldosVisiveis) {
       const uid = s.unidade_id || "sem-unidade";
       if (!map[uid]) map[uid] = [];
       map[uid].push(s);
     }
     return map;
-  }, [saldos]);
+  }, [saldosVisiveis]);
 
   // Tabs: only show units that have saldos
   const activeUnidades = useMemo(() => {
@@ -272,7 +282,7 @@ export default function EstoqueSaldos() {
   // Consolidado por material: soma todos os locais
   const consolidadoPorMaterial = useMemo(() => {
     const map = new Map<string, { material_id: string; material_nome: string; material_unidade: string; estoque_minimo: number; total: number; locais: number }>();
-    for (const s of saldos) {
+    for (const s of saldosVisiveis) {
       const cur = map.get(s.material_id);
       if (cur) {
         cur.total += s.quantidade;
@@ -288,8 +298,14 @@ export default function EstoqueSaldos() {
         });
       }
     }
-    return Array.from(map.values()).sort((a, b) => a.material_nome.localeCompare(b.material_nome));
-  }, [saldos]);
+    const arr = Array.from(map.values());
+    if (lowStockOnly) {
+      return arr
+        .filter((c) => c.total <= c.estoque_minimo && c.estoque_minimo > 0)
+        .sort((a, b) => (b.estoque_minimo - b.total) - (a.estoque_minimo - a.total));
+    }
+    return arr.sort((a, b) => a.material_nome.localeCompare(b.material_nome));
+  }, [saldosVisiveis, lowStockOnly]);
 
   // ─── Row action handlers ───
   const handleAjustar = (s: Saldo) => {
@@ -448,12 +464,44 @@ export default function EstoqueSaldos() {
 
       {/* Low stock alert */}
       {lowStockCount > 0 && (
-        <Card className="border-amber-600 bg-amber-100 dark:bg-amber-950/40 dark:border-amber-500/60">
+        <Card
+          role="button"
+          tabIndex={0}
+          onClick={() => setLowStockOnly((v) => !v)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setLowStockOnly((v) => !v);
+            }
+          }}
+          className={`cursor-pointer transition-colors border-amber-600 bg-amber-100 hover:bg-amber-200/70 dark:bg-amber-950/40 dark:border-amber-500/60 dark:hover:bg-amber-900/50 ${
+            lowStockOnly ? "ring-2 ring-amber-600" : ""
+          }`}
+        >
           <CardContent className="py-3 flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-700 dark:text-amber-400" />
-            <span className="text-sm font-medium text-amber-900 dark:text-amber-200">
-              <strong>{lowStockCount}</strong> {lowStockCount === 1 ? "material abaixo" : "materiais abaixo"} do estoque mínimo
+            <AlertTriangle className="h-5 w-5 text-amber-700 dark:text-amber-400 shrink-0" />
+            <span className="text-sm font-medium text-amber-900 dark:text-amber-200 flex-1">
+              <strong>{lowStockCount}</strong>{" "}
+              {lowStockCount === 1 ? "material abaixo" : "materiais abaixo"} do estoque mínimo.{" "}
+              {lowStockOnly ? (
+                <span className="underline">Filtro ativo — clique para mostrar todos</span>
+              ) : (
+                <span className="underline">Clique para filtrar somente esses</span>
+              )}
             </span>
+            {lowStockOnly && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-700 text-amber-900 hover:bg-amber-200 dark:text-amber-200"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLowStockOnly(false);
+                }}
+              >
+                <X className="h-3.5 w-3.5 mr-1" /> Limpar filtro
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}
@@ -473,7 +521,7 @@ export default function EstoqueSaldos() {
       ) : (
         <Tabs defaultValue="todas" className="space-y-4">
           <TabsList className="flex-wrap h-auto gap-1">
-            <TabsTrigger value="todas">Todas ({saldos.length})</TabsTrigger>
+            <TabsTrigger value="todas">Todas ({saldosVisiveis.length})</TabsTrigger>
             <TabsTrigger value="por-material">Por material ({consolidadoPorMaterial.length})</TabsTrigger>
             {activeUnidades.map((u) => (
               <TabsTrigger key={u.id} value={u.id}>
@@ -486,7 +534,7 @@ export default function EstoqueSaldos() {
             <Card>
               <CardContent className="pt-4">
                 <SaldosTable
-                  saldos={saldos}
+                  saldos={saldosVisiveis}
                   canEdit={canEditEstoque}
                   onAjustar={handleAjustar}
                   onTransferir={handleTransferir}
