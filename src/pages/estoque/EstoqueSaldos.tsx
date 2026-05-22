@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Loader2, AlertTriangle, PackageOpen, ArrowRightLeft, Pencil, Trash2 } from "lucide-react";
+import { Plus, Loader2, AlertTriangle, PackageOpen, ArrowRightLeft, Pencil, Trash2, Check, ChevronsUpDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,10 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
+import { normalizeText } from "@/lib/textUtils";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { useTableControls } from "@/hooks/useTableControls";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
@@ -169,6 +173,7 @@ export default function EstoqueSaldos() {
   const [ajusteDialog, setAjusteDialog] = useState(false);
   const [transferenciaDialog, setTransferenciaDialog] = useState(false);
   const [excluirDialog, setExcluirDialog] = useState(false);
+  const [materialPopoverOpen, setMaterialPopoverOpen] = useState(false);
 
   // Form state
   const [materialId, setMaterialId] = useState("");
@@ -567,10 +572,57 @@ export default function EstoqueSaldos() {
           <div className="space-y-4">
             <div>
               <Label>Material</Label>
-              <Select value={materialId} onValueChange={setMaterialId}>
-                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                <SelectContent>{materiais.map((m) => <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>)}</SelectContent>
-              </Select>
+              <Popover open={materialPopoverOpen} onOpenChange={setMaterialPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={materialPopoverOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className="truncate">
+                      {materialId
+                        ? materiais.find((m) => m.id === materialId)?.nome ?? "Selecione..."
+                        : "Selecione..."}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command
+                    filter={(value, search) => {
+                      const v = normalizeText(value);
+                      const s = normalizeText(search);
+                      return v.includes(s) ? 1 : 0;
+                    }}
+                  >
+                    <CommandInput placeholder="Buscar material..." />
+                    <CommandList>
+                      <CommandEmpty>Nenhum material encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        {materiais.map((m) => (
+                          <CommandItem
+                            key={m.id}
+                            value={m.nome}
+                            onSelect={() => {
+                              setMaterialId(m.id);
+                              setMaterialPopoverOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                materialId === m.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {m.nome}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div>
               <Label>Local de Armazenamento</Label>
