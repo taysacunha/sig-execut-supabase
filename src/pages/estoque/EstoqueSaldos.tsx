@@ -521,7 +521,7 @@ export default function EstoqueSaldos() {
       ) : (
         <Tabs defaultValue="todas" className="space-y-4">
           <TabsList className="flex-wrap h-auto gap-1">
-            <TabsTrigger value="todas">Todas ({saldos.length})</TabsTrigger>
+            <TabsTrigger value="todas">Todas ({saldosVisiveis.length})</TabsTrigger>
             <TabsTrigger value="por-material">Por material ({consolidadoPorMaterial.length})</TabsTrigger>
             {activeUnidades.map((u) => (
               <TabsTrigger key={u.id} value={u.id}>
@@ -534,7 +534,7 @@ export default function EstoqueSaldos() {
             <Card>
               <CardContent className="pt-4">
                 <SaldosTable
-                  saldos={saldos}
+                  saldos={saldosVisiveis}
                   canEdit={canEditEstoque}
                   onAjustar={handleAjustar}
                   onTransferir={handleTransferir}
