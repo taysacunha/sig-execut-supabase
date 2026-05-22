@@ -242,16 +242,25 @@ export default function EstoqueSaldos() {
     enabled: materiais.length > 0 && locais.length > 0,
   });
 
+  const isSaldoBaixo = (s: Saldo) =>
+    s.quantidade <= (s.material_estoque_minimo || 0) && (s.material_estoque_minimo || 0) > 0;
+
+  // Saldos visíveis (respeita filtro "somente abaixo do mínimo")
+  const saldosVisiveis = useMemo(
+    () => (lowStockOnly ? saldos.filter(isSaldoBaixo) : saldos),
+    [saldos, lowStockOnly]
+  );
+
   // Group saldos by unidade
   const saldosByUnidade = useMemo(() => {
     const map: Record<string, Saldo[]> = {};
-    for (const s of saldos) {
+    for (const s of saldosVisiveis) {
       const uid = s.unidade_id || "sem-unidade";
       if (!map[uid]) map[uid] = [];
       map[uid].push(s);
     }
     return map;
-  }, [saldos]);
+  }, [saldosVisiveis]);
 
   // Tabs: only show units that have saldos
   const activeUnidades = useMemo(() => {
@@ -273,7 +282,7 @@ export default function EstoqueSaldos() {
   // Consolidado por material: soma todos os locais
   const consolidadoPorMaterial = useMemo(() => {
     const map = new Map<string, { material_id: string; material_nome: string; material_unidade: string; estoque_minimo: number; total: number; locais: number }>();
-    for (const s of saldos) {
+    for (const s of saldosVisiveis) {
       const cur = map.get(s.material_id);
       if (cur) {
         cur.total += s.quantidade;
@@ -289,8 +298,14 @@ export default function EstoqueSaldos() {
         });
       }
     }
-    return Array.from(map.values()).sort((a, b) => a.material_nome.localeCompare(b.material_nome));
-  }, [saldos]);
+    const arr = Array.from(map.values());
+    if (lowStockOnly) {
+      return arr
+        .filter((c) => c.total <= c.estoque_minimo && c.estoque_minimo > 0)
+        .sort((a, b) => (b.estoque_minimo - b.total) - (a.estoque_minimo - a.total));
+    }
+    return arr.sort((a, b) => a.material_nome.localeCompare(b.material_nome));
+  }, [saldosVisiveis, lowStockOnly]);
 
   // ─── Row action handlers ───
   const handleAjustar = (s: Saldo) => {
