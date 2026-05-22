@@ -19,6 +19,7 @@ import { notificarGestoresUnidade, criarNotificacao, verificarEstoqueBaixo } fro
 import { useTableControls } from "@/hooks/useTableControls";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
 import { useUsuarioUnidades } from "@/hooks/useUsuarioUnidades";
+import { MaterialCombobox } from "@/components/estoque/MaterialCombobox";
 
 const fromEstoque = (table: string) => supabase.from(table as any);
 
@@ -725,14 +726,13 @@ export default function EstoqueSolicitacoes() {
               {itens.map((item, idx) => (
                 <div key={idx} className="flex gap-2 items-end">
                   <div className="flex-1">
-                    <Select value={item.material_id} onValueChange={(v) => updateItem(idx, "material_id", v)}>
-                      <SelectTrigger><SelectValue placeholder="Material..." /></SelectTrigger>
-                      <SelectContent>
-                        {materiaisDisponiveis.map((m) => (
-                          <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <MaterialCombobox
+                      materiais={materiaisDisponiveis}
+                      value={item.material_id}
+                      onChange={(v) => updateItem(idx, "material_id", v)}
+                      placeholder="Material..."
+                      emptyMessage="Nenhum material disponível."
+                    />
                   </div>
                   <div className="w-20">
                     <Input

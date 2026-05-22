@@ -170,7 +170,6 @@ export default function EstoqueSaldos() {
   const [ajusteDialog, setAjusteDialog] = useState(false);
   const [transferenciaDialog, setTransferenciaDialog] = useState(false);
   const [excluirDialog, setExcluirDialog] = useState(false);
-  const [materialPopoverOpen, setMaterialPopoverOpen] = useState(false);
 
   // Form state
   const [materialId, setMaterialId] = useState("");
@@ -449,10 +448,10 @@ export default function EstoqueSaldos() {
 
       {/* Low stock alert */}
       {lowStockCount > 0 && (
-        <Card className="border-yellow-500/30 bg-yellow-500/5">
+        <Card className="border-amber-600 bg-amber-100 dark:bg-amber-950/40 dark:border-amber-500/60">
           <CardContent className="py-3 flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-yellow-500" />
-            <span className="text-sm text-yellow-400">
+            <AlertTriangle className="h-5 w-5 text-amber-700 dark:text-amber-400" />
+            <span className="text-sm font-medium text-amber-900 dark:text-amber-200">
               <strong>{lowStockCount}</strong> {lowStockCount === 1 ? "material abaixo" : "materiais abaixo"} do estoque mínimo
             </span>
           </CardContent>
