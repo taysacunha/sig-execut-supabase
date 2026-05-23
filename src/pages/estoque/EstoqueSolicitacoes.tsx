@@ -521,7 +521,8 @@ export default function EstoqueSolicitacoes() {
       queryClient.invalidateQueries({ queryKey: ["estoque-solicitacoes"] });
       queryClient.invalidateQueries({ queryKey: ["estoque-movimentacoes"] });
       setReceiptConfirm(null);
-      toast.success("Recebimento confirmado. Obrigado!");
+      queryClient.invalidateQueries({ queryKey: ["estoque-recebimentos"] });
+      toast.success("Recebimento confirmado");
     },
     onError: (err: any) => toast.error(err.message || "Erro ao confirmar recebimento"),
   });
@@ -652,9 +653,9 @@ export default function EstoqueSolicitacoes() {
                             <Truck className="h-4 w-4 mr-1" /> Entregar
                           </Button>
                         )}
-                        {sol.status === "entregue" && sol.solicitante_user_id === user?.id && (
+                        {sol.status === "entregue" && sol.solicitante_user_id === user?.id && !recebidasIds.has(sol.id) && (
                           <Button size="sm" variant="outline" onClick={() => setReceiptConfirm(sol)}>
-                            <HandHeart className="h-4 w-4 mr-1" /> Confirmar Recebimento
+                            <PackageCheck className="h-4 w-4 mr-1" /> Confirmar Recebimento
                           </Button>
                         )}
                         {sol.status !== "cancelada" && sol.status !== "entregue" && (canEditEstoque || sol.solicitante_user_id === user?.id) && (
