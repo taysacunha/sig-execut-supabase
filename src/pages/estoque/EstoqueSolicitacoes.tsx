@@ -147,6 +147,24 @@ export default function EstoqueSolicitacoes() {
     },
   });
 
+  // Marca solicitações cujo recebimento já foi confirmado (recebido_em != null em alguma movimentação)
+  const solicitacaoIds = solicitacoes.map((s) => s.id);
+  const { data: recebimentos = [] } = useQuery({
+    queryKey: ["estoque-recebimentos", solicitacaoIds],
+    enabled: solicitacaoIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await fromEstoque("estoque_movimentacoes")
+        .select("solicitacao_id, recebido_em")
+        .in("solicitacao_id", solicitacaoIds)
+        .not("recebido_em", "is", null);
+      if (error) throw error;
+      return (data as any[]) || [];
+    },
+  });
+  const recebidasIds = new Set<string>(
+    recebimentos.map((r: any) => r.solicitacao_id).filter(Boolean),
+  );
+
   // Auto-abre o detalhe quando vier ?id= (de uma notificação clicada)
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
