@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, ClipboardList, Loader2, CheckCircle, Package, Truck, X, Eye, PackageCheck, HandHeart } from "lucide-react";
+import { Plus, ClipboardList, Loader2, CheckCircle, Package, Truck, X, Eye, PackageCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -146,6 +146,24 @@ export default function EstoqueSolicitacoes() {
       return data as unknown as Solicitacao[];
     },
   });
+
+  // Marca solicitações cujo recebimento já foi confirmado (recebido_em != null em alguma movimentação)
+  const solicitacaoIds = solicitacoes.map((s) => s.id);
+  const { data: recebimentos = [] } = useQuery({
+    queryKey: ["estoque-recebimentos", solicitacaoIds],
+    enabled: solicitacaoIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await fromEstoque("estoque_movimentacoes")
+        .select("solicitacao_id, recebido_em")
+        .in("solicitacao_id", solicitacaoIds)
+        .not("recebido_em", "is", null);
+      if (error) throw error;
+      return (data as any[]) || [];
+    },
+  });
+  const recebidasIds = new Set<string>(
+    recebimentos.map((r: any) => r.solicitacao_id).filter(Boolean),
+  );
 
   // Auto-abre o detalhe quando vier ?id= (de uma notificação clicada)
   const [searchParams, setSearchParams] = useSearchParams();
@@ -521,7 +539,8 @@ export default function EstoqueSolicitacoes() {
       queryClient.invalidateQueries({ queryKey: ["estoque-solicitacoes"] });
       queryClient.invalidateQueries({ queryKey: ["estoque-movimentacoes"] });
       setReceiptConfirm(null);
-      toast.success("Recebimento confirmado. Obrigado!");
+      queryClient.invalidateQueries({ queryKey: ["estoque-recebimentos"] });
+      toast.success("Recebimento confirmado");
     },
     onError: (err: any) => toast.error(err.message || "Erro ao confirmar recebimento"),
   });
@@ -652,9 +671,9 @@ export default function EstoqueSolicitacoes() {
                             <Truck className="h-4 w-4 mr-1" /> Entregar
                           </Button>
                         )}
-                        {sol.status === "entregue" && sol.solicitante_user_id === user?.id && (
+                        {sol.status === "entregue" && sol.solicitante_user_id === user?.id && !recebidasIds.has(sol.id) && (
                           <Button size="sm" variant="outline" onClick={() => setReceiptConfirm(sol)}>
-                            <HandHeart className="h-4 w-4 mr-1" /> Confirmar Recebimento
+                            <PackageCheck className="h-4 w-4 mr-1" /> Confirmar Recebimento
                           </Button>
                         )}
                         {sol.status !== "cancelada" && sol.status !== "entregue" && (canEditEstoque || sol.solicitante_user_id === user?.id) && (

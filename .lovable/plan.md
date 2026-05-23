@@ -1,31 +1,40 @@
-## Tratar 5 avisos de segurança
+## Problema
 
-### 1. Ignorar 4 falsos positivos no scanner
-Marcar como "ignore" via `security--manage_security_finding`, com justificativa registrada:
+Na página `Estoque › Solicitações`, ao clicar em **Confirmar Recebimento**:
 
-- **`dev_tracker_no_select_policy`** — Tabela protegida por política `ALL` restrita a admin/super_admin. A ausência de SELECT separado é intencional (tudo bloqueado para os demais).
-- **`ferias_colaborador_setores_substitutos_missing_update`** — Tabela append/delete-only por design; o app não edita, apenas recria.
-- **`ferias_folgas_perdas_missing_update`** — Idem: registros de perda são lançados/apagados, nunca editados.
-- **`ferias_setor_chefes_missing_update`** — Idem: vínculos de chefia são removidos e recriados.
+1. O toast aparece corretamente, mas o botão **continua visível** na linha.
+2. A mensagem do toast tem texto extra ("Obrigado!").
+3. O ícone usado (`HandHeart` — mão com coração) destoa do restante.
 
-### 2. Atualizar `mem://security-memory`
-Registrar os 4 padrões aceitos para que scanners futuros não voltem a sinalizá-los como problema.
+### Causa do botão persistente
 
-### 3. Migration: guard NULL em `is_admin_or_super`
-Criar `db/migrations/<timestamp>_is_admin_or_super_null_guard.sql` com `CREATE OR REPLACE FUNCTION` mantendo a assinatura atual e adicionando:
+A visibilidade do botão depende apenas de `sol.status === "entregue"`. A confirmação grava `recebido_em` em `estoque_movimentacoes`, mas **não altera o status** da solicitação (que continua "entregue"). Resultado: o botão segue aparecendo até um refresh manual, e mesmo após refresh nunca some, pois o status nunca muda.
 
-```sql
-SELECT CASE
-  WHEN _user_id IS NULL THEN FALSE
-  ELSE EXISTS (
-    SELECT 1 FROM public.user_roles
-    WHERE user_id = _user_id AND role IN ('super_admin','admin')
-  )
-END;
-```
+## Plano
 
-Mantém `STABLE SECURITY DEFINER` e `search_path = public`. Marcar o finding `is_admin_or_super_null_uid` como `mark_as_fixed` depois.
+Mudanças **somente em** `src/pages/estoque/EstoqueSolicitacoes.tsx` (frontend, sem migração de DB):
 
-### Escopo
-- Sem mudanças no app frontend.
-- Sem alteração de comportamento — apenas robustez explícita e silenciamento de falsos positivos.
+1. **Carregar status de recebimento por solicitação**
+   - Após a query `estoque-solicitacoes`, adicionar uma segunda `useQuery` (`["estoque-recebimentos", ids]`) que busca `estoque_movimentacoes` com `solicitacao_id IN (ids)` selecionando `solicitacao_id, recebido_em`.
+   - Montar um `Set<string>` (`recebidasIds`) com as solicitações que têm pelo menos uma movimentação com `recebido_em != null`.
+
+2. **Esconder botão após confirmação**
+   - Alterar a condição da linha 655 para:
+     ```
+     sol.status === "entregue"
+       && sol.solicitante_user_id === user?.id
+       && !recebidasIds.has(sol.id)
+     ```
+   - No `onSuccess` da mutation, invalidar também `["estoque-recebimentos"]` para refletir imediatamente.
+
+3. **Simplificar toast** (linha 524)
+   - `toast.success("Recebimento confirmado. Obrigado!")` → `toast.success("Recebimento confirmado")`.
+
+4. **Trocar ícone** (linha 657 + import linha 6)
+   - Remover `HandHeart` do import.
+   - Usar `PackageCheck` (já importado) no botão "Confirmar Recebimento".
+
+## Fora de escopo
+
+- Sem alteração de schema, RLS ou status no banco.
+- Sem mudanças em outras telas.
