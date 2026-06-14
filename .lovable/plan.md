@@ -1,55 +1,42 @@
 ## Objetivo
 
-Atualizar a tabela `dev_tracker` com todas as funcionalidades desenvolvidas após a criação inicial do seed, sem apagar nada do que já existe.
+Padronizar todos os campos de senha do sistema para exibir um botão de "olho" (ícone) à direita do input, que alterna entre mostrar e ocultar a senha digitada.
 
-## Como vou aplicar
+## Campos identificados (atualmente sem o toggle)
 
-Via **insert tool** (não migration — é dado, não schema), com `INSERT` simples por módulo, `display_order` continuando a partir do último valor existente em cada `system_name`.
+| Arquivo | Linha | Contexto |
+|---|---|---|
+| `src/pages/Auth.tsx` | 635 | Campo "Senha" do formulário de login |
+| `src/pages/Profile.tsx` | 247 | "Senha Atual" (alterar senha) |
+| `src/pages/Profile.tsx` | 259 | "Nova Senha" (alterar senha) |
+| `src/pages/Profile.tsx` | 402 | "Confirmar Senha" (excluir conta) |
+| `src/pages/UserManagement.tsx` | 845 | "Senha" (cadastro de usuário) |
+| `src/pages/UserManagement.tsx` | 855 | "Confirmar Senha" (cadastro de usuário) |
 
-Horas e custo seguirão o mesmo padrão do seed original (estimativas conservadoras, custo 0 — você ajusta depois pela própria UI do Dev Tracker se quiser).
+Já possuem o toggle e servirão de referência visual: `src/pages/Auth.tsx` linhas 482 e 543 (form de definir/redefinir senha).
 
-## O que será adicionado
+## Abordagem
 
-### Estoque (continua a partir de display_order = 11)
-- CRUD de categorias de materiais
-- Confirmação de recebimento pelo solicitante (com data de atesto)
-- Vínculo de usuários a unidades e setores (controle granular)
-- Política de recebimento (RLS dedicada para solicitantes)
-- Notificações de estoque baixo automáticas
-- Auditoria automática via triggers em todas as tabelas `estoque_*`
+Criar um componente reutilizável `src/components/ui/password-input.tsx` baseado no `Input` do shadcn, com:
 
-### Férias e Folgas (continua a partir de display_order = 17)
-- Aba Períodos Aquisitivos (gestão dedicada)
-- Campo "Enviado ao contador" por quinzena (Q1/Q2) + PDF do contador
-- Períodos de gozo flexível (sub-períodos via `ferias_gozo_periodos`)
-- Períodos quitados / venda integral (`ferias_periodos_quitados`)
-- Afastamentos de colaboradores (CRUD + impacto no aquisitivo)
-- Premiações de férias (1º e 2º período, ordem obrigatória, atesto, PDF)
-- Redução de férias e Quitar período (dialogs dedicados)
-- Utilização de créditos (férias e folgas) em dialogs separados
-- Mover folgas em lote, Perda de folga, Trocar folga
-- Visualização Gantt de férias + exportação PDF
-- Aniversariantes "Celebre" (PDF alternativo)
-- Dados sensíveis isolados (`ferias_colaboradores_dados_sensiveis` com RLS própria)
-- Auditoria automática via triggers em todas as tabelas `ferias_*`
-- Reconciliação determinística de status (`atualizar_status_ferias` reescrita)
-- Página de ajuda do módulo (`FeriasHelp`)
+- Mesmas props do `<Input>` nativo (forwardRef, className, etc.).
+- Estado interno `show` (boolean).
+- Botão `type="button"` posicionado absolutamente à direita (padrão `pr-10`), com ícones `Eye` / `EyeOff` do `lucide-react`.
+- `aria-label` dinâmico: "Mostrar senha" / "Ocultar senha".
+- `tabIndex={-1}` no botão para não atrapalhar a navegação por teclado entre campos.
+- Mantém `type` alternando entre `"password"` e `"text"`.
 
-### Infraestrutura (continua a partir de display_order = 15)
-- Páginas de Auditoria por módulo (Escalas, Vendas, Estoque, Férias)
-- Help / Ajuda contextual por módulo
-- Guia de Deploy (`DeployGuide`)
-- Página Dev Tracker (registro de funcionalidades — esta mesma)
-- Correções de RLS de segurança (`rls_security_fixes`)
-- Tabela de logs de auditoria de módulos (`module_audit_logs`) + função `audit_module_changes`
+Em seguida, substituir nos 6 pontos acima `<Input type="password" ... />` por `<PasswordInput ... />`, preservando todas as outras props (id, value, onChange, required, autoComplete, etc.).
+
+## Detalhes técnicos
+
+- O componente segue o mesmo padrão dos campos já existentes em `Auth.tsx` (wrapper `relative`, botão absoluto à direita).
+- Sem alterações de lógica de negócio, validação ou estilo geral — apenas adição do toggle visual.
+- Sem novas dependências (lucide-react já está no projeto).
+- Sem mudanças no Supabase, em hooks ou em RLS.
 
 ## Fora de escopo
 
-- Lembretes por e-mail (Resend) — conforme combinado, fica para depois.
-- Não vou alterar nada já cadastrado, só acrescentar.
-
-## Ordem de execução ao aprovar
-
-1. `SELECT` rápido para confirmar o último `display_order` de cada módulo.
-2. `INSERT` único por módulo (4 inserts) com todos os itens acima.
-3. Confirmação na chat com a contagem total adicionada.
+- Campos de senha em diálogos ainda não criados.
+- Alterações nos formulários já com toggle (Auth — definir/redefinir senha).
+- Regras de força de senha, validação ou autenticação.
