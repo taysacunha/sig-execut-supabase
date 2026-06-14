@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -242,9 +243,8 @@ export default function Profile() {
           <form onSubmit={handlePasswordChange} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="current-password">Senha Atual</Label>
-              <Input
+              <PasswordInput
                 id="current-password"
-                type="password"
                 placeholder="••••••••"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
@@ -254,9 +254,8 @@ export default function Profile() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="new-password">Nova Senha</Label>
-              <Input
+              <PasswordInput
                 id="new-password"
-                type="password"
                 placeholder="••••••••"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
@@ -397,9 +396,8 @@ export default function Profile() {
             
             <div className="space-y-2">
               <Label htmlFor="confirm-new-password">Confirmar Nova Senha</Label>
-              <Input
+              <PasswordInput
                 id="confirm-new-password"
-                type="password"
                 placeholder="••••••••"
                 value={confirmNewPassword}
                 onChange={(e) => setConfirmNewPassword(e.target.value)}
