@@ -51,6 +51,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -840,9 +841,8 @@ function UserManagementContent() {
                 <>
                   <div className="space-y-2">
                     <Label htmlFor="editPassword">Nova Senha (deixe em branco para manter)</Label>
-                    <Input 
+                    <PasswordInput
                       id="editPassword" 
-                      type="password"
                       placeholder="••••••••" 
                       value={editPassword} 
                       onChange={(e) => setEditPassword(e.target.value)} 
@@ -850,9 +850,8 @@ function UserManagementContent() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="editPasswordConfirm">Confirmar Nova Senha</Label>
-                    <Input 
+                    <PasswordInput
                       id="editPasswordConfirm" 
-                      type="password"
                       placeholder="••••••••" 
                       value={editPasswordConfirm} 
                       onChange={(e) => setEditPasswordConfirm(e.target.value)} 
