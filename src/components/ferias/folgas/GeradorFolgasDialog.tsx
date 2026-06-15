@@ -519,17 +519,20 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       return;
     }
     const perdasCount = perdasParaGerar.length;
+    // Set de IDs com perda — trava absoluta usada em TODAS as etapas
+    const perdaIds = new Set<string>(perdasParaGerar.map(p => p.colaborador_id));
 
     // Step 1: Determine exclusions GLOBALLY
     const exclusionReasons = new Map<string, string>();
     colaboradores.forEach(colab => {
-      if (isAfastadoAnySaturday(colab.id)) {
+      // Perda tem prioridade máxima — sempre bloqueia o mês inteiro
+      if (perdaIds.has(colab.id)) {
+        exclusionReasons.set(colab.id, "Perda registrada");
+      } else if (isAfastadoAnySaturday(colab.id)) {
         const motivo = getAfastamentoMotivo(colab.id);
         exclusionReasons.set(colab.id, `Afastado (${motivo})`);
       } else if (isInExperiencePeriod(colab)) {
         exclusionReasons.set(colab.id, "Período de experiência");
-      } else if (hasPerda(colab.id, perdasParaGerar)) {
-        exclusionReasons.set(colab.id, "Perda registrada");
       } else {
         const block = shouldBlockVacationMonth(colab.id);
         if (block.blocked) {
@@ -1140,9 +1143,39 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     });
 
     setPreviewData(allPreview);
+
+    // TRAVA FINAL DE SEGURANÇA: nenhuma linha alocada pode conter colaborador com perda
+    if (perdaIds.size > 0) {
+      const sanitized: PreviewRow[] = [];
+      const seenExcluded = new Set<string>();
+      for (const row of allPreview) {
+        if (perdaIds.has(row.colaborador_id) && row.data_sabado) {
+          // Remover alocação indevida e registrar apenas como excluído
+          if (!seenExcluded.has(row.colaborador_id)) {
+            seenExcluded.add(row.colaborador_id);
+            sanitized.push({
+              ...row,
+              data_sabado: "",
+              motivo_exclusao: "Perda registrada",
+            });
+          }
+          continue;
+        }
+        sanitized.push(row);
+      }
+      setPreviewData(sanitized);
+    }
+
+    // Diagnóstico: listar quem foi bloqueado por perda (ajuda a confirmar visualmente)
+    const bloqueadosPorPerda = colaboradores
+      .filter(c => perdaIds.has(c.id))
+      .map(c => c.nome);
+    if (bloqueadosPorPerda.length > 0) {
+      diagnostics.push(`Bloqueados por perda (${bloqueadosPorPerda.length}): ${bloqueadosPorPerda.join(", ")}`);
+    }
     
     const validKeys = allPreview
-      .filter(p => !p.motivo_exclusao && p.data_sabado)
+      .filter(p => !p.motivo_exclusao && p.data_sabado && !perdaIds.has(p.colaborador_id))
       .map(p => `${p.setor_id}-${p.colaborador_id}-${p.data_sabado}`);
     setSelectedRows(new Set(validKeys));
     
