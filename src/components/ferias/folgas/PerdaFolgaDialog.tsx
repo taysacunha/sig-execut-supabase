@@ -33,6 +33,16 @@ interface Afastamento {
   motivo: string;
 }
 
+interface PerdaRegistrada {
+  id: string;
+  colaborador_id: string | null;
+  ano: number;
+  mes: number;
+  motivo: string;
+  observacoes: string | null;
+  colaborador?: { nome: string } | null;
+}
+
 interface PerdaFolgaDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -147,7 +157,7 @@ export function PerdaFolgaDialog({ open, onOpenChange, year, month, selectedSeto
   const addPerdaMutation = useMutation({
     mutationFn: async () => {
       const { data: user } = await supabase.auth.getUser();
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("ferias_folgas_perdas")
         .insert({
           colaborador_id: colaboradorId,
@@ -156,11 +166,25 @@ export function PerdaFolgaDialog({ open, onOpenChange, year, month, selectedSeto
           motivo: motivoKey,
           observacoes: observacoes || null,
           created_by: user.user?.id,
-        });
+        })
+        .select("id, colaborador_id, ano, mes, motivo, observacoes, colaborador:ferias_colaboradores!ferias_folgas_perdas_colaborador_id_fkey(nome)")
+        .single();
       if (error) throw error;
+      return data as PerdaRegistrada;
     },
-    onSuccess: () => {
+    onSuccess: (perda) => {
       toast.success("Perda de folga registrada!");
+      queryClient.setQueryData<PerdaRegistrada[]>(["ferias-perdas", year, month], (old = []) => {
+        const semDuplicar = old.filter(p => p.colaborador_id !== perda.colaborador_id);
+        return [perda, ...semDuplicar];
+      });
+      queryClient.setQueryData<string[]>(["ferias-perdas-check", year, month], (old = []) => (
+        perda.colaborador_id && !old.includes(perda.colaborador_id) ? [...old, perda.colaborador_id] : old
+      ));
+      queryClient.setQueryData<{ colaborador_id: string | null }[]>(["ferias-perdas-gerador", year, month], (old = []) => {
+        if (!perda.colaborador_id || old.some(p => p.colaborador_id === perda.colaborador_id)) return old;
+        return [...old, { colaborador_id: perda.colaborador_id }];
+      });
       queryClient.invalidateQueries({ queryKey: ["ferias-perdas"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-perdas-check"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-perdas-gerador"] });

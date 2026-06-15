@@ -56,7 +56,7 @@ interface GozoPeriodo {
 }
 
 interface Perda {
-  colaborador_id: string;
+  colaborador_id: string | null;
 }
 
 interface SetorChefe {
@@ -84,6 +84,7 @@ interface GeradorFolgasDialogProps {
   onOpenChange: (open: boolean) => void;
   year: number;
   month: number;
+  perdasPeriodo?: Perda[];
 }
 
 interface ConfigMap {
@@ -116,7 +117,7 @@ interface AllocationUnit {
   allSetorIds: string[]; // All unique sector IDs from all members (for cross-sector families)
 }
 
-export function GeradorFolgasDialog({ open, onOpenChange, year, month }: GeradorFolgasDialogProps) {
+export function GeradorFolgasDialog({ open, onOpenChange, year, month, perdasPeriodo = [] }: GeradorFolgasDialogProps) {
   const queryClient = useQueryClient();
   const [previewData, setPreviewData] = useState<PreviewRow[]>([]);
   const [showPreview, setShowPreview] = useState(false);
@@ -268,7 +269,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
   };
 
   // Query perdas do mês
-  const { data: perdas = [], isFetching: fetchingPerdas, refetch: refetchPerdas } = useQuery({
+  const { data: perdas = [], isFetching: fetchingPerdas } = useQuery({
     queryKey: ["ferias-perdas-gerador", year, month],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -280,6 +281,14 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       return data as Perda[];
     },
   });
+
+  const perdaIdsEmMemoria = useMemo(() => {
+    const ids = new Set<string>();
+    [...perdas, ...perdasPeriodo].forEach(p => {
+      if (p.colaborador_id) ids.add(p.colaborador_id);
+    });
+    return ids;
+  }, [perdas, perdasPeriodo]);
 
   // Query afastamentos ativos no mês
   const { data: afastamentos = [] } = useQuery({
@@ -336,6 +345,20 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       return data || [];
     },
   });
+
+  const availableCreditsSemPerda = useMemo(() => {
+    return availableCredits.filter((credit: any) => !perdaIdsEmMemoria.has(credit.colaborador_id));
+  }, [availableCredits, perdaIdsEmMemoria]);
+
+  useEffect(() => {
+    if (!open) return;
+    setCreditsToUse(prev => {
+      const validCreditIds = new Set(availableCreditsSemPerda.map((credit: any) => credit.id));
+      const next = new Set([...prev].filter(id => validCreditIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [open, availableCreditsSemPerda]);
+
   const countVacationDaysInMonth = (colabId: string): number => {
     const monthStart = startOfMonth(new Date(year, month - 1));
     const monthEnd = endOfMonth(new Date(year, month - 1));
@@ -502,7 +525,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
 
     // Fonte única da verdade: buscar perdas diretamente do banco, ignorando cache.
     // Evita race após apagar/registrar perdas sem recarregar a página.
-    let perdasParaGerar: Perda[] = [];
+    let perdasParaGerar: Perda[] = [...perdasPeriodo, ...perdas];
     try {
       const { data: perdasFrescas, error: perdasErr } = await supabase
         .from("ferias_folgas_perdas")
@@ -510,7 +533,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
         .eq("ano", year)
         .eq("mes", month);
       if (perdasErr) throw perdasErr;
-      perdasParaGerar = (perdasFrescas || []) as Perda[];
+      perdasParaGerar = [...perdasParaGerar, ...((perdasFrescas || []) as Perda[])];
       // Atualizar cache para manter a UI consistente
       queryClient.setQueryData(["ferias-perdas-gerador", year, month], perdasParaGerar);
     } catch (err: any) {
@@ -518,9 +541,9 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       toast.error(`Erro ao consultar perdas: ${err?.message || "desconhecido"}`);
       return;
     }
-    const perdasCount = perdasParaGerar.length;
+    const perdasCount = new Set(perdasParaGerar.map(p => p.colaborador_id).filter(Boolean)).size;
     // Set de IDs com perda — trava absoluta usada em TODAS as etapas
-    const perdaIds = new Set<string>(perdasParaGerar.map(p => p.colaborador_id));
+    const perdaIds = new Set<string>(perdasParaGerar.map(p => p.colaborador_id).filter(Boolean) as string[]);
 
     // Step 1: Determine exclusions GLOBALLY
     const exclusionReasons = new Map<string, string>();
@@ -669,7 +692,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
 
     // Determine credit collaborators
     const creditColabIds = new Set<string>();
-    availableCredits.forEach(credit => {
+    availableCreditsSemPerda.forEach(credit => {
       if (creditsToUse.has(credit.id)) {
         creditColabIds.add(credit.colaborador_id);
       }
@@ -1241,6 +1264,24 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
         throw new Error("Nenhuma folga selecionada para salvar");
       }
 
+      const { data: perdasFrescas, error: perdasError } = await supabase
+        .from("ferias_folgas_perdas")
+        .select("colaborador_id")
+        .eq("ano", year)
+        .eq("mes", month);
+      if (perdasError) throw perdasError;
+
+      const perdaIds = new Set<string>([
+        ...perdasPeriodo,
+        ...perdas,
+        ...((perdasFrescas || []) as Perda[]),
+      ].map(p => p.colaborador_id).filter(Boolean) as string[]);
+      const selecionadosComPerda = selectedData.filter(p => perdaIds.has(p.colaborador_id));
+      if (selecionadosComPerda.length > 0) {
+        const nomes = [...new Set(selecionadosComPerda.map(p => p.colaborador_nome))].join(", ");
+        throw new Error(`Não foi possível salvar: ${nomes} possui perda registrada no período.`);
+      }
+
       // Group by setor
       const bySetor = new Map<string, PreviewRow[]>();
       selectedData.forEach(row => {
@@ -1450,7 +1491,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
             </div>
 
             {/* Credits section */}
-            {availableCredits.length > 0 && (
+            {availableCreditsSemPerda.length > 0 && (
               <div className="p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg space-y-3">
                 <div className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-200">
                   <Gift className="h-4 w-4" />
@@ -1460,7 +1501,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
                   Os colaboradores abaixo possuem créditos de folga. Marque para usar neste mês (folgará 2 sábados).
                 </p>
                 <div className="space-y-2">
-                  {availableCredits.map((credit: any) => {
+                  {availableCreditsSemPerda.map((credit: any) => {
                     const colabName = credit.ferias_colaboradores?.nome || "—";
                     const origemDate = format(new Date(credit.origem_data + "T12:00:00"), "dd/MM/yyyy");
                     return (
