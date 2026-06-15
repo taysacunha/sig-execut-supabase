@@ -1,42 +1,54 @@
-## Objetivo
+## Problema
 
-Padronizar todos os campos de senha do sistema para exibir um botão de "olho" (ícone) à direita do input, que alterna entre mostrar e ocultar a senha digitada.
+A tabela `ferias_folgas_perdas` tem uma constraint:
 
-## Campos identificados (atualmente sem o toggle)
+```sql
+CHECK (motivo IN ('falta_injustificada', 'atestado_sabado', 'aviso_previo'))
+```
 
-| Arquivo | Linha | Contexto |
-|---|---|---|
-| `src/pages/Auth.tsx` | 635 | Campo "Senha" do formulário de login |
-| `src/pages/Profile.tsx` | 247 | "Senha Atual" (alterar senha) |
-| `src/pages/Profile.tsx` | 259 | "Nova Senha" (alterar senha) |
-| `src/pages/Profile.tsx` | 402 | "Confirmar Senha" (excluir conta) |
-| `src/pages/UserManagement.tsx` | 845 | "Senha" (cadastro de usuário) |
-| `src/pages/UserManagement.tsx` | 855 | "Confirmar Senha" (cadastro de usuário) |
+Mas o `PerdaFolgaDialog.tsx` insere o **rótulo em português** (ex.: `"Falta injustificada"`, `"Atestado médico"`, `"Suspensão disciplinar"`, `"Outro motivo"`) — nenhum desses bate com os valores aceitos, então qualquer salvamento falha.
 
-Já possuem o toggle e servirão de referência visual: `src/pages/Auth.tsx` linhas 482 e 543 (form de definir/redefinir senha).
+## Solução
 
-## Abordagem
+Alinhar o banco e o frontend para usar as mesmas chaves canônicas e exibir rótulos no UI.
 
-Criar um componente reutilizável `src/components/ui/password-input.tsx` baseado no `Input` do shadcn, com:
+### 1. Migração SQL (nova)
 
-- Mesmas props do `<Input>` nativo (forwardRef, className, etc.).
-- Estado interno `show` (boolean).
-- Botão `type="button"` posicionado absolutamente à direita (padrão `pr-10`), com ícones `Eye` / `EyeOff` do `lucide-react`.
-- `aria-label` dinâmico: "Mostrar senha" / "Ocultar senha".
-- `tabIndex={-1}` no botão para não atrapalhar a navegação por teclado entre campos.
-- Mantém `type` alternando entre `"password"` e `"text"`.
+- `ALTER TABLE public.ferias_folgas_perdas DROP CONSTRAINT ferias_folgas_perdas_motivo_check;`
+- Normalizar dados existentes (se houver linhas com rótulos antigos como `"Atestado médico"`, mapear para a chave nova).
+- Recriar com a lista completa de chaves que o diálogo já oferece:
+  ```sql
+  CHECK (motivo IN (
+    'falta_injustificada',
+    'atestado_medico',
+    'atestado_sabado',
+    'aviso_previo',
+    'suspensao',
+    'outro'
+  ))
+  ```
+  (mantém `atestado_sabado` por compatibilidade histórica.)
 
-Em seguida, substituir nos 6 pontos acima `<Input type="password" ... />` por `<PasswordInput ... />`, preservando todas as outras props (id, value, onChange, required, autoComplete, etc.).
+### 2. `PerdaFolgaDialog.tsx`
 
-## Detalhes técnicos
+- Trocar o `insert` para gravar `motivo: motivoKey` (a chave) em vez do label traduzido.
+- Quando `motivoKey === 'outro'`, manter a obrigatoriedade do campo `observacoes` (já existe).
 
-- O componente segue o mesmo padrão dos campos já existentes em `Auth.tsx` (wrapper `relative`, botão absoluto à direita).
-- Sem alterações de lógica de negócio, validação ou estilo geral — apenas adição do toggle visual.
-- Sem novas dependências (lucide-react já está no projeto).
-- Sem mudanças no Supabase, em hooks ou em RLS.
+### 3. Exibição em `src/pages/ferias/FeriasFolgas.tsx` (linha 828)
+
+- Substituir `{perda.motivo}` por um helper `formatMotivoPerda(perda.motivo)` que mapeia as chaves para os rótulos em PT-BR (mesmo dicionário usado no diálogo). Fallback: retornar o valor cru.
+
+### 4. Dev Tracker
+
+- Acrescentar uma linha em `.lovable/dev_tracker_update_seed.sql` (sistema "Férias") registrando a correção: "Corrige constraint de motivo em perdas de folga e padroniza chaves/labels".
 
 ## Fora de escopo
 
-- Campos de senha em diálogos ainda não criados.
-- Alterações nos formulários já com toggle (Auth — definir/redefinir senha).
-- Regras de força de senha, validação ou autenticação.
+- Não muda RLS, layout do diálogo, regras de negócio de afastamento/créditos.
+- Não mexe em outras tabelas de férias nem em auditoria.
+
+## Resultado esperado
+
+Registrar perda com qualquer motivo (incluindo "Atestado médico", "Suspensão disciplinar", "Outro motivo") passa a salvar normalmente, e a tabela de perdas continua exibindo o rótulo legível em português.
+
+Também adicione um campo de buscar por nome do colaborador no dialog de registrar perda de folga, pois hoje tem que sair rolando e procurar.
