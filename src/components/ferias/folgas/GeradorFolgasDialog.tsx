@@ -1264,6 +1264,24 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month, perdasPer
         throw new Error("Nenhuma folga selecionada para salvar");
       }
 
+      const { data: perdasFrescas, error: perdasError } = await supabase
+        .from("ferias_folgas_perdas")
+        .select("colaborador_id")
+        .eq("ano", year)
+        .eq("mes", month);
+      if (perdasError) throw perdasError;
+
+      const perdaIds = new Set<string>([
+        ...perdasPeriodo,
+        ...perdas,
+        ...((perdasFrescas || []) as Perda[]),
+      ].map(p => p.colaborador_id).filter(Boolean) as string[]);
+      const selecionadosComPerda = selectedData.filter(p => perdaIds.has(p.colaborador_id));
+      if (selecionadosComPerda.length > 0) {
+        const nomes = [...new Set(selecionadosComPerda.map(p => p.colaborador_nome))].join(", ");
+        throw new Error(`Não foi possível salvar: ${nomes} possui perda registrada no período.`);
+      }
+
       // Group by setor
       const bySetor = new Map<string, PreviewRow[]>();
       selectedData.forEach(row => {
