@@ -4,13 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, AlertTriangle, CreditCard, Search } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
+import { Loader2, AlertTriangle, CreditCard, Check, ChevronsUpDown } from "lucide-react";
 
 const MOTIVOS_PERDA = [
   { value: "falta_injustificada", label: "Falta injustificada" },
@@ -61,7 +62,7 @@ export function PerdaFolgaDialog({ open, onOpenChange, year, month, selectedSeto
   const [colaboradorId, setColaboradorId] = useState("");
   const [motivoKey, setMotivoKey] = useState("");
   const [observacoes, setObservacoes] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
   const { data: colaboradores = [] } = useQuery({
     queryKey: ["ferias-colaboradores-perda", selectedSetor],
@@ -174,15 +175,12 @@ export function PerdaFolgaDialog({ open, onOpenChange, year, month, selectedSeto
     setColaboradorId("");
     setMotivoKey("");
     setObservacoes("");
-    setSearchTerm("");
+    setPopoverOpen(false);
     onOpenChange(false);
   };
 
-  const normalize = (s: string) =>
-    s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const availableColaboradores = colaboradores
-    .filter(c => !existingPerdas.includes(c.id))
-    .filter(c => !searchTerm || normalize(c.nome).includes(normalize(searchTerm)));
+  const availableColaboradores = colaboradores.filter(c => !existingPerdas.includes(c.id));
+  const selectedColaborador = availableColaboradores.find(c => c.id === colaboradorId);
 
   const isFormValid = colaboradorId && motivoKey && (motivoKey !== "outro" || observacoes.trim()) && !isAfastado;
 
@@ -204,31 +202,55 @@ export function PerdaFolgaDialog({ open, onOpenChange, year, month, selectedSeto
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label>Colaborador *</Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <Input
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar por nome..."
-                className="pl-9"
-              />
-            </div>
-            <Select value={colaboradorId} onValueChange={setColaboradorId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o colaborador" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableColaboradores.length === 0 ? (
-                  <div className="p-2 text-sm text-muted-foreground text-center">
-                    {searchTerm ? "Nenhum colaborador encontrado" : "Todos os colaboradores já têm perda registrada"}
-                  </div>
-                ) : (
-                  availableColaboradores.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+            <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={popoverOpen}
+                  className="w-full justify-between font-normal"
+                  disabled={availableColaboradores.length === 0}
+                >
+                  <span className={cn("truncate", !selectedColaborador && "text-muted-foreground")}>
+                    {selectedColaborador
+                      ? selectedColaborador.nome
+                      : availableColaboradores.length === 0
+                        ? "Todos os colaboradores já têm perda registrada"
+                        : "Selecione o colaborador"}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                <Command>
+                  <CommandInput placeholder="Buscar por nome..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhum colaborador encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      {availableColaboradores.map(c => (
+                        <CommandItem
+                          key={c.id}
+                          value={c.nome}
+                          onSelect={() => {
+                            setColaboradorId(c.id);
+                            setPopoverOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              colaboradorId === c.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {c.nome}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {isAfastado && selectedAfastamento && (
