@@ -282,6 +282,14 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month, perdasPer
     },
   });
 
+  const perdaIdsEmMemoria = useMemo(() => {
+    const ids = new Set<string>();
+    [...perdas, ...perdasPeriodo].forEach(p => {
+      if (p.colaborador_id) ids.add(p.colaborador_id);
+    });
+    return ids;
+  }, [perdas, perdasPeriodo]);
+
   // Query afastamentos ativos no mês
   const { data: afastamentos = [] } = useQuery({
     queryKey: ["ferias-afastamentos-gerador", year, month],
@@ -337,6 +345,20 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month, perdasPer
       return data || [];
     },
   });
+
+  const availableCreditsSemPerda = useMemo(() => {
+    return availableCredits.filter((credit: any) => !perdaIdsEmMemoria.has(credit.colaborador_id));
+  }, [availableCredits, perdaIdsEmMemoria]);
+
+  useEffect(() => {
+    if (!open) return;
+    setCreditsToUse(prev => {
+      const validCreditIds = new Set(availableCreditsSemPerda.map((credit: any) => credit.id));
+      const next = new Set([...prev].filter(id => validCreditIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [open, availableCreditsSemPerda]);
+
   const countVacationDaysInMonth = (colabId: string): number => {
     const monthStart = startOfMonth(new Date(year, month - 1));
     const monthEnd = endOfMonth(new Date(year, month - 1));
