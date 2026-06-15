@@ -1052,19 +1052,24 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       }
     }
 
-    // Set diagnostic message
-    if (diagnostics.length > 0) {
-      setDiagnosticMessage(`Alertas: ${diagnostics.join("; ")}`);
+    // Diagnóstico de perdas (bloqueados por perda registrada)
+    const bloqueadosPorPerda = colaboradores
+      .filter(c => perdaIds.has(c.id))
+      .map(c => c.nome);
+    if (bloqueadosPorPerda.length > 0) {
+      diagnostics.push(
+        `Bloqueados por perda (${bloqueadosPorPerda.length}): ${bloqueadosPorPerda.join(", ")}`
+      );
     }
 
-    // Add distribution summary to diagnostics
-    const distSummary = saturdaysOfMonth.map(sat => 
-      `${format(new Date(sat + "T12:00:00"), "dd/MM")}: ${globalPersonCount[sat]} pessoas`
-    ).join(" | ");
-    setDiagnosticMessage(prev => {
-      const base = prev ? prev + " — " : "";
-      return base + `Perdas consideradas: ${perdasCount} — Distribuição: ${distSummary}`;
-    });
+    // Set diagnostic message
+    const distSummary = saturdaysOfMonth
+      .map(sat => `${format(new Date(sat + "T12:00:00"), "dd/MM")}: ${globalPersonCount[sat]} pessoas`)
+      .join(" | ");
+    const alertPart = diagnostics.length > 0 ? `Alertas: ${diagnostics.join("; ")} — ` : "";
+    setDiagnosticMessage(
+      `${alertPart}Perdas consideradas: ${perdasCount} — Distribuição: ${distSummary}`
+    );
 
     // Build preview rows
     const allPreview: PreviewRow[] = [];
@@ -1142,40 +1147,32 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       }
     });
 
-    setPreviewData(allPreview);
-
-    // TRAVA FINAL DE SEGURANÇA: nenhuma linha alocada pode conter colaborador com perda
+    // TRAVA FINAL DE SEGURANÇA: nenhuma linha alocada pode conter colaborador com perda.
+    // Qualquer linha indevida vira "excluído com motivo Perda registrada".
+    let finalPreview: PreviewRow[] = allPreview;
     if (perdaIds.size > 0) {
       const sanitized: PreviewRow[] = [];
       const seenExcluded = new Set<string>();
       for (const row of allPreview) {
-        if (perdaIds.has(row.colaborador_id) && row.data_sabado) {
-          // Remover alocação indevida e registrar apenas como excluído
-          if (!seenExcluded.has(row.colaborador_id)) {
-            seenExcluded.add(row.colaborador_id);
-            sanitized.push({
-              ...row,
-              data_sabado: "",
-              motivo_exclusao: "Perda registrada",
-            });
-          }
+        if (perdaIds.has(row.colaborador_id)) {
+          if (seenExcluded.has(row.colaborador_id)) continue;
+          seenExcluded.add(row.colaborador_id);
+          sanitized.push({
+            ...row,
+            data_sabado: "",
+            motivo_exclusao: "Perda registrada",
+          });
           continue;
         }
         sanitized.push(row);
       }
-      setPreviewData(sanitized);
+      finalPreview = sanitized;
     }
 
-    // Diagnóstico: listar quem foi bloqueado por perda (ajuda a confirmar visualmente)
-    const bloqueadosPorPerda = colaboradores
-      .filter(c => perdaIds.has(c.id))
-      .map(c => c.nome);
-    if (bloqueadosPorPerda.length > 0) {
-      diagnostics.push(`Bloqueados por perda (${bloqueadosPorPerda.length}): ${bloqueadosPorPerda.join(", ")}`);
-    }
-    
-    const validKeys = allPreview
-      .filter(p => !p.motivo_exclusao && p.data_sabado && !perdaIds.has(p.colaborador_id))
+    setPreviewData(finalPreview);
+
+    const validKeys = finalPreview
+      .filter(p => !p.motivo_exclusao && p.data_sabado)
       .map(p => `${p.setor_id}-${p.colaborador_id}-${p.data_sabado}`);
     setSelectedRows(new Set(validKeys));
     
