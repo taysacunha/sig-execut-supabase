@@ -163,6 +163,7 @@ export function PerdaFolgaDialog({ open, onOpenChange, year, month, selectedSeto
       toast.success("Perda de folga registrada!");
       queryClient.invalidateQueries({ queryKey: ["ferias-perdas"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-perdas-check"] });
+      queryClient.invalidateQueries({ queryKey: ["ferias-perdas-gerador"] });
       handleClose();
     },
     onError: (err: any) => {
