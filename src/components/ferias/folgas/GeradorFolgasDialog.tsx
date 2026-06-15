@@ -269,7 +269,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month, perdasPer
   };
 
   // Query perdas do mês
-  const { data: perdas = [], isFetching: fetchingPerdas, refetch: refetchPerdas } = useQuery({
+  const { data: perdas = [], isFetching: fetchingPerdas } = useQuery({
     queryKey: ["ferias-perdas-gerador", year, month],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -525,7 +525,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month, perdasPer
 
     // Fonte única da verdade: buscar perdas diretamente do banco, ignorando cache.
     // Evita race após apagar/registrar perdas sem recarregar a página.
-    let perdasParaGerar: Perda[] = [];
+    let perdasParaGerar: Perda[] = [...perdasPeriodo, ...perdas];
     try {
       const { data: perdasFrescas, error: perdasErr } = await supabase
         .from("ferias_folgas_perdas")
@@ -533,7 +533,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month, perdasPer
         .eq("ano", year)
         .eq("mes", month);
       if (perdasErr) throw perdasErr;
-      perdasParaGerar = (perdasFrescas || []) as Perda[];
+      perdasParaGerar = [...perdasParaGerar, ...((perdasFrescas || []) as Perda[])];
       // Atualizar cache para manter a UI consistente
       queryClient.setQueryData(["ferias-perdas-gerador", year, month], perdasParaGerar);
     } catch (err: any) {
@@ -541,9 +541,9 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month, perdasPer
       toast.error(`Erro ao consultar perdas: ${err?.message || "desconhecido"}`);
       return;
     }
-    const perdasCount = perdasParaGerar.length;
+    const perdasCount = new Set(perdasParaGerar.map(p => p.colaborador_id).filter(Boolean)).size;
     // Set de IDs com perda — trava absoluta usada em TODAS as etapas
-    const perdaIds = new Set<string>(perdasParaGerar.map(p => p.colaborador_id));
+    const perdaIds = new Set<string>(perdasParaGerar.map(p => p.colaborador_id).filter(Boolean) as string[]);
 
     // Step 1: Determine exclusions GLOBALLY
     const exclusionReasons = new Map<string, string>();
