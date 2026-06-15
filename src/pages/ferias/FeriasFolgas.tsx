@@ -335,11 +335,18 @@ const FeriasFolgas = () => {
 
   const deletePerdaMutation = useMutation({
     mutationFn: async (id: string) => {
+      const perdaRemovida = perdas.find(p => p.id === id) || null;
       const { error } = await supabase.from("ferias_folgas_perdas").delete().eq("id", id);
       if (error) throw error;
+      return perdaRemovida;
     },
-    onSuccess: () => {
+    onSuccess: (perdaRemovida) => {
       toast.success("Registro de perda removido!");
+      queryClient.setQueryData<Perda[]>(["ferias-perdas", year, month], (old = []) => old.filter(p => p.id !== perdaRemovida?.id));
+      if (perdaRemovida?.colaborador_id) {
+        queryClient.setQueryData<string[]>(["ferias-perdas-check", year, month], (old = []) => old.filter(id => id !== perdaRemovida.colaborador_id));
+        queryClient.setQueryData<{ colaborador_id: string | null }[]>(["ferias-perdas-gerador", year, month], (old = []) => old.filter(p => p.colaborador_id !== perdaRemovida.colaborador_id));
+      }
       queryClient.invalidateQueries({ queryKey: ["ferias-perdas"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-perdas-gerador"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-perdas-check"] });
