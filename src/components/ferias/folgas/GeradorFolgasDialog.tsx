@@ -138,6 +138,11 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
   useEffect(() => {
     if (open) {
       setSelectedSaturdays(new Set(allSaturdaysOfMonth));
+      // Reset preview ao reabrir para um novo período (evita exibir resultado antigo)
+      setPreviewData([]);
+      setShowPreview(false);
+      setSelectedRows(new Set());
+      setDiagnosticMessage(null);
     }
   }, [open, allSaturdaysOfMonth]);
 
