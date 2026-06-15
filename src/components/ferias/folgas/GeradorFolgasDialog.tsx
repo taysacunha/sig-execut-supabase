@@ -56,7 +56,7 @@ interface GozoPeriodo {
 }
 
 interface Perda {
-  colaborador_id: string;
+  colaborador_id: string | null;
 }
 
 interface SetorChefe {
@@ -84,6 +84,7 @@ interface GeradorFolgasDialogProps {
   onOpenChange: (open: boolean) => void;
   year: number;
   month: number;
+  perdasPeriodo?: Perda[];
 }
 
 interface ConfigMap {
@@ -116,7 +117,7 @@ interface AllocationUnit {
   allSetorIds: string[]; // All unique sector IDs from all members (for cross-sector families)
 }
 
-export function GeradorFolgasDialog({ open, onOpenChange, year, month }: GeradorFolgasDialogProps) {
+export function GeradorFolgasDialog({ open, onOpenChange, year, month, perdasPeriodo = [] }: GeradorFolgasDialogProps) {
   const queryClient = useQueryClient();
   const [previewData, setPreviewData] = useState<PreviewRow[]>([]);
   const [showPreview, setShowPreview] = useState(false);
