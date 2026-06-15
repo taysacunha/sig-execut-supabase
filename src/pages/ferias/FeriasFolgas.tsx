@@ -867,6 +867,7 @@ const FeriasFolgas = () => {
         onOpenChange={setGenerateOpen}
         year={year}
         month={month}
+        perdasPeriodo={perdas}
       />
       
       <PerdaFolgaDialog 
