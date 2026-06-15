@@ -55,5 +55,10 @@ INSERT INTO public.dev_tracker (system_name, feature_name, description, hours, c
 ('ferias', 'Página de ajuda do módulo', 'FeriasHelp.tsx com documentação interna de regras e fluxos de férias/folgas', 6, 0, 33)
 ON CONFLICT (system_name, feature_name) DO NOTHING;
 
+-- Correções pontuais
+INSERT INTO public.dev_tracker (system_name, feature_name, description, estimated_hours, actual_hours, display_order) VALUES
+('ferias', 'Correção: motivo de perda de folga', 'Constraint ferias_folgas_perdas_motivo_check expandida (atestado_medico, suspensao, outro) e diálogo passa a gravar a chave; tabela exibe rótulo via formatMotivoPerda. Adicionado campo de busca por nome no PerdaFolgaDialog.', 2, 0, 34)
+ON CONFLICT (system_name, feature_name) DO NOTHING;
+
 -- Confirmação rápida (opcional)
 -- SELECT system_name, COUNT(*) FROM public.dev_tracker GROUP BY system_name ORDER BY system_name;

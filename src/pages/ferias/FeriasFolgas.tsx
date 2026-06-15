@@ -39,6 +39,16 @@ import { MoverFolgasLoteDialog } from "@/components/ferias/folgas/MoverFolgasLot
 import { RemoverFolgaDialog } from "@/components/ferias/folgas/RemoverFolgaDialog";
 import { cn } from "@/lib/utils";
 
+const MOTIVO_PERDA_LABELS: Record<string, string> = {
+  falta_injustificada: "Falta injustificada",
+  atestado_medico: "Atestado médico",
+  atestado_sabado: "Atestado de sábado",
+  aviso_previo: "Aviso prévio",
+  suspensao: "Suspensão disciplinar",
+  outro: "Outro motivo",
+};
+const formatMotivoPerda = (m: string) => MOTIVO_PERDA_LABELS[m] || m;
+
 interface Colaborador {
   id: string;
   nome: string;
@@ -825,7 +835,7 @@ const FeriasFolgas = () => {
                         className={cn(idx % 2 === 0 ? "bg-background" : "bg-muted/30")}
                       >
                         <TableCell className="font-medium">{perda.colaborador?.nome || "—"}</TableCell>
-                        <TableCell>{perda.motivo}</TableCell>
+                        <TableCell>{formatMotivoPerda(perda.motivo)}</TableCell>
                         <TableCell className="text-muted-foreground">{perda.observacoes || "—"}</TableCell>
                         {canEditFerias && (
                           <TableCell className="text-right">
