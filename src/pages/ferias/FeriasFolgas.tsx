@@ -341,6 +341,8 @@ const FeriasFolgas = () => {
     onSuccess: () => {
       toast.success("Registro de perda removido!");
       queryClient.invalidateQueries({ queryKey: ["ferias-perdas"] });
+      queryClient.invalidateQueries({ queryKey: ["ferias-perdas-gerador"] });
+      queryClient.invalidateQueries({ queryKey: ["ferias-perdas-check"] });
       setPerdaToDelete(null);
     },
     onError: () => toast.error("Erro ao remover perda"),
