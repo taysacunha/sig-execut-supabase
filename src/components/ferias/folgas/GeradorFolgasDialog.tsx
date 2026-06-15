@@ -519,17 +519,20 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       return;
     }
     const perdasCount = perdasParaGerar.length;
+    // Set de IDs com perda — trava absoluta usada em TODAS as etapas
+    const perdaIds = new Set<string>(perdasParaGerar.map(p => p.colaborador_id));
 
     // Step 1: Determine exclusions GLOBALLY
     const exclusionReasons = new Map<string, string>();
     colaboradores.forEach(colab => {
-      if (isAfastadoAnySaturday(colab.id)) {
+      // Perda tem prioridade máxima — sempre bloqueia o mês inteiro
+      if (perdaIds.has(colab.id)) {
+        exclusionReasons.set(colab.id, "Perda registrada");
+      } else if (isAfastadoAnySaturday(colab.id)) {
         const motivo = getAfastamentoMotivo(colab.id);
         exclusionReasons.set(colab.id, `Afastado (${motivo})`);
       } else if (isInExperiencePeriod(colab)) {
         exclusionReasons.set(colab.id, "Período de experiência");
-      } else if (hasPerda(colab.id, perdasParaGerar)) {
-        exclusionReasons.set(colab.id, "Perda registrada");
       } else {
         const block = shouldBlockVacationMonth(colab.id);
         if (block.blocked) {
@@ -1049,19 +1052,24 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       }
     }
 
-    // Set diagnostic message
-    if (diagnostics.length > 0) {
-      setDiagnosticMessage(`Alertas: ${diagnostics.join("; ")}`);
+    // Diagnóstico de perdas (bloqueados por perda registrada)
+    const bloqueadosPorPerda = colaboradores
+      .filter(c => perdaIds.has(c.id))
+      .map(c => c.nome);
+    if (bloqueadosPorPerda.length > 0) {
+      diagnostics.push(
+        `Bloqueados por perda (${bloqueadosPorPerda.length}): ${bloqueadosPorPerda.join(", ")}`
+      );
     }
 
-    // Add distribution summary to diagnostics
-    const distSummary = saturdaysOfMonth.map(sat => 
-      `${format(new Date(sat + "T12:00:00"), "dd/MM")}: ${globalPersonCount[sat]} pessoas`
-    ).join(" | ");
-    setDiagnosticMessage(prev => {
-      const base = prev ? prev + " — " : "";
-      return base + `Perdas consideradas: ${perdasCount} — Distribuição: ${distSummary}`;
-    });
+    // Set diagnostic message
+    const distSummary = saturdaysOfMonth
+      .map(sat => `${format(new Date(sat + "T12:00:00"), "dd/MM")}: ${globalPersonCount[sat]} pessoas`)
+      .join(" | ");
+    const alertPart = diagnostics.length > 0 ? `Alertas: ${diagnostics.join("; ")} — ` : "";
+    setDiagnosticMessage(
+      `${alertPart}Perdas consideradas: ${perdasCount} — Distribuição: ${distSummary}`
+    );
 
     // Build preview rows
     const allPreview: PreviewRow[] = [];
@@ -1139,9 +1147,31 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
       }
     });
 
-    setPreviewData(allPreview);
-    
-    const validKeys = allPreview
+    // TRAVA FINAL DE SEGURANÇA: nenhuma linha alocada pode conter colaborador com perda.
+    // Qualquer linha indevida vira "excluído com motivo Perda registrada".
+    let finalPreview: PreviewRow[] = allPreview;
+    if (perdaIds.size > 0) {
+      const sanitized: PreviewRow[] = [];
+      const seenExcluded = new Set<string>();
+      for (const row of allPreview) {
+        if (perdaIds.has(row.colaborador_id)) {
+          if (seenExcluded.has(row.colaborador_id)) continue;
+          seenExcluded.add(row.colaborador_id);
+          sanitized.push({
+            ...row,
+            data_sabado: "",
+            motivo_exclusao: "Perda registrada",
+          });
+          continue;
+        }
+        sanitized.push(row);
+      }
+      finalPreview = sanitized;
+    }
+
+    setPreviewData(finalPreview);
+
+    const validKeys = finalPreview
       .filter(p => !p.motivo_exclusao && p.data_sabado)
       .map(p => `${p.setor_id}-${p.colaborador_id}-${p.data_sabado}`);
     setSelectedRows(new Set(validKeys));

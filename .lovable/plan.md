@@ -1,26 +1,30 @@
-## Plano
+Plano para corrigir de forma definitiva a regra de perda no preview:
 
-1. **Fonte única da verdade para perdas do mês**
-   - No `GeradorFolgasDialog`, antes de gerar o preview, consultar diretamente a tabela `ferias_folgas_perdas` para o `ano` e `mês` atuais.
-   - Usar essa resposta direta para decidir exclusão por perda, sem depender do cache do React Query.
+1. Tornar a perda uma regra de bloqueio absoluta no gerador
+- Antes de qualquer alocação, buscar perdas frescas de `ferias_folgas_perdas` para o `ano` e `mes` atuais.
+- Montar um `Set` de `colaborador_id` com perda registrada.
+- Excluir qualquer colaborador desse `Set` antes da formação de unidades individuais/familiares.
+- Se um familiar tiver perda, apenas esse colaborador deve ficar excluído; o outro só participa se não tiver perda própria.
 
-2. **Regra objetiva no gerador**
-   - Se existir registro em `ferias_folgas_perdas` para `colaborador_id + ano + mes`, o colaborador entra no preview como excluído com motivo `Perda registrada`.
-   - Se não existir registro, ele não será excluído por perda e volta a disputar folga normalmente, salvo outras regras como férias, afastamento ou experiência.
+2. Adicionar uma trava final de segurança no preview
+- Depois da distribuição, remover qualquer linha alocada cujo `colaborador_id` esteja no `Set` de perdas.
+- Inserir esse colaborador apenas na lista de excluídos com status `Perda registrada`.
+- Isso impede que qualquer etapa posterior, crédito ou rebalanceamento recoloque a pessoa como disponível.
 
-3. **Sincronização após registrar/remover perda**
-   - Após registrar ou apagar perda, invalidar/refazer todas as queries relacionadas e também remover dados antigos do cache do gerador para evitar estado preso.
-   - Ao abrir o Gerador, limpar preview antigo e buscar perdas atualizadas.
+3. Sincronizar cadastro e gerador
+- Ao registrar ou excluir uma perda, invalidar/refazer as queries de perdas do mês e limpar previews antigos.
+- Ao abrir o gerador, garantir leitura fresca das perdas do período antes de permitir gerar preview.
 
-4. **Feedback de diagnóstico no preview**
-   - Mostrar no diagnóstico do Gerador quantas perdas foram consideradas no momento da geração.
-   - Isso deixa claro se o preview está usando a situação atual: com registro bloqueia; sem registro libera.
+4. Deixar o diagnóstico claro
+- Exibir no alerta do preview quantas perdas foram lidas do banco e quais colaboradores foram bloqueados por perda.
+- Isso facilita confirmar imediatamente se o registro usado no preview é o mesmo da aba “Perdas de Folga”.
 
-## Detalhes técnicos
+Arquivos envolvidos:
+- `src/components/ferias/folgas/GeradorFolgasDialog.tsx`
+- `src/components/ferias/folgas/PerdaFolgaDialog.tsx`
+- `src/pages/ferias/FeriasFolgas.tsx`
 
-- Alterar apenas:
-  - `src/components/ferias/folgas/GeradorFolgasDialog.tsx`
-  - `src/components/ferias/folgas/PerdaFolgaDialog.tsx`
-  - `src/pages/ferias/FeriasFolgas.tsx`
-- Não precisa alterar banco de dados.
-- Não muda as demais regras de férias, afastamento, experiência, familiares ou créditos.
+Critério de aceite:
+- Se existe perda registrada para colaborador + ano + mês, ele não aparece como disponível no preview.
+- Se a perda for removida, ele volta a aparecer como elegível no preview sem recarregar a página.
+- O preview nunca salva folga para colaborador com perda registrada no mês.
