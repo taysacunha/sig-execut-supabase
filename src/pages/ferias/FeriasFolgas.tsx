@@ -825,7 +825,7 @@ const FeriasFolgas = () => {
                         className={cn(idx % 2 === 0 ? "bg-background" : "bg-muted/30")}
                       >
                         <TableCell className="font-medium">{perda.colaborador?.nome || "—"}</TableCell>
-                        <TableCell>{perda.motivo}</TableCell>
+                        <TableCell>{formatMotivoPerda(perda.motivo)}</TableCell>
                         <TableCell className="text-muted-foreground">{perda.observacoes || "—"}</TableCell>
                         {canEditFerias && (
                           <TableCell className="text-right">
