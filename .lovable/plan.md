@@ -1,25 +1,35 @@
-## Problema
+## Causa raiz
 
-O campo de busca atual fica **fora** do Select e não filtra nada útil — o usuário continua precisando rolar a lista do dropdown. O esperado é digitar **dentro** do próprio seletor de colaborador e ver a lista filtrar.
+O `GeradorFolgasDialog` aplica corretamente a exclusão por perda registrada (linhas 506–507 de `GeradorFolgasDialog.tsx`, usando `hasPerda(colab.id)`), e a query carrega da tabela `ferias_folgas_perdas` pela chave:
 
-## Solução
+```
+["ferias-perdas-gerador", year, month]
+```
 
-Substituir o `Select` por um **Combobox** (Popover + Command do shadcn), padrão já usado em `src/components/estoque/MaterialCombobox.tsx`. Assim a busca acontece dentro do dropdown, com filtro acento-insensitive por nome.
+Mas no `PerdaFolgaDialog.tsx`, ao registrar uma nova perda, o `onSuccess` da mutation só invalida estas chaves:
 
-### Mudanças em `src/components/ferias/folgas/PerdaFolgaDialog.tsx`
+```
+["ferias-perdas"]
+["ferias-perdas-check"]
+```
 
-1. Remover o `<Input>` de busca externo e o estado `searchTerm` que adicionei.
-2. Remover o `Select`/`SelectContent`/`SelectItem` para o colaborador.
-3. Adicionar `Popover` + `Command` (`CommandInput`, `CommandEmpty`, `CommandGroup`, `CommandItem`):
-   - Trigger: `Button variant="outline"` com largura total, mostrando o nome selecionado ou "Selecione o colaborador", ícone `ChevronsUpDown` à direita.
-   - `CommandInput` com placeholder "Buscar por nome..." dentro do popover.
-   - `CommandEmpty`: "Nenhum colaborador encontrado" (ou "Todos os colaboradores já têm perda registrada" quando a lista base estiver vazia).
-   - `CommandItem` para cada colaborador disponível (`!existingPerdas.includes(c.id)`); `value={c.nome}` para o filtro do Command casar com a digitação, `onSelect` define `colaboradorId`.
-   - Ícone `Check` ao lado do item atualmente selecionado.
-4. Manter toda a lógica existente (afastamento, créditos, motivo, mutation) inalterada.
+A chave `["ferias-perdas-gerador", ...]` **nunca é invalidada**. Resultado: ao abrir o Gerador depois de registrar a perda, o React Query devolve o cache antigo (vazio) e a Maria de Lourdes não é excluída — exatamente o sintoma relatado.
 
-Sem alterações no banco, RLS, ou outros arquivos.
+O mesmo vale para `["ferias-afastamentos-gerador", ...]` (não afeta este caso, mas seria coerente também).
 
-## Resultado
+## Mudança
 
-Ao abrir o seletor de colaborador, o usuário digita o nome e a lista filtra imediatamente dentro do próprio dropdown — sem campo de busca solto acima.
+Em `src/components/ferias/folgas/PerdaFolgaDialog.tsx`, no `onSuccess` da `addPerdaMutation`, adicionar:
+
+```ts
+queryClient.invalidateQueries({ queryKey: ["ferias-perdas-gerador"] });
+```
+
+(invalidação por prefixo, cobre todas as combinações de year/month em cache).
+
+Nenhuma outra alteração necessária — a lógica de exclusão do gerador já está correta.
+
+## Validação
+
+1. Registrar perda da Maria de Lourdes em agosto.
+2. Abrir o Gerador de Folgas para agosto → ela deve aparecer como excluída (motivo "Perda registrada") e não receber sábado no preview.
