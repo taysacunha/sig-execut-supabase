@@ -692,7 +692,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month, perdasPer
 
     // Determine credit collaborators
     const creditColabIds = new Set<string>();
-    availableCredits.forEach(credit => {
+    availableCreditsSemPerda.forEach(credit => {
       if (creditsToUse.has(credit.id)) {
         creditColabIds.add(credit.colaborador_id);
       }
@@ -1473,7 +1473,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month, perdasPer
             </div>
 
             {/* Credits section */}
-            {availableCredits.length > 0 && (
+            {availableCreditsSemPerda.length > 0 && (
               <div className="p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg space-y-3">
                 <div className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-200">
                   <Gift className="h-4 w-4" />
@@ -1483,7 +1483,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month, perdasPer
                   Os colaboradores abaixo possuem créditos de folga. Marque para usar neste mês (folgará 2 sábados).
                 </p>
                 <div className="space-y-2">
-                  {availableCredits.map((credit: any) => {
+                  {availableCreditsSemPerda.map((credit: any) => {
                     const colabName = credit.ferias_colaboradores?.nome || "—";
                     const origemDate = format(new Date(credit.origem_data + "T12:00:00"), "dd/MM/yyyy");
                     return (
