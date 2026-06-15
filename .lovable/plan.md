@@ -1,35 +1,23 @@
-## Causa raiz
+## Causa
 
-O `GeradorFolgasDialog` aplica corretamente a exclusão por perda registrada (linhas 506–507 de `GeradorFolgasDialog.tsx`, usando `hasPerda(colab.id)`), e a query carrega da tabela `ferias_folgas_perdas` pela chave:
+A mutation `deletePerdaMutation` em `src/pages/ferias/FeriasFolgas.tsx` (linhas 336–347) só invalida `["ferias-perdas"]`. As outras queries que consomem a tabela `ferias_folgas_perdas` ficam com cache antigo:
 
-```
-["ferias-perdas-gerador", year, month]
-```
+- `["ferias-perdas-gerador", year, month]` em `GeradorFolgasDialog`
+- `["ferias-perdas-check", year, month]` em `PerdaFolgaDialog`
 
-Mas no `PerdaFolgaDialog.tsx`, ao registrar uma nova perda, o `onSuccess` da mutation só invalida estas chaves:
-
-```
-["ferias-perdas"]
-["ferias-perdas-check"]
-```
-
-A chave `["ferias-perdas-gerador", ...]` **nunca é invalidada**. Resultado: ao abrir o Gerador depois de registrar a perda, o React Query devolve o cache antigo (vazio) e a Maria de Lourdes não é excluída — exatamente o sintoma relatado.
-
-O mesmo vale para `["ferias-afastamentos-gerador", ...]` (não afeta este caso, mas seria coerente também).
+Por isso, ao apagar a perda e abrir o Gerador, ela ainda aparece como bloqueada / indisponível.
 
 ## Mudança
 
-Em `src/components/ferias/folgas/PerdaFolgaDialog.tsx`, no `onSuccess` da `addPerdaMutation`, adicionar:
+Em `src/pages/ferias/FeriasFolgas.tsx`, no `onSuccess` da `deletePerdaMutation`, invalidar também:
 
 ```ts
 queryClient.invalidateQueries({ queryKey: ["ferias-perdas-gerador"] });
+queryClient.invalidateQueries({ queryKey: ["ferias-perdas-check"] });
 ```
 
-(invalidação por prefixo, cobre todas as combinações de year/month em cache).
-
-Nenhuma outra alteração necessária — a lógica de exclusão do gerador já está correta.
+Nenhuma outra alteração.
 
 ## Validação
 
-1. Registrar perda da Maria de Lourdes em agosto.
-2. Abrir o Gerador de Folgas para agosto → ela deve aparecer como excluída (motivo "Perda registrada") e não receber sábado no preview.
+Apagar perda → abrir Gerador para o mesmo mês → colaboradora deve voltar a estar disponível.
