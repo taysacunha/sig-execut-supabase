@@ -500,9 +500,25 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     setGenerating(true);
     setDiagnosticMessage(null);
 
-    // Garantir dados frescos de perdas antes de gerar (evita race após apagar/registrar)
-    const refetchResult = await refetchPerdas();
-    const perdasParaGerar: Perda[] = refetchResult.data ?? perdas;
+    // Fonte única da verdade: buscar perdas diretamente do banco, ignorando cache.
+    // Evita race após apagar/registrar perdas sem recarregar a página.
+    let perdasParaGerar: Perda[] = [];
+    try {
+      const { data: perdasFrescas, error: perdasErr } = await supabase
+        .from("ferias_folgas_perdas")
+        .select("colaborador_id")
+        .eq("ano", year)
+        .eq("mes", month);
+      if (perdasErr) throw perdasErr;
+      perdasParaGerar = (perdasFrescas || []) as Perda[];
+      // Atualizar cache para manter a UI consistente
+      queryClient.setQueryData(["ferias-perdas-gerador", year, month], perdasParaGerar);
+    } catch (err: any) {
+      setGenerating(false);
+      toast.error(`Erro ao consultar perdas: ${err?.message || "desconhecido"}`);
+      return;
+    }
+    const perdasCount = perdasParaGerar.length;
 
     // Step 1: Determine exclusions GLOBALLY
     const exclusionReasons = new Map<string, string>();
@@ -1044,7 +1060,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     ).join(" | ");
     setDiagnosticMessage(prev => {
       const base = prev ? prev + " — " : "";
-      return base + `Distribuição: ${distSummary}`;
+      return base + `Perdas consideradas: ${perdasCount} — Distribuição: ${distSummary}`;
     });
 
     // Build preview rows
