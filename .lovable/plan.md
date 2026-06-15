@@ -1,30 +1,25 @@
-Plano para corrigir de forma definitiva a regra de perda no preview:
+Plano de correção
 
-1. Tornar a perda uma regra de bloqueio absoluta no gerador
-- Antes de qualquer alocação, buscar perdas frescas de `ferias_folgas_perdas` para o `ano` e `mes` atuais.
-- Montar um `Set` de `colaborador_id` com perda registrada.
-- Excluir qualquer colaborador desse `Set` antes da formação de unidades individuais/familiares.
-- Se um familiar tiver perda, apenas esse colaborador deve ficar excluído; o outro só participa se não tiver perda própria.
+1. Usar a mesma fonte que a aba “Perdas de Folga” vê
+- Passar as perdas carregadas em `FeriasFolgas` para `GeradorFolgasDialog`.
+- No gerador, montar o bloqueio por perda pela união de três fontes: perdas da aba, cache local e consulta fresca ao Supabase.
+- Resultado esperado: se a perda aparece na aba de perdas, o gerador obrigatoriamente considera essa pessoa bloqueada, sem precisar atualizar a página.
 
-2. Adicionar uma trava final de segurança no preview
-- Depois da distribuição, remover qualquer linha alocada cujo `colaborador_id` esteja no `Set` de perdas.
-- Inserir esse colaborador apenas na lista de excluídos com status `Perda registrada`.
-- Isso impede que qualquer etapa posterior, crédito ou rebalanceamento recoloque a pessoa como disponível.
+2. Atualizar o cache imediatamente ao registrar/remover perda
+- Ao registrar perda, retornar a linha inserida e atualizar manualmente os caches relevantes do React Query, além de invalidar/refazer as consultas.
+- Ao remover perda, limpar imediatamente essa pessoa dos caches do período.
+- Resultado esperado: abrir o gerador logo após registrar/remover já reflete o estado novo.
 
-3. Sincronizar cadastro e gerador
-- Ao registrar ou excluir uma perda, invalidar/refazer as queries de perdas do mês e limpar previews antigos.
-- Ao abrir o gerador, garantir leitura fresca das perdas do período antes de permitir gerar preview.
+3. Bloqueio absoluto dentro do preview
+- Centralizar a regra: `colaborador_id` com perda no período nunca entra em unidade individual, familiar, crédito extra ou linha selecionável.
+- Se aparecer em qualquer etapa por erro de lógica, converter para linha excluída com status “Perda registrada”.
+- Remover também da seção “Créditos de Folga Disponíveis” enquanto houver perda no mês.
 
-4. Deixar o diagnóstico claro
-- Exibir no alerta do preview quantas perdas foram lidas do banco e quais colaboradores foram bloqueados por perda.
-- Isso facilita confirmar imediatamente se o registro usado no preview é o mesmo da aba “Perdas de Folga”.
+4. Trava final antes de salvar
+- Antes de salvar a escala, consultar perdas novamente no Supabase.
+- Se algum selecionado tiver perda registrada, cancelar o salvamento com mensagem clara e não inserir folga para essa pessoa.
+- Resultado esperado: mesmo em caso de UI/cache inconsistente, a escala não salva colaborador com perda.
 
-Arquivos envolvidos:
-- `src/components/ferias/folgas/GeradorFolgasDialog.tsx`
-- `src/components/ferias/folgas/PerdaFolgaDialog.tsx`
-- `src/pages/ferias/FeriasFolgas.tsx`
-
-Critério de aceite:
-- Se existe perda registrada para colaborador + ano + mês, ele não aparece como disponível no preview.
-- Se a perda for removida, ele volta a aparecer como elegível no preview sem recarregar a página.
-- O preview nunca salva folga para colaborador com perda registrada no mês.
+5. Validação visual rápida
+- Verificar no preview que uma colaboradora com perda aparece apenas como “Perda registrada” em excluídos, e não como disponível/selecionável.
+- Verificar também o caminho inverso: removendo a perda, ela volta a ficar elegível sem reload.
