@@ -263,7 +263,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
   };
 
   // Query perdas do mês
-  const { data: perdas = [] } = useQuery({
+  const { data: perdas = [], isFetching: fetchingPerdas, refetch: refetchPerdas } = useQuery({
     queryKey: ["ferias-perdas-gerador", year, month],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -450,8 +450,8 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     return diasDesdeAdmissao < configMap.FOLGAS_PERIODO_EXPERIENCIA;
   };
 
-  const hasPerda = (colabId: string): boolean => {
-    return perdas.some(p => p.colaborador_id === colabId);
+  const hasPerda = (colabId: string, perdasBase: Perda[] = perdas): boolean => {
+    return perdasBase.some(p => p.colaborador_id === colabId);
   };
 
   const getAfastamentoMotivo = (colabId: string): string | null => {
@@ -486,7 +486,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
   };
 
   // GLOBAL ALLOCATION ALGORITHM
-  const handleGeneratePreview = () => {
+  const handleGeneratePreview = async () => {
     if (colaboradores.length === 0) {
       toast.error("Nenhum colaborador ativo encontrado");
       return;
@@ -494,6 +494,10 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
 
     setGenerating(true);
     setDiagnosticMessage(null);
+
+    // Garantir dados frescos de perdas antes de gerar (evita race após apagar/registrar)
+    const refetchResult = await refetchPerdas();
+    const perdasParaGerar: Perda[] = refetchResult.data ?? perdas;
 
     // Step 1: Determine exclusions GLOBALLY
     const exclusionReasons = new Map<string, string>();
@@ -503,7 +507,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
         exclusionReasons.set(colab.id, `Afastado (${motivo})`);
       } else if (isInExperiencePeriod(colab)) {
         exclusionReasons.set(colab.id, "Período de experiência");
-      } else if (hasPerda(colab.id)) {
+      } else if (hasPerda(colab.id, perdasParaGerar)) {
         exclusionReasons.set(colab.id, "Perda registrada");
       } else {
         const block = shouldBlockVacationMonth(colab.id);
