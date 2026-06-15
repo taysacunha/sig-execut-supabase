@@ -1,23 +1,36 @@
-## Causa
+## Causa provável
 
-A mutation `deletePerdaMutation` em `src/pages/ferias/FeriasFolgas.tsx` (linhas 336–347) só invalida `["ferias-perdas"]`. As outras queries que consomem a tabela `ferias_folgas_perdas` ficam com cache antigo:
+O cache já foi invalidado ao criar/apagar perda, mas se o usuário apaga o registro e clica em **Gerar Preview** sem recarregar a página, pode acontecer uma corrida: o `GeradorFolgasDialog` ainda usa o array `perdas` antigo em memória enquanto a refetch assíncrona ainda não terminou.
 
-- `["ferias-perdas-gerador", year, month]` em `GeradorFolgasDialog`
-- `["ferias-perdas-check", year, month]` em `PerdaFolgaDialog`
+Além disso, se já havia um preview aberto, ele fica guardado em `previewData` até fechar o gerador.
 
-Por isso, ao apagar a perda e abrir o Gerador, ela ainda aparece como bloqueada / indisponível.
+## Correção
 
-## Mudança
+Em `src/components/ferias/folgas/GeradorFolgasDialog.tsx`:
 
-Em `src/pages/ferias/FeriasFolgas.tsx`, no `onSuccess` da `deletePerdaMutation`, invalidar também:
+1. Capturar `isFetching`/`refetch` da query de perdas:
 
 ```ts
-queryClient.invalidateQueries({ queryKey: ["ferias-perdas-gerador"] });
-queryClient.invalidateQueries({ queryKey: ["ferias-perdas-check"] });
+const { data: perdas = [], isFetching: fetchingPerdas, refetch: refetchPerdas } = useQuery(...)
 ```
 
-Nenhuma outra alteração.
+2. Transformar `handleGeneratePreview` em `async` e, no início, buscar perdas diretamente antes de montar exclusões:
 
-## Validação
+```ts
+const { data: perdasAtualizadas } = await refetchPerdas();
+const perdasParaGerar = perdasAtualizadas ?? perdas;
+```
 
-Apagar perda → abrir Gerador para o mesmo mês → colaboradora deve voltar a estar disponível.
+3. Ajustar `hasPerda` para receber a lista usada naquela geração, evitando depender do estado antigo do React Query:
+
+```ts
+const hasPerda = (colabId: string, perdasBase: Perda[]) => ...
+```
+
+4. Limpar o preview quando o mês/ano mudar ou quando o diálogo abrir para uma nova geração, evitando exibir resultado antigo.
+
+5. Desabilitar o botão **Gerar Preview** enquanto as perdas estão sendo buscadas (`fetchingPerdas`) e mostrar carregamento nesse caso.
+
+## Resultado esperado
+
+Após apagar uma perda e clicar direto em **Gerar Preview**, sem F5, o gerador vai consultar o estado atualizado da tabela antes de decidir quem está bloqueado. A colaboradora removida da lista de perdas volta a ficar elegível imediatamente.

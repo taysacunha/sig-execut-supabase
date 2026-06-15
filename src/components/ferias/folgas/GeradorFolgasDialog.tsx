@@ -138,6 +138,11 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
   useEffect(() => {
     if (open) {
       setSelectedSaturdays(new Set(allSaturdaysOfMonth));
+      // Reset preview ao reabrir para um novo período (evita exibir resultado antigo)
+      setPreviewData([]);
+      setShowPreview(false);
+      setSelectedRows(new Set());
+      setDiagnosticMessage(null);
     }
   }, [open, allSaturdaysOfMonth]);
 
@@ -263,7 +268,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
   };
 
   // Query perdas do mês
-  const { data: perdas = [] } = useQuery({
+  const { data: perdas = [], isFetching: fetchingPerdas, refetch: refetchPerdas } = useQuery({
     queryKey: ["ferias-perdas-gerador", year, month],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -450,8 +455,8 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
     return diasDesdeAdmissao < configMap.FOLGAS_PERIODO_EXPERIENCIA;
   };
 
-  const hasPerda = (colabId: string): boolean => {
-    return perdas.some(p => p.colaborador_id === colabId);
+  const hasPerda = (colabId: string, perdasBase: Perda[] = perdas): boolean => {
+    return perdasBase.some(p => p.colaborador_id === colabId);
   };
 
   const getAfastamentoMotivo = (colabId: string): string | null => {
@@ -486,7 +491,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
   };
 
   // GLOBAL ALLOCATION ALGORITHM
-  const handleGeneratePreview = () => {
+  const handleGeneratePreview = async () => {
     if (colaboradores.length === 0) {
       toast.error("Nenhum colaborador ativo encontrado");
       return;
@@ -494,6 +499,10 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
 
     setGenerating(true);
     setDiagnosticMessage(null);
+
+    // Garantir dados frescos de perdas antes de gerar (evita race após apagar/registrar)
+    const refetchResult = await refetchPerdas();
+    const perdasParaGerar: Perda[] = refetchResult.data ?? perdas;
 
     // Step 1: Determine exclusions GLOBALLY
     const exclusionReasons = new Map<string, string>();
@@ -503,7 +512,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
         exclusionReasons.set(colab.id, `Afastado (${motivo})`);
       } else if (isInExperiencePeriod(colab)) {
         exclusionReasons.set(colab.id, "Período de experiência");
-      } else if (hasPerda(colab.id)) {
+      } else if (hasPerda(colab.id, perdasParaGerar)) {
         exclusionReasons.set(colab.id, "Perda registrada");
       } else {
         const block = shouldBlockVacationMonth(colab.id);
@@ -1439,9 +1448,9 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month }: Gerador
               <Button variant="outline" onClick={handleClose}>Cancelar</Button>
               <Button
                 onClick={handleGeneratePreview}
-                disabled={generating || colaboradores.length === 0 || loadingFerias || (feriasIds.length > 0 && loadingGozo)}
+                disabled={generating || fetchingPerdas || colaboradores.length === 0 || loadingFerias || (feriasIds.length > 0 && loadingGozo)}
               >
-                {(generating || loadingFerias || (feriasIds.length > 0 && loadingGozo)) && (
+                {(generating || fetchingPerdas || loadingFerias || (feriasIds.length > 0 && loadingGozo)) && (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 )}
                 {loadingFerias || (feriasIds.length > 0 && loadingGozo) ? "Carregando férias..." : "Gerar Preview"}
