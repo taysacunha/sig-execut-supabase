@@ -679,6 +679,129 @@ export type Database = {
         }
         Relationships: []
       }
+      estoque_placas: {
+        Row: {
+          codigo: string
+          created_at: string
+          created_by: string | null
+          data_instalacao_atual: string | null
+          id: string
+          imovel_codigo_atual: string | null
+          local_armazenamento_id: string | null
+          material_id: string
+          observacoes: string | null
+          status: string
+          substitui_placa_id: string | null
+          tamanho: string
+          tamanho_outro: string | null
+          tipo_uso: string
+          updated_at: string
+          versao: number
+        }
+        Insert: {
+          codigo: string
+          created_at?: string
+          created_by?: string | null
+          data_instalacao_atual?: string | null
+          id?: string
+          imovel_codigo_atual?: string | null
+          local_armazenamento_id?: string | null
+          material_id: string
+          observacoes?: string | null
+          status?: string
+          substitui_placa_id?: string | null
+          tamanho: string
+          tamanho_outro?: string | null
+          tipo_uso: string
+          updated_at?: string
+          versao?: number
+        }
+        Update: {
+          codigo?: string
+          created_at?: string
+          created_by?: string | null
+          data_instalacao_atual?: string | null
+          id?: string
+          imovel_codigo_atual?: string | null
+          local_armazenamento_id?: string | null
+          material_id?: string
+          observacoes?: string | null
+          status?: string
+          substitui_placa_id?: string | null
+          tamanho?: string
+          tamanho_outro?: string | null
+          tipo_uso?: string
+          updated_at?: string
+          versao?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estoque_placas_local_armazenamento_id_fkey"
+            columns: ["local_armazenamento_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_locais_armazenamento"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_placas_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_materiais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_placas_substitui_placa_id_fkey"
+            columns: ["substitui_placa_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_placas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estoque_placas_historico: {
+        Row: {
+          created_at: string
+          data_evento: string
+          data_retorno: string | null
+          id: string
+          imovel_codigo: string | null
+          observacoes: string | null
+          placa_id: string
+          tipo: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          data_evento?: string
+          data_retorno?: string | null
+          id?: string
+          imovel_codigo?: string | null
+          observacoes?: string | null
+          placa_id: string
+          tipo: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          data_evento?: string
+          data_retorno?: string | null
+          id?: string
+          imovel_codigo?: string | null
+          observacoes?: string | null
+          placa_id?: string
+          tipo?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estoque_placas_historico_placa_id_fkey"
+            columns: ["placa_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_placas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       estoque_saldos: {
         Row: {
           id: string
@@ -3351,6 +3474,10 @@ export type Database = {
         Returns: boolean
       }
       make_first_admin: { Args: { _user_id: string }; Returns: boolean }
+      recalcular_saldo_placas: {
+        Args: { _local_id: string; _material_id: string }
+        Returns: undefined
+      }
       save_broker_weekly_stats: {
         Args: {
           p_broker_id: string
