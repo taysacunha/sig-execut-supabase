@@ -160,13 +160,13 @@ export function AfastamentosPDFGenerator() {
 
       let y = 32;
       const cols = [
-        { label: "Colaborador", x: margin + 2, w: 60 },
-        { label: "Setor", x: margin + 64, w: 45 },
-        { label: "Motivo", x: margin + 111, w: 60 },
-        { label: "Início", x: margin + 173, w: 22 },
-        { label: "Fim", x: margin + 197, w: 22 },
-        { label: "Dias", x: margin + 221, w: 14 },
-        { label: "Observações", x: margin + 237, w: pageWidth - margin - (margin + 237) },
+        { label: "Colaborador", x: margin + 2, w: 55 },
+        { label: "Setor", x: margin + 59, w: 38 },
+        { label: "Motivo", x: margin + 99, w: 52 },
+        { label: "Início", x: margin + 153, w: 20 },
+        { label: "Fim", x: margin + 175, w: 20 },
+        { label: "Dias", x: margin + 197, w: 12 },
+        { label: "Observações", x: margin + 211, w: pageWidth - margin - (margin + 211) - 2 },
       ];
 
       const drawHeader = () => {
@@ -182,30 +182,43 @@ export function AfastamentosPDFGenerator() {
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(9);
 
-      const truncate = (s: string, n: number) => s.length > n ? s.substring(0, n - 1) + "…" : s;
+      const lineH = 4; // mm per text line
+      const padY = 2;  // vertical padding
 
       rows.forEach((r, idx) => {
-        if (y > pageHeight - 18) {
+        const dias = Math.floor((new Date(r.data_fim).getTime() - new Date(r.data_inicio).getTime()) / 86400000) + 1;
+
+        const cellTexts = [
+          r.colaborador?.nome || "-",
+          r.colaborador?.setor?.nome || "-",
+          motivoLabel(r.motivo, r.motivo_descricao),
+          formatDate(r.data_inicio),
+          formatDate(r.data_fim),
+          String(dias),
+          r.observacoes || "-",
+        ];
+        const wrapped = cellTexts.map((txt, i) =>
+          pdf.splitTextToSize(String(txt), Math.max(cols[i].w - 2, 8)) as string[]
+        );
+        const maxLines = Math.max(...wrapped.map(w => w.length));
+        const rowH = Math.max(7, maxLines * lineH + padY);
+
+        if (y + rowH > pageHeight - 10) {
           pdf.addPage();
           y = 15;
           drawHeader();
           pdf.setFont("helvetica", "normal");
           pdf.setFontSize(9);
         }
+
         const bg = idx % 2 === 0 ? 255 : 240;
         pdf.setFillColor(bg, bg, bg);
-        pdf.rect(margin, y, pageWidth - margin * 2, 7, "F");
+        pdf.rect(margin, y, pageWidth - margin * 2, rowH, "F");
 
-        const dias = Math.floor((new Date(r.data_fim).getTime() - new Date(r.data_inicio).getTime()) / 86400000) + 1;
-
-        pdf.text(truncate(r.colaborador?.nome || "-", 35), cols[0].x, y + 5);
-        pdf.text(truncate(r.colaborador?.setor?.nome || "-", 26), cols[1].x, y + 5);
-        pdf.text(truncate(motivoLabel(r.motivo, r.motivo_descricao), 36), cols[2].x, y + 5);
-        pdf.text(formatDate(r.data_inicio), cols[3].x, y + 5);
-        pdf.text(formatDate(r.data_fim), cols[4].x, y + 5);
-        pdf.text(String(dias), cols[5].x, y + 5);
-        pdf.text(truncate(r.observacoes || "-", 28), cols[6].x, y + 5);
-        y += 7;
+        wrapped.forEach((lines, i) => {
+          pdf.text(lines, cols[i].x, y + 4);
+        });
+        y += rowH;
       });
 
       pdf.setFontSize(8);

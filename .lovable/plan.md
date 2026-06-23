@@ -1,15 +1,37 @@
-## Ajustes nos dialogs de PDF
+## Objetivo
+Garantir que o texto digitado no campo **Observações** seja exibido por completo nos PDFs de **Afastamentos** e **Perdas de Folga**, sem cortes com reticências.
 
-### 1. Remover motivos legados do PDF de Afastamentos
-Arquivo: `src/components/ferias/colaboradores/AfastamentosPDFGenerator.tsx`
+## Contexto atual
+Ambos os relatórios usam `jsPDF` em modo paisagem (A4). As linhas têm altura fixa de 7 mm e os textos são truncados com reticências (`truncate(...)`) antes de serem desenhados:
 
-Tirar `acidente`, `doenca` e `licenca_medica` da constante `MOTIVO_LABELS` (e consequentemente do filtro `MOTIVO_OPTIONS`). Esses valores continuam mapeados apenas no fallback durante a renderização da célula "Motivo" do PDF, via expressão local — se aparecerem em registros antigos, mostram o rótulo amigável; mas não poluem mais o seletor.
+- `AfastamentosPDFGenerator.tsx`: observações truncadas em 28 caracteres.
+- `PerdasFolgaPDFGenerator.tsx`: observações truncadas em 35 caracteres.
 
-### 2. Corrigir scroll nos popovers (Colaboradores e Motivos)
-Causa: o `CommandList` do shadcn vem com `max-h-[300px] overflow-y-auto`, porém o `PopoverContent` em volta não está marcado como `onWheel`-friendly em alguns navegadores quando o conteúdo interno tenta scroll. O sintoma "não sobe/desce com a roda do mouse" geralmente acontece porque o `CommandList` recebe a roda mas o elemento não tem altura limitada nesse contexto (lista curta de motivos cabe inteira, lista de colaboradores estoura) e/ou o `PopoverContent` consome o evento.
+Como a altura da linha é fixa, mesmo que reduzíssemos a fonte o corte continuaria para textos maiores. A solução é **quebrar o texto em várias linhas e expandir a altura da linha dinamicamente**.
 
-Correções:
-- Em ambos os dialogs (`AfastamentosPDFGenerator.tsx` e `PerdasFolgaPDFGenerator.tsx`), adicionar `className="max-h-72 overflow-y-auto overscroll-contain"` ao `CommandList`, garantindo área rolável explícita.
-- Adicionar `onWheel={(e) => e.stopPropagation()}` no `PopoverContent` para impedir que o Radix bloqueie o evento da roda quando o popover está dentro de outro Dialog (caso comum com Radix focus scope).
+## Passos
 
-Sem mudanças de banco, tipos, RLS ou outras telas.
+### 1. AfastamentosPDFGenerator.tsx
+- Substituir a função `truncate` por `splitTextToSize` do jsPDF para as colunas que podem conter texto longo (nome, setor, motivo e, principalmente, observações).
+- Calcular a altura de cada linha com base na maior quantidade de linhas geradas entre as colunas daquela linha.
+- Ajustar o desenho do fundo zebrado para a nova altura.
+- Recalcular a verificação de quebra de página (`pageHeight - 18`) considerando a altura real da próxima linha.
+- Se necessário, redistribuir larguras das colunas anteriores para dar mais espaço à coluna de observações, sem alterar os dados ou filtros.
+
+### 2. PerdasFolgaPDFGenerator.tsx
+- Aplicar a mesma lógica de quebra de linha e altura dinâmica para observações.
+- Aproveitar para também quebrar textos longos das colunas `Colaborador`, `Setor` e `Motivo`, mantendo a tabela legível.
+- Ajustar retângulos de fundo e quebras de página conforme a nova altura variável.
+
+### 3. Testes/QA
+- Gerar PDFs de exemplo com observações curtas, médias e muito longas.
+- Verificar se:
+  - Nenhum texto aparece cortado com "…".
+  - O conteúdo não ultrapassa as margens.
+  - Linhas adjacentes não se sobrepõem.
+  - Quebras de página continuam funcionando corretamente.
+
+## O que não muda
+- Os diálogos de filtro (colaboradores, motivos, mês/ano) permanecem iguais.
+- A lógica de busca no Supabase e os dados retornados não são alterados.
+- O formato do PDF continua sendo A4 paisagem, gerado no cliente.
