@@ -31,12 +31,15 @@ const MOTIVO_LABELS: Record<string, string> = {
   licenca_maternidade: "Licença Maternidade",
   licenca_paternidade: "Licença Paternidade",
   outros: "Outros",
-  // legados
+};
+const MOTIVO_OPTIONS = Object.entries(MOTIVO_LABELS).map(([value, label]) => ({ value, label }));
+
+const MOTIVO_LABELS_DISPLAY: Record<string, string> = {
+  ...MOTIVO_LABELS,
   acidente: "Acidente",
   doenca: "Doença",
   licenca_medica: "Licença Médica",
 };
-const MOTIVO_OPTIONS = Object.entries(MOTIVO_LABELS).map(([value, label]) => ({ value, label }));
 
 interface Colaborador {
   id: string;
@@ -104,7 +107,7 @@ export function AfastamentosPDFGenerator() {
     try { return format(new Date(d + "T12:00:00"), "dd/MM/yyyy"); } catch { return d; }
   };
   const motivoLabel = (m: string, desc?: string | null) => {
-    const base = MOTIVO_LABELS[m] || m;
+    const base = MOTIVO_LABELS_DISPLAY[m] || m;
     return m === "outros" && desc ? `${base} – ${desc}` : base;
   };
 
