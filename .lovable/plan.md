@@ -154,3 +154,12 @@ Mesmo padrão visual dos PDFs `AfastamentosPDFGenerator` e `PerdasFolgaPDFGenera
 - Para o PDF, quer **dois botões separados** (Inventário e Histórico por placa) ou um único com seletor? Único com seletor.
 
 Se estiver tudo certo, basta aprovar e eu sigo para a implementação.
+---
+
+## Implementação concluída — Gestão de Placas
+
+- Migration: .lovable/estoque_placas_migration.sql
+- Página: src/pages/estoque/EstoquePlacas.tsx (com 5 dialogs inline)
+- Hook: src/hooks/useEstoquePlacas.ts
+- PDF: src/components/estoque/placas/PlacasPDFGenerator.tsx
+- Sidebar + rota /estoque/placas
