@@ -145,11 +145,11 @@ export function PerdasFolgaPDFGenerator({ year: initialYear, month: initialMonth
 
       let y = 32;
       const cols = [
-        { label: "Colaborador", x: margin + 2, w: 70 },
-        { label: "Setor", x: margin + 76, w: 55 },
-        { label: "Motivo", x: margin + 134, w: 55 },
-        { label: "Observações", x: margin + 192, w: 60 },
-        { label: "Registrado em", x: margin + 254, w: 30 },
+        { label: "Colaborador", x: margin + 2, w: 60 },
+        { label: "Setor", x: margin + 64, w: 45 },
+        { label: "Motivo", x: margin + 111, w: 45 },
+        { label: "Observações", x: margin + 158, w: 90 },
+        { label: "Registrado em", x: margin + 250, w: pageWidth - margin - (margin + 250) - 2 },
       ];
 
       const drawHeader = () => {
@@ -164,26 +164,39 @@ export function PerdasFolgaPDFGenerator({ year: initialYear, month: initialMonth
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(9);
 
-      const truncate = (s: string, n: number) => s.length > n ? s.substring(0, n - 1) + "…" : s;
+      const lineH = 4;
+      const padY = 2;
 
       rows.forEach((r, idx) => {
-        if (y > pageHeight - 18) {
+        const cellTexts = [
+          r.colaborador?.nome || "-",
+          r.colaborador?.setor?.nome || "-",
+          motivoLabel(r.motivo),
+          r.observacoes || "-",
+          r.created_at ? format(new Date(r.created_at), "dd/MM/yyyy", { locale: ptBR }) : "-",
+        ];
+        const wrapped = cellTexts.map((txt, i) =>
+          pdf.splitTextToSize(String(txt), Math.max(cols[i].w - 2, 8)) as string[]
+        );
+        const maxLines = Math.max(...wrapped.map(w => w.length));
+        const rowH = Math.max(7, maxLines * lineH + padY);
+
+        if (y + rowH > pageHeight - 10) {
           pdf.addPage();
           y = 15;
           drawHeader();
           pdf.setFont("helvetica", "normal");
           pdf.setFontSize(9);
         }
+
         const bg = idx % 2 === 0 ? 255 : 240;
         pdf.setFillColor(bg, bg, bg);
-        pdf.rect(margin, y, pageWidth - margin * 2, 7, "F");
+        pdf.rect(margin, y, pageWidth - margin * 2, rowH, "F");
 
-        pdf.text(truncate(r.colaborador?.nome || "-", 40), cols[0].x, y + 5);
-        pdf.text(truncate(r.colaborador?.setor?.nome || "-", 32), cols[1].x, y + 5);
-        pdf.text(truncate(motivoLabel(r.motivo), 32), cols[2].x, y + 5);
-        pdf.text(truncate(r.observacoes || "-", 35), cols[3].x, y + 5);
-        pdf.text(r.created_at ? format(new Date(r.created_at), "dd/MM/yyyy", { locale: ptBR }) : "-", cols[4].x, y + 5);
-        y += 7;
+        wrapped.forEach((lines, i) => {
+          pdf.text(lines, cols[i].x, y + 4);
+        });
+        y += rowH;
       });
 
       pdf.setFontSize(8);
