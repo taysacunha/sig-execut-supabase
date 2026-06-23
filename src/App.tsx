@@ -70,6 +70,7 @@ const EstoqueSolicitacoes = lazy(() => import("./pages/estoque/EstoqueSolicitaco
 const EstoqueSaldos = lazy(() => import("./pages/estoque/EstoqueSaldos"));
 const EstoqueMovimentacoes = lazy(() => import("./pages/estoque/EstoqueMovimentacoes"));
 const EstoqueNotificacoes = lazy(() => import("./pages/estoque/EstoqueNotificacoes"));
+const EstoquePlacas = lazy(() => import("./pages/estoque/EstoquePlacas"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -191,6 +192,7 @@ const App = () => {
               <Route path="locais" element={<EstoqueLocais />} />
               <Route path="categorias" element={<EstoqueCategorias />} />
               <Route path="saldos" element={<EstoqueSaldos />} />
+              <Route path="placas" element={<EstoquePlacas />} />
               <Route path="solicitacoes" element={<EstoqueSolicitacoes />} />
               <Route path="movimentacoes" element={<EstoqueMovimentacoes />} />
               <Route path="notificacoes" element={<EstoqueNotificacoes />} />
