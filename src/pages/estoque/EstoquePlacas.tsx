@@ -1,0 +1,617 @@
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import {
+  Loader2, Tag, Wrench, ArrowLeftRight, AlertTriangle,
+  History as HistoryIcon, ShieldAlert, Trash2,
+} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useSystemAccess } from "@/hooks/useSystemAccess";
+import { useUserRole } from "@/hooks/useUserRole";
+import { useTableControls } from "@/hooks/useTableControls";
+import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
+import {
+  usePlacas, useHistoricoPlaca, Placa, PlacaStatus,
+  STATUS_LABELS, STATUS_COLORS, TIPO_USO_LABELS, TAMANHO_LABELS, HIST_LABELS,
+} from "@/hooks/useEstoquePlacas";
+import { PlacasPDFGenerator } from "@/components/estoque/placas/PlacasPDFGenerator";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+
+const fromEstoque = (t: string) => supabase.from(t as any);
+
+interface LocalOpt { id: string; nome: string; }
+
+type AbaStatus = "disponivel" | "instalada" | "baixadas";
+
+export default function EstoquePlacas() {
+  const queryClient = useQueryClient();
+  const { hasAccess, user } = useSystemAccess();
+  const { isSuperAdmin, isAdmin } = useUserRole();
+  const isAdminOrSuper = isSuperAdmin || isAdmin;
+
+  const [aba, setAba] = useState<AbaStatus>("disponivel");
+  const [tipoFiltro, setTipoFiltro] = useState<string>("todos");
+  const [tamanhoFiltro, setTamanhoFiltro] = useState<string>("todos");
+
+  const [instalarDialog, setInstalarDialog] = useState(false);
+  const [retirarDialog, setRetirarDialog] = useState(false);
+  const [perdaRouboDialog, setPerdaRouboDialog] = useState<null | "roubo" | "perda">(null);
+  const [historicoDialog, setHistoricoDialog] = useState(false);
+  const [excluirDialog, setExcluirDialog] = useState(false);
+  const [selected, setSelected] = useState<Placa | null>(null);
+
+  const { data: placas = [], isLoading } = usePlacas();
+
+  const { data: locais = [] } = useQuery({
+    queryKey: ["estoque-locais-placas"],
+    queryFn: async () => {
+      const { data, error } = await fromEstoque("estoque_locais_armazenamento")
+        .select("id, nome").eq("is_active", true).order("nome");
+      if (error) throw error;
+      return (data as unknown as LocalOpt[]) || [];
+    },
+  });
+  const localNome = (id: string | null) =>
+    id ? (locais.find((l) => l.id === id)?.nome || "—") : "—";
+
+  // Filtra por aba + filtros adicionais
+  const placasFiltradas = useMemo(() => {
+    const matchAba = (p: Placa) =>
+      aba === "disponivel" ? p.status === "disponivel"
+      : aba === "instalada" ? p.status === "instalada"
+      : (p.status === "roubada" || p.status === "perdida" || p.status === "baixada");
+    return placas.filter((p) => {
+      if (!matchAba(p)) return false;
+      if (tipoFiltro !== "todos" && p.tipo_uso !== tipoFiltro) return false;
+      if (tamanhoFiltro !== "todos" && p.tamanho !== tamanhoFiltro) return false;
+      return true;
+    });
+  }, [placas, aba, tipoFiltro, tamanhoFiltro]);
+
+  const counts = useMemo(() => ({
+    disponivel: placas.filter((p) => p.status === "disponivel").length,
+    instalada: placas.filter((p) => p.status === "instalada").length,
+    baixadas: placas.filter((p) => ["roubada","perdida","baixada"].includes(p.status)).length,
+  }), [placas]);
+
+  const {
+    searchTerm, setSearchTerm, currentPage, setCurrentPage,
+    itemsPerPage, setItemsPerPage, sortField, sortDirection, setSorting,
+    paginatedData, filteredData, totalPages,
+  } = useTableControls({
+    data: placasFiltradas,
+    searchField: ["codigo", "imovel_codigo_atual"] as any,
+    defaultItemsPerPage: 25,
+  });
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["estoque-placas"] });
+    queryClient.invalidateQueries({ queryKey: ["estoque-saldos"] });
+    queryClient.invalidateQueries({ queryKey: ["estoque-saldos-check"] });
+    queryClient.invalidateQueries({ queryKey: ["estoque-movimentacoes"] });
+  };
+
+  // ─── MUTATIONS ───
+  const instalarMutation = useMutation({
+    mutationFn: async (input: { placa: Placa; imovel: string; data: string; obs: string }) => {
+      const imovel = input.imovel.trim();
+      if (!imovel) throw new Error("Código do imóvel obrigatório");
+      if (imovel.length > 30) throw new Error("Código do imóvel muito longo (máx 30)");
+      if (input.placa.status !== "disponivel") throw new Error("Placa não está disponível");
+
+      const { error } = await fromEstoque("estoque_placas").update({
+        status: "instalada",
+        imovel_codigo_atual: imovel,
+        data_instalacao_atual: input.data,
+      } as any).eq("id", input.placa.id);
+      if (error) throw error;
+
+      await fromEstoque("estoque_placas_historico").insert({
+        placa_id: input.placa.id,
+        tipo: "instalacao",
+        imovel_codigo: imovel,
+        data_evento: input.data,
+        observacoes: input.obs || null,
+        user_id: user?.id,
+      } as any);
+
+      await fromEstoque("estoque_movimentacoes").insert({
+        material_id: input.placa.material_id, tipo: "saida", quantidade: 1,
+        local_origem_id: input.placa.local_armazenamento_id,
+        responsavel_user_id: user?.id,
+        observacoes: `Placa ${input.placa.codigo} instalada no imóvel ${imovel}`,
+      } as any);
+    },
+    onSuccess: () => { invalidate(); toast.success("Placa instalada!"); setInstalarDialog(false); },
+    onError: (e: any) => toast.error(e?.message || "Erro ao instalar"),
+  });
+
+  const retirarMutation = useMutation({
+    mutationFn: async (input: { placa: Placa; data: string; obs: string }) => {
+      if (input.placa.status !== "instalada") throw new Error("Placa não está instalada");
+
+      const { error } = await fromEstoque("estoque_placas").update({
+        status: "disponivel",
+        imovel_codigo_atual: null,
+        data_instalacao_atual: null,
+      } as any).eq("id", input.placa.id);
+      if (error) throw error;
+
+      const { data: ultima } = await fromEstoque("estoque_placas_historico")
+        .select("id").eq("placa_id", input.placa.id).eq("tipo", "instalacao")
+        .is("data_retorno", null).order("data_evento", { ascending: false }).limit(1).maybeSingle();
+      if (ultima) {
+        await fromEstoque("estoque_placas_historico")
+          .update({ data_retorno: input.data } as any).eq("id", (ultima as any).id);
+      }
+
+      await fromEstoque("estoque_placas_historico").insert({
+        placa_id: input.placa.id,
+        tipo: "retirada",
+        imovel_codigo: input.placa.imovel_codigo_atual,
+        data_evento: input.data,
+        observacoes: input.obs || null,
+        user_id: user?.id,
+      } as any);
+
+      await fromEstoque("estoque_movimentacoes").insert({
+        material_id: input.placa.material_id, tipo: "entrada", quantidade: 1,
+        local_destino_id: input.placa.local_armazenamento_id,
+        responsavel_user_id: user?.id,
+        observacoes: `Placa ${input.placa.codigo} retirada do imóvel ${input.placa.imovel_codigo_atual || "?"}`,
+      } as any);
+    },
+    onSuccess: () => { invalidate(); toast.success("Placa retirada!"); setRetirarDialog(false); },
+    onError: (e: any) => toast.error(e?.message || "Erro ao retirar"),
+  });
+
+  const perdaRouboMutation = useMutation({
+    mutationFn: async (input: { placa: Placa; tipo: "roubo" | "perda"; data: string; obs: string }) => {
+      if (["roubada","perdida","baixada"].includes(input.placa.status)) {
+        throw new Error("Placa já está em estado terminal");
+      }
+      const novoStatus: PlacaStatus = input.tipo === "roubo" ? "roubada" : "perdida";
+      const { error } = await fromEstoque("estoque_placas").update({
+        status: novoStatus,
+      } as any).eq("id", input.placa.id);
+      if (error) throw error;
+
+      await fromEstoque("estoque_placas_historico").insert({
+        placa_id: input.placa.id,
+        tipo: input.tipo,
+        imovel_codigo: input.placa.imovel_codigo_atual,
+        data_evento: input.data,
+        observacoes: input.obs || null,
+        user_id: user?.id,
+      } as any);
+
+      await fromEstoque("estoque_movimentacoes").insert({
+        material_id: input.placa.material_id, tipo: "saida", quantidade: 1,
+        local_origem_id: input.placa.local_armazenamento_id,
+        responsavel_user_id: user?.id,
+        observacoes: `Placa ${input.placa.codigo} marcada como ${input.tipo}`,
+      } as any);
+    },
+    onSuccess: (_, vars) => {
+      invalidate();
+      toast.success(`Placa marcada como ${vars.tipo}`);
+      setPerdaRouboDialog(null);
+    },
+    onError: (e: any) => toast.error(e?.message || "Erro ao registrar"),
+  });
+
+  const excluirMutation = useMutation({
+    mutationFn: async (placa: Placa) => {
+      const { error } = await fromEstoque("estoque_placas").delete().eq("id", placa.id);
+      if (error) throw error;
+    },
+    onSuccess: () => { invalidate(); toast.success("Placa excluída"); setExcluirDialog(false); },
+    onError: (e: any) => toast.error(e?.message || "Erro ao excluir"),
+  });
+
+  if (!hasAccess("estoque")) {
+    return <div className="p-8 text-muted-foreground">Sem permissão para acessar este módulo.</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <Tag className="h-6 w-6" /> Placas
+          </h1>
+          <p className="text-muted-foreground">
+            Gerencie o vínculo das placas cadastradas com imóveis, retorno ao estoque e registros de perda/roubo.
+            O cadastro de novas placas é feito em <strong>/estoque/materiais</strong>.
+          </p>
+        </div>
+        <PlacasPDFGenerator placas={placas} />
+      </div>
+
+      <Tabs value={aba} onValueChange={(v) => { setAba(v as AbaStatus); setCurrentPage(1); }}>
+        <TabsList>
+          <TabsTrigger value="disponivel">
+            Disponíveis <Badge variant="secondary" className="ml-2">{counts.disponivel}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="instalada">
+            Instaladas <Badge variant="secondary" className="ml-2">{counts.instalada}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="baixadas">
+            Baixadas <Badge variant="secondary" className="ml-2">{counts.baixadas}</Badge>
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={aba} className="space-y-4 mt-4">
+          <Card>
+            <CardContent className="pt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <TableSearch value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por código ou imóvel..." />
+              <Select value={tipoFiltro} onValueChange={setTipoFiltro}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos tipos</SelectItem>
+                  {Object.entries(TIPO_USO_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={tamanhoFiltro} onValueChange={setTamanhoFiltro}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos tamanhos</SelectItem>
+                  {Object.entries(TAMANHO_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-0">
+              {isLoading ? (
+                <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+              ) : paginatedData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
+                  <Tag className="h-12 w-12 mb-4 opacity-50" />
+                  <p>Nenhuma placa nesta categoria</p>
+                </div>
+              ) : (
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead><SortableHeader label="Código" field="codigo" currentField={sortField as string} direction={sortDirection} onSort={setSorting as any} /></TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Tamanho</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Imóvel atual</TableHead>
+                        <TableHead>Local armazenamento</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedData.map((p) => (
+                        <TableRow key={p.id}>
+                          <TableCell className="font-medium">{p.codigo}</TableCell>
+                          <TableCell>{TIPO_USO_LABELS[p.tipo_uso]}</TableCell>
+                          <TableCell>
+                            {p.tamanho === "outro" ? `Outro (${p.tamanho_outro || "-"})` : TAMANHO_LABELS[p.tamanho]}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={STATUS_COLORS[p.status]}>
+                              {STATUS_LABELS[p.status]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {p.imovel_codigo_atual || "—"}
+                            {p.data_instalacao_atual && (
+                              <div className="text-xs text-muted-foreground">
+                                desde {format(new Date(p.data_instalacao_atual), "dd/MM/yyyy", { locale: ptBR })}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm">{localNome(p.local_armazenamento_id)}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1 flex-wrap">
+                              {p.status === "disponivel" && (
+                                <Button size="sm" variant="ghost" title="Instalar em imóvel"
+                                  onClick={() => { setSelected(p); setInstalarDialog(true); }}>
+                                  <Wrench className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {p.status === "instalada" && (
+                                <Button size="sm" variant="ghost" title="Retirar do imóvel"
+                                  onClick={() => { setSelected(p); setRetirarDialog(true); }}>
+                                  <ArrowLeftRight className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {(p.status === "disponivel" || p.status === "instalada") && (
+                                <>
+                                  <Button size="sm" variant="ghost" title="Registrar roubo"
+                                    onClick={() => { setSelected(p); setPerdaRouboDialog("roubo"); }}>
+                                    <ShieldAlert className="h-4 w-4 text-red-500" />
+                                  </Button>
+                                  <Button size="sm" variant="ghost" title="Registrar perda"
+                                    onClick={() => { setSelected(p); setPerdaRouboDialog("perda"); }}>
+                                    <AlertTriangle className="h-4 w-4 text-orange-500" />
+                                  </Button>
+                                </>
+                              )}
+                              <Button size="sm" variant="ghost" title="Ver histórico"
+                                onClick={() => { setSelected(p); setHistoricoDialog(true); }}>
+                                <HistoryIcon className="h-4 w-4" />
+                              </Button>
+                              {isAdminOrSuper && (
+                                <Button size="sm" variant="ghost" title="Excluir" className="text-destructive"
+                                  onClick={() => { setSelected(p); setExcluirDialog(true); }}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <div className="p-4">
+                    <TablePagination
+                      currentPage={currentPage} totalPages={totalPages}
+                      itemsPerPage={itemsPerPage} onPageChange={setCurrentPage}
+                      onItemsPerPageChange={setItemsPerPage} totalItems={filteredData.length}
+                    />
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {selected && (
+        <InstalarDialog
+          open={instalarDialog} onOpenChange={setInstalarDialog} placa={selected}
+          onSubmit={(v) => instalarMutation.mutate({ placa: selected, ...v })}
+          loading={instalarMutation.isPending}
+        />
+      )}
+      {selected && (
+        <RetirarDialog
+          open={retirarDialog} onOpenChange={setRetirarDialog} placa={selected}
+          onSubmit={(v) => retirarMutation.mutate({ placa: selected, ...v })}
+          loading={retirarMutation.isPending}
+        />
+      )}
+      {selected && perdaRouboDialog && (
+        <RouboPerdaDialog
+          open={!!perdaRouboDialog} tipo={perdaRouboDialog} placa={selected}
+          onOpenChange={(o) => !o && setPerdaRouboDialog(null)}
+          onSubmit={(v) => perdaRouboMutation.mutate({ placa: selected, tipo: perdaRouboDialog!, ...v })}
+          loading={perdaRouboMutation.isPending}
+        />
+      )}
+      {selected && (
+        <HistoricoDialog open={historicoDialog} onOpenChange={setHistoricoDialog} placa={selected} />
+      )}
+
+      <AlertDialog open={excluirDialog} onOpenChange={setExcluirDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir placa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação remove a placa <strong>{selected?.codigo}</strong> e todo o seu histórico.
+              Não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => selected && excluirMutation.mutate(selected)}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// SUB-COMPONENTES
+// ──────────────────────────────────────────────────────────────────────────
+
+function InstalarDialog({
+  open, onOpenChange, placa, onSubmit, loading,
+}: {
+  open: boolean; onOpenChange: (o: boolean) => void; placa: Placa;
+  onSubmit: (v: { imovel: string; data: string; obs: string }) => void; loading: boolean;
+}) {
+  const [imovel, setImovel] = useState("");
+  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+  const [obs, setObs] = useState("");
+  useEffect(() => { if (open) { setImovel(""); setData(new Date().toISOString().slice(0, 10)); setObs(""); } }, [open]);
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Instalar placa {placa.codigo}</DialogTitle>
+          <DialogDescription>Informe o código do imóvel onde a placa será fixada.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="space-y-2">
+            <Label>Código do imóvel *</Label>
+            <Input value={imovel} onChange={(e) => setImovel(e.target.value)} maxLength={30} />
+          </div>
+          <div className="space-y-2">
+            <Label>Data da instalação *</Label>
+            <Input type="date" value={data} onChange={(e) => setData(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Observações</Label>
+            <Textarea value={obs} onChange={(e) => setObs(e.target.value)} maxLength={500} rows={2} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button disabled={loading || !imovel.trim()} onClick={() => onSubmit({ imovel, data, obs })}>
+            {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Confirmar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RetirarDialog({
+  open, onOpenChange, placa, onSubmit, loading,
+}: {
+  open: boolean; onOpenChange: (o: boolean) => void; placa: Placa;
+  onSubmit: (v: { data: string; obs: string }) => void; loading: boolean;
+}) {
+  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+  const [obs, setObs] = useState("");
+  useEffect(() => { if (open) { setData(new Date().toISOString().slice(0, 10)); setObs(""); } }, [open]);
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Retirar placa {placa.codigo}</DialogTitle>
+          <DialogDescription>
+            Imóvel atual: <strong>{placa.imovel_codigo_atual || "—"}</strong>
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="space-y-2">
+            <Label>Data do retorno ao estoque *</Label>
+            <Input type="date" value={data} onChange={(e) => setData(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Observações</Label>
+            <Textarea value={obs} onChange={(e) => setObs(e.target.value)} maxLength={500} rows={2} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button disabled={loading} onClick={() => onSubmit({ data, obs })}>
+            {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Confirmar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RouboPerdaDialog({
+  open, onOpenChange, tipo, placa, onSubmit, loading,
+}: {
+  open: boolean; onOpenChange: (o: boolean) => void;
+  tipo: "roubo" | "perda"; placa: Placa;
+  onSubmit: (v: { data: string; obs: string }) => void; loading: boolean;
+}) {
+  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+  const [obs, setObs] = useState("");
+  useEffect(() => { if (open) { setData(new Date().toISOString().slice(0, 10)); setObs(""); } }, [open]);
+  const titulo = tipo === "roubo" ? "Registrar roubo" : "Registrar perda";
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{titulo} — placa {placa.codigo}</DialogTitle>
+          <DialogDescription>
+            A placa sairá do saldo de disponíveis. Esta ação não pode ser desfeita.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="space-y-2">
+            <Label>Data do ocorrido *</Label>
+            <Input type="date" value={data} onChange={(e) => setData(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Observações</Label>
+            <Textarea value={obs} onChange={(e) => setObs(e.target.value)} maxLength={500} rows={3}
+              placeholder={tipo === "roubo" ? "BO, local, descrição..." : "Onde foi perdida, contexto..."} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button
+            disabled={loading}
+            className={tipo === "roubo" ? "bg-red-600 hover:bg-red-700" : "bg-orange-600 hover:bg-orange-700"}
+            onClick={() => onSubmit({ data, obs })}
+          >
+            {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Confirmar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function HistoricoDialog({
+  open, onOpenChange, placa,
+}: { open: boolean; onOpenChange: (o: boolean) => void; placa: Placa }) {
+  const { data: historico = [], isLoading } = useHistoricoPlaca(open ? placa.id : null);
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Histórico — placa {placa.codigo}</DialogTitle>
+          <DialogDescription>
+            {TIPO_USO_LABELS[placa.tipo_uso]} · {placa.tamanho === "outro" ? placa.tamanho_outro : TAMANHO_LABELS[placa.tamanho]}
+          </DialogDescription>
+        </DialogHeader>
+        {isLoading ? (
+          <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+        ) : historico.length === 0 ? (
+          <p className="text-muted-foreground text-center py-6">Sem eventos registrados.</p>
+        ) : (
+          <div className="max-h-[60vh] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Evento</TableHead>
+                  <TableHead>Imóvel</TableHead>
+                  <TableHead>Retorno</TableHead>
+                  <TableHead>Observações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {historico.map((h) => (
+                  <TableRow key={h.id}>
+                    <TableCell>{format(new Date(h.data_evento), "dd/MM/yyyy", { locale: ptBR })}</TableCell>
+                    <TableCell><Badge variant="outline">{HIST_LABELS[h.tipo]}</Badge></TableCell>
+                    <TableCell>{h.imovel_codigo || "—"}</TableCell>
+                    <TableCell>{h.data_retorno ? format(new Date(h.data_retorno), "dd/MM/yyyy", { locale: ptBR }) : "—"}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground max-w-[200px]">{h.observacoes || "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
