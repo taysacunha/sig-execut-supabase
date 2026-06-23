@@ -10,7 +10,6 @@ export type Tamanho = "1x1" | "2x2" | "outro";
 export interface Placa {
   id: string;
   codigo: string;
-  versao: number;
   material_id: string;
   tipo_uso: TipoUso;
   tamanho: Tamanho;
@@ -20,7 +19,6 @@ export interface Placa {
   imovel_codigo_atual: string | null;
   data_instalacao_atual: string | null;
   observacoes: string | null;
-  substitui_placa_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -80,8 +78,7 @@ export function usePlacas() {
     queryFn: async () => {
       const { data, error } = await fromEstoque("estoque_placas")
         .select("*")
-        .order("codigo")
-        .order("versao", { ascending: false });
+        .order("codigo");
       if (error) throw error;
       return (data as unknown as Placa[]) || [];
     },

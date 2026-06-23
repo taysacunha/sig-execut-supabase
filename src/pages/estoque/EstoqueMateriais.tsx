@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Pencil, Package, Loader2, Trash2, RotateCcw } from "lucide-react";
+import { Plus, Pencil, Package, Loader2, Trash2, RotateCcw, Tag } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,8 +15,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
+import { useUserRole } from "@/hooks/useUserRole";
 import { useTableControls } from "@/hooks/useTableControls";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
+import { NovaPlacaDialog } from "@/components/estoque/materiais/NovaPlacaDialog";
 
 interface Material {
   id: string;
@@ -47,9 +49,12 @@ export default function EstoqueMateriais() {
   const queryClient = useQueryClient();
   const { canEdit } = useSystemAccess();
   const canEditEstoque = canEdit("estoque");
+  const { isSuperAdmin, isAdmin } = useUserRole();
+  const isAdminOrSuper = isSuperAdmin || isAdmin;
 
   const [activeTab, setActiveTab] = useState("ativos");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [novaPlacaOpen, setNovaPlacaOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [toggleConfirm, setToggleConfirm] = useState<{ id: string; nome: string; newActive: boolean } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; nome: string } | null>(null);
@@ -290,11 +295,20 @@ export default function EstoqueMateriais() {
           <p className="text-muted-foreground">Cadastro de materiais do estoque</p>
         </div>
         {canEditEstoque && (
-          <Button onClick={() => setDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Novo Material
-          </Button>
+          <div className="flex gap-2">
+            {isAdminOrSuper && (
+              <Button variant="outline" onClick={() => setNovaPlacaOpen(true)}>
+                <Tag className="mr-2 h-4 w-4" /> Nova Placa
+              </Button>
+            )}
+            <Button onClick={() => setDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Novo Material
+            </Button>
+          </div>
         )}
       </div>
+
+      <NovaPlacaDialog open={novaPlacaOpen} onOpenChange={setNovaPlacaOpen} />
 
       <Card>
         <CardHeader>
