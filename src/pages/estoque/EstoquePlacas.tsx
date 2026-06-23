@@ -562,7 +562,7 @@ function NovaPlacaDialog({
   const [reusoSelecionado, setReusoSelecionado] = useState<string>("");
 
   // Pré-preenche se for reposição
-  useMemo(() => {
+  useEffect(() => {
     if (open && substituiPlaca) {
       setCodigo(substituiPlaca.codigo);
       setTipoUso(substituiPlaca.tipo_uso);
@@ -706,7 +706,7 @@ function InstalarDialog({
   const [imovel, setImovel] = useState("");
   const [data, setData] = useState(new Date().toISOString().slice(0, 10));
   const [obs, setObs] = useState("");
-  useMemo(() => { if (open) { setImovel(""); setData(new Date().toISOString().slice(0, 10)); setObs(""); } }, [open]);
+  useEffect(() => { if (open) { setImovel(""); setData(new Date().toISOString().slice(0, 10)); setObs(""); } }, [open]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -747,7 +747,7 @@ function RetirarDialog({
 }) {
   const [data, setData] = useState(new Date().toISOString().slice(0, 10));
   const [obs, setObs] = useState("");
-  useMemo(() => { if (open) { setData(new Date().toISOString().slice(0, 10)); setObs(""); } }, [open]);
+  useEffect(() => { if (open) { setData(new Date().toISOString().slice(0, 10)); setObs(""); } }, [open]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -787,7 +787,7 @@ function RouboPerdaDialog({
 }) {
   const [data, setData] = useState(new Date().toISOString().slice(0, 10));
   const [obs, setObs] = useState("");
-  useMemo(() => { if (open) { setData(new Date().toISOString().slice(0, 10)); setObs(""); } }, [open]);
+  useEffect(() => { if (open) { setData(new Date().toISOString().slice(0, 10)); setObs(""); } }, [open]);
   const titulo = tipo === "roubo" ? "Registrar roubo" : "Registrar perda";
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
