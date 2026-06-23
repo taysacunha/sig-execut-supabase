@@ -29,11 +29,11 @@ interface AfastamentosSectionProps {
 }
 
 const MOTIVO_LABELS: Record<string, string> = {
-  acidente: "Acidente",
-  doenca: "Doença",
+  atestado_medico: "Atestado Médico",
+  acompanhamento_familiar: "Acompanhamento de Pessoa da Família",
+  doacao_sangue: "Doação de Sangue",
   licenca_maternidade: "Licença Maternidade",
   licenca_paternidade: "Licença Paternidade",
-  licenca_medica: "Licença Médica",
   outros: "Outros",
 };
 
@@ -41,7 +41,7 @@ export function AfastamentosSection({ colaboradorId, colaboradorNome, canEdit = 
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  const [motivo, setMotivo] = useState("doenca");
+  const [motivo, setMotivo] = useState("atestado_medico");
   const [motivoDescricao, setMotivoDescricao] = useState("");
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
@@ -138,7 +138,7 @@ export function AfastamentosSection({ colaboradorId, colaboradorNome, canEdit = 
   const closeDialog = () => {
     setDialogOpen(false);
     setEditing(null);
-    setMotivo("doenca");
+    setMotivo("atestado_medico");
     setMotivoDescricao("");
     setDataInicio("");
     setDataFim("");
