@@ -251,10 +251,10 @@ export function PerdasFolgaPDFGenerator({ year: initialYear, month: initialMonth
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start" onWheel={(e) => e.stopPropagation()}>
                   <Command>
                     <CommandInput placeholder="Buscar colaborador..." />
-                    <CommandList>
+                    <CommandList className="max-h-72 overflow-y-auto overscroll-contain">
                       <CommandEmpty>Nenhum encontrado.</CommandEmpty>
                       <CommandGroup>
                         <CommandItem value="__todos__" onSelect={toggleAllColab}>
@@ -285,9 +285,9 @@ export function PerdasFolgaPDFGenerator({ year: initialYear, month: initialMonth
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start" onWheel={(e) => e.stopPropagation()}>
                   <Command>
-                    <CommandList>
+                    <CommandList className="max-h-72 overflow-y-auto overscroll-contain">
                       <CommandGroup>
                         <CommandItem value="__todos__" onSelect={toggleAllMotivo}>
                           <Checkbox checked={allMotivoSelected} className="mr-2" />
