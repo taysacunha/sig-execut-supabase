@@ -1,28 +1,59 @@
 ## Objetivo
 
-Restringir as ações de **Nova Entrada**, **Ajustar**, **Transferir** e **Excluir** na página **Saldos de Estoque** apenas para usuários com perfil **Super Administrador** ou **Administrador**. Demais usuários com acesso ao módulo Estoque continuam podendo visualizar os saldos, mas sem acesso a essas ações.
+Reforçar no banco de dados que somente usuários com role `super_admin` ou `admin` consigam **INSERT / UPDATE / DELETE** em `estoque_saldos` e `estoque_movimentacoes`, garantindo a regra mesmo se alguém chamar a API diretamente. A leitura (SELECT) continua para qualquer usuário com acesso ao módulo Estoque.
 
-## Mudanças
+## Migration
 
-### 1. `src/pages/estoque/EstoqueSaldos.tsx`
+Criar uma migration que:
 
-- Importar o hook `useUserRole` (`@/hooks/useUserRole`).
-- Calcular `const isAdminOrSuper = isSuperAdmin || isAdmin;`.
-- Substituir o `canEditEstoque` que governa os botões e ações por `canManageSaldos = canEditEstoque && isAdminOrSuper`.
-- Aplicar `canManageSaldos` em:
-  - Botão **"Nova Entrada"** no topo da página (ocultar para quem não for Admin/Super).
-  - Prop `canEdit` passada para `<SaldosTable />` (controla a coluna "Ações": Ajustar, Transferir, Excluir).
-- Manter o restante do fluxo (visualização, abas por unidade, filtro de estoque baixo, busca, paginação) acessível para qualquer usuário com acesso ao módulo.
+1. **`estoque_saldos`** — derruba as policies atuais de INSERT/UPDATE/DELETE e recria exigindo Admin/Super Admin, mantendo a checagem de acesso ao módulo:
 
-### 2. Backend (RLS) — sem alterações nesta etapa
+   ```sql
+   DROP POLICY IF EXISTS "Users with edit access can insert estoque_saldos" ON public.estoque_saldos;
+   DROP POLICY IF EXISTS "Users with edit access can update estoque_saldos" ON public.estoque_saldos;
+   DROP POLICY IF EXISTS "Users with edit access can delete estoque_saldos" ON public.estoque_saldos;
 
-A restrição é apenas de UI. As policies atuais em `estoque_saldos` e `estoque_movimentacoes` continuam permitindo INSERT/UPDATE/DELETE para qualquer usuário com `can_edit_system('estoque')`. Isso é suficiente para esconder os botões da interface e atende ao pedido.
+   CREATE POLICY "Admin/Super can insert estoque_saldos"
+     ON public.estoque_saldos FOR INSERT TO authenticated
+     WITH CHECK (
+       public.is_admin_or_super(auth.uid())
+       AND public.has_system_access(auth.uid(), 'estoque')
+     );
 
-> Observação: caso você queira que a restrição também seja garantida no banco (impedindo que alguém com `view_edit` em Estoque, mas sem ser Admin/Super, faça as operações via API direta), eu posso, em um passo seguinte, criar uma migration ajustando as policies de `estoque_saldos` e `estoque_movimentacoes` para exigir `has_role('admin')` ou `has_role('super_admin')`. Me avise se quiser esse reforço.
+   CREATE POLICY "Admin/Super can update estoque_saldos"
+     ON public.estoque_saldos FOR UPDATE TO authenticated
+     USING (
+       public.is_admin_or_super(auth.uid())
+       AND public.has_system_access(auth.uid(), 'estoque')
+     );
+
+   CREATE POLICY "Admin/Super can delete estoque_saldos"
+     ON public.estoque_saldos FOR DELETE TO authenticated
+     USING (
+       public.is_admin_or_super(auth.uid())
+       AND public.has_system_access(auth.uid(), 'estoque')
+     );
+   ```
+
+2. **`estoque_movimentacoes`** — mesmo padrão para INSERT/UPDATE/DELETE (entrada, ajuste, transferência e saída são registradas aqui):
+
+   ```sql
+   DROP POLICY IF EXISTS "Users with edit access can insert estoque_movimentacoes" ON public.estoque_movimentacoes;
+   DROP POLICY IF EXISTS "Users with edit access can update estoque_movimentacoes" ON public.estoque_movimentacoes;
+   DROP POLICY IF EXISTS "Users with edit access can delete estoque_movimentacoes" ON public.estoque_movimentacoes;
+
+   CREATE POLICY "Admin/Super can insert estoque_movimentacoes" ...
+   CREATE POLICY "Admin/Super can update estoque_movimentacoes" ...
+   CREATE POLICY "Admin/Super can delete estoque_movimentacoes" ...
+   ```
+
+3. Policies de SELECT existentes em ambas as tabelas permanecem inalteradas — qualquer usuário com `has_system_access('estoque')` continua visualizando.
 
 ## Fora de escopo
 
-- Página de **Materiais** (`/estoque/materiais`) — o pedido se refere às ações na página Saldos. Se quiser restringir cadastro/edição/exclusão de materiais também, posso fazer em outra rodada.
-- Outras páginas do módulo Estoque (Locais, Categorias, Solicitações, Movimentações, etc.) ficam inalteradas.
+- `estoque_solicitacoes` e `estoque_solicitacao_itens` continuam liberadas para criação por qualquer usuário com acesso ao módulo (fluxo de solicitar material não é afetado).
+- Tabelas `estoque_materiais`, `estoque_locais_armazenamento`, `estoque_categorias`, `estoque_gestores`, `estoque_usuarios_unidades`, `estoque_notificacoes` ficam como estão.
 
-Faça também, num próximo plano, o tratamento de restrição no bancode dados.
+## Impacto no frontend
+
+Nenhuma mudança de código. Como a UI já esconde os botões para não-admins (implementado no passo anterior), o reforço de RLS apenas bloqueia chamadas via API direta. Usuários Admin/Super Admin continuam operando normalmente.
