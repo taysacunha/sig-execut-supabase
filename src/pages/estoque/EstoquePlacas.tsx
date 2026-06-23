@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -42,7 +42,7 @@ interface LocalOpt { id: string; nome: string; unidade_id: string; }
 
 export default function EstoquePlacas() {
   const queryClient = useQueryClient();
-  const { canView, user } = useSystemAccess();
+  const { hasAccess, user } = useSystemAccess();
   const { isSuperAdmin, isAdmin } = useUserRole();
   const isAdminOrSuper = isSuperAdmin || isAdmin;
 
@@ -307,7 +307,7 @@ export default function EstoquePlacas() {
     onError: (e: any) => toast.error(e?.message || "Erro ao excluir"),
   });
 
-  if (!canView("estoque")) {
+  if (!hasAccess("estoque")) {
     return <div className="p-8 text-muted-foreground">Sem permissão para acessar este módulo.</div>;
   }
 
