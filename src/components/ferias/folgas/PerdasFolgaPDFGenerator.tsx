@@ -29,11 +29,17 @@ const MOTIVO_LABELS: Record<string, string> = {
   aviso_previo: "Aviso prévio",
   suspensao: "Suspensão disciplinar",
   outro: "Outro motivo",
-  // legado
+  // legado: exibido no PDF, mas removido do seletor de filtros
   atestado_medico: "Atestado médico (legado)",
   atestado_sabado: "Atestado de sábado",
 };
-const MOTIVO_OPTIONS = Object.entries(MOTIVO_LABELS).map(([value, label]) => ({ value, label }));
+
+const MOTIVO_OPTIONS = [
+  { value: "falta_injustificada", label: "Falta injustificada" },
+  { value: "aviso_previo", label: "Aviso prévio" },
+  { value: "suspensao", label: "Suspensão disciplinar" },
+  { value: "outro", label: "Outro motivo" },
+];
 
 interface Colaborador { id: string; nome: string; }
 
