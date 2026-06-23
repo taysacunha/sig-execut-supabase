@@ -72,7 +72,7 @@ export function PlacasPDFGenerator({ placas }: { placas: Placa[] }) {
       const subtitulo = modo === "inventario"
         ? `Gerado em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`
         : placaSelecionada
-          ? `Código ${placaSelecionada.codigo} • Versão ${placaSelecionada.versao} • ${TIPO_USO_LABELS[placaSelecionada.tipo_uso]} • ${TAMANHO_LABELS[placaSelecionada.tamanho]}`
+          ? `Código ${placaSelecionada.codigo} • ${TIPO_USO_LABELS[placaSelecionada.tipo_uso]} • ${TAMANHO_LABELS[placaSelecionada.tamanho]}`
           : "";
       pdf.text(subtitulo, pageWidth / 2, 20, { align: "center" });
       pdf.setTextColor(0, 0, 0);
@@ -83,7 +83,7 @@ export function PlacasPDFGenerator({ placas }: { placas: Placa[] }) {
         let rows = [...placas];
         if (statusFiltro !== "todos") rows = rows.filter((p) => p.status === statusFiltro);
         if (tipoFiltro !== "todos") rows = rows.filter((p) => p.tipo_uso === tipoFiltro);
-        rows.sort((a, b) => a.codigo.localeCompare(b.codigo) || a.versao - b.versao);
+        rows.sort((a, b) => a.codigo.localeCompare(b.codigo));
 
         if (rows.length === 0) {
           toast.error("Nenhuma placa para os filtros selecionados");
@@ -92,13 +92,12 @@ export function PlacasPDFGenerator({ placas }: { placas: Placa[] }) {
 
         const cols = [
           { label: "Código", x: margin + 2, w: 28 },
-          { label: "Ver.", x: margin + 32, w: 12 },
-          { label: "Tipo", x: margin + 46, w: 20 },
-          { label: "Tamanho", x: margin + 68, w: 22 },
-          { label: "Status", x: margin + 92, w: 26 },
-          { label: "Imóvel atual", x: margin + 120, w: 36 },
-          { label: "Local armazenamento", x: margin + 158, w: 60 },
-          { label: "Atualizado em", x: margin + 220, w: pageWidth - margin - (margin + 220) - 2 },
+          { label: "Tipo", x: margin + 32, w: 22 },
+          { label: "Tamanho", x: margin + 56, w: 24 },
+          { label: "Status", x: margin + 82, w: 28 },
+          { label: "Imóvel atual", x: margin + 112, w: 38 },
+          { label: "Local armazenamento", x: margin + 152, w: 68 },
+          { label: "Atualizado em", x: margin + 222, w: pageWidth - margin - (margin + 222) - 2 },
         ];
 
         const drawHeader = () => {
@@ -118,7 +117,6 @@ export function PlacasPDFGenerator({ placas }: { placas: Placa[] }) {
         rows.forEach((r, idx) => {
           const cellTexts = [
             r.codigo,
-            String(r.versao),
             TIPO_USO_LABELS[r.tipo_uso],
             r.tamanho === "outro" ? `Outro (${r.tamanho_outro || "-"})` : TAMANHO_LABELS[r.tamanho],
             STATUS_LABELS[r.status],
@@ -228,7 +226,7 @@ export function PlacasPDFGenerator({ placas }: { placas: Placa[] }) {
           `Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })} | Eventos: ${rows.length}`,
           pageWidth / 2, pageHeight - 6, { align: "center" }
         );
-        pdf.save(`placa-${placaSelecionada.codigo}-v${placaSelecionada.versao}-historico.pdf`);
+        pdf.save(`placa-${placaSelecionada.codigo}-historico.pdf`);
       }
 
       toast.success("PDF gerado!");
@@ -244,9 +242,7 @@ export function PlacasPDFGenerator({ placas }: { placas: Placa[] }) {
   // Agrupa placas por código para o seletor (mostra todas as versões)
   const placasOpts = useMemo(
     () =>
-      [...placas].sort(
-        (a, b) => a.codigo.localeCompare(b.codigo) || b.versao - a.versao
-      ),
+      [...placas].sort((a, b) => a.codigo.localeCompare(b.codigo)),
     [placas]
   );
 
@@ -312,7 +308,7 @@ export function PlacasPDFGenerator({ placas }: { placas: Placa[] }) {
                   <SelectContent>
                     {placasOpts.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
-                        {p.codigo} (v{p.versao}) — {STATUS_LABELS[p.status]}
+                        {p.codigo} — {STATUS_LABELS[p.status]}
                       </SelectItem>
                     ))}
                   </SelectContent>
