@@ -1,4 +1,4 @@
-import { Home, Package, MapPin, Users, UserCircle, Shield, History, LogOut, ArrowLeft, Crown, Briefcase, User, ClipboardList, PackageOpen, ArrowDownUp, Bell, Tag } from "lucide-react";
+import { Home, Package, MapPin, Users, UserCircle, Shield, History, LogOut, ArrowLeft, Crown, Briefcase, User, ClipboardList, PackageOpen, ArrowDownUp, Bell, Tag, Flag } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -34,6 +34,7 @@ const moduleMenuItems: MenuItem[] = [
   { title: "Categorias", url: "/estoque/categorias", icon: Tag },
   { title: "Locais", url: "/estoque/locais", icon: MapPin },
   { title: "Saldos", url: "/estoque/saldos", icon: PackageOpen },
+  { title: "Placas", url: "/estoque/placas", icon: Flag },
   { title: "Solicitações", url: "/estoque/solicitacoes", icon: ClipboardList },
   { title: "Movimentações", url: "/estoque/movimentacoes", icon: ArrowDownUp },
   { title: "Notificações", url: "/estoque/notificacoes", icon: Bell },
