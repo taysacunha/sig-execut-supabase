@@ -37,6 +37,7 @@ import { SetoresSabadosTable } from "@/components/ferias/folgas/SetoresSabadosTa
 import { FolgasPrintGenerator } from "@/components/ferias/folgas/FolgasPrintGenerator";
 import { MoverFolgasLoteDialog } from "@/components/ferias/folgas/MoverFolgasLoteDialog";
 import { RemoverFolgaDialog } from "@/components/ferias/folgas/RemoverFolgaDialog";
+import { PerdasFolgaPDFGenerator } from "@/components/ferias/folgas/PerdasFolgaPDFGenerator";
 import { cn } from "@/lib/utils";
 
 const MOTIVO_PERDA_LABELS: Record<string, string> = {
@@ -815,12 +816,15 @@ const FeriasFolgas = () => {
                 <CardTitle>Perdas de Folga</CardTitle>
                 <CardDescription>Registro de folgas perdidas por colaboradores</CardDescription>
               </div>
-              {canEditFerias && (
-                <Button variant="outline" onClick={() => setPerdaOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Registrar Perda
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                <PerdasFolgaPDFGenerator year={year} month={month} />
+                {canEditFerias && (
+                  <Button variant="outline" onClick={() => setPerdaOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Registrar Perda
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {perdas.length === 0 ? (

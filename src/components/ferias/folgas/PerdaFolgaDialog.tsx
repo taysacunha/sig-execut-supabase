@@ -15,7 +15,6 @@ import { Loader2, AlertTriangle, CreditCard, Check, ChevronsUpDown } from "lucid
 
 const MOTIVOS_PERDA = [
   { value: "falta_injustificada", label: "Falta injustificada" },
-  { value: "atestado_medico", label: "Atestado médico" },
   { value: "aviso_previo", label: "Aviso prévio" },
   { value: "suspensao", label: "Suspensão disciplinar" },
   { value: "outro", label: "Outro motivo" },

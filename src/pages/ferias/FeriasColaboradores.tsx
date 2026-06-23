@@ -13,6 +13,7 @@ import jsPDF from "jspdf";
 import ColaboradorDialog from "@/components/ferias/colaboradores/ColaboradorDialog";
 import ColaboradorViewDialog from "@/components/ferias/colaboradores/ColaboradorViewDialog";
 import ColaboradorFilters from "@/components/ferias/colaboradores/ColaboradorFilters";
+import { AfastamentosPDFGenerator } from "@/components/ferias/colaboradores/AfastamentosPDFGenerator";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
 import { useTableControls } from "@/hooks/useTableControls";
 import {
@@ -306,6 +307,7 @@ const FeriasColaboradores = () => {
             <FileDown className="h-4 w-4 mr-2" />
             PDF
           </Button>
+          <AfastamentosPDFGenerator />
           <Button onClick={() => setDialogOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Novo Colaborador
