@@ -1,37 +1,28 @@
 ## Objetivo
-Garantir que o texto digitado no campo **Observações** seja exibido por completo nos PDFs de **Afastamentos** e **Perdas de Folga**, sem cortes com reticências.
 
-## Contexto atual
-Ambos os relatórios usam `jsPDF` em modo paisagem (A4). As linhas têm altura fixa de 7 mm e os textos são truncados com reticências (`truncate(...)`) antes de serem desenhados:
+Restringir as ações de **Nova Entrada**, **Ajustar**, **Transferir** e **Excluir** na página **Saldos de Estoque** apenas para usuários com perfil **Super Administrador** ou **Administrador**. Demais usuários com acesso ao módulo Estoque continuam podendo visualizar os saldos, mas sem acesso a essas ações.
 
-- `AfastamentosPDFGenerator.tsx`: observações truncadas em 28 caracteres.
-- `PerdasFolgaPDFGenerator.tsx`: observações truncadas em 35 caracteres.
+## Mudanças
 
-Como a altura da linha é fixa, mesmo que reduzíssemos a fonte o corte continuaria para textos maiores. A solução é **quebrar o texto em várias linhas e expandir a altura da linha dinamicamente**.
+### 1. `src/pages/estoque/EstoqueSaldos.tsx`
 
-## Passos
+- Importar o hook `useUserRole` (`@/hooks/useUserRole`).
+- Calcular `const isAdminOrSuper = isSuperAdmin || isAdmin;`.
+- Substituir o `canEditEstoque` que governa os botões e ações por `canManageSaldos = canEditEstoque && isAdminOrSuper`.
+- Aplicar `canManageSaldos` em:
+  - Botão **"Nova Entrada"** no topo da página (ocultar para quem não for Admin/Super).
+  - Prop `canEdit` passada para `<SaldosTable />` (controla a coluna "Ações": Ajustar, Transferir, Excluir).
+- Manter o restante do fluxo (visualização, abas por unidade, filtro de estoque baixo, busca, paginação) acessível para qualquer usuário com acesso ao módulo.
 
-### 1. AfastamentosPDFGenerator.tsx
-- Substituir a função `truncate` por `splitTextToSize` do jsPDF para as colunas que podem conter texto longo (nome, setor, motivo e, principalmente, observações).
-- Calcular a altura de cada linha com base na maior quantidade de linhas geradas entre as colunas daquela linha.
-- Ajustar o desenho do fundo zebrado para a nova altura.
-- Recalcular a verificação de quebra de página (`pageHeight - 18`) considerando a altura real da próxima linha.
-- Se necessário, redistribuir larguras das colunas anteriores para dar mais espaço à coluna de observações, sem alterar os dados ou filtros.
+### 2. Backend (RLS) — sem alterações nesta etapa
 
-### 2. PerdasFolgaPDFGenerator.tsx
-- Aplicar a mesma lógica de quebra de linha e altura dinâmica para observações.
-- Aproveitar para também quebrar textos longos das colunas `Colaborador`, `Setor` e `Motivo`, mantendo a tabela legível.
-- Ajustar retângulos de fundo e quebras de página conforme a nova altura variável.
+A restrição é apenas de UI. As policies atuais em `estoque_saldos` e `estoque_movimentacoes` continuam permitindo INSERT/UPDATE/DELETE para qualquer usuário com `can_edit_system('estoque')`. Isso é suficiente para esconder os botões da interface e atende ao pedido.
 
-### 3. Testes/QA
-- Gerar PDFs de exemplo com observações curtas, médias e muito longas.
-- Verificar se:
-  - Nenhum texto aparece cortado com "…".
-  - O conteúdo não ultrapassa as margens.
-  - Linhas adjacentes não se sobrepõem.
-  - Quebras de página continuam funcionando corretamente.
+> Observação: caso você queira que a restrição também seja garantida no banco (impedindo que alguém com `view_edit` em Estoque, mas sem ser Admin/Super, faça as operações via API direta), eu posso, em um passo seguinte, criar uma migration ajustando as policies de `estoque_saldos` e `estoque_movimentacoes` para exigir `has_role('admin')` ou `has_role('super_admin')`. Me avise se quiser esse reforço.
 
-## O que não muda
-- Os diálogos de filtro (colaboradores, motivos, mês/ano) permanecem iguais.
-- A lógica de busca no Supabase e os dados retornados não são alterados.
-- O formato do PDF continua sendo A4 paisagem, gerado no cliente.
+## Fora de escopo
+
+- Página de **Materiais** (`/estoque/materiais`) — o pedido se refere às ações na página Saldos. Se quiser restringir cadastro/edição/exclusão de materiais também, posso fazer em outra rodada.
+- Outras páginas do módulo Estoque (Locais, Categorias, Solicitações, Movimentações, etc.) ficam inalteradas.
+
+Faça também, num próximo plano, o tratamento de restrição no bancode dados.
