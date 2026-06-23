@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
+import { useUserRole } from "@/hooks/useUserRole";
 import { useTableControls } from "@/hooks/useTableControls";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
 import { verificarEstoqueBaixo } from "@/hooks/useEstoqueNotificacoes";
@@ -164,7 +165,9 @@ function SaldosTable({
 export default function EstoqueSaldos() {
   const queryClient = useQueryClient();
   const { canEdit, user } = useSystemAccess();
-  const canEditEstoque = canEdit("estoque");
+  const { isSuperAdmin, isAdmin } = useUserRole();
+  const isAdminOrSuper = isSuperAdmin || isAdmin;
+  const canEditEstoque = canEdit("estoque") && isAdminOrSuper;
 
   const [entradaDialog, setEntradaDialog] = useState(false);
   const [ajusteDialog, setAjusteDialog] = useState(false);
