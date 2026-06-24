@@ -157,7 +157,12 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>Nova Placa</DialogTitle>
           <DialogDescription>
-            Cada placa é uma unidade rastreável no estoque. O código deve ser único no sistema.
+            Pré-cadastra um código de placa para uso futuro. O código deve ser único no sistema.
+            <br />
+            <span className="text-xs">
+              Este cadastro <strong>não altera o saldo</strong> — o saldo é controlado em
+              <strong> /estoque/saldos</strong>. A baixa só acontece quando a placa é instalada em um imóvel.
+            </span>
           </DialogDescription>
         </DialogHeader>
 
