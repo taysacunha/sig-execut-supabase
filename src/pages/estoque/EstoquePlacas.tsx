@@ -33,6 +33,7 @@ import { TableSearch, TablePagination, SortableHeader } from "@/components/venda
 import {
   usePlacas, useHistoricoPlaca, Placa, PlacaStatus,
   STATUS_LABELS, STATUS_COLORS, TIPO_USO_LABELS, TAMANHO_LABELS, HIST_LABELS,
+  MaterialPlaca, inferPlacaAttributes, formatPlacaTamanho,
 } from "@/hooks/useEstoquePlacas";
 import { PlacasPDFGenerator } from "@/components/estoque/placas/PlacasPDFGenerator";
 import { NovaSaidaDialog } from "@/components/estoque/placas/NovaSaidaDialog";
@@ -42,8 +43,20 @@ import { ptBR } from "date-fns/locale";
 const fromEstoque = (t: string) => supabase.from(t as any);
 
 interface LocalOpt { id: string; nome: string; }
+interface SaldoPlacaRow { id: string; material_id: string; local_armazenamento_id: string; quantidade: number; }
 
 type AbaStatus = "disponivel" | "instalada" | "baixadas";
+
+type ResumoSaldoPlaca = {
+  key: string;
+  material_id: string;
+  material_nome: string;
+  local_armazenamento_id: string;
+  quantidade: number;
+  tipo_uso: "venda" | "aluga";
+  tamanho: "1x1" | "2x2" | "outro";
+  tamanho_outro: string | null;
+};
 
 export default function EstoquePlacas() {
   const queryClient = useQueryClient();
@@ -54,6 +67,8 @@ export default function EstoquePlacas() {
   const [aba, setAba] = useState<AbaStatus>("disponivel");
   const [tipoFiltro, setTipoFiltro] = useState<string>("todos");
   const [tamanhoFiltro, setTamanhoFiltro] = useState<string>("todos");
+  const [materialFiltro, setMaterialFiltro] = useState<string>("todos");
+  const [localFiltro, setLocalFiltro] = useState<string>("todos");
 
   const [instalarDialog, setInstalarDialog] = useState(false);
   const [retirarDialog, setRetirarDialog] = useState(false);
@@ -64,6 +79,19 @@ export default function EstoquePlacas() {
   const [selected, setSelected] = useState<Placa | null>(null);
 
   const { data: placas = [], isLoading } = usePlacas();
+
+  const { data: materiaisPlaca = [] } = useQuery({
+    queryKey: ["estoque-materiais-placa"],
+    queryFn: async () => {
+      const { data, error } = await fromEstoque("estoque_materiais")
+        .select("id, nome, categoria_id, categoria, unidade_medida, estoque_minimo, is_placa, is_active")
+        .eq("is_active", true)
+        .order("nome");
+      if (error) throw error;
+      const rows = (data as unknown as MaterialPlaca[]) || [];
+      return rows.filter((m) => m.is_placa || m.nome.toLowerCase().startsWith("placa"));
+    },
+  });
 
   const { data: locais = [] } = useQuery({
     queryKey: ["estoque-locais-placas"],
@@ -77,6 +105,47 @@ export default function EstoquePlacas() {
   const localNome = (id: string | null) =>
     id ? (locais.find((l) => l.id === id)?.nome || "—") : "—";
 
+  const materialNome = (id: string | null) =>
+    id ? (materiaisPlaca.find((m) => m.id === id)?.nome || "—") : "—";
+
+  const { data: saldosPlaca = [] } = useQuery({
+    queryKey: ["estoque-saldos-placas"],
+    queryFn: async () => {
+      const { data, error } = await fromEstoque("estoque_saldos")
+        .select("id, material_id, local_armazenamento_id, quantidade");
+      if (error) throw error;
+      return ((data as unknown as SaldoPlacaRow[]) || []).filter((s) =>
+        s.quantidade > 0 && materiaisPlaca.some((m) => m.id === s.material_id)
+      );
+    },
+    enabled: materiaisPlaca.length > 0,
+  });
+
+  const resumoSaldosPlaca = useMemo<ResumoSaldoPlaca[]>(() => {
+    return saldosPlaca.map((s) => {
+      const material = materiaisPlaca.find((m) => m.id === s.material_id);
+      const attrs = inferPlacaAttributes(material?.nome || "");
+      return {
+        key: s.id,
+        material_id: s.material_id,
+        material_nome: material?.nome || "—",
+        local_armazenamento_id: s.local_armazenamento_id,
+        quantidade: s.quantidade,
+        ...attrs,
+      };
+    });
+  }, [saldosPlaca, materiaisPlaca]);
+
+  const resumoFiltrado = useMemo(() => {
+    return resumoSaldosPlaca.filter((r) => {
+      if (tipoFiltro !== "todos" && r.tipo_uso !== tipoFiltro) return false;
+      if (tamanhoFiltro !== "todos" && r.tamanho !== tamanhoFiltro) return false;
+      if (materialFiltro !== "todos" && r.material_id !== materialFiltro) return false;
+      if (localFiltro !== "todos" && r.local_armazenamento_id !== localFiltro) return false;
+      return true;
+    });
+  }, [resumoSaldosPlaca, tipoFiltro, tamanhoFiltro, materialFiltro, localFiltro]);
+
   // Filtra por aba + filtros adicionais
   const placasFiltradas = useMemo(() => {
     const matchAba = (p: Placa) =>
@@ -87,15 +156,17 @@ export default function EstoquePlacas() {
       if (!matchAba(p)) return false;
       if (tipoFiltro !== "todos" && p.tipo_uso !== tipoFiltro) return false;
       if (tamanhoFiltro !== "todos" && p.tamanho !== tamanhoFiltro) return false;
+      if (materialFiltro !== "todos" && p.material_id !== materialFiltro) return false;
+      if (localFiltro !== "todos" && p.local_armazenamento_id !== localFiltro) return false;
       return true;
     });
-  }, [placas, aba, tipoFiltro, tamanhoFiltro]);
+  }, [placas, aba, tipoFiltro, tamanhoFiltro, materialFiltro, localFiltro]);
 
   const counts = useMemo(() => ({
-    disponivel: placas.filter((p) => p.status === "disponivel").length,
+    disponivel: resumoSaldosPlaca.reduce((acc, item) => acc + item.quantidade, 0),
     instalada: placas.filter((p) => p.status === "instalada").length,
     baixadas: placas.filter((p) => ["roubada","perdida","baixada"].includes(p.status)).length,
-  }), [placas]);
+  }), [placas, resumoSaldosPlaca]);
 
   const {
     searchTerm, setSearchTerm, currentPage, setCurrentPage,
@@ -109,7 +180,8 @@ export default function EstoquePlacas() {
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["estoque-placas"] });
-    queryClient.invalidateQueries({ queryKey: ["estoque-saldos"] });
+      queryClient.invalidateQueries({ queryKey: ["estoque-saldos"] });
+      queryClient.invalidateQueries({ queryKey: ["estoque-saldos-placas"] });
     queryClient.invalidateQueries({ queryKey: ["estoque-saldos-check"] });
     queryClient.invalidateQueries({ queryKey: ["estoque-movimentacoes"] });
   };
@@ -144,6 +216,22 @@ export default function EstoquePlacas() {
         responsavel_user_id: user?.id,
         observacoes: `Placa ${input.placa.codigo ?? "(sem código)"} instalada no imóvel ${imovel}`,
       } as any);
+
+      if (input.placa.local_armazenamento_id) {
+        const { data: saldo } = await fromEstoque("estoque_saldos")
+          .select("id, quantidade")
+          .eq("material_id", input.placa.material_id)
+          .eq("local_armazenamento_id", input.placa.local_armazenamento_id)
+          .maybeSingle();
+        if (saldo) {
+          const novaQuantidade = Math.max(((saldo as any).quantidade || 0) - 1, 0);
+          if (novaQuantidade === 0) {
+            await fromEstoque("estoque_saldos").delete().eq("id", (saldo as any).id);
+          } else {
+            await fromEstoque("estoque_saldos").update({ quantidade: novaQuantidade } as any).eq("id", (saldo as any).id);
+          }
+        }
+      }
     },
     onSuccess: () => { invalidate(); toast.success("Placa instalada!"); setInstalarDialog(false); },
     onError: (e: any) => toast.error(e?.message || "Erro ao instalar"),
@@ -183,6 +271,25 @@ export default function EstoquePlacas() {
         responsavel_user_id: user?.id,
         observacoes: `Placa ${input.placa.codigo ?? "(sem código)"} retirada do imóvel ${input.placa.imovel_codigo_atual || "?"}`,
       } as any);
+
+      if (input.placa.local_armazenamento_id) {
+        const { data: saldo } = await fromEstoque("estoque_saldos")
+          .select("id, quantidade")
+          .eq("material_id", input.placa.material_id)
+          .eq("local_armazenamento_id", input.placa.local_armazenamento_id)
+          .maybeSingle();
+        if (saldo) {
+          await fromEstoque("estoque_saldos")
+            .update({ quantidade: ((saldo as any).quantidade || 0) + 1 } as any)
+            .eq("id", (saldo as any).id);
+        } else {
+          await fromEstoque("estoque_saldos").insert({
+            material_id: input.placa.material_id,
+            local_armazenamento_id: input.placa.local_armazenamento_id,
+            quantidade: 1,
+          } as any);
+        }
+      }
     },
     onSuccess: () => { invalidate(); toast.success("Placa retirada!"); setRetirarDialog(false); },
     onError: (e: any) => toast.error(e?.message || "Erro ao retirar"),
@@ -244,8 +351,8 @@ export default function EstoquePlacas() {
             <Tag className="h-6 w-6" /> Placas
           </h1>
           <p className="text-muted-foreground">
-            Gerencie o vínculo das placas cadastradas com imóveis, retorno ao estoque e registros de perda/roubo.
-            O cadastro de novas placas é feito em <strong>/estoque/materiais</strong>.
+            Acompanhe saldos de materiais-placa, instalações em imóveis e registros de perda/roubo.
+            Cadastre a placa em <strong>/estoque/materiais</strong> e lance o saldo em <strong>/estoque/saldos</strong>.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -273,8 +380,15 @@ export default function EstoquePlacas() {
 
         <TabsContent value={aba} className="space-y-4 mt-4">
           <Card>
-            <CardContent className="pt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <CardContent className="pt-4 grid grid-cols-1 sm:grid-cols-5 gap-3">
               <TableSearch value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por código ou imóvel..." />
+              <Select value={materialFiltro} onValueChange={setMaterialFiltro}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos materiais</SelectItem>
+                  {materiaisPlaca.map((m) => <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
               <Select value={tipoFiltro} onValueChange={setTipoFiltro}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -289,8 +403,54 @@ export default function EstoquePlacas() {
                   {Object.entries(TAMANHO_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                 </SelectContent>
               </Select>
+              <Select value={localFiltro} onValueChange={setLocalFiltro}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos locais</SelectItem>
+                  {locais.map((l) => <SelectItem key={l.id} value={l.id}>{l.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </CardContent>
           </Card>
+
+          {aba === "disponivel" && (
+            <Card>
+              <CardContent className="pt-4">
+                <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
+                  <h2 className="font-semibold text-foreground">Saldos disponíveis por material</h2>
+                  <Badge variant="secondary">
+                    {resumoFiltrado.reduce((acc, item) => acc + item.quantidade, 0)} unidade(s)
+                  </Badge>
+                </div>
+                {resumoFiltrado.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">Nenhum saldo de placa encontrado para os filtros.</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Material</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Tamanho</TableHead>
+                        <TableHead>Local</TableHead>
+                        <TableHead className="text-right">Saldo</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {resumoFiltrado.map((r) => (
+                        <TableRow key={r.key}>
+                          <TableCell className="font-medium">{r.material_nome}</TableCell>
+                          <TableCell>{TIPO_USO_LABELS[r.tipo_uso]}</TableCell>
+                          <TableCell>{formatPlacaTamanho(r.tamanho, r.tamanho_outro)}</TableCell>
+                          <TableCell>{localNome(r.local_armazenamento_id)}</TableCell>
+                          <TableCell className="text-right font-mono">{r.quantidade}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardContent className="p-0">
@@ -307,6 +467,7 @@ export default function EstoquePlacas() {
                     <TableHeader>
                       <TableRow>
                         <TableHead><SortableHeader label="Código" field="codigo" currentField={sortField as string} direction={sortDirection} onSort={setSorting as any} /></TableHead>
+                        <TableHead>Material</TableHead>
                         <TableHead>Tipo</TableHead>
                         <TableHead>Tamanho</TableHead>
                         <TableHead>Status</TableHead>
@@ -321,6 +482,7 @@ export default function EstoquePlacas() {
                           <TableCell className="font-medium">
                             {p.codigo || <span className="text-muted-foreground italic">sem código</span>}
                           </TableCell>
+                          <TableCell>{materialNome(p.material_id)}</TableCell>
                           <TableCell>{TIPO_USO_LABELS[p.tipo_uso]}</TableCell>
                           <TableCell>
                             {p.tamanho === "outro" ? `Outro (${p.tamanho_outro || "-"})` : TAMANHO_LABELS[p.tamanho]}
