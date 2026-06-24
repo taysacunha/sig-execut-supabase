@@ -123,15 +123,6 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
         observacoes: obs.trim() || null,
         user_id: user?.id,
       } as any);
-
-      await fromEstoque("estoque_movimentacoes").insert({
-        material_id: materialPlaca.id,
-        tipo: "entrada",
-        quantidade: 1,
-        local_destino_id: localId,
-        responsavel_user_id: user?.id,
-        observacoes: `Nova placa cadastrada: ${c}`,
-      } as any);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["estoque-placas"] });
