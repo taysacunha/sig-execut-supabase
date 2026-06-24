@@ -1,66 +1,80 @@
-## Reestruturação da Gestão de Placas
+## Fluxo final do controle de placas
 
-Ajustar a feature já implementada para o fluxo correto:
+Três etapas claras, cada uma na sua página:
 
-- Cadastro de placa = **entrada no estoque** → acontece na página **Materiais**
-- Página **Placas** = só gestão (vínculo com imóvel, entrada/saída, perda/roubo, histórico, PDF)
-- Códigos de placa são **únicos globalmente**
+```text
+1. MATERIAIS    → cadastra o material "Placa" (uma vez, com is_placa=true)
+                   + opcionalmente pré-cadastra códigos via "Nova Placa"
+2. SALDOS       → admin lança entrada de N unidades no local de armazenamento
+                   (saldo numérico, sem códigos)
+3. PLACAS       → gestão de saída/retorno/roubo/perda, vinculando código de
+                   placa ao código do imóvel
+```
 
----
+## Regra-chave
 
-### 1. Banco (nova migration `estoque_placas_ajustes.sql`)
+O saldo da página **Saldos** é a fonte da verdade da quantidade física disponível.
+Os **códigos** da página Placas são rótulos de rastreamento — só consomem saldo quando uma placa sai para um imóvel.
 
-- Adicionar coluna `is_placa boolean NOT NULL DEFAULT false` em `estoque_materiais`. Admin marca o material "Placa" existente como `is_placa = true` (UPDATE direto na migration localizando por nome, com fallback manual).
-- **Reforçar unicidade do código:** trocar o índice parcial atual por `UNIQUE (codigo)` em `estoque_placas`. Como agora cada código existe uma única vez (sem versionamento), remover colunas `versao` e `substitui_placa_id` — reposição vira simplesmente "reativar a placa" ou "cadastrar nova com outro código". → confirmar abaixo.
-- Manter triggers de saldo, auditoria e histórico já criados.
+- Placa **disponível com código** = código já cadastrado, ainda não foi instalada.
+- Placa **instalada** = saiu para um imóvel (consumiu 1 do saldo do local).
+- Placa **retornada** = voltou ao estoque (devolve 1 ao saldo do local, código vira "disponível" de novo).
+- Placa **roubada/perdida** = baixa definitiva (consumiu 1 do saldo, código fica bloqueado para reuso — nova compra usa novo código).
 
-### 2. Página Materiais (`src/pages/estoque/EstoqueMateriais.tsx`)
+## Mudanças na página /estoque/placas
 
-- Botão **"Nova Placa"** ao lado de **"Novo Material"** (visível só para admin/super, igual à regra atual).
-- Abre dialog `NovaPlacaDialog` (mover de `placas/` para `materiais/`) com campos:
-  - Código da placa (único, validação ao digitar consultando `estoque_placas`)
-  - Tipo de uso: Venda / Aluga
-  - Tamanho: 1x1 / 2x2 / Outro (+ texto)
-  - Local de armazenamento
-  - Observações
-- Ao salvar: insere em `estoque_placas` com `status='disponivel'` + linha em `estoque_placas_historico` tipo `criacao`. Trigger atualiza `estoque_saldos` do material Placa automaticamente.
-- Bloqueio: se o material com `is_placa=true` não existir, mostrar aviso "Cadastre primeiro o material Placa e marque-o como controle unitário".
+Manter as 3 abas (**Disponíveis / Instaladas / Baixadas**), mas reorganizar as ações:
 
-### 3. Página Placas (`src/pages/estoque/EstoquePlacas.tsx`)
+### Aba Disponíveis
+Lista placas com status `disponivel` (com código já cadastrado).
+Ação por linha: **"Instalar em imóvel"** → dialog pede só código do imóvel + observação. Consome 1 do saldo do local de armazenamento da placa.
 
-Remover a aba/dialog de "Nova Placa". Reorganizar em:
+### Aba Instaladas
+Lista placas com status `instalada` (mostra código da placa + código do imóvel + data).
+Ações por linha:
+- **Retornar ao estoque** → devolve 1 ao saldo, placa volta a `disponivel`.
+- **Registrar roubo** / **Registrar perda** → baixa definitiva, código bloqueado.
 
-- **Aba 1 – Disponíveis:** placas com `status='disponivel'`, ação principal **Instalar em imóvel** (dialog: código do imóvel + data + obs).
-- **Aba 2 – Instaladas:** placas com `status='instalada'`, mostra imóvel atual + data. Ações: **Retirar** (volta a disponível) e **Registrar roubo/perda** (dialog: tipo + data + obs).
-- **Aba 3 – Baixadas:** roubadas/perdidas/baixadas (somente leitura + histórico).
-- Filtros globais: tipo_uso, tamanho, local, busca por código/imóvel.
-- Cada linha: botão **Histórico** (drawer com timeline) e **PDF da placa**.
-- Botão geral **PDF Inventário** no topo.
-- Permissões: qualquer usuário com `has_system_access('estoque')` pode usar as ações; exclusão definitiva só admin.
+### Aba Baixadas
+Read-only: placas roubadas/perdidas com histórico completo.
 
-### 4. Saldos
+### Botão principal "Nova saída para imóvel" (topo da página)
+Único fluxo unificado, abre dialog com:
+1. **Local de armazenamento** (select) — mostra saldo disponível ao lado.
+2. **Tipo de uso** (Venda/Aluga) e **tamanho** (1x1/2x2/outro).
+3. **Código da placa**:
+   - Combobox listando placas com status `disponivel` no local + tipo + tamanho selecionados.
+   - Se não houver código disponível ou o usuário quiser, opção **"+ Criar novo código"** → input para digitar código novo (validação de unicidade global) → cria a placa e já marca como instalada.
+4. **Código do imóvel** (texto livre obrigatório).
+5. **Observação** (opcional).
 
-A página `/estoque/saldos` continua mostrando o material "Placa" com quantidade = nº de placas disponíveis (já vem do trigger). Sem mudança de UI.
+Validação: bloqueia se saldo do local = 0. Cria entrada em `estoque_placas_historico` (instalacao). Cria movimentação de saída em `estoque_movimentacoes` para abater o saldo automaticamente (via trigger já existente ou inserção manual).
 
-### 5. Arquivos
+## Mudanças na página /estoque/materiais
 
-**Criar**
+**Manter** o botão "Nova Placa" como o usuário pediu — serve para pré-cadastrar códigos em lote (um a um) que ficam com status `disponivel` mas **sem consumir saldo** (são só rótulos disponíveis para futura saída).
 
-- `.lovable/estoque_placas_ajustes.sql` (flag is_placa, unicidade do código, drop versão)
-- `src/components/estoque/materiais/NovaPlacaDialog.tsx`
+Esclarecer no dialog: "Esta placa fica disponível para ser usada em uma saída futura. O saldo do estoque é controlado separadamente em Saldos."
 
-**Alterar**
+## Trigger de saldo
 
-- `src/pages/estoque/EstoqueMateriais.tsx` — botão "Nova Placa"
-- `src/pages/estoque/EstoquePlacas.tsx` — remover criação, reorganizar abas
-- `src/hooks/useEstoquePlacas.ts` — remover mutation `criar nova versão`, manter criação simples
-- `src/components/estoque/placas/PlacasPDFGenerator.tsx` — sem alteração estrutural
-- `.lovable/plan.md`
+Adicionar trigger no `estoque_placas` que, ao mudar status:
+- `disponivel` → `instalada`: insere movimentação de **saída** (-1) no material Placa, no local da placa.
+- `instalada` → `disponivel` (retorno): insere movimentação de **entrada** (+1).
+- `instalada` → `roubada`/`perdida`: insere movimentação de **saída** (-1) com motivo "Roubo"/"Perda".
+- Criar placa nova direto como `instalada` (fluxo "criar novo código na saída"): insere saída (-1).
+- Criar placa como `disponivel` (pré-cadastro em Materiais): **não mexe no saldo**.
 
-### 6. Pendência antes de implementar
+## Arquivos a alterar
 
-Você confirma **remover o versionamento** (`versao`, `substitui_placa_id`)? Isso simplifica: código é único, se uma placa for roubada e depois você comprar outra com o mesmo código físico, você primeiro precisa **dar baixa definitiva** na antiga (status `baixada`) e aí o sistema libera o código para um novo cadastro.
+- **`.lovable/estoque_placas_saldo_trigger.sql`** (novo) — trigger de sincronização placa↔saldo + função de retorno ao estoque.
+- **`src/pages/estoque/EstoquePlacas.tsx`** — adicionar botão "Nova saída para imóvel", ação "Retornar ao estoque" na aba Instaladas, ajustar dialog de instalar.
+- **`src/components/estoque/placas/NovaSaidaDialog.tsx`** (novo) — fluxo unificado de saída (selecionar disponível OU criar novo código).
+- **`src/components/estoque/placas/InstalarPlacaDialog.tsx`** (novo) — dialog simples por linha na aba Disponíveis.
+- **`src/components/estoque/placas/RetornarPlacaDialog.tsx`** (novo) — retorno ao estoque.
+- **`src/components/estoque/materiais/NovaPlacaDialog.tsx`** — adicionar texto explicativo de que não afeta saldo.
+- **`src/hooks/useEstoquePlacas.ts`** — adicionar tipo "retorno" no histórico + mutations.
 
-**Alternativa:** manter o versionamento que já está pronto (placa roubada fica no histórico com versão 1, nova compra entra como versão 2 do mesmo código) — só que aí "código único" passa a ser "código único entre placas ativas", não absolutamente único.
+## Ação manual
 
-Qual prefere? Responda e eu sigo para a implementação. Remova o versionamento.
+Após aprovar, executar `.lovable/estoque_placas_saldo_trigger.sql` no SQL Editor do Supabase para criar o trigger de sincronização.
