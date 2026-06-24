@@ -167,6 +167,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
         if (!placaId) throw new Error("Selecione uma placa disponível ou crie um novo código");
         const found = placas.find((p) => p.id === placaId);
         if (!found) throw new Error("Placa não encontrada");
+        if (found.material_id !== materialId) throw new Error("A placa selecionada não pertence ao material escolhido");
         if (found.status !== "disponivel") throw new Error("Placa não está mais disponível");
         placa = found;
 
@@ -193,7 +194,6 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
         const c = novoCodigo.trim();
         if (!c) throw new Error("Informe o novo código");
         if (c.length > 30) throw new Error("Código muito longo (máx 30 caracteres)");
-        if (tamanho === "outro" && !tamanhoOutro.trim()) throw new Error("Especifique o tamanho");
 
         const { data: existente } = await fromEstoque("estoque_placas")
           .select("id").eq("codigo", c).limit(1).maybeSingle();
@@ -204,7 +204,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
           material_id: materialId,
           tipo_uso: tipoUso,
           tamanho,
-          tamanho_outro: tamanho === "outro" ? tamanhoOutro.trim() : null,
+          tamanho_outro: tamanho === "outro" ? (tamanhoOutro.trim() || "não especificado") : null,
           local_armazenamento_id: localId,
           status: "instalada",
           imovel_codigo_atual: imv,
@@ -272,7 +272,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
     && !!imovel.trim()
     && (modo === "existente"
         ? !!placaId && (!precisaAtribuirCodigo || (!!novoCodigo.trim() && codigoCheck !== "duplicado"))
-        : !!novoCodigo.trim() && codigoCheck !== "duplicado" && (tamanho !== "outro" || !!tamanhoOutro.trim()));
+        : !!novoCodigo.trim() && codigoCheck !== "duplicado");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
