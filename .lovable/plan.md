@@ -1,28 +1,26 @@
-## Controle de placas — implementado
+## Objetivo
 
-Fluxo em três etapas:
+Impedir que o usuário cadastre/edite um material como "Placa" pelo dialog **Novo Material** em `/estoque/materiais`. O fluxo correto é usar o botão **Nova Placa**, que aciona `NovaPlacaDialog` e gerencia o material `is_placa` e o pré-cadastro do código.
 
-1. **Materiais** — cadastra o material "Placa" (com `is_placa=true`). Botão "Nova Placa" pré-cadastra códigos rastreáveis sem afetar saldo.
-2. **Saldos** — admin lança entrada/saída de unidades por local de armazenamento.
-3. **Placas** — gestão de saída para imóvel, retorno, roubo e perda.
+## Como detectar "tentativa de placa"
 
-## Sincronização placa ↔ saldo
+No dialog de Novo Material, considerar tentativa de cadastrar placa quando, no campo **Nome**, o texto (após `trim().toLowerCase()`) começar com `placa` (mesma heurística já usada em `NovaPlacaDialog` no fallback de `is_placa`).
 
-Feita no código JS via inserts em `estoque_movimentacoes`. Sem trigger SQL adicional (evita duplicação de saldo).
+## Mudanças (somente em `src/pages/estoque/EstoqueMateriais.tsx`)
 
-| Ação | Movimentação |
-|---|---|
-| Instalar / Nova saída unificada | `saida` -1 |
-| Retornar ao estoque | `entrada` +1 |
-| Roubo / perda | `saida` -1 |
-| Pré-cadastro em Materiais | nenhuma |
+1. Criar um derivado:
+   ```ts
+   const isPlacaNome = form.nome.trim().toLowerCase().startsWith("placa");
+   ```
+2. Mostrar um alerta inline logo abaixo do campo **Nome** quando `isPlacaNome` for `true`:
+   - Texto: *"Materiais do tipo Placa devem ser cadastrados pelo botão **Nova Placa**. Este formulário não aceita placas."*
+   - Incluir um botão/link "Abrir Nova Placa" que fecha o dialog atual (`closeDialog()`) e abre `setNovaPlacaOpen(true)`.
+   - Usar o componente `Alert` (variant destructive) já presente no design system, sem cores hardcoded.
+3. Desabilitar o botão **Salvar/Cadastrar** do `DialogFooter` quando `isPlacaNome` for `true` (somando à condição atual de `disabled`).
+4. Defesa em profundidade no handler de submit (`handleSubmit`/mutation): se `isPlacaNome` for `true`, exibir `toast.error(...)` com a mesma mensagem e abortar antes de chamar o Supabase. Isso protege contra edição (`editingMaterial`) e contra qualquer caminho que não passe pelo botão.
+5. Não alterar `NovaPlacaDialog`, schema, RLS, nem lógica de saldos/movimentações.
 
-## Arquivos
+## Fora de escopo
 
-- `src/pages/estoque/EstoqueMateriais.tsx` — botão "Nova Placa" (admin/super)
-- `src/components/estoque/materiais/NovaPlacaDialog.tsx` — pré-cadastro sem afetar saldo
-- `src/pages/estoque/EstoquePlacas.tsx` — 3 abas (Disponíveis / Instaladas / Baixadas) + ações por linha + botão "Nova saída para imóvel"
-- `src/components/estoque/placas/NovaSaidaDialog.tsx` — fluxo unificado (selecionar disponível OU criar novo código)
-- `src/hooks/useEstoquePlacas.ts` — tipos e queries
-- `src/components/estoque/placas/PlacasPDFGenerator.tsx` — relatório PDF
-- `.lovable/estoque_placas_migration.sql` + `.lovable/estoque_placas_ajustes.sql` — schema (já executados)
+- Bloqueio no banco (trigger/policy) — apenas UI/UX por enquanto.
+- Renomear placas já cadastradas erroneamente.
