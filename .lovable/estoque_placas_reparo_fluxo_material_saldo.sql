@@ -11,6 +11,10 @@
 
 BEGIN;
 
+-- 0) Remove o recálculo automático antigo que fazia estoque_placas sobrescrever
+-- estoque_saldos. A partir deste fluxo, estoque_saldos é a fonte do saldo.
+DROP TRIGGER IF EXISTS recalc_saldo_placas ON public.estoque_placas;
+
 -- 1) Reativa e marca como placa todos os materiais cujo nome começa com "Placa".
 UPDATE public.estoque_materiais
 SET is_active = true,
