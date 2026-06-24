@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTableControls } from "@/hooks/useTableControls";
@@ -204,6 +205,9 @@ export default function EstoqueMateriais() {
 
   const handleSubmit = () => {
     if (!form.nome.trim()) return toast.error("Nome é obrigatório");
+    if (form.nome.trim().toLowerCase().startsWith("placa")) {
+      return toast.error('Materiais do tipo Placa devem ser cadastrados pelo botão "Nova Placa".');
+    }
     saveMutation.mutate({ ...form, id: editingMaterial?.id });
   };
 
@@ -360,6 +364,24 @@ export default function EstoqueMateriais() {
             <div>
               <Label>Nome *</Label>
               <Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
+              {form.nome.trim().toLowerCase().startsWith("placa") && (
+                <Alert variant="destructive" className="mt-2">
+                  <AlertDescription className="flex flex-col gap-2">
+                    <span>
+                      Materiais do tipo <strong>Placa</strong> devem ser cadastrados pelo botão <strong>Nova Placa</strong>. Este formulário não aceita placas.
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="self-start"
+                      onClick={() => { closeDialog(); setNovaPlacaOpen(true); }}
+                    >
+                      Abrir Nova Placa
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
             <div>
               <Label>Descrição</Label>
@@ -405,7 +427,10 @@ export default function EstoqueMateriais() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeDialog}>Cancelar</Button>
-            <Button onClick={handleSubmit} disabled={saveMutation.isPending}>
+            <Button
+              onClick={handleSubmit}
+              disabled={saveMutation.isPending || form.nome.trim().toLowerCase().startsWith("placa")}
+            >
               {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               {editingMaterial ? "Salvar" : "Cadastrar"}
             </Button>
