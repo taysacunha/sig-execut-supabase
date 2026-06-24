@@ -1,57 +1,52 @@
-## Objetivo
+## Plano de correção do fluxo de placas
 
-Esclarecer o dialog "Nova Placa" e migrar automaticamente os 5 materiais-placa existentes (+ saldos) para o novo modelo `estoque_placas`.
+Vou ajustar para seguir exatamente o fluxo esperado:
 
-## 1. Ajustes no dialog Nova Placa (`src/components/estoque/materiais/NovaPlacaDialog.tsx`)
+1. **Materiais continuam sendo a base**
+  - Não desativar materiais do tipo placa.
+  - Reativar os materiais de placa que possam ter sido desativados pelo script anterior.
+  - Manter cada tipo como material próprio: `Placa Venda 3,00X0,70`, `Placa Venda 2X2 LONA`, `Placa Venda 1X1 LONA`, `Placa Aluga 1X1 LONA`, `Placa - Vende`, etc.
+2. **Nova Placa deve cadastrar Material, não criar item direto em `estoque_placas**`
+  - Ajustar o dialog **Nova Placa** em `/estoque/materiais` para criar um registro em `estoque_materiais` com `is_placa = true`.
+  - Campos do dialog: nome/tipo/tamanho/categoria/unidade/estoque mínimo/descrição ou observação conforme já existir no cadastro de material.
+  - Remover a lógica de “material âncora” genérico.
+3. **Saldos continuam em `/estoque/saldos**`
+  - O usuário registra entrada dos materiais-placa em `/estoque/saldos`, como já faz hoje.
+  - Não apagar nem substituir os saldos por um material genérico.
+  - Corrigir qualquer consulta que esteja buscando saldo usando um material âncora único para buscar o saldo do material-placa selecionado.
+4. **Página `/estoque/placas` deve refletir os saldos dos materiais-placa**
+  - Buscar materiais ativos com `is_placa = true` e seus saldos.
+  - Exibir na página Placas uma visão organizada por status e também por tipo/tamanho/material.
+  - Manter as abas principais: **Disponíveis**, **Instaladas**, **Baixadas**.
+  - Dentro das abas, adicionar filtros/visão para o usuário ver: tipo de uso (**Venda/Aluga**), tamanho (**1x1/2x2/Outro**), material específico e local.
+  - Incluir um resumo por tipo/material mostrando quantidades disponíveis para facilitar a leitura.
+5. **Saída para imóvel**
+  - Ajustar o dialog **Nova saída para imóvel** para o usuário escolher primeiro o material-placa e o local.
+  - Validar saldo desse material naquele local.
+  - Ao confirmar saída, criar/vincular o registro em `estoque_placas` com aquele `material_id`, código da placa e imóvel.
+  - A saída deve consumir 1 unidade do saldo daquele material/local, não de um material genérico.
+6. **Script de reparo de dados**
+  - Criar um SQL de reparo, para executar no Supabase, que:
+    - reativa materiais cujo nome começa com `Placa`;
+    - marca esses materiais como `is_placa = true`;
+    - não desativa materiais de placa;
+    - preserva os saldos existentes;
+    - desfaz a ideia de material âncora quando possível sem perder histórico.
+  - Se o script anterior de migração já tiver sido executado e criado placas genéricas, o reparo tentará reassociar essas placas ao material correto usando `observacoes = 'Migrado de ...'`.
 
-- **Texto da descrição**: substituir o bloco atual por uma frase curta:
-  > "Cadastre um tipo de placa (ex: Placa Aluga 1x1 Lona). O código é atribuído na entrada em /estoque/placas."
-- **Remover** o aviso "Este cadastro não altera o saldo…" e a linha "Material vinculado: …" (e também o estado de erro/loading desse material, já que fica implícito).
-- O resto do dialog (Categoria, Tipo de uso, Tamanho, Local, Observações) permanece como está.
-- A vinculação ao material `is_placa` continua acontecendo internamente (transparente para o usuário).
+## Arquivos a alterar
 
-## 2. Migração de dados dos 5 materiais-placa existentes
+- `src/components/estoque/materiais/NovaPlacaDialog.tsx`
+- `src/components/estoque/placas/NovaSaidaDialog.tsx`
+- `src/pages/estoque/EstoquePlacas.tsx`
+- `src/hooks/useEstoquePlacas.ts`
+- Criar um script SQL de reparo em `.lovable/` para ser executado no SQL Editor do Supabase.
 
-Dados conhecidos hoje:
+## Resultado esperado
 
-| Material antigo            | Saldo total | tipo_uso | tamanho            |
-|----------------------------|-------------|----------|--------------------|
-| Placa Venda 3,00X0,70      | 2           | venda    | outro (3,00x0,70)  |
-| Placa Venda 2X2 LONA       | 4           | venda    | 2x2                |
-| Placa Venda 1X1 LONA       | 2           | venda    | 1x1                |
-| Placa Aluga 1X1 LONA       | 3           | aluga    | 1x1                |
-| Placa - Vende              | 32          | venda    | outro (não esp.)   |
+- As placas aparecem e permanecem como materiais ativos.
+- Os saldos cadastrados em `/estoque/saldos` continuam sendo a fonte de estoque.
+- `/estoque/placas` passa a mostrar os saldos e placas de forma organizada por venda/aluga, 1x1/2x2/outro, material e local.
+- Nenhum material de placa será desativado automaticamente.
 
-**Estratégia (script SQL único, executado via insert tool):**
-
-1. Garantir que existe **um único** material "âncora" com `is_placa = true` (ex.: criar/atualizar `Placa` genérico). Os 5 antigos viram `is_active = false` para sumir do dropdown de Novo Material, mas ficam preservados para histórico.
-2. Para cada linha de `estoque_saldos` desses 5 materiais, gerar `quantidade` registros em `estoque_placas` com:
-   - `material_id` = id do material-âncora
-   - `tipo_uso` e `tamanho` inferidos pelo nome (regex), `tamanho_outro` quando `outro`
-   - `local_armazenamento_id` = do saldo
-   - `status` = `disponivel`
-   - `codigo` = NULL (será atribuído na entrada)
-   - `observacoes` = "Migrado de <nome antigo>"
-3. Inserir 1 linha em `estoque_placas_historico` por placa criada (`tipo = 'criacao'`).
-4. Apagar as linhas correspondentes em `estoque_saldos` (os 5 materiais antigos). O trigger `recalcular_saldo_placas` recompõe os saldos do material-âncora automaticamente.
-5. Marcar os 5 materiais antigos como `is_active = false` e `is_placa = false`.
-
-Total esperado: **43 placas** criadas em `estoque_placas` (2+4+2+3+32).
-
-## 3. Verificação pós-migração
-
-- Conferir `SELECT count(*) FROM estoque_placas` = 43.
-- Conferir `estoque_saldos` do material-âncora reflete 43 distribuídos por local.
-- Abrir `/estoque/placas` e ver as 43 placas listadas (sem código).
-- Abrir `/estoque/materiais` e ver que os 5 antigos não aparecem mais (ou aparecem como inativos, conforme filtro da página).
-
-## Arquivos afetados
-
-- **Editar**: `src/components/estoque/materiais/NovaPlacaDialog.tsx`
-- **SQL (insert tool, dados)**: criação do material-âncora + INSERTs em `estoque_placas`/`historico` + UPDATE em materiais antigos + DELETE em saldos antigos.
-
-## Fora de escopo
-
-- Mudanças no fluxo de entrada/saída em `/estoque/placas` (já implementado).
-- Alterações em RLS, schema (`estoque_placas` já tem `categoria_id` e `codigo` nullable).
-- Edição de outros dialogs.
+Entenda que existe esse fluxo, essa dependência. A placa é uma material. Após cadastrado, adiciona o saldo. Após adicionar o saldo, as placas aparecem na página placas.

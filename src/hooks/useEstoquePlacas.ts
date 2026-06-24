@@ -7,6 +7,17 @@ export type PlacaStatus = "disponivel" | "instalada" | "roubada" | "perdida" | "
 export type TipoUso = "venda" | "aluga";
 export type Tamanho = "1x1" | "2x2" | "outro";
 
+export interface MaterialPlaca {
+  id: string;
+  nome: string;
+  categoria_id: string | null;
+  categoria: string | null;
+  unidade_medida: string;
+  estoque_minimo: number;
+  is_placa: boolean;
+  is_active: boolean;
+}
+
 export interface Placa {
   id: string;
   codigo: string | null;
@@ -72,6 +83,30 @@ export const HIST_LABELS: Record<PlacaHistorico["tipo"], string> = {
   perda: "Perda",
   baixa: "Baixa",
 };
+
+export function inferPlacaAttributes(nome: string): {
+  tipo_uso: TipoUso;
+  tamanho: Tamanho;
+  tamanho_outro: string | null;
+} {
+  const normalized = nome.toLowerCase();
+  const tipo_uso: TipoUso = normalized.includes("aluga") ? "aluga" : "venda";
+
+  const compact = normalized.replace(/\s+/g, "");
+  if (compact.includes("1x1")) {
+    return { tipo_uso, tamanho: "1x1", tamanho_outro: null };
+  }
+  if (compact.includes("2x2")) {
+    return { tipo_uso, tamanho: "2x2", tamanho_outro: null };
+  }
+
+  const medida = nome.match(/([0-9]+(?:[,.][0-9]+)?\s*[xX]\s*[0-9]+(?:[,.][0-9]+)?)/)?.[1]?.trim() || null;
+  return { tipo_uso, tamanho: "outro", tamanho_outro: medida };
+}
+
+export function formatPlacaTamanho(tamanho: Tamanho, tamanhoOutro?: string | null) {
+  return tamanho === "outro" ? `Outro (${tamanhoOutro || "não especificado"})` : TAMANHO_LABELS[tamanho];
+}
 
 export function usePlacas() {
   return useQuery({
