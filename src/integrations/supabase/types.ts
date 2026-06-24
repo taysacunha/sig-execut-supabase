@@ -534,6 +534,7 @@ export type Database = {
           estoque_minimo: number | null
           id: string
           is_active: boolean | null
+          is_placa: boolean
           nome: string
           unidade_medida: string
           updated_at: string | null
@@ -546,6 +547,7 @@ export type Database = {
           estoque_minimo?: number | null
           id?: string
           is_active?: boolean | null
+          is_placa?: boolean
           nome: string
           unidade_medida?: string
           updated_at?: string | null
@@ -558,6 +560,7 @@ export type Database = {
           estoque_minimo?: number | null
           id?: string
           is_active?: boolean | null
+          is_placa?: boolean
           nome?: string
           unidade_medida?: string
           updated_at?: string | null
@@ -691,12 +694,10 @@ export type Database = {
           material_id: string
           observacoes: string | null
           status: string
-          substitui_placa_id: string | null
           tamanho: string
           tamanho_outro: string | null
           tipo_uso: string
           updated_at: string
-          versao: number
         }
         Insert: {
           codigo: string
@@ -709,12 +710,10 @@ export type Database = {
           material_id: string
           observacoes?: string | null
           status?: string
-          substitui_placa_id?: string | null
           tamanho: string
           tamanho_outro?: string | null
           tipo_uso: string
           updated_at?: string
-          versao?: number
         }
         Update: {
           codigo?: string
@@ -727,12 +726,10 @@ export type Database = {
           material_id?: string
           observacoes?: string | null
           status?: string
-          substitui_placa_id?: string | null
           tamanho?: string
           tamanho_outro?: string | null
           tipo_uso?: string
           updated_at?: string
-          versao?: number
         }
         Relationships: [
           {
@@ -747,13 +744,6 @@ export type Database = {
             columns: ["material_id"]
             isOneToOne: false
             referencedRelation: "estoque_materiais"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "estoque_placas_substitui_placa_id_fkey"
-            columns: ["substitui_placa_id"]
-            isOneToOne: false
-            referencedRelation: "estoque_placas"
             referencedColumns: ["id"]
           },
         ]
