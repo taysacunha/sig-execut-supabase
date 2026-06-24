@@ -321,6 +321,22 @@ export default function EstoquePlacas() {
         responsavel_user_id: user?.id,
         observacoes: `Placa ${input.placa.codigo ?? "(sem código)"} marcada como ${input.tipo}`,
       } as any);
+
+      if (input.placa.status === "disponivel" && input.placa.local_armazenamento_id) {
+        const { data: saldo } = await fromEstoque("estoque_saldos")
+          .select("id, quantidade")
+          .eq("material_id", input.placa.material_id)
+          .eq("local_armazenamento_id", input.placa.local_armazenamento_id)
+          .maybeSingle();
+        if (saldo) {
+          const novaQuantidade = Math.max(((saldo as any).quantidade || 0) - 1, 0);
+          if (novaQuantidade === 0) {
+            await fromEstoque("estoque_saldos").delete().eq("id", (saldo as any).id);
+          } else {
+            await fromEstoque("estoque_saldos").update({ quantidade: novaQuantidade } as any).eq("id", (saldo as any).id);
+          }
+        }
+      }
     },
     onSuccess: (_, vars) => {
       invalidate();
