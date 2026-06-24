@@ -136,31 +136,18 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>Nova Placa</DialogTitle>
           <DialogDescription>
-            Pré-cadastra uma placa no estoque. O <strong>código</strong> da placa é atribuído
-            na página de gestão <strong>/estoque/placas</strong>, no momento da entrada ou saída.
-            <br />
-            <span className="text-xs">
-              Este cadastro <strong>não altera o saldo</strong> — o saldo é controlado em
-              <strong> /estoque/saldos</strong>. A baixa só acontece quando a placa é instalada em um imóvel.
-            </span>
+            Cadastre um tipo de placa (ex.: Placa Aluga 1x1 Lona). O código é atribuído
+            na entrada em <strong>/estoque/placas</strong>.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-2">
-          {loadingMat ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Carregando material...
-            </div>
-          ) : !materialPlaca ? (
+          {loadingMat ? null : !materialPlaca ? (
             <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
               Nenhum material está marcado como "Placa". Vá em <strong>/estoque/materiais</strong>, edite
               o material correspondente e marque a flag <em>is_placa</em>, ou execute a migration de ajustes.
             </div>
-          ) : (
-            <div className="text-xs text-muted-foreground">
-              Material vinculado: <strong>{materialPlaca.nome}</strong>
-            </div>
-          )}
+          ) : null}
 
           <div className="space-y-2">
             <Label>Categoria</Label>
