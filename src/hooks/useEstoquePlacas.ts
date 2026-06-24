@@ -9,8 +9,9 @@ export type Tamanho = "1x1" | "2x2" | "outro";
 
 export interface Placa {
   id: string;
-  codigo: string;
+  codigo: string | null;
   material_id: string;
+  categoria_id: string | null;
   tipo_uso: TipoUso;
   tamanho: Tamanho;
   tamanho_outro: string | null;
