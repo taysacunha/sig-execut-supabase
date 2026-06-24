@@ -684,7 +684,8 @@ export type Database = {
       }
       estoque_placas: {
         Row: {
-          codigo: string
+          categoria_id: string | null
+          codigo: string | null
           created_at: string
           created_by: string | null
           data_instalacao_atual: string | null
@@ -700,7 +701,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          codigo: string
+          categoria_id?: string | null
+          codigo?: string | null
           created_at?: string
           created_by?: string | null
           data_instalacao_atual?: string | null
@@ -716,7 +718,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          codigo?: string
+          categoria_id?: string | null
+          codigo?: string | null
           created_at?: string
           created_by?: string | null
           data_instalacao_atual?: string | null
@@ -732,6 +735,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "estoque_placas_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_categorias"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "estoque_placas_local_armazenamento_id_fkey"
             columns: ["local_armazenamento_id"]
