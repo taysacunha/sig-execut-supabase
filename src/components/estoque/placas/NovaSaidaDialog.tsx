@@ -14,9 +14,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { MaterialCombobox } from "@/components/estoque/MaterialCombobox";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import {
-  Placa, TipoUso, Tamanho, TIPO_USO_LABELS, TAMANHO_LABELS, usePlacas,
+  Placa, TipoUso, Tamanho, TIPO_USO_LABELS, TAMANHO_LABELS, usePlacas, inferPlacaAttributes,
 } from "@/hooks/useEstoquePlacas";
 
 const fromEstoque = (t: string) => supabase.from(t as any);
@@ -27,7 +28,7 @@ interface Props {
 }
 
 interface LocalRow { id: string; nome: string; }
-interface SaldoRow { material_id: string; local_id: string; quantidade: number; }
+interface SaldoRow { id: string; material_id: string; local_armazenamento_id: string; quantidade: number; }
 interface MaterialPlacaRow { id: string; nome: string; is_placa: boolean; is_active: boolean; }
 
 type Modo = "existente" | "novo";
@@ -36,6 +37,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
   const queryClient = useQueryClient();
   const { user } = useSystemAccess();
 
+  const [materialId, setMaterialId] = useState("");
   const [localId, setLocalId] = useState("");
   const [tipoUso, setTipoUso] = useState<TipoUso>("venda");
   const [tamanho, setTamanho] = useState<Tamanho>("1x1");
@@ -50,11 +52,20 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
 
   useEffect(() => {
     if (open) {
-      setLocalId(""); setTipoUso("venda"); setTamanho("1x1"); setTamanhoOutro("");
+      setMaterialId(""); setLocalId(""); setTipoUso("venda"); setTamanho("1x1"); setTamanhoOutro("");
       setModo("existente"); setPlacaId(""); setNovoCodigo(""); setCodigoCheck("vazio");
       setImovel(""); setData(new Date().toISOString().slice(0, 10)); setObs("");
     }
   }, [open]);
+
+  const syncAttributesFromMaterial = (material: MaterialPlacaRow | undefined) => {
+    if (!material) return;
+    const attrs = inferPlacaAttributes(material.nome);
+    setTipoUso(attrs.tipo_uso);
+    setTamanho(attrs.tamanho);
+    setTamanhoOutro(attrs.tamanho_outro || "");
+    setPlacaId("");
+  };
 
   const { data: locais = [] } = useQuery({
     queryKey: ["estoque-locais-nova-saida"],
@@ -67,47 +78,57 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
     enabled: open,
   });
 
-  const { data: materialPlaca } = useQuery({
-    queryKey: ["estoque-material-placa-saida"],
+  const { data: materiaisPlaca = [] } = useQuery({
+    queryKey: ["estoque-materiais-placa"],
     queryFn: async () => {
       const { data, error } = await fromEstoque("estoque_materiais")
-        .select("id, nome, is_placa, is_active").eq("is_active", true);
+        .select("id, nome, is_placa, is_active")
+        .eq("is_active", true)
+        .order("nome");
       if (error) throw error;
       const rows = (data as unknown as MaterialPlacaRow[]) || [];
-      return rows.find((m) => m.is_placa)
-        || rows.find((m) => m.nome.toLowerCase().startsWith("placa"))
-        || null;
+      return rows.filter((m) => m.is_placa || m.nome.toLowerCase().startsWith("placa"));
     },
     enabled: open,
   });
 
+  const materialSelecionado = useMemo(
+    () => materiaisPlaca.find((m) => m.id === materialId),
+    [materiaisPlaca, materialId]
+  );
+
   const { data: saldos = [] } = useQuery({
-    queryKey: ["estoque-saldos-nova-saida", materialPlaca?.id],
+    queryKey: ["estoque-saldos-nova-saida"],
     queryFn: async () => {
-      if (!materialPlaca) return [];
       const { data, error } = await fromEstoque("estoque_saldos")
-        .select("material_id, local_id, quantidade").eq("material_id", materialPlaca.id);
+        .select("id, material_id, local_armazenamento_id, quantidade");
       if (error) throw error;
       return (data as unknown as SaldoRow[]) || [];
     },
-    enabled: open && !!materialPlaca,
+    enabled: open,
   });
 
   const { data: placas = [] } = usePlacas();
 
   const saldoLocal = useMemo(() => {
-    if (!localId) return 0;
-    return saldos.find((s) => s.local_id === localId)?.quantidade ?? 0;
-  }, [saldos, localId]);
+    if (!localId || !materialId) return 0;
+    return saldos.find((s) => s.material_id === materialId && s.local_armazenamento_id === localId)?.quantidade ?? 0;
+  }, [saldos, localId, materialId]);
+
+  const saldoSelecionado = useMemo(() => {
+    if (!localId || !materialId) return null;
+    return saldos.find((s) => s.material_id === materialId && s.local_armazenamento_id === localId) || null;
+  }, [saldos, localId, materialId]);
 
   const disponiveis = useMemo(() => {
     return placas.filter((p) =>
       p.status === "disponivel"
+      && p.material_id === materialId
       && (!localId || p.local_armazenamento_id === localId)
       && p.tipo_uso === tipoUso
       && p.tamanho === tamanho
     );
-  }, [placas, localId, tipoUso, tamanho]);
+  }, [placas, materialId, localId, tipoUso, tamanho]);
 
   const placaSelecionada = useMemo(
     () => placas.find((p) => p.id === placaId) || null,
@@ -133,11 +154,12 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
   const mutation = useMutation({
     mutationFn: async () => {
       const imv = imovel.trim();
+      if (!materialId || !materialSelecionado) throw new Error("Selecione o material da placa");
       if (!localId) throw new Error("Selecione o local de armazenamento");
       if (!imv) throw new Error("Código do imóvel obrigatório");
       if (imv.length > 30) throw new Error("Código do imóvel muito longo (máx 30)");
       if (saldoLocal <= 0) throw new Error("Saldo zerado neste local. Lance entrada em /estoque/saldos antes.");
-      if (!materialPlaca) throw new Error("Nenhum material está marcado como Placa.");
+      if (!saldoSelecionado) throw new Error("Saldo não encontrado para este material/local");
 
       let placa: Placa | null = null;
 
@@ -145,6 +167,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
         if (!placaId) throw new Error("Selecione uma placa disponível ou crie um novo código");
         const found = placas.find((p) => p.id === placaId);
         if (!found) throw new Error("Placa não encontrada");
+        if (found.material_id !== materialId) throw new Error("A placa selecionada não pertence ao material escolhido");
         if (found.status !== "disponivel") throw new Error("Placa não está mais disponível");
         placa = found;
 
@@ -171,7 +194,6 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
         const c = novoCodigo.trim();
         if (!c) throw new Error("Informe o novo código");
         if (c.length > 30) throw new Error("Código muito longo (máx 30 caracteres)");
-        if (tamanho === "outro" && !tamanhoOutro.trim()) throw new Error("Especifique o tamanho");
 
         const { data: existente } = await fromEstoque("estoque_placas")
           .select("id").eq("codigo", c).limit(1).maybeSingle();
@@ -179,10 +201,10 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
 
         const { data: nova, error } = await fromEstoque("estoque_placas").insert({
           codigo: c,
-          material_id: materialPlaca.id,
+          material_id: materialId,
           tipo_uso: tipoUso,
           tamanho,
-          tamanho_outro: tamanho === "outro" ? tamanhoOutro.trim() : null,
+          tamanho_outro: tamanho === "outro" ? (tamanhoOutro.trim() || "não especificado") : null,
           local_armazenamento_id: localId,
           status: "instalada",
           imovel_codigo_atual: imv,
@@ -200,6 +222,17 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
           observacoes: `Código criado já na saída para imóvel ${imv}`,
           user_id: user?.id,
         } as any);
+      }
+
+      const novaQuantidade = saldoSelecionado.quantidade - 1;
+      if (novaQuantidade <= 0) {
+        const { error } = await fromEstoque("estoque_saldos").delete().eq("id", saldoSelecionado.id);
+        if (error) throw error;
+      } else {
+        const { error } = await fromEstoque("estoque_saldos")
+          .update({ quantidade: novaQuantidade } as any)
+          .eq("id", saldoSelecionado.id);
+        if (error) throw error;
       }
 
       await fromEstoque("estoque_placas_historico").insert({
@@ -234,11 +267,12 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
 
   const podeSalvar =
     !!localId
+    && !!materialId
     && saldoLocal > 0
     && !!imovel.trim()
     && (modo === "existente"
         ? !!placaId && (!precisaAtribuirCodigo || (!!novoCodigo.trim() && codigoCheck !== "duplicado"))
-        : !!novoCodigo.trim() && codigoCheck !== "duplicado" && (tamanho !== "outro" || !!tamanhoOutro.trim()));
+        : !!novoCodigo.trim() && codigoCheck !== "duplicado");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -246,12 +280,27 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>Nova saída para imóvel</DialogTitle>
           <DialogDescription>
-            Vincule uma placa a um imóvel. Você pode escolher um código já cadastrado
-            ou criar um novo código na hora. A saída consome 1 unidade do saldo do local.
+            Escolha o material da placa e o local. A saída consome 1 unidade do saldo cadastrado em /estoque/saldos.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-2">
+          <div className="space-y-2">
+            <Label>Material da placa *</Label>
+            <MaterialCombobox
+              materiais={materiaisPlaca}
+              value={materialId}
+              onChange={(id) => {
+                setMaterialId(id);
+                setLocalId("");
+                setPlacaId("");
+                syncAttributesFromMaterial(materiaisPlaca.find((m) => m.id === id));
+              }}
+              placeholder="Selecione o material-placa"
+              emptyMessage="Nenhum material de placa ativo encontrado. Cadastre em /estoque/materiais."
+            />
+          </div>
+
           <div className="space-y-2">
             <Label>Local de armazenamento *</Label>
             <Select value={localId} onValueChange={(v) => { setLocalId(v); setPlacaId(""); }}>
@@ -264,7 +313,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
             </Select>
             {localId && (
               <p className={`text-xs ${saldoLocal > 0 ? "text-muted-foreground" : "text-destructive"}`}>
-                Saldo disponível neste local: <strong>{saldoLocal}</strong>
+                Saldo disponível deste material neste local: <strong>{saldoLocal}</strong>
                 {saldoLocal === 0 && " — lance entrada em /estoque/saldos antes."}
               </p>
             )}
