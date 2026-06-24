@@ -123,15 +123,6 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
         observacoes: obs.trim() || null,
         user_id: user?.id,
       } as any);
-
-      await fromEstoque("estoque_movimentacoes").insert({
-        material_id: materialPlaca.id,
-        tipo: "entrada",
-        quantidade: 1,
-        local_destino_id: localId,
-        responsavel_user_id: user?.id,
-        observacoes: `Nova placa cadastrada: ${c}`,
-      } as any);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["estoque-placas"] });
@@ -157,7 +148,12 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>Nova Placa</DialogTitle>
           <DialogDescription>
-            Cada placa é uma unidade rastreável no estoque. O código deve ser único no sistema.
+            Pré-cadastra um código de placa para uso futuro. O código deve ser único no sistema.
+            <br />
+            <span className="text-xs">
+              Este cadastro <strong>não altera o saldo</strong> — o saldo é controlado em
+              <strong> /estoque/saldos</strong>. A baixa só acontece quando a placa é instalada em um imóvel.
+            </span>
           </DialogDescription>
         </DialogHeader>
 

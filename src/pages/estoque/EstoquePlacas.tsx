@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
-  Loader2, Tag, Wrench, ArrowLeftRight, AlertTriangle,
+  Loader2, Tag, Wrench, ArrowLeftRight, AlertTriangle, Plus,
   History as HistoryIcon, ShieldAlert, Trash2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,6 +35,7 @@ import {
   STATUS_LABELS, STATUS_COLORS, TIPO_USO_LABELS, TAMANHO_LABELS, HIST_LABELS,
 } from "@/hooks/useEstoquePlacas";
 import { PlacasPDFGenerator } from "@/components/estoque/placas/PlacasPDFGenerator";
+import { NovaSaidaDialog } from "@/components/estoque/placas/NovaSaidaDialog";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -59,6 +60,7 @@ export default function EstoquePlacas() {
   const [perdaRouboDialog, setPerdaRouboDialog] = useState<null | "roubo" | "perda">(null);
   const [historicoDialog, setHistoricoDialog] = useState(false);
   const [excluirDialog, setExcluirDialog] = useState(false);
+  const [novaSaidaDialog, setNovaSaidaDialog] = useState(false);
   const [selected, setSelected] = useState<Placa | null>(null);
 
   const { data: placas = [], isLoading } = usePlacas();
@@ -246,8 +248,15 @@ export default function EstoquePlacas() {
             O cadastro de novas placas é feito em <strong>/estoque/materiais</strong>.
           </p>
         </div>
-        <PlacasPDFGenerator placas={placas} />
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setNovaSaidaDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" /> Nova saída para imóvel
+          </Button>
+          <PlacasPDFGenerator placas={placas} />
+        </div>
       </div>
+
+      <NovaSaidaDialog open={novaSaidaDialog} onOpenChange={setNovaSaidaDialog} />
 
       <Tabs value={aba} onValueChange={(v) => { setAba(v as AbaStatus); setCurrentPage(1); }}>
         <TabsList>
