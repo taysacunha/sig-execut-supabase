@@ -318,7 +318,9 @@ export default function EstoquePlacas() {
                     <TableBody>
                       {paginatedData.map((p) => (
                         <TableRow key={p.id}>
-                          <TableCell className="font-medium">{p.codigo}</TableCell>
+                          <TableCell className="font-medium">
+                            {p.codigo || <span className="text-muted-foreground italic">sem código</span>}
+                          </TableCell>
                           <TableCell>{TIPO_USO_LABELS[p.tipo_uso]}</TableCell>
                           <TableCell>
                             {p.tamanho === "outro" ? `Outro (${p.tamanho_outro || "-"})` : TAMANHO_LABELS[p.tamanho]}
