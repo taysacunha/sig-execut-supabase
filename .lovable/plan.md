@@ -1,26 +1,48 @@
-## Objetivo
+## Ajustes no dialog "Nova Placa"
 
-Impedir que o usuário cadastre/edite um material como "Placa" pelo dialog **Novo Material** em `/estoque/materiais`. O fluxo correto é usar o botão **Nova Placa**, que aciona `NovaPlacaDialog` e gerencia o material `is_placa` e o pré-cadastro do código.
+Duas mudanças no `src/components/estoque/materiais/NovaPlacaDialog.tsx` e ajustes correlatos no fluxo de entrada em `/estoque/placas`.
 
-## Como detectar "tentativa de placa"
+### 1. Adicionar campo Categoria
+- Igual ao do dialog "Novo Material": Select com as opções de `estoque_categorias` (ativas, ordenadas por nome), opcional.
+- Buscar com `useQuery(["estoque-categorias-nova-placa"])`.
+- Persistir em `estoque_placas.categoria_id` (nova coluna FK para `estoque_categorias`, ON DELETE SET NULL, nullable).
 
-No dialog de Novo Material, considerar tentativa de cadastrar placa quando, no campo **Nome**, o texto (após `trim().toLowerCase()`) começar com `placa` (mesma heurística já usada em `NovaPlacaDialog` no fallback de `is_placa`).
+### 2. Remover campo "Código da placa"
+- Remover Input do código, o `useEffect` de verificação de duplicidade e o estado `codigoCheck`.
+- O código passa a ser atribuído **somente no fluxo de Entrada** dentro de `/estoque/placas` (página de gestão).
+- Tornar `estoque_placas.codigo` nullable; manter unicidade apenas quando preenchido (índice único parcial `WHERE codigo IS NOT NULL`).
+- Placas sem código ficam com status `aguardando_codigo` (novo valor) até receberem código na entrada. Aparecem em um contador/aba dedicada na página de placas (escopo: somente ajuste de label do status existente — sem nova aba nesta entrega).
 
-## Mudanças (somente em `src/pages/estoque/EstoqueMateriais.tsx`)
+### 3. Fluxo de Entrada em `/estoque/placas`
+- Em `NovaSaidaDialog` / botão equivalente de **Entrada** (criar se ainda não existir um dialog de entrada): permitir selecionar uma placa "aguardando código" e informar o `codigo` ali, registrando histórico `tipo: "codigo_atribuido"`.
+- Validação de unicidade do código acontece nesse momento (mensagem clara se já existir).
 
-1. Criar um derivado:
-   ```ts
-   const isPlacaNome = form.nome.trim().toLowerCase().startsWith("placa");
-   ```
-2. Mostrar um alerta inline logo abaixo do campo **Nome** quando `isPlacaNome` for `true`:
-   - Texto: *"Materiais do tipo Placa devem ser cadastrados pelo botão **Nova Placa**. Este formulário não aceita placas."*
-   - Incluir um botão/link "Abrir Nova Placa" que fecha o dialog atual (`closeDialog()`) e abre `setNovaPlacaOpen(true)`.
-   - Usar o componente `Alert` (variant destructive) já presente no design system, sem cores hardcoded.
-3. Desabilitar o botão **Salvar/Cadastrar** do `DialogFooter` quando `isPlacaNome` for `true` (somando à condição atual de `disabled`).
-4. Defesa em profundidade no handler de submit (`handleSubmit`/mutation): se `isPlacaNome` for `true`, exibir `toast.error(...)` com a mesma mensagem e abortar antes de chamar o Supabase. Isso protege contra edição (`editingMaterial`) e contra qualquer caminho que não passe pelo botão.
-5. Não alterar `NovaPlacaDialog`, schema, RLS, nem lógica de saldos/movimentações.
+### Detalhes técnicos
 
-## Fora de escopo
+**Migração SQL** (`db/migrations/<timestamp>_estoque_placas_categoria_e_codigo_opcional.sql`):
+```sql
+ALTER TABLE public.estoque_placas
+  ADD COLUMN IF NOT EXISTS categoria_id uuid
+  REFERENCES public.estoque_categorias(id) ON DELETE SET NULL;
 
-- Bloqueio no banco (trigger/policy) — apenas UI/UX por enquanto.
-- Renomear placas já cadastradas erroneamente.
+CREATE INDEX IF NOT EXISTS estoque_placas_categoria_id_idx
+  ON public.estoque_placas (categoria_id);
+
+ALTER TABLE public.estoque_placas
+  ALTER COLUMN codigo DROP NOT NULL;
+
+DROP INDEX IF EXISTS estoque_placas_codigo_key;
+CREATE UNIQUE INDEX estoque_placas_codigo_unique
+  ON public.estoque_placas (codigo) WHERE codigo IS NOT NULL;
+```
+(Sem novos GRANTs — tabela já existente.)
+
+**Arquivos alterados:**
+- `src/components/estoque/materiais/NovaPlacaDialog.tsx` — remove código/codigoCheck, adiciona Select de Categoria, ajusta `mutationFn` (insere sem `codigo`, com `categoria_id`).
+- `src/pages/estoque/EstoquePlacas.tsx` — coluna/badge para placas sem código, ação "Atribuir código" no fluxo de entrada.
+- `src/hooks/useEstoquePlacas.ts` — incluir `categoria_id` e tornar `codigo` opcional na interface `Placa`.
+- `db/migrations/<timestamp>_estoque_placas_categoria_e_codigo_opcional.sql`.
+
+### Fora de escopo
+- Não vou transformar placas em linhas de `estoque_materiais` (manter modelo atual: 1 material "Placa" + instâncias em `estoque_placas`).
+- Não vou mexer em RLS, saldos, ou no dialog Novo Material.
