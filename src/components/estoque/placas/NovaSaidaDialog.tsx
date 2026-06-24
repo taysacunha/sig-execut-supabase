@@ -109,8 +109,15 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
     );
   }, [placas, localId, tipoUso, tamanho]);
 
+  const placaSelecionada = useMemo(
+    () => placas.find((p) => p.id === placaId) || null,
+    [placas, placaId]
+  );
+  const precisaAtribuirCodigo = modo === "existente" && !!placaSelecionada && !placaSelecionada.codigo;
+
   useEffect(() => {
-    if (modo !== "novo") { setCodigoCheck("vazio"); return; }
+    const precisa = modo === "novo" || precisaAtribuirCodigo;
+    if (!precisa) { setCodigoCheck("vazio"); return; }
     const c = novoCodigo.trim();
     if (!c) { setCodigoCheck("vazio"); return; }
     let cancelled = false;
@@ -121,7 +128,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
       setCodigoCheck(data ? "duplicado" : "ok");
     }, 350);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [novoCodigo, modo]);
+  }, [novoCodigo, modo, precisaAtribuirCodigo]);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -141,11 +148,24 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
         if (found.status !== "disponivel") throw new Error("Placa não está mais disponível");
         placa = found;
 
-        const { error } = await fromEstoque("estoque_placas").update({
+        const updatePayload: any = {
           status: "instalada",
           imovel_codigo_atual: imv,
           data_instalacao_atual: data,
-        } as any).eq("id", placa.id);
+        };
+
+        if (!found.codigo) {
+          const c = novoCodigo.trim();
+          if (!c) throw new Error("Informe o código da placa para atribuir nesta saída");
+          if (c.length > 30) throw new Error("Código muito longo (máx 30 caracteres)");
+          const { data: existente } = await fromEstoque("estoque_placas")
+            .select("id").eq("codigo", c).limit(1).maybeSingle();
+          if (existente) throw new Error(`Código "${c}" já existe.`);
+          updatePayload.codigo = c;
+          placa = { ...found, codigo: c };
+        }
+
+        const { error } = await fromEstoque("estoque_placas").update(updatePayload).eq("id", placa.id);
         if (error) throw error;
       } else {
         const c = novoCodigo.trim();
@@ -197,7 +217,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
         quantidade: 1,
         local_origem_id: placa!.local_armazenamento_id,
         responsavel_user_id: user?.id,
-        observacoes: `Placa ${placa!.codigo} instalada no imóvel ${imv}`,
+        observacoes: `Placa ${placa!.codigo ?? "(sem código)"} instalada no imóvel ${imv}`,
       } as any);
     },
     onSuccess: () => {
@@ -217,7 +237,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
     && saldoLocal > 0
     && !!imovel.trim()
     && (modo === "existente"
-        ? !!placaId
+        ? !!placaId && (!precisaAtribuirCodigo || (!!novoCodigo.trim() && codigoCheck !== "duplicado"))
         : !!novoCodigo.trim() && codigoCheck !== "duplicado" && (tamanho !== "outro" || !!tamanhoOutro.trim()));
 
   return (
@@ -300,6 +320,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
             </RadioGroup>
 
             {modo === "existente" ? (
+              <>
               <Select value={placaId} onValueChange={setPlacaId} disabled={disponiveis.length === 0}>
                 <SelectTrigger>
                   <SelectValue placeholder={
@@ -310,10 +331,29 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
                 </SelectTrigger>
                 <SelectContent>
                   {disponiveis.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.codigo}</SelectItem>
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.codigo || `(sem código) — ${p.id.slice(0, 8)}`}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {precisaAtribuirCodigo && (
+                <>
+                  <Input
+                    value={novoCodigo}
+                    onChange={(e) => setNovoCodigo(e.target.value)}
+                    maxLength={30}
+                    placeholder="Atribua o código agora (ex: P-1234)"
+                  />
+                  {codigoCheck === "duplicado" && (
+                    <p className="text-xs text-destructive">Este código já está cadastrado.</p>
+                  )}
+                  {codigoCheck === "ok" && (
+                    <p className="text-xs text-green-600">Código disponível.</p>
+                  )}
+                </>
+              )}
+              </>
             ) : (
               <>
                 <Input

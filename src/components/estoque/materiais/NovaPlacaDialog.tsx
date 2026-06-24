@@ -25,23 +25,23 @@ interface Props {
 
 interface MaterialPlacaRow { id: string; nome: string; is_placa: boolean; is_active: boolean; }
 interface LocalRow { id: string; nome: string; is_active: boolean; }
+interface CategoriaRow { id: string; nome: string; is_active: boolean; }
 
 export function NovaPlacaDialog({ open, onOpenChange }: Props) {
   const queryClient = useQueryClient();
   const { user } = useSystemAccess();
 
-  const [codigo, setCodigo] = useState("");
   const [tipoUso, setTipoUso] = useState<TipoUso>("venda");
   const [tamanho, setTamanho] = useState<Tamanho>("1x1");
   const [tamanhoOutro, setTamanhoOutro] = useState("");
   const [localId, setLocalId] = useState("");
+  const [categoriaId, setCategoriaId] = useState<string>("none");
   const [obs, setObs] = useState("");
-  const [codigoCheck, setCodigoCheck] = useState<"ok" | "duplicado" | "vazio">("vazio");
 
   useEffect(() => {
     if (open) {
-      setCodigo(""); setTipoUso("venda"); setTamanho("1x1"); setTamanhoOutro("");
-      setLocalId(""); setObs(""); setCodigoCheck("vazio");
+      setTipoUso("venda"); setTamanho("1x1"); setTamanhoOutro("");
+      setLocalId(""); setCategoriaId("none"); setObs("");
     }
   }, [open]);
 
@@ -73,39 +73,29 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
     enabled: open,
   });
 
-  // Verifica duplicidade do código com debounce simples
-  useEffect(() => {
-    const c = codigo.trim();
-    if (!c) { setCodigoCheck("vazio"); return; }
-    let cancelled = false;
-    const t: ReturnType<typeof setTimeout> = setTimeout(async () => {
-      const { data } = await fromEstoque("estoque_placas")
-        .select("id").eq("codigo", c).limit(1).maybeSingle();
-      if (cancelled) return;
-      setCodigoCheck(data ? "duplicado" : "ok");
-    }, 350);
-    return () => { cancelled = true; clearTimeout(t); };
-  }, [codigo]);
+  const { data: categorias = [] } = useQuery({
+    queryKey: ["estoque-categorias-nova-placa"],
+    queryFn: async () => {
+      const { data, error } = await fromEstoque("estoque_categorias")
+        .select("id, nome, is_active").eq("is_active", true).order("nome");
+      if (error) throw error;
+      return (data as unknown as CategoriaRow[]) || [];
+    },
+    enabled: open,
+  });
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const c = codigo.trim();
-      if (!c) throw new Error("Código obrigatório");
-      if (c.length > 30) throw new Error("Código muito longo (máx 30 caracteres)");
       if (!materialPlaca) {
         throw new Error("Nenhum material marcado como 'Placa'. Edite o material em /estoque/materiais ou rode a migration.");
       }
       if (!localId) throw new Error("Local de armazenamento obrigatório");
       if (tamanho === "outro" && !tamanhoOutro.trim()) throw new Error("Especifique o tamanho");
 
-      // Dupla verificação no servidor
-      const { data: existente } = await fromEstoque("estoque_placas")
-        .select("id, status").eq("codigo", c).limit(1).maybeSingle();
-      if (existente) throw new Error(`Código "${c}" já existe no sistema. Códigos de placa são únicos.`);
-
       const { data: nova, error } = await fromEstoque("estoque_placas").insert({
-        codigo: c,
+        codigo: null,
         material_id: materialPlaca.id,
+        categoria_id: categoriaId === "none" ? null : categoriaId,
         tipo_uso: tipoUso,
         tamanho,
         tamanho_outro: tamanho === "outro" ? tamanhoOutro.trim() : null,
@@ -120,7 +110,7 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
         placa_id: (nova as any).id,
         tipo: "criacao",
         data_evento: new Date().toISOString().slice(0, 10),
-        observacoes: obs.trim() || null,
+        observacoes: obs.trim() || "Placa pré-cadastrada (código será atribuído na entrada/saída).",
         user_id: user?.id,
       } as any);
     },
@@ -137,8 +127,6 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
 
   const podeSalvar =
     !!materialPlaca &&
-    !!codigo.trim() &&
-    codigoCheck !== "duplicado" &&
     !!localId &&
     (tamanho !== "outro" || !!tamanhoOutro.trim());
 
@@ -148,7 +136,8 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>Nova Placa</DialogTitle>
           <DialogDescription>
-            Pré-cadastra um código de placa para uso futuro. O código deve ser único no sistema.
+            Pré-cadastra uma placa no estoque. O <strong>código</strong> da placa é atribuído
+            na página de gestão <strong>/estoque/placas</strong>, no momento da entrada ou saída.
             <br />
             <span className="text-xs">
               Este cadastro <strong>não altera o saldo</strong> — o saldo é controlado em
@@ -174,19 +163,16 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
           )}
 
           <div className="space-y-2">
-            <Label>Código da placa *</Label>
-            <Input
-              value={codigo}
-              onChange={(e) => setCodigo(e.target.value)}
-              maxLength={30}
-              placeholder="Ex: P-1234"
-            />
-            {codigoCheck === "duplicado" && (
-              <p className="text-xs text-destructive">Este código já está cadastrado.</p>
-            )}
-            {codigoCheck === "ok" && (
-              <p className="text-xs text-green-600">Código disponível.</p>
-            )}
+            <Label>Categoria</Label>
+            <Select value={categoriaId} onValueChange={setCategoriaId}>
+              <SelectTrigger><SelectValue placeholder="Selecione (opcional)" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sem categoria</SelectItem>
+                {categorias.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

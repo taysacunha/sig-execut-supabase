@@ -142,7 +142,7 @@ export default function EstoquePlacas() {
         material_id: input.placa.material_id, tipo: "saida", quantidade: 1,
         local_origem_id: input.placa.local_armazenamento_id,
         responsavel_user_id: user?.id,
-        observacoes: `Placa ${input.placa.codigo} instalada no imóvel ${imovel}`,
+        observacoes: `Placa ${input.placa.codigo ?? "(sem código)"} instalada no imóvel ${imovel}`,
       } as any);
     },
     onSuccess: () => { invalidate(); toast.success("Placa instalada!"); setInstalarDialog(false); },
@@ -181,7 +181,7 @@ export default function EstoquePlacas() {
         material_id: input.placa.material_id, tipo: "entrada", quantidade: 1,
         local_destino_id: input.placa.local_armazenamento_id,
         responsavel_user_id: user?.id,
-        observacoes: `Placa ${input.placa.codigo} retirada do imóvel ${input.placa.imovel_codigo_atual || "?"}`,
+        observacoes: `Placa ${input.placa.codigo ?? "(sem código)"} retirada do imóvel ${input.placa.imovel_codigo_atual || "?"}`,
       } as any);
     },
     onSuccess: () => { invalidate(); toast.success("Placa retirada!"); setRetirarDialog(false); },
@@ -212,7 +212,7 @@ export default function EstoquePlacas() {
         material_id: input.placa.material_id, tipo: "saida", quantidade: 1,
         local_origem_id: input.placa.local_armazenamento_id,
         responsavel_user_id: user?.id,
-        observacoes: `Placa ${input.placa.codigo} marcada como ${input.tipo}`,
+        observacoes: `Placa ${input.placa.codigo ?? "(sem código)"} marcada como ${input.tipo}`,
       } as any);
     },
     onSuccess: (_, vars) => {
@@ -318,7 +318,9 @@ export default function EstoquePlacas() {
                     <TableBody>
                       {paginatedData.map((p) => (
                         <TableRow key={p.id}>
-                          <TableCell className="font-medium">{p.codigo}</TableCell>
+                          <TableCell className="font-medium">
+                            {p.codigo || <span className="text-muted-foreground italic">sem código</span>}
+                          </TableCell>
                           <TableCell>{TIPO_USO_LABELS[p.tipo_uso]}</TableCell>
                           <TableCell>
                             {p.tamanho === "outro" ? `Outro (${p.tamanho_outro || "-"})` : TAMANHO_LABELS[p.tamanho]}
@@ -424,7 +426,7 @@ export default function EstoquePlacas() {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir placa?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação remove a placa <strong>{selected?.codigo}</strong> e todo o seu histórico.
+              Esta ação remove a placa <strong>{selected?.codigo ?? "(sem código)"}</strong> e todo o seu histórico.
               Não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -461,7 +463,7 @@ function InstalarDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Instalar placa {placa.codigo}</DialogTitle>
+          <DialogTitle>Instalar placa {placa.codigo ?? "(sem código)"}</DialogTitle>
           <DialogDescription>Informe o código do imóvel onde a placa será fixada.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-2">
@@ -502,7 +504,7 @@ function RetirarDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Retirar placa {placa.codigo}</DialogTitle>
+          <DialogTitle>Retirar placa {placa.codigo ?? "(sem código)"}</DialogTitle>
           <DialogDescription>
             Imóvel atual: <strong>{placa.imovel_codigo_atual || "—"}</strong>
           </DialogDescription>
@@ -543,7 +545,7 @@ function RouboPerdaDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{titulo} — placa {placa.codigo}</DialogTitle>
+          <DialogTitle>{titulo} — placa {placa.codigo ?? "(sem código)"}</DialogTitle>
           <DialogDescription>
             A placa sairá do saldo de disponíveis. Esta ação não pode ser desfeita.
           </DialogDescription>
@@ -582,7 +584,7 @@ function HistoricoDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Histórico — placa {placa.codigo}</DialogTitle>
+          <DialogTitle>Histórico — placa {placa.codigo ?? "(sem código)"}</DialogTitle>
           <DialogDescription>
             {TIPO_USO_LABELS[placa.tipo_uso]} · {placa.tamanho === "outro" ? placa.tamanho_outro : TAMANHO_LABELS[placa.tamanho]}
           </DialogDescription>
