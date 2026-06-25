@@ -565,9 +565,9 @@ export default function EstoqueSolicitacoes() {
         });
         throw error;
       }
-      const updated = (data as any)?.updated_count ?? 0;
-      if (updated === 0) {
-        toast.warning("Nenhuma movimentação pendente encontrada para esta solicitação.");
+      const already = (data as any)?.already_confirmed === true;
+      if (already) {
+        toast.info("Esta solicitação já estava confirmada.");
       }
 
       // Notifica gestores
@@ -581,7 +581,6 @@ export default function EstoqueSolicitacoes() {
       queryClient.invalidateQueries({ queryKey: ["estoque-solicitacoes"] });
       queryClient.invalidateQueries({ queryKey: ["estoque-movimentacoes"] });
       setReceiptConfirm(null);
-      queryClient.invalidateQueries({ queryKey: ["estoque-recebimentos"] });
       toast.success("Recebimento confirmado");
     },
     onError: (err: any) => toast.error(err.message || "Erro ao confirmar recebimento"),
