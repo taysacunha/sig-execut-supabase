@@ -36,10 +36,47 @@ const Bullets = ({ children }: { children: React.ReactNode }) => (
   <ul className="list-disc ml-6 space-y-1 text-sm leading-relaxed">{children}</ul>
 );
 
+const topics = [
+  { value: "visao-geral", label: "Visão Geral", keywords: "introdução, estoque, gestão, fluxo, permissões, papéis", description: "Conceitos gerais do sistema e fluxo de trabalho recomendado." },
+  { value: "dashboard", label: "Dashboard", keywords: "dashboard, resumo, saldo total, itens mínimos, solicitações pendentes, placas", description: "Visão consolidada com atalhos para cada área." },
+  { value: "materiais", label: "Materiais", keywords: "material, cadastro, placa, unidade, estoque mínimo, categoria, ativar, inativar, excluir", description: "Cadastro de itens e materiais do tipo placa." },
+  { value: "categorias", label: "Categorias", keywords: "categoria, grupo, classificação, materiais", description: "Agrupamento de materiais para filtros e relatórios." },
+  { value: "locais", label: "Locais", keywords: "local, depósito, armazenamento, unidade, saldo", description: "Pontos físicos de armazenamento vinculados a unidades." },
+  { value: "saldos", label: "Saldos", keywords: "saldo, quantidade, estoque mínimo, entrada, ajuste, transferência, local", description: "Controle de saldo por material e local." },
+  { value: "placas", label: "Placas", keywords: "placa, venda, aluga, 1x1, 2x2, disponível, instalada, baixada, instalação, retirada, roubo, perda", description: "Ciclo de vida de cada placa física." },
+  { value: "solicitacoes", label: "Solicitações", keywords: "solicitação, pedido, aprovar, recusar, pendente, material", description: "Fluxo de pedidos e aprovações." },
+  { value: "movimentacoes", label: "Movimentações", keywords: "movimentação, entrada, saída, ajuste, transferência, histórico, exportar", description: "Todas as alterações de saldo." },
+  { value: "notificacoes", label: "Notificações", keywords: "notificação, alerta, saldo mínimo, pendente", description: "Avisos automáticos do sistema." },
+  { value: "gestores", label: "Gestores e Usuários", keywords: "gestor, usuário, papel, permissão, unidade, administrador, gerente, supervisor, colaborador", description: "Vínculo de gestores e permissões de acesso." },
+  { value: "usuarios", label: "Perfil e Segurança", keywords: "perfil, senha, auditoria, histórico, segurança, sessão", description: "Perfil do usuário, auditoria e boas práticas." },
+];
+
+const normalize = (text: string) =>
+  text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
 const EstoqueHelp = () => {
+  const [activeTab, setActiveTab] = useState("visao-geral");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const normalizedQuery = normalize(searchQuery).trim();
+  const results = normalizedQuery
+    ? topics.filter((t) => {
+        const haystack = normalize(`${t.label} ${t.keywords} ${t.description}`);
+        return normalizedQuery.split(/\s+/).every((term) => haystack.includes(term));
+      })
+    : [];
+
+  const handleResultClick = (value: string) => {
+    setActiveTab(value);
+    setSearchQuery("");
+  };
+
   return (
     <div className="container mx-auto py-6 px-4 max-w-5xl">
-      <div className="mb-8">
+      <div className="mb-6">
         <div className="flex items-center gap-3 mb-2">
           <HelpCircle className="h-8 w-8 text-primary" />
           <h1 className="text-3xl font-bold">Central de Ajuda</h1>
@@ -49,7 +86,41 @@ const EstoqueHelp = () => {
         </p>
       </div>
 
-      <Tabs defaultValue="visao-geral" className="space-y-6">
+      <div className="relative mb-6">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          type="text"
+          placeholder="Buscar tópicos como Placas, Saldos, Movimentações..."
+          className="pl-10"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        {results.length > 0 && (
+          <div className="absolute z-10 mt-1 w-full rounded-md border bg-popover shadow-md">
+            <ul className="py-1 max-h-60 overflow-auto">
+              {results.map((t) => (
+                <li key={t.value}>
+                  <button
+                    type="button"
+                    onClick={() => handleResultClick(t.value)}
+                    className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground focus:outline-none focus:bg-accent focus:text-accent-foreground"
+                  >
+                    <div className="font-medium text-sm">{t.label}</div>
+                    <div className="text-xs text-muted-foreground">{t.description}</div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {normalizedQuery && results.length === 0 && (
+          <div className="absolute z-10 mt-1 w-full rounded-md border bg-popover shadow-md px-4 py-2 text-sm text-muted-foreground">
+            Nenhum tópico encontrado.
+          </div>
+        )}
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="flex flex-wrap h-auto gap-2 justify-start">
           <TabsTrigger value="visao-geral" className="flex items-center gap-2"><Home className="h-4 w-4" /><span className="hidden sm:inline">Visão Geral</span></TabsTrigger>
           <TabsTrigger value="dashboard" className="flex items-center gap-2"><FileText className="h-4 w-4" /><span className="hidden sm:inline">Dashboard</span></TabsTrigger>
