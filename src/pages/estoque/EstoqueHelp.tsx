@@ -17,12 +17,16 @@ import {
   AlertTriangle,
   CheckCircle2,
   FileText,
+  Search,
 } from "lucide-react";
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+
 
 const Step = ({ children }: { children: React.ReactNode }) => (
   <ol className="list-decimal ml-6 space-y-2 text-sm leading-relaxed">{children}</ol>
