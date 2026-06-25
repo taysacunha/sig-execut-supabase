@@ -448,7 +448,7 @@ export default function EstoquePlacas() {
                     <div>
                       <h2 className="font-semibold text-foreground">Saldos por material e local</h2>
                       <p className="text-xs text-muted-foreground">
-                        Quantidades agregadas. Para registrar entradas/baixas de saldo, use /estoque/saldos.
+                        Quantidades agregadas. Para registrar entradas/baixas de saldo, use a aba Saldos.
                       </p>
                     </div>
                   </div>
