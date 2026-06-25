@@ -1,4 +1,4 @@
-import { Home, Users, UserPlus, FileText, TrendingUp, ClipboardList, BarChart3, LogOut, UserCircle, Shield, Crown, Briefcase, User, ArrowLeft, FileSpreadsheet, History } from "lucide-react";
+import { Home, Users, UserPlus, FileText, TrendingUp, ClipboardList, BarChart3, LogOut, UserCircle, Shield, Crown, Briefcase, User, ArrowLeft, FileSpreadsheet, History, HelpCircle } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -38,6 +38,7 @@ const moduleMenuItems: MenuItem[] = [
   { title: "Avaliações", url: "/vendas/avaliacoes", icon: BarChart3 },
   { title: "Relatórios", url: "/vendas/relatorios", icon: FileSpreadsheet },
   { title: "Perfil", url: "/vendas/perfil", icon: UserCircle },
+  { title: "Ajuda", url: "/vendas/ajuda", icon: HelpCircle },
 ];
 
 // Itens restritos a super_admin/admin (verificação de ROLE)
