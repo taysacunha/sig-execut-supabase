@@ -533,18 +533,28 @@ export default function EstoqueSolicitacoes() {
   const confirmarRecebimentoMutation = useMutation({
     mutationFn: async (sol: Solicitacao) => {
       if (!user?.id) throw new Error("Usuário não autenticado");
-      const { error } = await fromEstoque("estoque_movimentacoes")
-        .update({
-          recebido_por_user_id: user.id,
-          recebido_em: new Date().toISOString(),
-        } as any)
-        .eq("solicitacao_id", sol.id)
-        .is("recebido_em", null);
-      if (error) throw error;
+      const { data, error } = await (supabase.rpc as any)(
+        "confirmar_recebimento_solicitacao",
+        { p_solicitacao_id: sol.id }
+      );
+      if (error) {
+        console.error("[confirmar_recebimento_solicitacao] erro:", {
+          code: (error as any).code,
+          message: error.message,
+          details: (error as any).details,
+          hint: (error as any).hint,
+        });
+        throw error;
+      }
+      const updated = (data as any)?.updated_count ?? 0;
+      if (updated === 0) {
+        toast.warning("Nenhuma movimentação pendente encontrada para esta solicitação.");
+      }
 
       // Notifica gestores
       if (sol.unidade_id) {
-        const userName = user.user_metadata?.name || user.email || "Usuário";
+        const fallback = user.user_metadata?.name || user.email || "Usuário";
+        const userName = await resolverNomeUsuario(user.id, fallback);
         await notificarGestoresUnidade(sol.unidade_id, `${userName} confirmou o recebimento dos materiais.`, sol.id);
       }
     },
