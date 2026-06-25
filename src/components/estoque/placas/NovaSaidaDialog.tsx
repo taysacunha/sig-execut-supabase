@@ -167,7 +167,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
       if (!localId) throw new Error("Selecione o local de armazenamento");
       if (!imv) throw new Error("Código do imóvel obrigatório");
       if (imv.length > 30) throw new Error("Código do imóvel muito longo (máx 30)");
-      if (saldoLocal <= 0) throw new Error("Saldo zerado neste local. Lance entrada em /estoque/saldos antes.");
+      if (saldoLocal <= 0) throw new Error("Saldo zerado neste local. Registre uma entrada na aba Saldos antes.");
       if (!saldoSelecionado) throw new Error("Saldo não encontrado para este material/local");
 
       let placa: Placa | null = null;
@@ -289,7 +289,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>Nova saída para imóvel</DialogTitle>
           <DialogDescription>
-            Escolha o material da placa e o local. A saída consome 1 unidade do saldo cadastrado em /estoque/saldos.
+            Escolha o material da placa e o local. A saída consome 1 unidade do saldo registrado na aba Saldos.
           </DialogDescription>
         </DialogHeader>
 
@@ -306,7 +306,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
                 syncAttributesFromMaterial(materiaisPlaca.find((m) => m.id === id));
               }}
               placeholder="Selecione o material-placa"
-              emptyMessage="Nenhum material de placa ativo encontrado. Cadastre em /estoque/materiais."
+              emptyMessage="Nenhum material de placa ativo encontrado. Cadastre na aba Materiais."
             />
           </div>
 
@@ -314,7 +314,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
             <Label>Local de armazenamento *</Label>
             {materialId && locaisComSaldo.length === 0 ? (
               <p className="text-xs text-destructive border border-destructive/30 bg-destructive/5 rounded-md p-2">
-                Nenhum local tem saldo deste material. Lance entrada em /estoque/saldos antes.
+                Nenhum local tem saldo deste material. Registre uma entrada na aba Saldos antes.
               </p>
             ) : (
               <Select
@@ -338,7 +338,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
             {localId && (
               <p className={`text-xs ${saldoLocal > 0 ? "text-muted-foreground" : "text-destructive"}`}>
                 Saldo disponível deste material neste local: <strong>{saldoLocal}</strong>
-                {saldoLocal === 0 && " — lance entrada em /estoque/saldos antes."}
+                {saldoLocal === 0 && " — registre uma entrada na aba Saldos antes."}
               </p>
             )}
           </div>
