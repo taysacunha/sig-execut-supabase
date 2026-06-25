@@ -839,6 +839,12 @@ export default function EstoqueSolicitacoes() {
                 <div><span className="text-muted-foreground">Setor:</span> {getSetorNome(viewDialog.setor_id)}</div>
                 <div><span className="text-muted-foreground">Data:</span> {new Date(viewDialog.created_at).toLocaleDateString("pt-BR")}</div>
               </div>
+              {viewDialog.recebimento_confirmado_em && (
+                <div className="text-sm text-green-600">
+                  <PackageCheck className="h-4 w-4 inline mr-1" />
+                  Recebimento confirmado em {new Date(viewDialog.recebimento_confirmado_em).toLocaleString("pt-BR")}
+                </div>
+              )}
               {viewDialog.observacoes && (
                 <div className="text-sm"><span className="text-muted-foreground">Obs:</span> {viewDialog.observacoes}</div>
               )}
