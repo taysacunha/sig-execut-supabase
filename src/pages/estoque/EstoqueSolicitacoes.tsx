@@ -45,6 +45,8 @@ interface Solicitacao {
   observacoes: string | null;
   created_at: string;
   updated_at: string;
+  recebimento_confirmado_em?: string | null;
+  recebimento_confirmado_por_user_id?: string | null;
 }
 
 interface SolicitacaoItem {
@@ -159,23 +161,8 @@ export default function EstoqueSolicitacoes() {
     },
   });
 
-  // Marca solicitações cujo recebimento já foi confirmado (recebido_em != null em alguma movimentação)
-  const solicitacaoIds = solicitacoes.map((s) => s.id);
-  const { data: recebimentos = [] } = useQuery({
-    queryKey: ["estoque-recebimentos", solicitacaoIds],
-    enabled: solicitacaoIds.length > 0,
-    queryFn: async () => {
-      const { data, error } = await fromEstoque("estoque_movimentacoes")
-        .select("solicitacao_id, recebido_em")
-        .in("solicitacao_id", solicitacaoIds)
-        .not("recebido_em", "is", null);
-      if (error) throw error;
-      return (data as any[]) || [];
-    },
-  });
-  const recebidasIds = new Set<string>(
-    recebimentos.map((r: any) => r.solicitacao_id).filter(Boolean),
-  );
+  // Fonte oficial: recebimento_confirmado_em na própria solicitação
+  const isRecebida = (sol: Solicitacao) => !!sol.recebimento_confirmado_em;
 
   // Resolve nomes amigáveis (user_profiles) para solicitações cujo solicitante_nome
   // ainda esteja salvo como e-mail (contém "@").
@@ -578,9 +565,9 @@ export default function EstoqueSolicitacoes() {
         });
         throw error;
       }
-      const updated = (data as any)?.updated_count ?? 0;
-      if (updated === 0) {
-        toast.warning("Nenhuma movimentação pendente encontrada para esta solicitação.");
+      const already = (data as any)?.already_confirmed === true;
+      if (already) {
+        toast.info("Esta solicitação já estava confirmada.");
       }
 
       // Notifica gestores
@@ -594,7 +581,6 @@ export default function EstoqueSolicitacoes() {
       queryClient.invalidateQueries({ queryKey: ["estoque-solicitacoes"] });
       queryClient.invalidateQueries({ queryKey: ["estoque-movimentacoes"] });
       setReceiptConfirm(null);
-      queryClient.invalidateQueries({ queryKey: ["estoque-recebimentos"] });
       toast.success("Recebimento confirmado");
     },
     onError: (err: any) => toast.error(err.message || "Erro ao confirmar recebimento"),
@@ -726,7 +712,7 @@ export default function EstoqueSolicitacoes() {
                             <Truck className="h-4 w-4 mr-1" /> Entregar
                           </Button>
                         )}
-                        {sol.status === "entregue" && sol.solicitante_user_id === user?.id && !recebidasIds.has(sol.id) && (
+                        {sol.status === "entregue" && sol.solicitante_user_id === user?.id && !isRecebida(sol) && (
                           <Button size="sm" variant="outline" onClick={() => setReceiptConfirm(sol)}>
                             <PackageCheck className="h-4 w-4 mr-1" /> Confirmar Recebimento
                           </Button>
@@ -853,6 +839,12 @@ export default function EstoqueSolicitacoes() {
                 <div><span className="text-muted-foreground">Setor:</span> {getSetorNome(viewDialog.setor_id)}</div>
                 <div><span className="text-muted-foreground">Data:</span> {new Date(viewDialog.created_at).toLocaleDateString("pt-BR")}</div>
               </div>
+              {viewDialog.recebimento_confirmado_em && (
+                <div className="text-sm text-green-600">
+                  <PackageCheck className="h-4 w-4 inline mr-1" />
+                  Recebimento confirmado em {new Date(viewDialog.recebimento_confirmado_em).toLocaleString("pt-BR")}
+                </div>
+              )}
               {viewDialog.observacoes && (
                 <div className="text-sm"><span className="text-muted-foreground">Obs:</span> {viewDialog.observacoes}</div>
               )}
