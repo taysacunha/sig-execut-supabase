@@ -23,6 +23,18 @@ import { MaterialCombobox } from "@/components/estoque/MaterialCombobox";
 
 const fromEstoque = (table: string) => supabase.from(table as any);
 
+// Resolve nome amigável do usuário a partir de user_profiles (fallback p/ metadata/email)
+async function resolverNomeUsuario(userId: string, fallback: string): Promise<string> {
+  const { data } = await supabase
+    .from("user_profiles")
+    .select("name")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const nome = (data as any)?.name as string | undefined;
+  if (nome && nome.trim().length > 0) return nome.trim();
+  return fallback;
+}
+
 interface Solicitacao {
   id: string;
   solicitante_user_id: string;
