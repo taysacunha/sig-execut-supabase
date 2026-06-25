@@ -177,6 +177,38 @@ export default function EstoqueSolicitacoes() {
     recebimentos.map((r: any) => r.solicitacao_id).filter(Boolean),
   );
 
+  // Resolve nomes amigáveis (user_profiles) para solicitações cujo solicitante_nome
+  // ainda esteja salvo como e-mail (contém "@").
+  const solicitantesParaResolver = Array.from(
+    new Set(
+      solicitacoes
+        .filter((s) => typeof s.solicitante_nome === "string" && s.solicitante_nome.includes("@"))
+        .map((s) => s.solicitante_user_id)
+        .filter(Boolean),
+    ),
+  );
+  const { data: nomesPerfis = [] } = useQuery({
+    queryKey: ["estoque-solicitante-nomes", solicitantesParaResolver],
+    enabled: solicitantesParaResolver.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_profiles")
+        .select("user_id, name")
+        .in("user_id", solicitantesParaResolver);
+      if (error) throw error;
+      return (data as any[]) || [];
+    },
+  });
+  const nomePorUserId = new Map<string, string>(
+    nomesPerfis.map((p: any) => [p.user_id as string, (p.name as string) || ""]),
+  );
+  const displaySolicitante = (sol: Solicitacao): string => {
+    const nome = sol.solicitante_nome || "";
+    if (nome && !nome.includes("@")) return nome;
+    const resolvido = nomePorUserId.get(sol.solicitante_user_id);
+    return resolvido && resolvido.trim().length > 0 ? resolvido : nome || "—";
+  };
+
   // Auto-abre o detalhe quando vier ?id= (de uma notificação clicada)
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
