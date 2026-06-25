@@ -286,7 +286,8 @@ export default function EstoqueSolicitacoes() {
       const validItens = itens.filter((i) => i.material_id && i.quantidade > 0);
       if (validItens.length === 0) throw new Error("Adicione ao menos um item");
 
-      const userName = user.user_metadata?.name || user.email || "Usuário";
+      const fallback = user.user_metadata?.name || user.email || "Usuário";
+      const userName = await resolverNomeUsuario(user.id, fallback);
 
       const { data: sol, error: solError } = await fromEstoque("estoque_solicitacoes")
         .insert({
