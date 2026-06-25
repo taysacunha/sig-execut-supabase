@@ -23,6 +23,18 @@ import { MaterialCombobox } from "@/components/estoque/MaterialCombobox";
 
 const fromEstoque = (table: string) => supabase.from(table as any);
 
+// Resolve nome amigável do usuário a partir de user_profiles (fallback p/ metadata/email)
+async function resolverNomeUsuario(userId: string, fallback: string): Promise<string> {
+  const { data } = await supabase
+    .from("user_profiles")
+    .select("name")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const nome = (data as any)?.name as string | undefined;
+  if (nome && nome.trim().length > 0) return nome.trim();
+  return fallback;
+}
+
 interface Solicitacao {
   id: string;
   solicitante_user_id: string;
@@ -165,6 +177,38 @@ export default function EstoqueSolicitacoes() {
     recebimentos.map((r: any) => r.solicitacao_id).filter(Boolean),
   );
 
+  // Resolve nomes amigáveis (user_profiles) para solicitações cujo solicitante_nome
+  // ainda esteja salvo como e-mail (contém "@").
+  const solicitantesParaResolver = Array.from(
+    new Set(
+      solicitacoes
+        .filter((s) => typeof s.solicitante_nome === "string" && s.solicitante_nome.includes("@"))
+        .map((s) => s.solicitante_user_id)
+        .filter(Boolean),
+    ),
+  );
+  const { data: nomesPerfis = [] } = useQuery({
+    queryKey: ["estoque-solicitante-nomes", solicitantesParaResolver],
+    enabled: solicitantesParaResolver.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_profiles")
+        .select("user_id, name")
+        .in("user_id", solicitantesParaResolver);
+      if (error) throw error;
+      return (data as any[]) || [];
+    },
+  });
+  const nomePorUserId = new Map<string, string>(
+    nomesPerfis.map((p: any) => [p.user_id as string, (p.name as string) || ""]),
+  );
+  const displaySolicitante = (sol: Solicitacao): string => {
+    const nome = sol.solicitante_nome || "";
+    if (nome && !nome.includes("@")) return nome;
+    const resolvido = nomePorUserId.get(sol.solicitante_user_id);
+    return resolvido && resolvido.trim().length > 0 ? resolvido : nome || "—";
+  };
+
   // Auto-abre o detalhe quando vier ?id= (de uma notificação clicada)
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
@@ -274,7 +318,8 @@ export default function EstoqueSolicitacoes() {
       const validItens = itens.filter((i) => i.material_id && i.quantidade > 0);
       if (validItens.length === 0) throw new Error("Adicione ao menos um item");
 
-      const userName = user.user_metadata?.name || user.email || "Usuário";
+      const fallback = user.user_metadata?.name || user.email || "Usuário";
+      const userName = await resolverNomeUsuario(user.id, fallback);
 
       const { data: sol, error: solError } = await fromEstoque("estoque_solicitacoes")
         .insert({
@@ -520,18 +565,28 @@ export default function EstoqueSolicitacoes() {
   const confirmarRecebimentoMutation = useMutation({
     mutationFn: async (sol: Solicitacao) => {
       if (!user?.id) throw new Error("Usuário não autenticado");
-      const { error } = await fromEstoque("estoque_movimentacoes")
-        .update({
-          recebido_por_user_id: user.id,
-          recebido_em: new Date().toISOString(),
-        } as any)
-        .eq("solicitacao_id", sol.id)
-        .is("recebido_em", null);
-      if (error) throw error;
+      const { data, error } = await (supabase.rpc as any)(
+        "confirmar_recebimento_solicitacao",
+        { p_solicitacao_id: sol.id }
+      );
+      if (error) {
+        console.error("[confirmar_recebimento_solicitacao] erro:", {
+          code: (error as any).code,
+          message: error.message,
+          details: (error as any).details,
+          hint: (error as any).hint,
+        });
+        throw error;
+      }
+      const updated = (data as any)?.updated_count ?? 0;
+      if (updated === 0) {
+        toast.warning("Nenhuma movimentação pendente encontrada para esta solicitação.");
+      }
 
       // Notifica gestores
       if (sol.unidade_id) {
-        const userName = user.user_metadata?.name || user.email || "Usuário";
+        const fallback = user.user_metadata?.name || user.email || "Usuário";
+        const userName = await resolverNomeUsuario(user.id, fallback);
         await notificarGestoresUnidade(sol.unidade_id, `${userName} confirmou o recebimento dos materiais.`, sol.id);
       }
     },
@@ -643,7 +698,7 @@ export default function EstoqueSolicitacoes() {
                 <TableBody>
                   {paginatedData.map((sol) => (
                     <TableRow key={sol.id}>
-                      <TableCell className="font-medium">{sol.solicitante_nome}</TableCell>
+                      <TableCell className="font-medium">{displaySolicitante(sol)}</TableCell>
                       <TableCell>{getUnidadeNome(sol.unidade_id)}</TableCell>
                       <TableCell>{getSetorNome(sol.setor_id)}</TableCell>
                       <TableCell>
@@ -790,7 +845,7 @@ export default function EstoqueSolicitacoes() {
           {viewDialog && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-muted-foreground">Solicitante:</span> <strong>{viewDialog.solicitante_nome}</strong></div>
+                <div><span className="text-muted-foreground">Solicitante:</span> <strong>{displaySolicitante(viewDialog)}</strong></div>
                 <div><span className="text-muted-foreground">Status:</span>{" "}
                   <Badge variant="outline" className={STATUS_COLORS[viewDialog.status]}>{STATUS_LABELS[viewDialog.status]}</Badge>
                 </div>
