@@ -713,7 +713,7 @@ export default function EstoqueSolicitacoes() {
                             <Truck className="h-4 w-4 mr-1" /> Entregar
                           </Button>
                         )}
-                        {sol.status === "entregue" && sol.solicitante_user_id === user?.id && !recebidasIds.has(sol.id) && (
+                        {sol.status === "entregue" && sol.solicitante_user_id === user?.id && !isRecebida(sol) && (
                           <Button size="sm" variant="outline" onClick={() => setReceiptConfirm(sol)}>
                             <PackageCheck className="h-4 w-4 mr-1" /> Confirmar Recebimento
                           </Button>
