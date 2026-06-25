@@ -110,7 +110,7 @@ export function ReducaoFeriasDialog({ open, onOpenChange, ferias, colaboradorNom
 
       const { error } = await supabase
         .from("ferias_ferias")
-        .update(updatePayload)
+        .update(updatePayload as any)
         .eq("id", ferias.id);
       if (error) throw error;
     },

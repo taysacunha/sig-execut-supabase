@@ -289,7 +289,7 @@ export default function Sales() {
       
       const { error } = await supabase
         .from("sales")
-        .update(updateData)
+        .update(updateData as any)
         .eq("id", data.id);
       if (error) throw error;
 

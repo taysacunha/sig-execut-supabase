@@ -1198,7 +1198,7 @@ const Schedules = () => {
               }
             }
             
-            const deduplicatedAssignments = Array.from(assignmentKeys.values());
+            const deduplicatedAssignments = Array.from(assignmentKeys.values()).map(({ broker, location, ...rest }: any) => rest);
             console.log(`📊 Alocações: ${assignmentsWithScheduleId.length} → ${deduplicatedAssignments.length} (após dedup)`);
 
             const { error: assignmentsError } = await supabase
@@ -1608,7 +1608,7 @@ const Schedules = () => {
               }
             }
             
-            const deduplicatedAssignments = Array.from(assignmentKeys.values());
+            const deduplicatedAssignments = Array.from(assignmentKeys.values()).map(({ broker, location, ...rest }: any) => rest);
             console.log(`📊 Alocações: ${assignmentsWithScheduleId.length} → ${deduplicatedAssignments.length} (após dedup)`);
 
             const { error: assignmentsError } = await supabase

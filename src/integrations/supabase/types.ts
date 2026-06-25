@@ -3222,6 +3222,10 @@ export type Database = {
         Args: { _system: string; _user_id: string }
         Returns: boolean
       }
+      confirmar_recebimento_solicitacao: {
+        Args: { p_solicitacao_id: string }
+        Returns: Json
+      }
       delete_weekly_stats_for_period: {
         Args: { p_end_date: string; p_start_date: string }
         Returns: Json
