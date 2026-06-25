@@ -201,7 +201,7 @@ export function UtilizarCreditoFeriasDialog({ open, onOpenChange, credito, allCr
 
         const { error } = await supabase
           .from("ferias_ferias")
-          .update(updateData)
+          .update(updateData as any)
           .eq("id", target.feriasId);
         if (error) throw error;
         referencia = `Extensão de período (${target.label}) em ${totalDias} dia(s)`;
