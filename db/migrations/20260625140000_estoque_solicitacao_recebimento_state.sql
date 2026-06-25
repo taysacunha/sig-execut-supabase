@@ -10,13 +10,14 @@ UPDATE public.estoque_solicitacoes s
    SET recebimento_confirmado_em = sub.recebido_em,
        recebimento_confirmado_por_user_id = sub.recebido_por_user_id
   FROM (
-    SELECT solicitacao_id,
-           MIN(recebido_em) AS recebido_em,
-           MIN(recebido_por_user_id) AS recebido_por_user_id
+    SELECT DISTINCT ON (solicitacao_id)
+           solicitacao_id,
+           recebido_em,
+           recebido_por_user_id
       FROM public.estoque_movimentacoes
      WHERE recebido_em IS NOT NULL
        AND solicitacao_id IS NOT NULL
-     GROUP BY solicitacao_id
+     ORDER BY solicitacao_id, recebido_em ASC
   ) sub
  WHERE sub.solicitacao_id = s.id
    AND s.recebimento_confirmado_em IS NULL;
