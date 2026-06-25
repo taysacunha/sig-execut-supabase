@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Loader2, Tag, Wrench, ArrowLeftRight, AlertTriangle, Plus,
-  History as HistoryIcon, ShieldAlert, Trash2,
+  History as HistoryIcon, ShieldAlert, Trash2, Tag as TagIcon, Layers, Package, Info,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ import {
 } from "@/hooks/useEstoquePlacas";
 import { PlacasPDFGenerator } from "@/components/estoque/placas/PlacasPDFGenerator";
 import { NovaSaidaDialog } from "@/components/estoque/placas/NovaSaidaDialog";
+import { AtribuirCodigoDialog } from "@/components/estoque/placas/AtribuirCodigoDialog";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -76,6 +77,7 @@ export default function EstoquePlacas() {
   const [historicoDialog, setHistoricoDialog] = useState(false);
   const [excluirDialog, setExcluirDialog] = useState(false);
   const [novaSaidaDialog, setNovaSaidaDialog] = useState(false);
+  const [atribuirCodigoDialog, setAtribuirCodigoDialog] = useState(false);
   const [selected, setSelected] = useState<Placa | null>(null);
 
   const { data: placas = [], isLoading } = usePlacas();
@@ -347,7 +349,49 @@ export default function EstoquePlacas() {
   });
 
   const excluirMutation = useMutation({
-    mutationFn: async (placa: Placa) => {
+    mutationFn: async (input: { placa: Placa; justificativa: string }) => {
+      const { placa, justificativa } = input;
+      const just = justificativa.trim();
+      if (just.length < 5) throw new Error("Justificativa obrigatória (mín. 5 caracteres)");
+
+      // Se estava disponível em algum local, devolve 1 unidade ao saldo (decrementa)
+      if (placa.status === "disponivel" && placa.local_armazenamento_id) {
+        const { data: saldo } = await fromEstoque("estoque_saldos")
+          .select("id, quantidade")
+          .eq("material_id", placa.material_id)
+          .eq("local_armazenamento_id", placa.local_armazenamento_id)
+          .maybeSingle();
+        if (saldo) {
+          const novaQuantidade = Math.max(((saldo as any).quantidade || 0) - 1, 0);
+          if (novaQuantidade === 0) {
+            await fromEstoque("estoque_saldos").delete().eq("id", (saldo as any).id);
+          } else {
+            await fromEstoque("estoque_saldos")
+              .update({ quantidade: novaQuantidade } as any)
+              .eq("id", (saldo as any).id);
+          }
+        }
+
+        await fromEstoque("estoque_movimentacoes").insert({
+          material_id: placa.material_id,
+          tipo: "saida",
+          quantidade: 1,
+          local_origem_id: placa.local_armazenamento_id,
+          responsavel_user_id: user?.id,
+          observacoes: `Exclusão de placa ${placa.codigo ?? "(sem código)"}: ${just}`,
+        } as any);
+      } else {
+        // Apenas registra a movimentação de auditoria (sem alterar saldo)
+        await fromEstoque("estoque_movimentacoes").insert({
+          material_id: placa.material_id,
+          tipo: "saida",
+          quantidade: 0,
+          local_origem_id: placa.local_armazenamento_id,
+          responsavel_user_id: user?.id,
+          observacoes: `Exclusão de placa ${placa.codigo ?? "(sem código)"} (status ${placa.status}): ${just}`,
+        } as any);
+      }
+
       const { error } = await fromEstoque("estoque_placas").delete().eq("id", placa.id);
       if (error) throw error;
     },
@@ -367,12 +411,12 @@ export default function EstoquePlacas() {
             <Tag className="h-6 w-6" /> Placas
           </h1>
           <p className="text-muted-foreground">
-            Acompanhe saldos de materiais-placa, instalações em imóveis e registros de perda/roubo.
-            Cadastre a placa em <strong>/estoque/materiais</strong> e lance o saldo em <strong>/estoque/saldos</strong>.
+            Esta página tem dois blocos: <strong className="text-blue-500">Saldos</strong> (quantidades agregadas por material e local)
+            e <strong className="text-emerald-500">Placas</strong> (cada unidade física, com ou sem código).
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => setNovaSaidaDialog(true)}>
+          <Button onClick={() => setNovaSaidaDialog(true)} title="Escolha o material e local. Para uma placa específica, use o ícone de chave inglesa na lista abaixo.">
             <Plus className="h-4 w-4 mr-2" /> Nova saída para imóvel
           </Button>
           <PlacasPDFGenerator placas={placas} />
@@ -395,46 +439,20 @@ export default function EstoquePlacas() {
         </TabsList>
 
         <TabsContent value={aba} className="space-y-4 mt-4">
-          <Card>
-            <CardContent className="pt-4 grid grid-cols-1 sm:grid-cols-5 gap-3">
-              <TableSearch value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por código ou imóvel..." />
-              <Select value={materialFiltro} onValueChange={setMaterialFiltro}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos materiais</SelectItem>
-                  {materiaisPlaca.map((m) => <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={tipoFiltro} onValueChange={setTipoFiltro}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos tipos</SelectItem>
-                  {Object.entries(TIPO_USO_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={tamanhoFiltro} onValueChange={setTamanhoFiltro}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos tamanhos</SelectItem>
-                  {Object.entries(TAMANHO_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={localFiltro} onValueChange={setLocalFiltro}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos locais</SelectItem>
-                  {locais.map((l) => <SelectItem key={l.id} value={l.id}>{l.nome}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
-
           {aba === "disponivel" && (
-            <Card>
+            <Card className="border-blue-500/30 bg-blue-500/5">
               <CardContent className="pt-4">
-                <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
-                  <h2 className="font-semibold text-foreground">Saldos disponíveis por material</h2>
-                  <Badge variant="secondary">
+                <div className="mb-3 flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex items-start gap-2">
+                    <Layers className="h-5 w-5 text-blue-500 mt-0.5" />
+                    <div>
+                      <h2 className="font-semibold text-foreground">Saldos por material e local</h2>
+                      <p className="text-xs text-muted-foreground">
+                        Quantidades agregadas. Para registrar entradas/baixas de saldo, use /estoque/saldos.
+                      </p>
+                    </div>
+                  </div>
+                  <Badge className="bg-blue-500/20 text-blue-500 border-blue-500/30">
                     {resumoFiltrado.reduce((acc, item) => acc + item.quantidade, 0)} unidade(s)
                   </Badge>
                 </div>
@@ -468,8 +486,63 @@ export default function EstoquePlacas() {
             </Card>
           )}
 
-          <Card>
+          <Card className={
+            aba === "disponivel" ? "border-emerald-500/30 bg-emerald-500/5"
+            : aba === "instalada" ? "border-indigo-500/30 bg-indigo-500/5"
+            : "border-muted-foreground/20 bg-muted/20"
+          }>
             <CardContent className="p-0">
+              <div className="p-4 flex items-start justify-between gap-3 flex-wrap border-b">
+                <div className="flex items-start gap-2">
+                  <Package className={
+                    "h-5 w-5 mt-0.5 " + (
+                      aba === "disponivel" ? "text-emerald-500"
+                      : aba === "instalada" ? "text-indigo-500"
+                      : "text-muted-foreground"
+                    )
+                  } />
+                  <div>
+                    <h2 className="font-semibold text-foreground">
+                      Placas {aba === "disponivel" ? "disponíveis" : aba === "instalada" ? "instaladas" : "baixadas (roubadas/perdidas/baixadas)"}
+                    </h2>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Info className="h-3 w-3" />
+                      Cada linha é uma unidade física. Use o ícone <TagIcon className="h-3 w-3 inline" /> para atribuir código a placas sem identificação.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-4 grid grid-cols-1 sm:grid-cols-5 gap-3 border-b">
+                <TableSearch value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por código ou imóvel..." />
+                <Select value={materialFiltro} onValueChange={setMaterialFiltro}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos materiais</SelectItem>
+                    {materiaisPlaca.map((m) => <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={tipoFiltro} onValueChange={setTipoFiltro}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos tipos</SelectItem>
+                    {Object.entries(TIPO_USO_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={tamanhoFiltro} onValueChange={setTamanhoFiltro}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos tamanhos</SelectItem>
+                    {Object.entries(TAMANHO_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={localFiltro} onValueChange={setLocalFiltro}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos locais</SelectItem>
+                    {locais.map((l) => <SelectItem key={l.id} value={l.id}>{l.nome}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
               {isLoading ? (
                 <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
               ) : paginatedData.length === 0 ? (
@@ -519,8 +592,14 @@ export default function EstoquePlacas() {
                           <TableCell className="text-sm">{localNome(p.local_armazenamento_id)}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1 flex-wrap">
+                              {!p.codigo && (
+                                <Button size="sm" variant="ghost" title="Atribuir código"
+                                  onClick={() => { setSelected(p); setAtribuirCodigoDialog(true); }}>
+                                  <TagIcon className="h-4 w-4 text-amber-500" />
+                                </Button>
+                              )}
                               {p.status === "disponivel" && (
-                                <Button size="sm" variant="ghost" title="Instalar em imóvel"
+                                <Button size="sm" variant="ghost" title="Instalar esta placa em um imóvel"
                                   onClick={() => { setSelected(p); setInstalarDialog(true); }}>
                                   <Wrench className="h-4 w-4" />
                                 </Button>
@@ -598,27 +677,21 @@ export default function EstoquePlacas() {
       {selected && (
         <HistoricoDialog open={historicoDialog} onOpenChange={setHistoricoDialog} placa={selected} />
       )}
+      <AtribuirCodigoDialog
+        open={atribuirCodigoDialog}
+        onOpenChange={setAtribuirCodigoDialog}
+        placa={selected}
+        materialNome={selected ? materialNome(selected.material_id) : ""}
+        localNome={selected ? localNome(selected.local_armazenamento_id) : ""}
+      />
 
-      <AlertDialog open={excluirDialog} onOpenChange={setExcluirDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir placa?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta ação remove a placa <strong>{selected?.codigo ?? "(sem código)"}</strong> e todo o seu histórico.
-              Não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => selected && excluirMutation.mutate(selected)}
-            >
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ExcluirPlacaDialog
+        open={excluirDialog}
+        onOpenChange={setExcluirDialog}
+        placa={selected}
+        loading={excluirMutation.isPending}
+        onSubmit={(justificativa) => selected && excluirMutation.mutate({ placa: selected, justificativa })}
+      />
     </div>
   );
 }
@@ -802,5 +875,58 @@ function HistoricoDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ExcluirPlacaDialog({
+  open, onOpenChange, placa, loading, onSubmit,
+}: {
+  open: boolean; onOpenChange: (o: boolean) => void;
+  placa: Placa | null; loading: boolean;
+  onSubmit: (justificativa: string) => void;
+}) {
+  const [just, setJust] = useState("");
+  useEffect(() => { if (open) setJust(""); }, [open]);
+  const valid = just.trim().length >= 5;
+  const devolveSaldo = !!placa && placa.status === "disponivel" && !!placa.local_armazenamento_id;
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir placa?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Remove a placa <strong>{placa?.codigo ?? "(sem código)"}</strong> e todo o seu histórico. Não pode ser desfeita.
+            {devolveSaldo && (
+              <span className="block mt-2 text-xs">
+                Como a placa está <strong>disponível</strong>, 1 unidade será descontada do saldo do local de origem.
+              </span>
+            )}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="space-y-2 py-2">
+          <Label>Justificativa da exclusão *</Label>
+          <Textarea
+            value={just}
+            onChange={(e) => setJust(e.target.value)}
+            rows={3}
+            maxLength={500}
+            placeholder="Explique o motivo (mín. 5 caracteres)"
+          />
+          <p className="text-xs text-muted-foreground">
+            A justificativa será registrada nas movimentações para auditoria.
+          </p>
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={!valid || loading}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={(e) => { e.preventDefault(); if (valid) onSubmit(just); }}
+          >
+            {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Excluir
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

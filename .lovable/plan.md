@@ -1,70 +1,90 @@
 ## Objetivo
 
-Aplicar o padrão criado para a Central de Ajuda do Estoque às demais páginas de ajuda do sistema:
+Reorganizar a página `/estoque/placas` para deixar claro o que é **saldo (quantidades por material/local)** e o que é **placa individual (unidade física com código)**, corrigir o fluxo de exclusão (confirmação, justificativa, atualização de saldo) e simplificar o diálogo de saída.
 
-- `src/pages/Help.tsx` — Escalas
-- `src/pages/ferias/FeriasHelp.tsx` — Férias
+## Respostas rápidas (para alinhamento)
 
-## Padrão a replicar
+- **Botão Excluir hoje:** já existe `AlertDialog` de confirmação, mas **não pede justificativa** e **não devolve a unidade ao saldo** quando a placa estava `disponível`. Será corrigido.
+- **Como atribuir código a placas existentes:** hoje só é possível na hora da saída. Vamos adicionar um botão **"Atribuir código"** em cada linha da lista (válido para qualquer placa sem código, independente do status), além de manter o fluxo na saída.
+- **Saída para imóvel:** hoje há **dois caminhos** que fazem coisas levemente diferentes:
+  1. Botão grande **"Nova saída para imóvel"** (topo) → escolhe material+local+código e instala.
+  2. Ícone **"Instalar em imóvel"** (chave inglesa) na linha de uma placa específica `disponível`.
+  Ambos são válidos. Vamos deixar isso explícito no UI (rótulos + tooltip) para o usuário não ficar em dúvida.
 
-Mesmo conjunto de elementos usado no Estoque:
+## Mudanças na página `EstoquePlacas.tsx`
 
-1. **Cabeçalho** com ícone `HelpCircle`, título "Central de Ajuda" e subtítulo descrevendo o sistema.
-2. **Barra de busca** com ícone `Search`, normalização sem acento, índice `topics` (label + keywords + description) e dropdown de resultados que troca a aba ativa via estado controlado (`activeTab`).
-3. **Tabs controladas** (`value` + `onValueChange`) iguais às atuais — sem alterar quais abas existem em cada página.
-4. **Componentes auxiliares locais** (mesma assinatura usada no Estoque):
-  - `Step` / `Bullets`
-  - `HowTo` — passo a passo numerado dentro de bloco destacado.
-  - `Scenario` — cenário prático (título + contexto opcional + passos).
-  - `Faq` — accordion (`@/components/ui/accordion`) com perguntas e respostas.
-5. **Conteúdo de cada aba** ganha, além da descrição atual:
-  - 1 a 3 blocos `HowTo` (passo a passo com cliques reais nos botões/campos da tela).
-  - 1 a 3 blocos `Scenario` cobrindo casos comuns do dia a dia daquele módulo.
-  - 1 bloco `Faq` com 3 a 6 perguntas frequentes.
+### 1. Reorganização visual (separar Saldos × Placas)
 
-O texto descritivo, as `Alert`s e os badges já existentes são preservados — só adicionamos os blocos novos.
+Layout atual: filtros + card "Saldos disponíveis" + card "Lista de placas" todos colados, sem hierarquia. Novo layout para a aba **Disponíveis**:
 
-## Páginas e cobertura
+```text
+┌─ Cabeçalho da página ────────────────────────────────────┐
+│ Placas    [Nova saída p/ imóvel] [PDF]                   │
+├──────────────────────────────────────────────────────────┤
+│ [Tabs: Disponíveis | Instaladas | Baixadas]              │
+├──────────────────────────────────────────────────────────┤
+│ ╔══ SALDOS (azul) ═════════════════════════════════════╗ │
+│ ║ Quanto tenho de cada placa, por local                ║ │
+│ ║ [tabela compacta agrupando material/local/qtd]       ║ │
+│ ╚══════════════════════════════════════════════════════╝ │
+│ ╔══ PLACAS (verde/âmbar/cinza por aba) ════════════════╗ │
+│ ║ Unidades físicas (com ou sem código)                 ║ │
+│ ║ [filtros] [tabela placa-a-placa] [paginação]         ║ │
+│ ╚══════════════════════════════════════════════════════╝ │
+└──────────────────────────────────────────────────────────┘
+```
 
-### `src/pages/Help.tsx` (Escalas)
+- Cada bloco com **header colorido + ícone + descrição curta** ("Saldos: contagem agregada" / "Placas: cada unidade individual").
+- Usar cores do design system via tokens semânticos: borda/fundo sutil `border-blue-500/30 bg-blue-500/5` para Saldos, `border-emerald-500/30 bg-emerald-500/5` para Disponíveis, `border-blue-500/30` para Instaladas e `border-muted` para Baixadas.
+- Bloco **Saldos** aparece apenas na aba **Disponíveis** (mantém comportamento atual, mas com destaque visual).
+- Filtros movidos para dentro do bloco Placas, com label "Filtrar placas".
+- Botão "Nova saída p/ imóvel" ganha tooltip explicando: "Escolha o material e local, ou use o ícone de chave inglesa em uma placa específica abaixo."
 
-Manter todas as abas atuais. Para cada uma, acrescentar HowTo + Scenario + FAQ. Foco extra em:
+### 2. Exclusão com justificativa + ajuste de saldo
 
-- **Escala / Alocação** — regras de prioridade, validações, conflitos.
-- **Corretores** — cadastro, inativação, vínculo de unidade.
-- **Vendas** (se existir a aba) — registro de venda, visibilidade de VGV.
-- **Notificações, Perfil e Auditoria** — mesmo padrão simplificado.
+- Trocar `AlertDialog` simples por um diálogo com:
+  - `Textarea` **obrigatório** "Justificativa da exclusão" (mín. 5 caracteres, máx. 500).
+  - Botão "Excluir" desabilitado até preencher a justificativa.
+- Na mutação `excluirMutation`:
+  - Se a placa estava `disponivel` e tinha `local_armazenamento_id` → **decrementar 1 do saldo** (`estoque_saldos`) ou deletar a linha se zerar.
+  - Inserir registro em `estoque_movimentacoes` tipo `saida` com a justificativa no campo `observacoes` (prefixo "Exclusão de placa <código>: …").
+  - Excluir a placa (cascade já remove histórico).
+- Invalidate queries: placas, saldos, movimentações.
 
-### `src/pages/ferias/FeriasHelp.tsx` (Férias)
+### 3. Atribuir código a placas existentes
 
-Manter todas as abas atuais. Acrescentar HowTo + Scenario + FAQ, com foco em:
+Hoje placas podem ficar sem código (campo virou nullable na migration `20260624120000`). Adicionar:
 
-- **Período aquisitivo / vesting** — como o sistema calcula.
-- **Solicitar férias** — passo a passo do colaborador.
-- **Aprovação** — fluxo do gestor.
-- **Validação cronológica** — explicar erros comuns.
-- **Afastamentos e contabilização** — cenários do RH.
+- Botão de ícone **`Tag`** na linha, visível quando `p.codigo == null`, com tooltip "Atribuir código".
+- Novo `AtribuirCodigoDialog`:
+  - Mostra material, tipo, tamanho, local atual.
+  - Input "Novo código" (máx. 30) com checagem de duplicidade em tempo real (mesmo padrão do `NovaSaidaDialog`).
+  - Salva via `update` em `estoque_placas` setando `codigo`.
+  - Insere registro em `estoque_placas_historico` tipo `criacao` com observação "Código atribuído posteriormente".
+- Disponível para placas em **qualquer status** (disponível, instalada, baixada, etc.) — para regularizar legado.
 
-### Conteúdo do FAQ
+### 4. Diálogo "Nova saída para imóvel" — filtrar locais com saldo
 
-As perguntas serão extraídas de situações reais já tratadas no código (validações, alerts, bloqueios) e de dúvidas operacionais típicas — sem inventar comportamento que o sistema não tenha.
+No `NovaSaidaDialog.tsx`:
+
+- Depois de escolher o **Material da placa**, recalcular a lista do `Select` de **Local de armazenamento** para mostrar **apenas locais com `saldo > 0`** desse material.
+- Se a lista ficar vazia: substituir o select por aviso "Nenhum local tem saldo deste material. Lance entrada em `/estoque/saldos` antes."
+- Manter o restante do fluxo intacto (atribuir código a placa sem código, ou criar nova).
 
 ## Detalhes técnicos
 
-- Apenas dois arquivos alterados: `src/pages/Help.tsx` e `src/pages/ferias/FeriasHelp.tsx`.
-- Reuso do componente `Accordion` do shadcn (`@/components/ui/accordion`), já presente no projeto.
-- `useState` para `activeTab` e `searchQuery`, `normalize` igual ao do Estoque.
-- Sem alterações em rotas, sidebars, hooks, schema, RLS ou lógica de negócio.
-- Sem mudanças no Estoque (já está pronto).
+- Arquivos editados:
+  - `src/pages/estoque/EstoquePlacas.tsx` — layout, cores, novo diálogo de exclusão, novo botão "Atribuir código".
+  - `src/components/estoque/placas/NovaSaidaDialog.tsx` — filtrar locais com saldo do material selecionado.
+- Arquivo novo:
+  - `src/components/estoque/placas/AtribuirCodigoDialog.tsx`.
+- Sem migrations — schema já suporta tudo (código nullable, histórico, saldos).
+- Sem mudanças em RLS, hooks compartilhados ou rotas.
+- Não altera regras de negócio de instalação/retirada/roubo/perda.
+- Tokens semânticos do Tailwind (sem `text-white` hardcoded). Reusar `STATUS_COLORS` e adicionar uma paleta leve por bloco.
 
 ## Fora de escopo
 
-- Criar página de ajuda para Vendas (não existe; permanece como item pendente em `.lovable/plan.md`).
-- Tour interativo, vídeos ou capturas de tela.
-- Refatorar o conteúdo descritivo já existente além do necessário para encaixar os novos blocos.
-
-## Antes de executar
-
-Para o conteúdo das novas seções fazer sentido sem inventar comportamento, ao implementar irei reler rapidamente as duas páginas atuais e os hooks/serviços principais de cada módulo (`useEscala*`, `useFerias*`) para extrair os passos reais. Nenhuma lógica será modificada.
-
-Crie também em vendas. Todos os sistemas devem ter a página de ajuda. Entendido?
+- Refatorar `EstoqueSaldos.tsx`.
+- Auditoria persistente de exclusões em tabela dedicada (a justificativa fica em `estoque_movimentacoes.observacoes`).
+- Alterar comportamento do botão de instalar na linha (continua funcionando como atalho).

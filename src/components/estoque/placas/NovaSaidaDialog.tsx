@@ -110,6 +110,15 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
 
   const { data: placas = [] } = usePlacas();
 
+  const locaisComSaldo = useMemo(() => {
+    if (!materialId) return [];
+    const ids = new Set(
+      saldos.filter((s) => s.material_id === materialId && s.quantidade > 0)
+        .map((s) => s.local_armazenamento_id)
+    );
+    return locais.filter((l) => ids.has(l.id));
+  }, [locais, saldos, materialId]);
+
   const saldoLocal = useMemo(() => {
     if (!localId || !materialId) return 0;
     return saldos.find((s) => s.material_id === materialId && s.local_armazenamento_id === localId)?.quantidade ?? 0;
@@ -303,14 +312,29 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
 
           <div className="space-y-2">
             <Label>Local de armazenamento *</Label>
-            <Select value={localId} onValueChange={(v) => { setLocalId(v); setPlacaId(""); }}>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                {locais.map((l) => (
-                  <SelectItem key={l.id} value={l.id}>{l.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {materialId && locaisComSaldo.length === 0 ? (
+              <p className="text-xs text-destructive border border-destructive/30 bg-destructive/5 rounded-md p-2">
+                Nenhum local tem saldo deste material. Lance entrada em /estoque/saldos antes.
+              </p>
+            ) : (
+              <Select
+                value={localId}
+                onValueChange={(v) => { setLocalId(v); setPlacaId(""); }}
+                disabled={!materialId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={materialId ? "Selecione" : "Escolha o material primeiro"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {locaisComSaldo.map((l) => {
+                    const qtd = saldos.find((s) => s.material_id === materialId && s.local_armazenamento_id === l.id)?.quantidade ?? 0;
+                    return (
+                      <SelectItem key={l.id} value={l.id}>{l.nome} ({qtd})</SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            )}
             {localId && (
               <p className={`text-xs ${saldoLocal > 0 ? "text-muted-foreground" : "text-destructive"}`}>
                 Saldo disponível deste material neste local: <strong>{saldoLocal}</strong>
