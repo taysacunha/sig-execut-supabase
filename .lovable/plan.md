@@ -1,37 +1,76 @@
-## Correção: Confirmação de recebimento (Ruan) + nome do solicitante
+## Diagnóstico
 
-### 1. RPC `confirmar_recebimento_solicitacao` (SECURITY DEFINER)
-Nova migration criando função que:
-- Valida `auth.uid() = solicitante_user_id` da solicitação (senão `RAISE EXCEPTION 'Apenas o solicitante pode confirmar o recebimento'`).
-- Faz `UPDATE estoque_movimentacoes SET recebido_por_user_id = auth.uid(), recebido_em = now() WHERE solicitacao_id = p_id AND recebido_em IS NULL`.
-- Opcional: atualiza `estoque_solicitacoes.status = 'concluida'` (somente se hoje "entregue" for terminal — confirmar comportamento atual antes).
-- Retorna `jsonb` com `{ updated_count, solicitacao_id }`.
-- `GRANT EXECUTE ... TO authenticated`.
+O problema provavelmente voltou porque a tela decide se deve esconder o botão olhando para `estoque_movimentacoes.recebido_em`, não para a própria solicitação.
 
-Vantagem: elimina dependência sutil de RLS/columns; roda como owner; mensagem de erro clara chega ao front.
+Isso deixa o fluxo frágil em dois cenários:
 
-### 2. Front-end: usar RPC + logs detalhados
-Em `src/pages/estoque/EstoqueSolicitacoes.tsx`, trocar o `.update(...)` direto pela chamada:
-```ts
-const { data, error } = await supabase.rpc("confirmar_recebimento_solicitacao", { p_solicitacao_id: sol.id });
+1. A RPC confirma o recebimento, mas não encontra nenhuma movimentação vinculada à solicitação (`updated_count = 0`). Nesse caso o botão continua aparecendo.
+2. A confirmação é gravada em `estoque_movimentacoes`, mas o usuário não consegue enxergar essa movimentação por RLS/filtro/consulta. A tela não detecta o recebimento e mantém o botão.
+
+Ou seja: a correção anterior melhorou a permissão da atualização, mas ainda deixou o estado visual dependente de uma tabela secundária. O recebimento precisa ser um estado da própria `estoque_solicitacoes`.
+
+## Plano de correção
+
+### 1. Criar campos definitivos na solicitação
+Adicionar em `public.estoque_solicitacoes`:
+
+- `recebimento_confirmado_em timestamptz null`
+- `recebimento_confirmado_por_user_id uuid null`
+
+Esses campos serão a fonte oficial para saber se o recebimento foi confirmado.
+
+### 2. Atualizar a RPC `confirmar_recebimento_solicitacao`
+A função passará a:
+
+- Validar usuário autenticado.
+- Validar que o usuário é o solicitante.
+- Validar que a solicitação está `entregue`.
+- Atualizar sempre a própria solicitação com `recebimento_confirmado_em` e `recebimento_confirmado_por_user_id`.
+- Atualizar também `estoque_movimentacoes.recebido_em` quando houver movimentações vinculadas, mas sem depender disso para considerar sucesso.
+- Retornar algo como:
+
+```json
+{
+  "solicitacao_id": "...",
+  "solicitacao_updated": true,
+  "movimentacoes_updated": 1
+}
 ```
-- Se `updated_count === 0`, exibir toast de aviso: "Nenhuma movimentação pendente encontrada para esta solicitação".
-- No `onError`, logar `err.code`, `err.message`, `err.details`, `err.hint` no console e mostrar mensagem real no toast (para diagnóstico futuro).
 
-### 3. Exibir nome do solicitante (não o e-mail)
-Hoje a coluna **Solicitante** mostra `sol.solicitante_nome`, que em muitos registros foi salvo como e-mail (fallback `user.email`).
+### 3. Backfill de dados antigos
+Para solicitações já confirmadas via movimentação, preencher os novos campos da solicitação com base em `estoque_movimentacoes.recebido_em` e `recebido_por_user_id`.
 
-Correções:
-- **Backfill**: migration que atualiza `estoque_solicitacoes.solicitante_nome` cruzando com `user_profiles.full_name` (ou equivalente) onde o valor atual contém `@`.
-- **Criação de novas solicitações**: ajustar `createMutation` em `EstoqueSolicitacoes.tsx` para buscar o nome do `user_profiles` antes de inserir (cair para `user_metadata.name` e só por último para email).
-- **Render**: na tabela e no dialog de detalhes, se `solicitante_nome` contiver `@`, resolver via lookup em `user_profiles` para exibição (cache via React Query).
+Assim registros antigos não voltarão a exibir o botão.
 
-### 4. Validação
-- Login como Ruan no preview → confirmar recebimento de uma solicitação "entregue" → verificar que `recebido_em` é gravado, botão some, toast de sucesso.
-- Verificar lista: coluna "Solicitante" exibe nome em vez de e-mail (registros antigos e novos).
-- Conferir `module_audit_logs` para o evento de update.
+### 4. Ajustar a tela de Solicitações
+Na página `EstoqueSolicitacoes.tsx`:
 
-### Arquivos afetados
-- Nova migration SQL (RPC + backfill de `solicitante_nome`).
-- `src/pages/estoque/EstoqueSolicitacoes.tsx` (mutation via RPC, logs, lookup de nome ao criar).
-- Possível novo hook `useUserName(userId)` se a resolução de nome for usada em mais de um lugar.
+- Remover a dependência da consulta separada `estoque-recebimentos` para esconder o botão.
+- Mostrar o botão apenas quando:
+
+```ts
+sol.status === "entregue" &&
+sol.solicitante_user_id === user?.id &&
+!sol.recebimento_confirmado_em
+```
+
+- Após confirmar, invalidar `estoque-solicitacoes` e fechar o diálogo.
+- Melhorar a mensagem quando a RPC retornar erro.
+
+### 5. Ajustar detalhes da solicitação
+No dialog de detalhes, mostrar quando já houve confirmação:
+
+- Data/hora da confirmação.
+- Indicação “Recebimento confirmado”.
+
+### 6. Validação esperada
+Depois da correção:
+
+- Ruan clica em “Confirmar Recebimento”.
+- A RPC atualiza `estoque_solicitacoes` diretamente.
+- A lista recarrega.
+- O botão desaparece mesmo se não houver movimentação vinculada ou se a leitura de movimentações for bloqueada por RLS.
+
+## Resultado esperado
+
+A confirmação deixa de depender de `estoque_movimentacoes` para controlar o botão. A movimentação continua recebendo o carimbo quando existir, mas a solicitação passa a ter seu próprio estado oficial de recebimento.
