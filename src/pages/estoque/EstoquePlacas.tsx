@@ -877,3 +877,56 @@ function HistoricoDialog({
     </Dialog>
   );
 }
+
+function ExcluirPlacaDialog({
+  open, onOpenChange, placa, loading, onSubmit,
+}: {
+  open: boolean; onOpenChange: (o: boolean) => void;
+  placa: Placa | null; loading: boolean;
+  onSubmit: (justificativa: string) => void;
+}) {
+  const [just, setJust] = useState("");
+  useEffect(() => { if (open) setJust(""); }, [open]);
+  const valid = just.trim().length >= 5;
+  const devolveSaldo = !!placa && placa.status === "disponivel" && !!placa.local_armazenamento_id;
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir placa?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Remove a placa <strong>{placa?.codigo ?? "(sem código)"}</strong> e todo o seu histórico. Não pode ser desfeita.
+            {devolveSaldo && (
+              <span className="block mt-2 text-xs">
+                Como a placa está <strong>disponível</strong>, 1 unidade será descontada do saldo do local de origem.
+              </span>
+            )}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="space-y-2 py-2">
+          <Label>Justificativa da exclusão *</Label>
+          <Textarea
+            value={just}
+            onChange={(e) => setJust(e.target.value)}
+            rows={3}
+            maxLength={500}
+            placeholder="Explique o motivo (mín. 5 caracteres)"
+          />
+          <p className="text-xs text-muted-foreground">
+            A justificativa será registrada nas movimentações para auditoria.
+          </p>
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={!valid || loading}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={(e) => { e.preventDefault(); if (valid) onSubmit(just); }}
+          >
+            {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Excluir
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
