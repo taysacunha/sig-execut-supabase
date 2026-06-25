@@ -698,7 +698,7 @@ export default function EstoqueSolicitacoes() {
                 <TableBody>
                   {paginatedData.map((sol) => (
                     <TableRow key={sol.id}>
-                      <TableCell className="font-medium">{sol.solicitante_nome}</TableCell>
+                      <TableCell className="font-medium">{displaySolicitante(sol)}</TableCell>
                       <TableCell>{getUnidadeNome(sol.unidade_id)}</TableCell>
                       <TableCell>{getSetorNome(sol.setor_id)}</TableCell>
                       <TableCell>
@@ -845,7 +845,7 @@ export default function EstoqueSolicitacoes() {
           {viewDialog && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-muted-foreground">Solicitante:</span> <strong>{viewDialog.solicitante_nome}</strong></div>
+                <div><span className="text-muted-foreground">Solicitante:</span> <strong>{displaySolicitante(viewDialog)}</strong></div>
                 <div><span className="text-muted-foreground">Status:</span>{" "}
                   <Badge variant="outline" className={STATUS_COLORS[viewDialog.status]}>{STATUS_LABELS[viewDialog.status]}</Badge>
                 </div>
