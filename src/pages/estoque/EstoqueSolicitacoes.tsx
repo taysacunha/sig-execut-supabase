@@ -45,6 +45,8 @@ interface Solicitacao {
   observacoes: string | null;
   created_at: string;
   updated_at: string;
+  recebimento_confirmado_em?: string | null;
+  recebimento_confirmado_por_user_id?: string | null;
 }
 
 interface SolicitacaoItem {
@@ -159,23 +161,8 @@ export default function EstoqueSolicitacoes() {
     },
   });
 
-  // Marca solicitações cujo recebimento já foi confirmado (recebido_em != null em alguma movimentação)
-  const solicitacaoIds = solicitacoes.map((s) => s.id);
-  const { data: recebimentos = [] } = useQuery({
-    queryKey: ["estoque-recebimentos", solicitacaoIds],
-    enabled: solicitacaoIds.length > 0,
-    queryFn: async () => {
-      const { data, error } = await fromEstoque("estoque_movimentacoes")
-        .select("solicitacao_id, recebido_em")
-        .in("solicitacao_id", solicitacaoIds)
-        .not("recebido_em", "is", null);
-      if (error) throw error;
-      return (data as any[]) || [];
-    },
-  });
-  const recebidasIds = new Set<string>(
-    recebimentos.map((r: any) => r.solicitacao_id).filter(Boolean),
-  );
+  // Fonte oficial: recebimento_confirmado_em na própria solicitação
+  const isRecebida = (sol: Solicitacao) => !!sol.recebimento_confirmado_em;
 
   // Resolve nomes amigáveis (user_profiles) para solicitações cujo solicitante_nome
   // ainda esteja salvo como e-mail (contém "@").
