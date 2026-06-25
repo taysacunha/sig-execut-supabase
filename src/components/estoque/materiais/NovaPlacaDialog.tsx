@@ -118,7 +118,7 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>Nova Placa</DialogTitle>
           <DialogDescription>
-            Cadastre a placa como material. Depois lance o saldo em <strong>/estoque/saldos</strong> para ela aparecer em <strong>/estoque/placas</strong>.
+            Cadastre a placa como material. Depois registre o saldo na aba <strong>Saldos</strong> para ela aparecer na aba <strong>Placas</strong>.
           </DialogDescription>
         </DialogHeader>
 
