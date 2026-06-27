@@ -895,6 +895,8 @@ export type Database = {
           created_at: string | null
           id: string
           observacoes: string | null
+          recebimento_confirmado_em: string | null
+          recebimento_confirmado_por_user_id: string | null
           setor_id: string | null
           solicitante_nome: string
           solicitante_user_id: string
@@ -906,6 +908,8 @@ export type Database = {
           created_at?: string | null
           id?: string
           observacoes?: string | null
+          recebimento_confirmado_em?: string | null
+          recebimento_confirmado_por_user_id?: string | null
           setor_id?: string | null
           solicitante_nome: string
           solicitante_user_id: string
@@ -917,6 +921,8 @@ export type Database = {
           created_at?: string | null
           id?: string
           observacoes?: string | null
+          recebimento_confirmado_em?: string | null
+          recebimento_confirmado_por_user_id?: string | null
           setor_id?: string | null
           solicitante_nome?: string
           solicitante_user_id?: string
