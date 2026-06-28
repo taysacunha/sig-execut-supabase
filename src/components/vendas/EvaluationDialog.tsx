@@ -14,7 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { TrendingUp, TrendingDown, Minus, Star, Calendar, FileText, Handshake } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Star, Calendar, FileText, Handshake, Users, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const scoreField = z.coerce.number().min(0).max(10).optional().nullable();
@@ -181,7 +181,7 @@ export function EvaluationDialog({
     queryFn: async () => {
       const { data: leads } = await supabase
         .from("monthly_leads")
-        .select("gimob_key_visits, builder_visits, scheduled_visits")
+        .select("gimob_key_visits, builder_visits, scheduled_visits, leads_received, leads_archived")
         .eq("broker_id", broker.id)
         .eq("year_month", previousMonth)
         .maybeSingle();
@@ -207,6 +207,10 @@ export function EvaluationDialog({
         visits: totalVisits,
         proposals: proposals?.proposals_count || 0,
         contracts: salesData?.length || 0,
+        leads: {
+          received: leads?.leads_received || 0,
+          archived: leads?.leads_archived || 0,
+        },
       };
     },
     enabled: open,
@@ -220,7 +224,7 @@ export function EvaluationDialog({
       // Get visits from monthly_leads
       const { data: leads } = await supabase
         .from("monthly_leads")
-        .select("gimob_key_visits, builder_visits, scheduled_visits, last_visit_date")
+        .select("gimob_key_visits, builder_visits, scheduled_visits, last_visit_date, leads_received, leads_archived")
         .eq("broker_id", broker.id)
         .eq("year_month", yearMonth)
         .maybeSingle();
@@ -255,6 +259,10 @@ export function EvaluationDialog({
         },
         proposals: proposals?.proposals_count || 0,
         contracts: salesData || [],
+        leads: {
+          received: leads?.leads_received || 0,
+          archived: leads?.leads_archived || 0,
+        },
       };
     },
     enabled: open,
@@ -404,7 +412,7 @@ export function EvaluationDialog({
               <h3 className="font-semibold">Desempenho</h3>
               <p className="text-xs text-muted-foreground">Dados extraídos automaticamente do sistema</p>
               
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div className="border rounded-lg p-4 text-center">
                    <Calendar className="h-5 w-5 mx-auto mb-2 text-primary" />
                    <div className="text-2xl font-bold">{performanceData?.visits.total ?? 0}</div>
@@ -499,6 +507,47 @@ export function EvaluationDialog({
                     </div>
                   </PopoverContent>
                 </Popover>
+                {(() => {
+                  const received = performanceData?.leads.received ?? 0;
+                  const archived = performanceData?.leads.archived ?? 0;
+                  const hasAlert = received > 0 && archived / received > 0.5;
+                  const archivedPercent = received > 0 ? Math.round((archived / received) * 100) : 0;
+                  return (
+                    <div className={cn(
+                      "rounded-lg p-4 text-center border",
+                      hasAlert
+                        ? "bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800"
+                        : "bg-green-50/50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+                    )}>
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <Users className={cn(
+                          "h-5 w-5",
+                          hasAlert ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"
+                        )} />
+                        {hasAlert ? (
+                          <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                        ) : (
+                          <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        )}
+                      </div>
+                      <div className="text-2xl font-bold">{received}</div>
+                      <div className="text-xs text-muted-foreground">Leads Recebidos</div>
+                      <div className="text-[10px] mt-1">
+                        <span className="text-muted-foreground">Descartados: {archived} ({archivedPercent}%)</span>
+                      </div>
+                      {previousPerformanceData && (
+                        <div className="text-xs mt-1">
+                          <span className="text-muted-foreground">Anterior: </span>
+                          <span className={cn(
+                            "font-medium",
+                            received > previousPerformanceData.leads.received ? "text-green-600 dark:text-green-400" :
+                            received < previousPerformanceData.leads.received ? "text-red-600 dark:text-red-400" : "text-muted-foreground"
+                          )}>{previousPerformanceData.leads.received}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 

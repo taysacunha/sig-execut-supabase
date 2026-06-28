@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Calendar, FileText, Handshake, Star, BarChart3 } from "lucide-react";
+import { Calendar, FileText, Handshake, Star, BarChart3, Users, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 interface EvaluationSummaryDialogProps {
   open: boolean;
@@ -47,6 +48,29 @@ export function EvaluationSummaryDialog({
         ...totals,
         total: totals.gimobKey + totals.builder + totals.scheduled,
       };
+    },
+    enabled: open,
+  });
+
+  // Fetch aggregated leads for the year
+  const { data: leadsData } = useQuery({
+    queryKey: ["broker-yearly-leads", broker.id, year],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("monthly_leads")
+        .select("leads_received, leads_archived")
+        .eq("broker_id", broker.id)
+        .like("year_month", `${year}-%`);
+      
+      if (error) throw error;
+      
+      return (data || []).reduce(
+        (acc, row) => ({
+          received: acc.received + (row.leads_received || 0),
+          archived: acc.archived + (row.leads_archived || 0),
+        }),
+        { received: 0, archived: 0 }
+      );
     },
     enabled: open,
   });
@@ -159,7 +183,7 @@ export function EvaluationSummaryDialog({
               Desempenho Anual
             </h3>
             
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="border rounded-lg p-4 text-center">
                 <Calendar className="h-5 w-5 mx-auto mb-2 text-primary" />
                 <div className="text-2xl font-bold">{visitsData?.total ?? 0}</div>
@@ -185,6 +209,37 @@ export function EvaluationSummaryDialog({
                 <div className="text-2xl font-bold">{salesCount ?? 0}</div>
                 <div className="text-xs text-muted-foreground">Contratos</div>
               </div>
+              {(() => {
+                const received = leadsData?.received ?? 0;
+                const archived = leadsData?.archived ?? 0;
+                const hasAlert = received > 0 && archived / received > 0.5;
+                const archivedPercent = received > 0 ? Math.round((archived / received) * 100) : 0;
+                return (
+                  <div className={cn(
+                    "rounded-lg p-4 text-center border",
+                    hasAlert
+                      ? "bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800"
+                      : "bg-green-50/50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+                  )}>
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <Users className={cn(
+                        "h-5 w-5",
+                        hasAlert ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"
+                      )} />
+                      {hasAlert ? (
+                        <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                      ) : (
+                        <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                      )}
+                    </div>
+                    <div className="text-2xl font-bold">{received}</div>
+                    <div className="text-xs text-muted-foreground">Leads Recebidos</div>
+                    <div className="text-[10px] mt-1">
+                      <span className="text-muted-foreground">Descartados: {archived} ({archivedPercent}%)</span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
