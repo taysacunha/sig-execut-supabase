@@ -51,6 +51,29 @@ export function EvaluationSummaryDialog({
     enabled: open,
   });
 
+  // Fetch aggregated leads for the year
+  const { data: leadsData } = useQuery({
+    queryKey: ["broker-yearly-leads", broker.id, year],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("monthly_leads")
+        .select("leads_received, leads_archived")
+        .eq("broker_id", broker.id)
+        .like("year_month", `${year}-%`);
+      
+      if (error) throw error;
+      
+      return (data || []).reduce(
+        (acc, row) => ({
+          received: acc.received + (row.leads_received || 0),
+          archived: acc.archived + (row.leads_archived || 0),
+        }),
+        { received: 0, archived: 0 }
+      );
+    },
+    enabled: open,
+  });
+
   // Fetch aggregated proposals for the year
   const { data: proposalsData } = useQuery({
     queryKey: ["broker-yearly-proposals", broker.id, year],
