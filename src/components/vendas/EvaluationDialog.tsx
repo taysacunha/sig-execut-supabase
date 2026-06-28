@@ -412,7 +412,7 @@ export function EvaluationDialog({
               <h3 className="font-semibold">Desempenho</h3>
               <p className="text-xs text-muted-foreground">Dados extraídos automaticamente do sistema</p>
               
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div className="border rounded-lg p-4 text-center">
                    <Calendar className="h-5 w-5 mx-auto mb-2 text-primary" />
                    <div className="text-2xl font-bold">{performanceData?.visits.total ?? 0}</div>
