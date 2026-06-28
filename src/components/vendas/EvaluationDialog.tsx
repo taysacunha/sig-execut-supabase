@@ -224,7 +224,7 @@ export function EvaluationDialog({
       // Get visits from monthly_leads
       const { data: leads } = await supabase
         .from("monthly_leads")
-        .select("gimob_key_visits, builder_visits, scheduled_visits, last_visit_date")
+        .select("gimob_key_visits, builder_visits, scheduled_visits, last_visit_date, leads_received, leads_archived")
         .eq("broker_id", broker.id)
         .eq("year_month", yearMonth)
         .maybeSingle();
@@ -259,6 +259,10 @@ export function EvaluationDialog({
         },
         proposals: proposals?.proposals_count || 0,
         contracts: salesData || [],
+        leads: {
+          received: leads?.leads_received || 0,
+          archived: leads?.leads_archived || 0,
+        },
       };
     },
     enabled: open,
