@@ -14,7 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { TrendingUp, TrendingDown, Minus, Star, Calendar, FileText, Handshake } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Star, Calendar, FileText, Handshake, Users, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const scoreField = z.coerce.number().min(0).max(10).optional().nullable();
