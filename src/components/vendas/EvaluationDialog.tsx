@@ -181,7 +181,7 @@ export function EvaluationDialog({
     queryFn: async () => {
       const { data: leads } = await supabase
         .from("monthly_leads")
-        .select("gimob_key_visits, builder_visits, scheduled_visits")
+        .select("gimob_key_visits, builder_visits, scheduled_visits, leads_received, leads_archived")
         .eq("broker_id", broker.id)
         .eq("year_month", previousMonth)
         .maybeSingle();
@@ -207,6 +207,10 @@ export function EvaluationDialog({
         visits: totalVisits,
         proposals: proposals?.proposals_count || 0,
         contracts: salesData?.length || 0,
+        leads: {
+          received: leads?.leads_received || 0,
+          archived: leads?.leads_archived || 0,
+        },
       };
     },
     enabled: open,
