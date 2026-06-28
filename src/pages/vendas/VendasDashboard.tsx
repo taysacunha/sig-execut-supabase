@@ -173,7 +173,7 @@ const VendasDashboard = () => {
           const totalSales = (data || []).length;
           
           return {
-            month: format(new Date(month + "-01"), selectedMonth === null ? "MMM" : "MMM/yy", { locale: ptBR }),
+            month: format(parse(month, "yyyy-MM", new Date()), selectedMonth === null ? "MMM" : "MMM/yy", { locale: ptBR }),
             vgv: totalVgv,
             vendas: totalSales,
           };
@@ -200,7 +200,7 @@ const VendasDashboard = () => {
           const converted = (data || []).reduce((acc, p) => acc + (p.proposals_converted || 0), 0);
           
           return {
-            month: format(new Date(month + "-01"), selectedMonth === null ? "MMM" : "MMM/yy", { locale: ptBR }),
+            month: format(parse(month, "yyyy-MM", new Date()), selectedMonth === null ? "MMM" : "MMM/yy", { locale: ptBR }),
             total,
             convertidas: converted,
             pendentes: total - converted,
