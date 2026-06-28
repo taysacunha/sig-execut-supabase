@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Calendar, FileText, Handshake, Star, BarChart3 } from "lucide-react";
+import { Calendar, FileText, Handshake, Star, BarChart3, Users, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 interface EvaluationSummaryDialogProps {
   open: boolean;
