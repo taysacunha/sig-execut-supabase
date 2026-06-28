@@ -507,6 +507,47 @@ export function EvaluationDialog({
                     </div>
                   </PopoverContent>
                 </Popover>
+                {(() => {
+                  const received = performanceData?.leads.received ?? 0;
+                  const archived = performanceData?.leads.archived ?? 0;
+                  const hasAlert = received > 0 && archived / received > 0.5;
+                  const archivedPercent = received > 0 ? Math.round((archived / received) * 100) : 0;
+                  return (
+                    <div className={cn(
+                      "rounded-lg p-4 text-center border",
+                      hasAlert
+                        ? "bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800"
+                        : "bg-green-50/50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+                    )}>
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <Users className={cn(
+                          "h-5 w-5",
+                          hasAlert ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"
+                        )} />
+                        {hasAlert ? (
+                          <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                        ) : (
+                          <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        )}
+                      </div>
+                      <div className="text-2xl font-bold">{received}</div>
+                      <div className="text-xs text-muted-foreground">Leads Recebidos</div>
+                      <div className="text-[10px] mt-1">
+                        <span className="text-muted-foreground">Descartados: {archived} ({archivedPercent}%)</span>
+                      </div>
+                      {previousPerformanceData && (
+                        <div className="text-xs mt-1">
+                          <span className="text-muted-foreground">Anterior: </span>
+                          <span className={cn(
+                            "font-medium",
+                            received > previousPerformanceData.leads.received ? "text-green-600 dark:text-green-400" :
+                            received < previousPerformanceData.leads.received ? "text-red-600 dark:text-red-400" : "text-muted-foreground"
+                          )}>{previousPerformanceData.leads.received}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
