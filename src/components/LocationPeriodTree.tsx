@@ -1116,11 +1116,14 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
                   // Calcular total de dias considerando ocorrências no período
                   let totalDays = 0;
                   if (hasConfigs) {
-                    for (const dayConfig of dayConfigs) {
+                    const uniqueWeekdays = Array.from(
+                      new Set(dayConfigs.map((c: any) => c.weekday))
+                    );
+                    for (const weekday of uniqueWeekdays) {
                       totalDays += countWeekdayOccurrences(
                         period.start_date,
                         period.end_date,
-                        dayConfig.weekday
+                        weekday as string
                       );
                     }
                   }
