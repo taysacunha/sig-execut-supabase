@@ -1116,11 +1116,14 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
                   // Calcular total de dias considerando ocorrências no período
                   let totalDays = 0;
                   if (hasConfigs) {
-                    for (const dayConfig of dayConfigs) {
+                    const uniqueWeekdays = Array.from(
+                      new Set(dayConfigs.map((c: any) => c.weekday))
+                    );
+                    for (const weekday of uniqueWeekdays) {
                       totalDays += countWeekdayOccurrences(
                         period.start_date,
                         period.end_date,
-                        dayConfig.weekday
+                        weekday as string
                       );
                     }
                   }
@@ -1280,15 +1283,27 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
               // Calcular total de dias
               let configCount = 0;
               if (specificConfigs.length > 0) {
-                // ✅ Se tem configs específicas, contar elas (mesmo em modo weekday)
-                configCount = specificConfigs.length;
+                // ✅ Se tem configs específicas, contar dias distintos dentro do período
+                //    (evita duplicatas por timezone ou registros órfãos fora do intervalo)
+                const periodStart = period.start_date;
+                const periodEnd = period.end_date;
+                const uniqueDates = new Set(
+                  specificConfigs
+                    .map((c: any) => c.specific_date)
+                    .filter((d: string) => d >= periodStart && d <= periodEnd)
+                );
+                configCount = uniqueDates.size;
               } else if (dayConfigs.length > 0) {
                 // ✅ Se não tem configs específicas, calcular por dias da semana
-                for (const dayConfig of dayConfigs) {
+                //    Deduplicar por weekday para não somar linhas repetidas
+                const uniqueWeekdays = Array.from(
+                  new Set(dayConfigs.map((c: any) => c.weekday))
+                );
+                for (const weekday of uniqueWeekdays) {
                   configCount += countWeekdayOccurrences(
                     period.start_date,
                     period.end_date,
-                    dayConfig.weekday
+                    weekday as string
                   );
                 }
               }
