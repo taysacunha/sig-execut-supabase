@@ -1817,6 +1817,28 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
                               4: "thursday", 5: "friday", 6: "saturday",
                             };
 
+                            // 🔒 Guarda: só aceitar datas dentro do intervalo do período.
+                            // Evita vazamento de datas de outro mês herdadas do estado do dialog.
+                            const targetPeriod = periods?.find((p: any) => p.id === periodId);
+                            const inRange = (d: Date) => {
+                              if (!targetPeriod) return true;
+                              const iso = format(d, "yyyy-MM-dd");
+                              return iso >= targetPeriod.start_date && iso <= targetPeriod.end_date;
+                            };
+                            const weekdayDatesSafe = weekdayDates.filter(inRange);
+                            const saturdayDatesSafe = saturdayDates.filter(inRange);
+                            const sundayDatesSafe = sundayDates.filter(inRange);
+                            const droppedCount =
+                              (weekdayDates.length - weekdayDatesSafe.length) +
+                              (saturdayDates.length - saturdayDatesSafe.length) +
+                              (sundayDates.length - sundayDatesSafe.length);
+                            if (droppedCount > 0) {
+                              console.warn(
+                                `[LocationPeriodTree] Ignorando ${droppedCount} data(s) fora do intervalo do período`,
+                                { periodId, start: targetPeriod?.start_date, end: targetPeriod?.end_date }
+                              );
+                            }
+
                             // 🗑️ Ao editar, limpar registros antigos antes de inserir os novos
                             if (editingPeriodId) {
                               const { error: delSpecific } = await supabase
@@ -1833,9 +1855,9 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
                             }
 
                             // 1️⃣ Processar dias úteis (seg-sex)
-                            if (weekdayDates.length > 0) {
+                            if (weekdayDatesSafe.length > 0) {
                               const uniqueWeekdays = Array.from(
-                                new Set(weekdayDates.map(d => weekdayMap[getDay(d)]))
+                                new Set(weekdayDatesSafe.map(d => weekdayMap[getDay(d)]))
                               );
 
                               // Salvar em period_day_configs
@@ -1859,7 +1881,7 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
                               }
 
                               // Salvar em period_specific_day_configs
-                              const weekdayConfigs = weekdayDates.map(date => ({
+                              const weekdayConfigs = weekdayDatesSafe.map(date => ({
                                 period_id: periodId,
                                 specific_date: format(date, "yyyy-MM-dd"),
                                 has_morning: tempWeekdayConfig.has_morning,
@@ -1880,7 +1902,7 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
                             }
 
                             // 2️⃣ Processar sábados
-                            if (saturdayDates.length > 0) {
+                            if (saturdayDatesSafe.length > 0) {
                               const { error } = await supabase
                                 .from("period_day_configs")
                                 .upsert({
@@ -1898,7 +1920,7 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
                                 });
                               if (error) throw error;
 
-                              const saturdayConfigs = saturdayDates.map(date => ({
+                              const saturdayConfigs = saturdayDatesSafe.map(date => ({
                                 period_id: periodId,
                                 specific_date: format(date, "yyyy-MM-dd"),
                                 has_morning: tempSaturdayConfig.has_morning,
@@ -1919,7 +1941,7 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
                             }
 
                             // 3️⃣ Processar domingos
-                            if (sundayDates.length > 0) {
+                            if (sundayDatesSafe.length > 0) {
                               const { error } = await supabase
                                 .from("period_day_configs")
                                 .upsert({
@@ -1937,7 +1959,7 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
                                 });
                               if (error) throw error;
 
-                              const sundayConfigs = sundayDates.map(date => ({
+                              const sundayConfigs = sundayDatesSafe.map(date => ({
                                 period_id: periodId,
                                 specific_date: format(date, "yyyy-MM-dd"),
                                 has_morning: tempSundayConfig.has_morning,
@@ -1957,7 +1979,13 @@ export function LocationPeriodTree({ locationId, locationName, locationType }: L
                               if (sundayError) throw sundayError;
                             }
 
-                            toast.success(`${selectedWeekdayDates.length} dia(s) configurado(s)!`);
+                            const savedCount =
+                              weekdayDatesSafe.length + saturdayDatesSafe.length + sundayDatesSafe.length;
+                            toast.success(
+                              droppedCount > 0
+                                ? `${savedCount} dia(s) configurado(s). ${droppedCount} data(s) fora do mês foram ignoradas.`
+                                : `${savedCount} dia(s) configurado(s)!`
+                            );
 
                             await queryClient.invalidateQueries({ 
                               queryKey: ["period-day-configs", locationId] 
