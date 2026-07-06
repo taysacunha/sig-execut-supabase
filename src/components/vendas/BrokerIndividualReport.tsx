@@ -30,6 +30,8 @@ import {
   Info,
   Check,
   ChevronsUpDown,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -253,7 +255,7 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
         months.map(async (month) => {
           const { data } = await supabase
             .from("monthly_leads")
-            .select("leads_received, leads_active, gimob_key_visits, scheduled_visits, builder_visits")
+            .select("leads_received, leads_active, leads_archived, gimob_key_visits, scheduled_visits, builder_visits")
             .eq("broker_id", selectedBrokerId)
             .eq("year_month", month)
             .maybeSingle();
@@ -264,6 +266,7 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
             month: format(new Date(y, m - 1, 1), "MMM", { locale: ptBR }),
             recebidos: data?.leads_received || 0,
             ativos: data?.leads_active || 0,
+            descartados: data?.leads_archived || 0,
             visitas: totalVisits,
           };
         })
@@ -376,6 +379,9 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
   const totalLeads = reportLeadsData.reduce((acc, l) => acc + l.recebidos, 0);
   const totalLeadsActive = reportLeadsData.reduce((acc, l) => Math.max(acc, l.ativos), 0);
   const totalVisits = reportLeadsData.reduce((acc, l) => acc + l.visitas, 0);
+  const totalLeadsArchived = reportLeadsData.reduce((acc, l) => acc + l.descartados, 0);
+  const archivedPercent = totalLeads > 0 ? Math.round((totalLeadsArchived / totalLeads) * 100) : 0;
+  const hasLeadsAlert = totalLeads > 0 && totalLeadsArchived / totalLeads > 0.5;
   const avgScore = reportEvaluationsData.filter(e => e.nota > 0).length > 0
     ? reportEvaluationsData.filter(e => e.nota > 0).reduce((acc, e) => acc + e.nota, 0) / reportEvaluationsData.filter(e => e.nota > 0).length
     : 0;
@@ -732,6 +738,14 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
                 <div className="text-xl font-bold">{totalLeads}</div>
                 <p className="text-xs text-muted-foreground">
                   Ativos: {totalLeadsActive} | Visitas: {totalVisits}
+                </p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                  {hasLeadsAlert ? (
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                  ) : (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                  )}
+                  Descartados: {totalLeadsArchived} ({archivedPercent}%)
                 </p>
               </CardContent>
             </Card>
