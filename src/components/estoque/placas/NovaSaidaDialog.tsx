@@ -105,11 +105,6 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
     [materiaisPlaca, materialId]
   );
 
-  useEffect(() => {
-    if (!open || !materialSelecionado) return;
-    syncAttributesFromMaterial(materialSelecionado);
-  }, [open, materialSelecionado]);
-
   const { data: saldos = [] } = useQuery({
     queryKey: ["estoque-saldos-nova-saida"],
     queryFn: async () => {
