@@ -45,10 +45,9 @@ WHERE is_placa = true
 
 -- Extrai medida livre (ex: "3x1,5", "0.9 x 1.2") para tamanho='outro'
 UPDATE public.estoque_materiais
-SET tamanho_outro = trim((regexp_matches(
-      nome,
-      '([0-9]+(?:[,.][0-9]+)?\s*[xX]\s*[0-9]+(?:[,.][0-9]+)?)'
-    ))[1])
+SET tamanho_outro = trim(substring(
+      nome from '([0-9]+(?:[,.][0-9]+)?\s*[xX]\s*[0-9]+(?:[,.][0-9]+)?)'
+    ))
 WHERE is_placa = true
   AND tamanho = 'outro'
   AND tamanho_outro IS NULL
