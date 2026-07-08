@@ -63,6 +63,21 @@ type SaldoPlacaComMaterial = SaldoPlacaRow & {
   material?: MaterialPlaca | null;
 };
 
+type SaidaPreselect = {
+  materialId: string;
+  localId: string;
+} | null;
+
+type PlacasDisponiveisInfo = {
+  total: number;
+  comCodigo: number;
+};
+
+const normalizeBusca = (value: string) =>
+  value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+const saldoKey = (materialId: string, localId: string | null) => `${materialId}::${localId || ""}`;
+
 export default function EstoquePlacas() {
   const queryClient = useQueryClient();
   const { hasAccess, user } = useSystemAccess();
@@ -81,7 +96,9 @@ export default function EstoquePlacas() {
   const [historicoDialog, setHistoricoDialog] = useState(false);
   const [excluirDialog, setExcluirDialog] = useState(false);
   const [novaSaidaDialog, setNovaSaidaDialog] = useState(false);
+  const [saidaPreselect, setSaidaPreselect] = useState<SaidaPreselect>(null);
   const [atribuirCodigoDialog, setAtribuirCodigoDialog] = useState(false);
+  const [criarCodigoSaldo, setCriarCodigoSaldo] = useState<ResumoSaldoPlaca | null>(null);
   const [selected, setSelected] = useState<Placa | null>(null);
 
   const { data: placas = [], isLoading } = usePlacas();
@@ -172,6 +189,27 @@ export default function EstoquePlacas() {
       return true;
     });
   }, [resumoSaldosPlaca, tipoFiltro, tamanhoFiltro, materialFiltro, localFiltro]);
+
+  const saldosDisponiveisFiltrados = useMemo(() => {
+    const term = normalizeBusca(searchTerm.trim());
+    if (!term) return resumoFiltrado;
+    return resumoFiltrado.filter((r) =>
+      normalizeBusca(`${r.material_nome} ${localNome(r.local_armazenamento_id)}`).includes(term)
+    );
+  }, [resumoFiltrado, searchTerm, locais]);
+
+  const placasDisponiveisPorSaldo = useMemo(() => {
+    const map = new Map<string, PlacasDisponiveisInfo>();
+    placas.forEach((p) => {
+      if (p.status !== "disponivel") return;
+      const key = saldoKey(p.material_id, p.local_armazenamento_id);
+      const current = map.get(key) || { total: 0, comCodigo: 0 };
+      current.total += 1;
+      if (p.codigo) current.comCodigo += 1;
+      map.set(key, current);
+    });
+    return map;
+  }, [placas]);
 
   // Filtra por aba + filtros adicionais
   const placasFiltradas = useMemo(() => {
@@ -442,14 +480,19 @@ export default function EstoquePlacas() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => setNovaSaidaDialog(true)} title="Escolha o material e local. Para uma placa específica, use o ícone de chave inglesa na lista abaixo.">
+          <Button onClick={() => { setSaidaPreselect(null); setNovaSaidaDialog(true); }} title="Escolha o material e local. Para uma placa específica, use o ícone de chave inglesa na lista abaixo.">
             <Plus className="h-4 w-4 mr-2" /> Nova saída para imóvel
           </Button>
           <PlacasPDFGenerator placas={placas} />
         </div>
       </div>
 
-      <NovaSaidaDialog open={novaSaidaDialog} onOpenChange={setNovaSaidaDialog} />
+      <NovaSaidaDialog
+        open={novaSaidaDialog}
+        onOpenChange={setNovaSaidaDialog}
+        initialMaterialId={saidaPreselect?.materialId}
+        initialLocalId={saidaPreselect?.localId}
+      />
 
       <Tabs value={aba} onValueChange={(v) => { setAba(v as AbaStatus); setCurrentPage(1); }}>
         <TabsList>
@@ -465,53 +508,6 @@ export default function EstoquePlacas() {
         </TabsList>
 
         <TabsContent value={aba} className="space-y-4 mt-4">
-          {aba === "disponivel" && (
-            <Card className="border-blue-500/30 bg-blue-500/5">
-              <CardContent className="pt-4">
-                <div className="mb-3 flex items-start justify-between gap-3 flex-wrap">
-                  <div className="flex items-start gap-2">
-                    <Layers className="h-5 w-5 text-blue-500 mt-0.5" />
-                    <div>
-                      <h2 className="font-semibold text-foreground">Saldos por material e local</h2>
-                      <p className="text-xs text-muted-foreground">
-                        Quantidades agregadas. Para registrar entradas/baixas de saldo, use a aba Saldos.
-                      </p>
-                    </div>
-                  </div>
-                  <Badge className="bg-blue-500/20 text-blue-500 border-blue-500/30">
-                    {resumoFiltrado.reduce((acc, item) => acc + item.quantidade, 0)} unidade(s)
-                  </Badge>
-                </div>
-                {resumoFiltrado.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-muted-foreground">Nenhum saldo de placa encontrado para os filtros.</p>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Material</TableHead>
-                        <TableHead>Tipo</TableHead>
-                        <TableHead>Tamanho</TableHead>
-                        <TableHead>Local</TableHead>
-                        <TableHead className="text-right">Saldo</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {resumoFiltrado.map((r) => (
-                        <TableRow key={r.key}>
-                          <TableCell className="font-medium">{r.material_nome}</TableCell>
-                          <TableCell>{TIPO_USO_LABELS[r.tipo_uso]}</TableCell>
-                          <TableCell>{formatPlacaTamanho(r.tamanho, r.tamanho_outro)}</TableCell>
-                          <TableCell>{localNome(r.local_armazenamento_id)}</TableCell>
-                          <TableCell className="text-right font-mono">{r.quantidade}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
           <Card className={
             aba === "disponivel" ? "border-emerald-500/30 bg-emerald-500/5"
             : aba === "instalada" ? "border-indigo-500/30 bg-indigo-500/5"
@@ -533,15 +529,22 @@ export default function EstoquePlacas() {
                     </h2>
                     <p className="text-xs text-muted-foreground flex items-center gap-1">
                       <Info className="h-3 w-3" />
-                      Cada linha é uma unidade física. Use o ícone <TagIcon className="h-3 w-3 inline" /> para atribuir código a placas sem identificação.
+                      {aba === "disponivel"
+                        ? "Disponíveis usa o saldo real por material e local. Códigos são a identificação física já cadastrada."
+                        : <>Cada linha é uma unidade física. Use o ícone <TagIcon className="h-3 w-3 inline" /> para atribuir código a placas sem identificação.</>}
                     </p>
                   </div>
                 </div>
+                {aba === "disponivel" && (
+                  <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30">
+                    {saldosDisponiveisFiltrados.reduce((acc, item) => acc + item.quantidade, 0)} unidade(s)
+                  </Badge>
+                )}
               </div>
               <div className="p-4 grid grid-cols-1 sm:grid-cols-5 gap-3 border-b">
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Buscar</Label>
-                  <TableSearch value={searchTerm} onChange={setSearchTerm} placeholder="Código ou imóvel..." />
+                  <TableSearch value={searchTerm} onChange={setSearchTerm} placeholder={aba === "disponivel" ? "Material ou local..." : "Código ou imóvel..."} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Material</Label>
@@ -584,17 +587,68 @@ export default function EstoquePlacas() {
                   </Select>
                 </div>
               </div>
-              {isLoading ? (
+              {aba === "disponivel" ? (
+                saldosDisponiveisFiltrados.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
+                    <Tag className="h-12 w-12 mb-4 opacity-50" />
+                    <p>Nenhum saldo de placa disponível para os filtros.</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Material</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Tamanho</TableHead>
+                        <TableHead>Local</TableHead>
+                        <TableHead className="text-right">Disponível</TableHead>
+                        <TableHead className="text-right">Códigos</TableHead>
+                        <TableHead className="text-right">Pendentes</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {saldosDisponiveisFiltrados.map((r) => {
+                        const info = placasDisponiveisPorSaldo.get(saldoKey(r.material_id, r.local_armazenamento_id)) || { total: 0, comCodigo: 0 };
+                        const pendentes = Math.max(r.quantidade - info.comCodigo, 0);
+                        return (
+                          <TableRow key={r.key}>
+                            <TableCell className="font-medium">{r.material_nome}</TableCell>
+                            <TableCell>{TIPO_USO_LABELS[r.tipo_uso]}</TableCell>
+                            <TableCell>{formatPlacaTamanho(r.tamanho, r.tamanho_outro)}</TableCell>
+                            <TableCell>{localNome(r.local_armazenamento_id)}</TableCell>
+                            <TableCell className="text-right font-mono">{r.quantidade}</TableCell>
+                            <TableCell className="text-right font-mono">{info.comCodigo}</TableCell>
+                            <TableCell className="text-right">
+                              <Badge variant={pendentes > 0 ? "outline" : "secondary"}>{pendentes}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1 flex-wrap">
+                                {pendentes > 0 && (
+                                  <Button size="sm" variant="ghost" title="Criar código para uma unidade disponível" onClick={() => setCriarCodigoSaldo(r)}>
+                                    <TagIcon className="h-4 w-4 text-amber-500" />
+                                  </Button>
+                                )}
+                                <Button size="sm" variant="ghost" title="Registrar saída para imóvel" onClick={() => {
+                                  setSaidaPreselect({ materialId: r.material_id, localId: r.local_armazenamento_id });
+                                  setNovaSaidaDialog(true);
+                                }}>
+                                  <Wrench className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )
+              ) : isLoading ? (
                 <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
               ) : paginatedData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
                   <Tag className="h-12 w-12 mb-4 opacity-50" />
                   <p>Nenhuma placa física individualizada nesta categoria</p>
-                  {aba === "disponivel" && resumoFiltrado.length > 0 && (
-                    <p className="mt-2 max-w-xl text-center text-sm">
-                      Há saldo agregado para estes filtros no bloco acima, mas ainda não há unidades físicas com código/registro individual para listar aqui.
-                    </p>
-                  )}
                 </div>
               ) : (
                 <>
@@ -729,6 +783,18 @@ export default function EstoquePlacas() {
         placa={selected}
         materialNome={selected ? materialNome(selected.material_id) : ""}
         localNome={selected ? localNome(selected.local_armazenamento_id) : ""}
+      />
+
+      <CriarCodigoSaldoDialog
+        open={!!criarCodigoSaldo}
+        onOpenChange={(o) => !o && setCriarCodigoSaldo(null)}
+        saldo={criarCodigoSaldo}
+        localNome={criarCodigoSaldo ? localNome(criarCodigoSaldo.local_armazenamento_id) : ""}
+        onSuccess={invalidate}
+        userId={user?.id}
+        codigosExistentes={criarCodigoSaldo
+          ? (placasDisponiveisPorSaldo.get(saldoKey(criarCodigoSaldo.material_id, criarCodigoSaldo.local_armazenamento_id))?.comCodigo || 0)
+          : 0}
       />
 
       <ExcluirPlacaDialog
