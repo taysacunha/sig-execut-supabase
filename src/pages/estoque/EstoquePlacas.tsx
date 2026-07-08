@@ -48,22 +48,6 @@ interface SaldoPlacaRow { id: string; material_id: string; local_armazenamento_i
 
 type AbaStatus = "disponivel" | "instalada" | "baixadas";
 
-type ResumoSaldoPlaca = {
-  key: string;
-  material_id: string;
-  material_nome: string;
-  local_armazenamento_id: string;
-  quantidade: number;
-  tipo_uso: "venda" | "aluga";
-  tamanho: "1x1" | "2x2" | "outro";
-  tamanho_outro: string | null;
-};
-
-type SaidaPreselect = {
-  materialId: string;
-  localId: string;
-} | null;
-
 export default function EstoquePlacas() {
   const queryClient = useQueryClient();
   const { hasAccess, user } = useSystemAccess();
@@ -126,22 +110,6 @@ export default function EstoquePlacas() {
       return (data as unknown as SaldoPlacaRow[]) || [];
     },
   });
-
-  const resumoSaldosPlaca = useMemo<ResumoSaldoPlaca[]>(() => {
-    return saldosPlaca.flatMap((s) => {
-      const material = materiaisPlaca.find((m) => m.id === s.material_id);
-      if (!material) return [];
-      const attrs = resolvePlacaAttributes(material);
-      return [{
-        key: s.id,
-        material_id: s.material_id,
-        material_nome: material?.nome || "—",
-        local_armazenamento_id: s.local_armazenamento_id,
-        quantidade: s.quantidade,
-        ...attrs,
-      }];
-    });
-  }, [saldosPlaca, materiaisPlaca]);
 
   // Filtra por aba + filtros adicionais
   const placasFiltradas = useMemo(() => {
@@ -586,7 +554,7 @@ export default function EstoquePlacas() {
                   </Select>
                 </div>
               </div>
-              {isLoading || materializarPlacasMutation.isPending ? (
+              {isLoading || isLoadingMateriaisPlaca || isLoadingSaldosPlaca || materializarPlacasMutation.isPending ? (
                 <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
               ) : paginatedData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
