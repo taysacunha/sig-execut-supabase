@@ -142,10 +142,14 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
       p.status === "disponivel"
       && p.material_id === materialId
       && (!localId || p.local_armazenamento_id === localId)
-      && p.tipo_uso === tipoUso
-      && p.tamanho === tamanho
     );
-  }, [placas, materialId, localId, tipoUso, tamanho]);
+  }, [placas, materialId, localId]);
+
+  useEffect(() => {
+    if (modo === "existente" && disponiveis.length === 0 && materialId && localId) {
+      setModo("novo");
+    }
+  }, [disponiveis.length, modo, materialId, localId]);
 
   const placaSelecionada = useMemo(
     () => placas.find((p) => p.id === placaId) || null,
@@ -318,6 +322,11 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
               placeholder="Selecione o material-placa"
               emptyMessage="Nenhum material de placa ativo encontrado. Cadastre na aba Materiais."
             />
+            {materialSelecionado && (
+              <p className="text-xs text-muted-foreground">
+                {TIPO_USO_LABELS[tipoUso]} · {tamanho === "outro" ? (tamanhoOutro || "outro") : TAMANHO_LABELS[tamanho]}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -353,43 +362,11 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Tipo de uso *</Label>
-              <Select value={tipoUso} onValueChange={(v) => { setTipoUso(v as TipoUso); setPlacaId(""); }}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(TIPO_USO_LABELS).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>{v}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Tamanho *</Label>
-              <Select value={tamanho} onValueChange={(v) => { setTamanho(v as Tamanho); setPlacaId(""); }}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(TAMANHO_LABELS).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>{v}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {tamanho === "outro" && (
-            <div className="space-y-2">
-              <Label>Especifique o tamanho *</Label>
-              <Input value={tamanhoOutro} onChange={(e) => setTamanhoOutro(e.target.value)} maxLength={30} />
-            </div>
-          )}
-
           <div className="space-y-2">
             <Label>Código da placa *</Label>
             <RadioGroup value={modo} onValueChange={(v) => setModo(v as Modo)} className="flex gap-4">
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="existente" id="modo-existente" />
+                <RadioGroupItem value="existente" id="modo-existente" disabled={disponiveis.length === 0} />
                 <Label htmlFor="modo-existente" className="cursor-pointer text-sm font-normal">
                   Selecionar disponível ({disponiveis.length})
                 </Label>
