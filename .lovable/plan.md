@@ -1,29 +1,48 @@
 ## Objetivo
 
-No diálogo "Nova saída para imóvel", exibir no campo **Material da placa** apenas os materiais que possuem saldo em estoque (> 0 em qualquer local) e mostrar a quantidade total disponível ao lado do nome — evitando perder tempo abrindo materiais sem saldo.
+Resolver apenas 2 findings do scanner de segurança:
 
-## Comportamento esperado
+1. **`user_profiles_update_no_with_check`** — corrigir de fato.
+2. **`ferias_colaboradores_birthdate_exposure`** — ignorar com justificativa (regra de negócio: qualquer usuário com acesso ao módulo Férias deve continuar vendo a data de nascimento para o quadro de aniversariantes).
 
-- Lista de materiais mostra apenas materiais-placa ativos com saldo total > 0.
-- Cada opção exibe o nome seguido do total disponível, ex: `Placa - Aluga (43)`.
-- Se nenhum material tiver saldo, a lista fica vazia com mensagem existente do combobox.
-- O nome exibido no botão do combobox (após selecionar) também mostra `(N)`.
-- Nada muda no fluxo de locais, códigos, criação de código ou gravação — apenas o filtro/label do material.
+Nenhum outro finding será tocado.
 
-## Alterações
+## 1. Fix: `user_profiles` UPDATE sem WITH CHECK
 
-Arquivo único: `src/components/estoque/placas/NovaSaidaDialog.tsx`
+Nova migration `supabase/migrations/<timestamp>_user_profiles_update_with_check.sql`:
 
-1. Criar um `useMemo` que soma `quantidade` de `saldos` agrupado por `material_id` (apenas quantidades > 0 já entram naturalmente na soma).
-2. Derivar `materiaisPlacaComSaldo` a partir de `materiaisPlaca`:
-   - Filtrar `total > 0`.
-   - Mapear para `{ id, nome: \`${nome} (${total})\` }` para o combobox.
-3. Passar `materiaisPlacaComSaldo` ao `<MaterialCombobox>` em vez de `materiaisPlaca`.
-4. Ao resolver `materialSelecionado` e `syncAttributesFromMaterial`, continuar usando `materiaisPlaca` original (com nome sem sufixo) para não afetar atributos.
-5. Placeholder/emptyMessage: ajustar `emptyMessage` para "Nenhum material-placa com saldo em estoque. Registre uma entrada na aba Saldos." quando aplicável.
+```sql
+DROP POLICY IF EXISTS "Users can update own profile" ON public.user_profiles;
+
+CREATE POLICY "Users can update own profile"
+  ON public.user_profiles
+  FOR UPDATE
+  TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+```
+
+Efeito: além de restringir *qual* linha o usuário pode atualizar (`USING`), o `WITH CHECK` impede que ele reescreva `user_id` para apontar para outro usuário (evita sequestro de perfil).
+
+Nenhuma alteração de código no frontend — a policy é transparente para quem já só edita o próprio perfil.
+
+## 2. Ignore: exposição de `data_nascimento`
+
+Chamada de `security--manage_security_finding` com:
+
+- `operation`: `ignore`
+- `scanner_name`: `supabase_lov`
+- `internal_id`: `ferias_colaboradores_birthdate_exposure`
+- `explanation`: "Comportamento intencional. O módulo Férias mantém o quadro de Aniversariantes e o widget do dashboard visíveis a todos os usuários com `can_view_system('ferias')`. A data de nascimento é dado corporativo compartilhado internamente. CPF permanece isolado em `ferias_colaboradores_dados_sensiveis`."
+
+## 3. Atualização da `@security-memory`
+
+Adicionar nota curta registrando:
+- `user_profiles` UPDATE agora exige `WITH CHECK (user_id = auth.uid())`.
+- Exposição de `data_nascimento` em `ferias_colaboradores` para qualquer viewer de `ferias` é intencional (feature Aniversariantes). CPF continua em tabela sensível separada.
 
 ## Fora de escopo
 
-- Diálogo/ferramenta de saída em outros locais (só este dialog foi pedido).
-- Regras de código de placa (mantidas como estão).
-- Alterações no `MaterialCombobox`.
+- Qualquer refactor de aniversariantes/dashboard/PDFs.
+- Movimentação da coluna `data_nascimento` para tabela sensível.
+- Outros findings do scanner.
