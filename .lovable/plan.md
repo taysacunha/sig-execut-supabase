@@ -1,48 +1,27 @@
-## Corrigir 3 problemas do fluxo de placas
+Plano para corrigir o filtro “Aluga” na página de Placas:
 
-### Problema 1 — Botão "Editar" abre o diálogo errado
-Ao clicar no lápis de um material do tipo placa em **Materiais**, abre o formulário genérico "Editar Material", que não tem os campos `tipo_uso`/`tamanho`/`tamanho_outro`. Isso obriga a desativar e recriar, e é a causa raiz de placas legadas ficarem com metadados errados.
+1. Ajustar a fonte de dados dos saldos de placas
+   - Refazer a consulta de `estoque-saldos-placas` para não depender de um filtro em memória frágil.
+   - Buscar os saldos e cruzar com materiais ativos de placa de forma consistente, garantindo que materiais recém-criados como `Placa Aluga 2x2 Lona` entrem no resumo.
+   - Garantir que materiais com `tipo_uso`/`tamanho` nulos ainda sejam classificados pelo nome como fallback.
 
-**Correção**
-- `src/components/estoque/materiais/NovaPlacaDialog.tsx`: nova prop opcional `editingMaterial?: { id, nome, tipo_uso, tamanho, tamanho_outro, descricao, estoque_minimo, categoria_id }`.
-  - Quando presente: pré-preencher todos os campos; título "Editar Placa"; botão "Salvar alterações"; mostrar o nome atual em destaque com aviso "O nome do material é preservado".
-  - `mutationFn`: UPDATE por `id`, gravando `tipo_uso`, `tamanho`, `tamanho_outro`, `descricao`, `estoque_minimo`, `categoria_id`, `categoria`, `is_placa=true`. Pular a checagem `ilike nome`. Não alterar `nome`.
-- `src/pages/estoque/EstoqueMateriais.tsx`:
-  - Estender a interface `Material` com `is_placa`, `tipo_uso`, `tamanho`, `tamanho_outro`.
-  - Novo estado `editingPlaca: Material | null`.
-  - No handler do lápis: se `material.is_placa === true` OU `nome.toLowerCase().startsWith("placa")`, setar `editingPlaca` e abrir `NovaPlacaDialog`; caso contrário, comportamento atual.
-  - Passar `editingMaterial={editingPlaca}` ao `<NovaPlacaDialog />` e limpar no `onOpenChange(false)`.
+2. Corrigir o comportamento do filtro “Tipo de uso”
+   - Aplicar o filtro “Aluga” corretamente no bloco superior “Saldos por material e local”.
+   - Manter o filtro também no bloco inferior de unidades físicas, mas deixar claro que ele lista apenas placas individualizadas/codificadas.
 
-### Problema 2 — Observação (ex: "Lona") não aparece no nome nem em lugar nenhum útil
-Hoje `buildNomePlaca` gera nomes rígidos ("Placa Aluga 2x2"), sem espaço para variantes de material (Lona, PVC, etc.). A observação/descrição fica escondida em um campo que só aparece dentro do próprio diálogo.
+3. Tratar a brecha entre saldo agregado e placa física
+   - Hoje, adicionar saldo em `Saldos` aumenta `estoque_saldos`, mas não cria automaticamente linhas individuais em `estoque_placas`.
+   - Vou ajustar a página para que o usuário enxergue o saldo agregado filtrado por “Aluga” mesmo que ainda não existam placas físicas/códigos cadastrados.
+   - Se não houver unidades físicas no bloco inferior, a mensagem será mais clara: existe saldo, mas ainda não há placas individualizadas para listar.
 
-**Correção**
-- Adicionar um novo campo **"Variante / material da placa (opcional)"** no `NovaPlacaDialog` (ex.: "Lona", "PVC", "MDF") — texto livre, máx. 30 caracteres.
-- `buildNomePlaca(tipoUso, tamanho, tamanhoOutro, variante)`: quando `variante` estiver preenchida, gera `Placa Aluga 2x2 Lona`; sem variante, mantém `Placa Aluga 2x2`.
-- Preview do nome no cabeçalho do diálogo já reflete o resultado.
-- No modo edição: exibir a variante extraída do nome atual (heurística: tudo após o padrão base), e permitir alterar — mas se o nome for alterado, revalidar unicidade `ilike nome`.
-- O campo "Descrição/observações" fica como está, para textos maiores.
+4. Sincronizar invalidações de cache
+   - Completar as invalidações relacionadas a placas/saldos após entrada, ajuste, transferência, saída e atribuição de código.
+   - Incluir `estoque-saldos-placas`, `estoque-materiais-placa` e `estoque-placas` onde necessário para evitar a tela ficar desatualizada após navegar entre Saldos, Materiais e Placas.
 
-### Problema 3 — Placa criada agora não aparece no filtro "Aluga" da aba Placas
-Diagnóstico: `EstoqueSaldos.invalidate()` só invalida `["estoque-saldos"]`, mas `EstoquePlacas` consulta pela chave separada `["estoque-saldos-placas"]`. Após dar entrada, a página de Placas continua com cache antigo. Recarregar a página faz aparecer — mas isso é péssima UX.
+5. Validar o fluxo afetado
+   - Conferir o cenário: material `Placa Aluga 2x2 Lona` ativo, saldo positivo cadastrado, página Placas com filtro `Tipo de uso = Aluga`.
+   - Resultado esperado: o saldo agregado aparece no bloco superior; se não houver unidade física, o bloco inferior informa isso de forma explícita em vez de parecer que a placa “sumiu”.
 
-**Correção**
-- `src/pages/estoque/EstoqueSaldos.tsx`, função `invalidate`: passar a invalidar também `["estoque-saldos-placas"]` e `["estoque-materiais-placa"]` (usadas por `EstoquePlacas`).
-
-```ts
-const invalidate = () => {
-  queryClient.invalidateQueries({ queryKey: ["estoque-saldos"] });
-  queryClient.invalidateQueries({ queryKey: ["estoque-saldos-placas"] });
-  queryClient.invalidateQueries({ queryKey: ["estoque-materiais-placa"] });
-};
-```
-
-### Fora de escopo
-- Renomear placas legadas automaticamente.
-- Nova migração de banco (schema já suporta tudo).
-- Alterações em PDFs ou aba Saldos.
-
-### Como testar após o build
-1. Materiais → lápis em "Placa Aluga 2x2 Lona" → abre "Editar Placa" com os campos pré-preenchidos.
-2. Nova Placa → tipo Aluga, tamanho 2x2, variante "Lona" → nome preview vira "Placa Aluga 2x2 Lona".
-3. Saldos → dar entrada nessa placa → ir para Placas → filtro Tipo = Aluga → o card aparece sem precisar recarregar.
+Detalhes técnicos:
+- Arquivos principais: `src/pages/estoque/EstoquePlacas.tsx`, `src/pages/estoque/EstoqueSaldos.tsx`, `src/components/estoque/placas/NovaSaidaDialog.tsx` e `src/components/estoque/placas/AtribuirCodigoDialog.tsx`.
+- Não pretendo alterar banco de dados neste passo; a correção é de consulta, filtro e sincronização da UI.

@@ -355,6 +355,8 @@ export default function EstoqueSaldos() {
     queryClient.invalidateQueries({ queryKey: ["estoque-saldos"] });
     queryClient.invalidateQueries({ queryKey: ["estoque-saldos-placas"] });
     queryClient.invalidateQueries({ queryKey: ["estoque-materiais-placa"] });
+    queryClient.invalidateQueries({ queryKey: ["estoque-placas"] });
+    queryClient.invalidateQueries({ queryKey: ["estoque-saldos-nova-saida"] });
   };
 
   const entradaMutation = useMutation({
