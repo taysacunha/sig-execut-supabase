@@ -515,7 +515,7 @@ export default function EstoquePlacas() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Material</Label>
-                  <Select value={materialFiltro} onValueChange={setMaterialFiltro}>
+                  <Select value={materialFiltro} onValueChange={(v) => { setMaterialFiltro(v); setCurrentPage(1); }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos materiais</SelectItem>
@@ -525,7 +525,7 @@ export default function EstoquePlacas() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Tipo de uso</Label>
-                  <Select value={tipoFiltro} onValueChange={setTipoFiltro}>
+                  <Select value={tipoFiltro} onValueChange={(v) => { setTipoFiltro(v); setCurrentPage(1); }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos tipos</SelectItem>
@@ -535,7 +535,7 @@ export default function EstoquePlacas() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Tamanho</Label>
-                  <Select value={tamanhoFiltro} onValueChange={setTamanhoFiltro}>
+                  <Select value={tamanhoFiltro} onValueChange={(v) => { setTamanhoFiltro(v); setCurrentPage(1); }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos tamanhos</SelectItem>
@@ -545,7 +545,7 @@ export default function EstoquePlacas() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Local</Label>
-                  <Select value={localFiltro} onValueChange={setLocalFiltro}>
+                  <Select value={localFiltro} onValueChange={(v) => { setLocalFiltro(v); setCurrentPage(1); }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos locais</SelectItem>
