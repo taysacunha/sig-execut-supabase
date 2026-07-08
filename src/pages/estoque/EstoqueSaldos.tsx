@@ -767,7 +767,10 @@ export default function EstoqueSaldos() {
           <AlertDialogFooter>
             <AlertDialogCancel onClick={resetForms}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => excluirMutation.mutate()}
+              onClick={(e) => {
+                e.preventDefault();
+                excluirMutation.mutate();
+              }}
               disabled={!justificativa.trim() || excluirMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
