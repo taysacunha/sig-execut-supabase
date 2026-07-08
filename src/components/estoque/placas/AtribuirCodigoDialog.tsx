@@ -68,6 +68,8 @@ export function AtribuirCodigoDialog({ open, onOpenChange, placa, materialNome, 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["estoque-placas"] });
+      queryClient.invalidateQueries({ queryKey: ["estoque-saldos-placas"] });
+      queryClient.invalidateQueries({ queryKey: ["estoque-materiais-placa"] });
       toast.success("Código atribuído!");
       onOpenChange(false);
     },

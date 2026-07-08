@@ -273,6 +273,8 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["estoque-placas"] });
       queryClient.invalidateQueries({ queryKey: ["estoque-saldos"] });
+      queryClient.invalidateQueries({ queryKey: ["estoque-saldos-placas"] });
+      queryClient.invalidateQueries({ queryKey: ["estoque-materiais-placa"] });
       queryClient.invalidateQueries({ queryKey: ["estoque-saldos-check"] });
       queryClient.invalidateQueries({ queryKey: ["estoque-saldos-nova-saida"] });
       queryClient.invalidateQueries({ queryKey: ["estoque-movimentacoes"] });
