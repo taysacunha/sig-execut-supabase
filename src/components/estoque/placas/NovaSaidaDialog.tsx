@@ -25,8 +25,6 @@ const fromEstoque = (t: string) => supabase.from(t as any);
 interface Props {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  initialMaterialId?: string;
-  initialLocalId?: string;
 }
 
 interface LocalRow { id: string; nome: string; }
@@ -43,7 +41,7 @@ interface MaterialPlacaRow {
 
 type Modo = "existente" | "novo";
 
-export function NovaSaidaDialog({ open, onOpenChange, initialMaterialId, initialLocalId }: Props) {
+export function NovaSaidaDialog({ open, onOpenChange }: Props) {
   const queryClient = useQueryClient();
   const { user } = useSystemAccess();
 
@@ -62,11 +60,11 @@ export function NovaSaidaDialog({ open, onOpenChange, initialMaterialId, initial
 
   useEffect(() => {
     if (open) {
-      setMaterialId(initialMaterialId || ""); setLocalId(initialLocalId || ""); setTipoUso("venda"); setTamanho("1x1"); setTamanhoOutro("");
+      setMaterialId(""); setLocalId(""); setTipoUso("venda"); setTamanho("1x1"); setTamanhoOutro("");
       setModo("existente"); setPlacaId(""); setNovoCodigo(""); setCodigoCheck("vazio");
       setImovel(""); setData(new Date().toISOString().slice(0, 10)); setObs("");
     }
-  }, [open, initialMaterialId, initialLocalId]);
+  }, [open]);
 
   const syncAttributesFromMaterial = (material: MaterialPlacaRow | undefined) => {
     if (!material) return;

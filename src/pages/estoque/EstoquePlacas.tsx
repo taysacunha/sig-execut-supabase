@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Loader2, Tag, Wrench, ArrowLeftRight, AlertTriangle, Plus,
-  History as HistoryIcon, ShieldAlert, Trash2, Tag as TagIcon, Layers, Package, Info,
+  History as HistoryIcon, ShieldAlert, Trash2, Tag as TagIcon, Package, Info,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,7 @@ import { TableSearch, TablePagination, SortableHeader } from "@/components/venda
 import {
   usePlacas, useHistoricoPlaca, Placa, PlacaStatus,
   STATUS_LABELS, STATUS_COLORS, TIPO_USO_LABELS, TAMANHO_LABELS, HIST_LABELS,
-  MaterialPlaca, resolvePlacaAttributes, formatPlacaTamanho,
+  MaterialPlaca, resolvePlacaAttributes,
 } from "@/hooks/useEstoquePlacas";
 import { PlacasPDFGenerator } from "@/components/estoque/placas/PlacasPDFGenerator";
 import { NovaSaidaDialog } from "@/components/estoque/placas/NovaSaidaDialog";
@@ -64,16 +64,6 @@ type SaidaPreselect = {
   localId: string;
 } | null;
 
-type PlacasDisponiveisInfo = {
-  total: number;
-  comCodigo: number;
-};
-
-const normalizeBusca = (value: string) =>
-  value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-const saldoKey = (materialId: string, localId: string | null) => `${materialId}::${localId || ""}`;
-
 export default function EstoquePlacas() {
   const queryClient = useQueryClient();
   const { hasAccess, user } = useSystemAccess();
@@ -92,14 +82,13 @@ export default function EstoquePlacas() {
   const [historicoDialog, setHistoricoDialog] = useState(false);
   const [excluirDialog, setExcluirDialog] = useState(false);
   const [novaSaidaDialog, setNovaSaidaDialog] = useState(false);
-  const [saidaPreselect, setSaidaPreselect] = useState<SaidaPreselect>(null);
   const [atribuirCodigoDialog, setAtribuirCodigoDialog] = useState(false);
-  const [criarCodigoSaldo, setCriarCodigoSaldo] = useState<ResumoSaldoPlaca | null>(null);
   const [selected, setSelected] = useState<Placa | null>(null);
+  const materializacaoKeyRef = useRef("");
 
   const { data: placas = [], isLoading } = usePlacas();
 
-  const { data: materiaisPlaca = [] } = useQuery({
+  const { data: materiaisPlaca = [], isLoading: isLoadingMateriaisPlaca } = useQuery({
     queryKey: ["estoque-materiais-placa"],
     queryFn: async () => {
       const { data, error } = await fromEstoque("estoque_materiais")
@@ -127,7 +116,7 @@ export default function EstoquePlacas() {
   const materialNome = (id: string | null) =>
     id ? (materiaisPlaca.find((m) => m.id === id)?.nome || "—") : "—";
 
-  const { data: saldosPlaca = [] } = useQuery({
+  const { data: saldosPlaca = [], isLoading: isLoadingSaldosPlaca } = useQuery({
     queryKey: ["estoque-saldos-placas"],
     queryFn: async () => {
       const { data, error } = await fromEstoque("estoque_saldos")
@@ -154,29 +143,6 @@ export default function EstoquePlacas() {
     });
   }, [saldosPlaca, materiaisPlaca]);
 
-  const resumoFiltrado = useMemo(() => {
-    return resumoSaldosPlaca.filter((r) => {
-      if (tipoFiltro !== "todos" && r.tipo_uso !== tipoFiltro) return false;
-      if (tamanhoFiltro !== "todos" && r.tamanho !== tamanhoFiltro) return false;
-      if (materialFiltro !== "todos" && r.material_id !== materialFiltro) return false;
-      if (localFiltro !== "todos" && r.local_armazenamento_id !== localFiltro) return false;
-      return true;
-    });
-  }, [resumoSaldosPlaca, tipoFiltro, tamanhoFiltro, materialFiltro, localFiltro]);
-
-  const placasDisponiveisPorSaldo = useMemo(() => {
-    const map = new Map<string, PlacasDisponiveisInfo>();
-    placas.forEach((p) => {
-      if (p.status !== "disponivel") return;
-      const key = saldoKey(p.material_id, p.local_armazenamento_id);
-      const current = map.get(key) || { total: 0, comCodigo: 0 };
-      current.total += 1;
-      if (p.codigo) current.comCodigo += 1;
-      map.set(key, current);
-    });
-    return map;
-  }, [placas]);
-
   // Filtra por aba + filtros adicionais
   const placasFiltradas = useMemo(() => {
     const matchAba = (p: Placa) =>
@@ -194,10 +160,10 @@ export default function EstoquePlacas() {
   }, [placas, aba, tipoFiltro, tamanhoFiltro, materialFiltro, localFiltro]);
 
   const counts = useMemo(() => ({
-    disponivel: resumoSaldosPlaca.reduce((acc, item) => acc + item.quantidade, 0),
+    disponivel: placas.filter((p) => p.status === "disponivel").length,
     instalada: placas.filter((p) => p.status === "instalada").length,
     baixadas: placas.filter((p) => ["roubada","perdida","baixada"].includes(p.status)).length,
-  }), [placas, resumoSaldosPlaca]);
+  }), [placas]);
 
   const {
     searchTerm, setSearchTerm, currentPage, setCurrentPage,
@@ -209,14 +175,6 @@ export default function EstoquePlacas() {
     defaultItemsPerPage: 25,
   });
 
-  const saldosDisponiveisFiltrados = useMemo(() => {
-    const term = normalizeBusca(searchTerm.trim());
-    if (!term) return resumoFiltrado;
-    return resumoFiltrado.filter((r) =>
-      normalizeBusca(`${r.material_nome} ${localNome(r.local_armazenamento_id)}`).includes(term)
-    );
-  }, [resumoFiltrado, searchTerm, locais]);
-
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["estoque-placas"] });
     queryClient.invalidateQueries({ queryKey: ["estoque-saldos"] });
@@ -225,6 +183,82 @@ export default function EstoquePlacas() {
     queryClient.invalidateQueries({ queryKey: ["estoque-saldos-check"] });
     queryClient.invalidateQueries({ queryKey: ["estoque-movimentacoes"] });
   };
+
+  const materializarPlacasMutation = useMutation({
+    mutationFn: async (inserts: any[]) => {
+      if (inserts.length === 0) return;
+      const { data: criadas, error } = await fromEstoque("estoque_placas")
+        .insert(inserts)
+        .select("id");
+      if (error) throw error;
+
+      const ids = ((criadas as unknown as { id: string }[]) || []).map((p) => p.id);
+      if (ids.length > 0) {
+        await fromEstoque("estoque_placas_historico").insert(ids.map((id) => ({
+          placa_id: id,
+          tipo: "criacao",
+          data_evento: new Date().toISOString().slice(0, 10),
+          observacoes: "Unidade física criada automaticamente para refletir o saldo disponível",
+          user_id: user?.id,
+        })) as any);
+      }
+    },
+    onSuccess: () => invalidate(),
+    onError: (e: any) => toast.error(e?.message || "Erro ao carregar todas as placas disponíveis"),
+  });
+
+  useEffect(() => {
+    if (!hasAccess("estoque")) return;
+    if (isLoading || isLoadingMateriaisPlaca || isLoadingSaldosPlaca || materializarPlacasMutation.isPending) return;
+    if (saldosPlaca.length === 0 || materiaisPlaca.length === 0) return;
+
+    const inserts: any[] = [];
+    const partes: string[] = [];
+
+    saldosPlaca.forEach((saldo) => {
+      const material = materiaisPlaca.find((m) => m.id === saldo.material_id);
+      if (!material) return;
+
+      const existentes = placas.filter((p) =>
+        p.status === "disponivel" &&
+        p.material_id === saldo.material_id &&
+        p.local_armazenamento_id === saldo.local_armazenamento_id
+      ).length;
+      const faltantes = Math.max(Math.floor(saldo.quantidade) - existentes, 0);
+      if (faltantes <= 0) return;
+
+      const attrs = resolvePlacaAttributes(material);
+      partes.push(`${saldo.material_id}:${saldo.local_armazenamento_id}:${faltantes}`);
+      for (let i = 0; i < faltantes; i += 1) {
+        inserts.push({
+          codigo: null,
+          material_id: saldo.material_id,
+          categoria_id: material.categoria_id,
+          tipo_uso: attrs.tipo_uso,
+          tamanho: attrs.tamanho,
+          tamanho_outro: attrs.tamanho === "outro" ? attrs.tamanho_outro : null,
+          local_armazenamento_id: saldo.local_armazenamento_id,
+          status: "disponivel",
+          created_by: user?.id,
+        });
+      }
+    });
+
+    const key = partes.join("|");
+    if (!key || materializacaoKeyRef.current === key) return;
+    materializacaoKeyRef.current = key;
+    materializarPlacasMutation.mutate(inserts);
+  }, [
+    hasAccess,
+    isLoading,
+    isLoadingMateriaisPlaca,
+    isLoadingSaldosPlaca,
+    materializarPlacasMutation.isPending,
+    materiaisPlaca,
+    placas,
+    saldosPlaca,
+    user?.id,
+  ]);
 
   // ─── MUTATIONS ───
   const instalarMutation = useMutation({
@@ -454,7 +488,7 @@ export default function EstoquePlacas() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => { setSaidaPreselect(null); setNovaSaidaDialog(true); }} title="Escolha o material e local. Para uma placa específica, use o ícone de chave inglesa na lista abaixo.">
+          <Button onClick={() => setNovaSaidaDialog(true)} title="Escolha o material e local. Para uma placa específica, use o ícone de chave inglesa na lista abaixo.">
             <Plus className="h-4 w-4 mr-2" /> Nova saída para imóvel
           </Button>
           <PlacasPDFGenerator placas={placas} />
@@ -464,8 +498,6 @@ export default function EstoquePlacas() {
       <NovaSaidaDialog
         open={novaSaidaDialog}
         onOpenChange={setNovaSaidaDialog}
-        initialMaterialId={saidaPreselect?.materialId}
-        initialLocalId={saidaPreselect?.localId}
       />
 
       <Tabs value={aba} onValueChange={(v) => { setAba(v as AbaStatus); setCurrentPage(1); }}>
@@ -503,22 +535,15 @@ export default function EstoquePlacas() {
                     </h2>
                     <p className="text-xs text-muted-foreground flex items-center gap-1">
                       <Info className="h-3 w-3" />
-                      {aba === "disponivel"
-                        ? "Disponíveis usa o saldo real por material e local. Códigos são a identificação física já cadastrada."
-                        : <>Cada linha é uma unidade física. Use o ícone <TagIcon className="h-3 w-3 inline" /> para atribuir código a placas sem identificação.</>}
+                      Cada linha é uma unidade física. Use o ícone <TagIcon className="h-3 w-3 inline" /> para atribuir código a placas sem identificação.
                     </p>
                   </div>
                 </div>
-                {aba === "disponivel" && (
-                  <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30">
-                    {saldosDisponiveisFiltrados.reduce((acc, item) => acc + item.quantidade, 0)} unidade(s)
-                  </Badge>
-                )}
               </div>
               <div className="p-4 grid grid-cols-1 sm:grid-cols-5 gap-3 border-b">
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Buscar</Label>
-                  <TableSearch value={searchTerm} onChange={setSearchTerm} placeholder={aba === "disponivel" ? "Material ou local..." : "Código ou imóvel..."} />
+                  <TableSearch value={searchTerm} onChange={setSearchTerm} placeholder="Código ou imóvel..." />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Material</Label>
@@ -561,68 +586,12 @@ export default function EstoquePlacas() {
                   </Select>
                 </div>
               </div>
-              {aba === "disponivel" ? (
-                saldosDisponiveisFiltrados.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
-                    <Tag className="h-12 w-12 mb-4 opacity-50" />
-                    <p>Nenhum saldo de placa disponível para os filtros.</p>
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Material</TableHead>
-                        <TableHead>Tipo</TableHead>
-                        <TableHead>Tamanho</TableHead>
-                        <TableHead>Local</TableHead>
-                        <TableHead className="text-right">Disponível</TableHead>
-                        <TableHead className="text-right">Códigos</TableHead>
-                        <TableHead className="text-right">Pendentes</TableHead>
-                        <TableHead className="text-right">Ações</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {saldosDisponiveisFiltrados.map((r) => {
-                        const info = placasDisponiveisPorSaldo.get(saldoKey(r.material_id, r.local_armazenamento_id)) || { total: 0, comCodigo: 0 };
-                        const pendentes = Math.max(r.quantidade - info.comCodigo, 0);
-                        return (
-                          <TableRow key={r.key}>
-                            <TableCell className="font-medium">{r.material_nome}</TableCell>
-                            <TableCell>{TIPO_USO_LABELS[r.tipo_uso]}</TableCell>
-                            <TableCell>{formatPlacaTamanho(r.tamanho, r.tamanho_outro)}</TableCell>
-                            <TableCell>{localNome(r.local_armazenamento_id)}</TableCell>
-                            <TableCell className="text-right font-mono">{r.quantidade}</TableCell>
-                            <TableCell className="text-right font-mono">{info.comCodigo}</TableCell>
-                            <TableCell className="text-right">
-                              <Badge variant={pendentes > 0 ? "outline" : "secondary"}>{pendentes}</Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-1 flex-wrap">
-                                {pendentes > 0 && (
-                                  <Button size="sm" variant="ghost" title="Criar código para uma unidade disponível" onClick={() => setCriarCodigoSaldo(r)}>
-                                    <TagIcon className="h-4 w-4 text-amber-500" />
-                                  </Button>
-                                )}
-                                <Button size="sm" variant="ghost" title="Registrar saída para imóvel" onClick={() => {
-                                  setSaidaPreselect({ materialId: r.material_id, localId: r.local_armazenamento_id });
-                                  setNovaSaidaDialog(true);
-                                }}>
-                                  <Wrench className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                )
-              ) : isLoading ? (
+              {isLoading || materializarPlacasMutation.isPending ? (
                 <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
               ) : paginatedData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
                   <Tag className="h-12 w-12 mb-4 opacity-50" />
-                  <p>Nenhuma placa física individualizada nesta categoria</p>
+                  <p>Nenhuma placa nesta categoria</p>
                 </div>
               ) : (
                 <>
@@ -757,18 +726,6 @@ export default function EstoquePlacas() {
         placa={selected}
         materialNome={selected ? materialNome(selected.material_id) : ""}
         localNome={selected ? localNome(selected.local_armazenamento_id) : ""}
-      />
-
-      <CriarCodigoSaldoDialog
-        open={!!criarCodigoSaldo}
-        onOpenChange={(o) => !o && setCriarCodigoSaldo(null)}
-        saldo={criarCodigoSaldo}
-        localNome={criarCodigoSaldo ? localNome(criarCodigoSaldo.local_armazenamento_id) : ""}
-        onSuccess={invalidate}
-        userId={user?.id}
-        codigosExistentes={criarCodigoSaldo
-          ? (placasDisponiveisPorSaldo.get(saldoKey(criarCodigoSaldo.material_id, criarCodigoSaldo.local_armazenamento_id))?.comCodigo || 0)
-          : 0}
       />
 
       <ExcluirPlacaDialog
@@ -958,121 +915,6 @@ function HistoricoDialog({
         )}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function CriarCodigoSaldoDialog({
-  open, onOpenChange, saldo, localNome, onSuccess, userId, codigosExistentes,
-}: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  saldo: ResumoSaldoPlaca | null;
-  localNome: string;
-  onSuccess: () => void;
-  userId?: string;
-  codigosExistentes: number;
-}) {
-  const [codigo, setCodigo] = useState("");
-  const [check, setCheck] = useState<"ok" | "duplicado" | "vazio">("vazio");
-
-  useEffect(() => {
-    if (open) {
-      setCodigo("");
-      setCheck("vazio");
-    }
-  }, [open]);
-
-  useEffect(() => {
-    const c = codigo.trim();
-    if (!c) { setCheck("vazio"); return; }
-    let cancelled = false;
-    const t: ReturnType<typeof setTimeout> = setTimeout(async () => {
-      const { data } = await fromEstoque("estoque_placas")
-        .select("id").eq("codigo", c).limit(1).maybeSingle();
-      if (cancelled) return;
-      setCheck(data ? "duplicado" : "ok");
-    }, 350);
-    return () => { cancelled = true; clearTimeout(t); };
-  }, [codigo]);
-
-  const mutation = useMutation({
-    mutationFn: async () => {
-      if (!saldo) throw new Error("Saldo inválido");
-      const c = codigo.trim();
-      if (!c) throw new Error("Informe o código");
-      if (c.length > 30) throw new Error("Código muito longo (máx 30)");
-      if (codigosExistentes >= saldo.quantidade) throw new Error("Todas as unidades disponíveis já possuem código.");
-
-      const { data: existente } = await fromEstoque("estoque_placas")
-        .select("id").eq("codigo", c).limit(1).maybeSingle();
-      if (existente) throw new Error(`Código "${c}" já existe.`);
-
-      const { data: placa, error } = await fromEstoque("estoque_placas").insert({
-        codigo: c,
-        material_id: saldo.material_id,
-        tipo_uso: saldo.tipo_uso,
-        tamanho: saldo.tamanho,
-        tamanho_outro: saldo.tamanho === "outro" ? saldo.tamanho_outro : null,
-        local_armazenamento_id: saldo.local_armazenamento_id,
-        status: "disponivel",
-        created_by: userId,
-      } as any).select("id").single();
-      if (error) throw error;
-
-      await fromEstoque("estoque_placas_historico").insert({
-        placa_id: (placa as any).id,
-        tipo: "criacao",
-        data_evento: new Date().toISOString().slice(0, 10),
-        observacoes: "Código criado a partir do saldo disponível",
-        user_id: userId,
-      } as any);
-    },
-    onSuccess: () => {
-      onSuccess();
-      toast.success("Código criado para a placa disponível!");
-      onOpenChange(false);
-    },
-    onError: (e: any) => toast.error(e?.message || "Erro ao criar código"),
-  });
-
-  if (!saldo) return null;
-  const pendentes = Math.max(saldo.quantidade - codigosExistentes, 0);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Criar código para placa disponível</DialogTitle>
-          <DialogDescription>
-            O código será vinculado a uma unidade já existente no saldo, sem alterar a quantidade em estoque.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3 py-2">
-          <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
-            <div><span className="text-muted-foreground">Material:</span> <strong>{saldo.material_nome}</strong></div>
-            <div><span className="text-muted-foreground">Tipo:</span> {TIPO_USO_LABELS[saldo.tipo_uso]} · {formatPlacaTamanho(saldo.tamanho, saldo.tamanho_outro)}</div>
-            <div><span className="text-muted-foreground">Local:</span> {localNome}</div>
-            <div><span className="text-muted-foreground">Saldo:</span> {saldo.quantidade} · <span className="text-muted-foreground">Pendentes de código:</span> {pendentes}</div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Código *</Label>
-            <Input value={codigo} onChange={(e) => setCodigo(e.target.value)} maxLength={30} placeholder="Ex: P-1234" autoFocus />
-            {check === "duplicado" && <p className="text-xs text-destructive">Este código já está cadastrado.</p>}
-            {check === "ok" && <p className="text-xs text-green-600">Código disponível.</p>}
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button disabled={mutation.isPending || !codigo.trim() || check === "duplicado" || pendentes <= 0} onClick={() => mutation.mutate()}>
-            {mutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Criar código
-          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
