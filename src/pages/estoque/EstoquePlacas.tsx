@@ -513,35 +513,50 @@ export default function EstoquePlacas() {
                 </div>
               </div>
               <div className="p-4 grid grid-cols-1 sm:grid-cols-5 gap-3 border-b">
-                <TableSearch value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por código ou imóvel..." />
-                <Select value={materialFiltro} onValueChange={setMaterialFiltro}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos materiais</SelectItem>
-                    {materiaisPlaca.map((m) => <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={tipoFiltro} onValueChange={setTipoFiltro}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos tipos</SelectItem>
-                    {Object.entries(TIPO_USO_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={tamanhoFiltro} onValueChange={setTamanhoFiltro}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos tamanhos</SelectItem>
-                    {Object.entries(TAMANHO_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={localFiltro} onValueChange={setLocalFiltro}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos locais</SelectItem>
-                    {locais.map((l) => <SelectItem key={l.id} value={l.id}>{l.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Buscar</Label>
+                  <TableSearch value={searchTerm} onChange={setSearchTerm} placeholder="Código ou imóvel..." />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Material</Label>
+                  <Select value={materialFiltro} onValueChange={setMaterialFiltro}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos materiais</SelectItem>
+                      {materiaisPlaca.map((m) => <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Tipo de uso</Label>
+                  <Select value={tipoFiltro} onValueChange={setTipoFiltro}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos tipos</SelectItem>
+                      {Object.entries(TIPO_USO_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Tamanho</Label>
+                  <Select value={tamanhoFiltro} onValueChange={setTamanhoFiltro}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos tamanhos</SelectItem>
+                      {Object.entries(TAMANHO_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Local</Label>
+                  <Select value={localFiltro} onValueChange={setLocalFiltro}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos locais</SelectItem>
+                      {locais.map((l) => <SelectItem key={l.id} value={l.id}>{l.nome}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               {isLoading ? (
                 <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
