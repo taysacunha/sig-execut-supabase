@@ -116,6 +116,26 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
     enabled: open,
   });
 
+  const totaisPorMaterial = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of saldos) {
+      if (s.quantidade > 0) {
+        map.set(s.material_id, (map.get(s.material_id) ?? 0) + s.quantidade);
+      }
+    }
+    return map;
+  }, [saldos]);
+
+  const materiaisPlacaComSaldo = useMemo(() => {
+    return materiaisPlaca
+      .map((m) => {
+        const total = totaisPorMaterial.get(m.id) ?? 0;
+        return { id: m.id, nome: `${m.nome} (${total})`, total };
+      })
+      .filter((m) => m.total > 0)
+      .map(({ id, nome }) => ({ id, nome }));
+  }, [materiaisPlaca, totaisPorMaterial]);
+
   const { data: placas = [] } = usePlacas();
 
   const locaisComSaldo = useMemo(() => {
@@ -317,7 +337,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
           <div className="space-y-2">
             <Label>Material da placa *</Label>
             <MaterialCombobox
-              materiais={materiaisPlaca}
+              materiais={materiaisPlacaComSaldo}
               value={materialId}
               onChange={(id) => {
                 setMaterialId(id);
@@ -326,7 +346,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
                 syncAttributesFromMaterial(materiaisPlaca.find((m) => m.id === id));
               }}
               placeholder="Selecione o material-placa"
-              emptyMessage="Nenhum material de placa ativo encontrado. Cadastre na aba Materiais."
+              emptyMessage="Nenhum material-placa com saldo em estoque. Registre uma entrada na aba Saldos."
             />
             {materialSelecionado && (
               <p className="text-xs text-muted-foreground">
