@@ -33,7 +33,7 @@ import { TableSearch, TablePagination, SortableHeader } from "@/components/venda
 import {
   usePlacas, useHistoricoPlaca, Placa, PlacaStatus,
   STATUS_LABELS, STATUS_COLORS, TIPO_USO_LABELS, TAMANHO_LABELS, HIST_LABELS,
-  MaterialPlaca, inferPlacaAttributes, formatPlacaTamanho,
+  MaterialPlaca, resolvePlacaAttributes, formatPlacaTamanho,
 } from "@/hooks/useEstoquePlacas";
 import { PlacasPDFGenerator } from "@/components/estoque/placas/PlacasPDFGenerator";
 import { NovaSaidaDialog } from "@/components/estoque/placas/NovaSaidaDialog";
@@ -86,7 +86,7 @@ export default function EstoquePlacas() {
     queryKey: ["estoque-materiais-placa"],
     queryFn: async () => {
       const { data, error } = await fromEstoque("estoque_materiais")
-        .select("id, nome, categoria_id, categoria, unidade_medida, estoque_minimo, is_placa, is_active")
+        .select("id, nome, categoria_id, categoria, unidade_medida, estoque_minimo, is_placa, is_active, tipo_uso, tamanho, tamanho_outro")
         .eq("is_active", true)
         .order("nome");
       if (error) throw error;
@@ -126,7 +126,7 @@ export default function EstoquePlacas() {
   const resumoSaldosPlaca = useMemo<ResumoSaldoPlaca[]>(() => {
     return saldosPlaca.map((s) => {
       const material = materiaisPlaca.find((m) => m.id === s.material_id);
-      const attrs = inferPlacaAttributes(material?.nome || "");
+      const attrs = resolvePlacaAttributes(material);
       return {
         key: s.id,
         material_id: s.material_id,
