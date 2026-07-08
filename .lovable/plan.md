@@ -1,64 +1,29 @@
-## Entendimento correto
+## Objetivo
 
-A placa pode sair para imóvel por dois caminhos:
+No diálogo "Nova saída para imóvel", exibir no campo **Material da placa** apenas os materiais que possuem saldo em estoque (> 0 em qualquer local) e mostrar a quantidade total disponível ao lado do nome — evitando perder tempo abrindo materiais sem saldo.
 
-1. **Já existe uma placa disponível com código**
-  - O campo **Selecionar disponível** deve mostrar esses códigos.
-  - Ao confirmar, essa placa vai para o imóvel.
-2. **Só existem placas disponíveis sem código**
-  - O sistema não deve listar `(sem código) — id` como opção.
-  - Deve permitir **Criar novo código**.
-  - Ao confirmar, o sistema deve pegar **uma placa física disponível sem código** daquele material/local, atribuir o novo código a ela e então instalar no imóvel.
+## Comportamento esperado
 
-Regra principal: **nenhuma placa sai para imóvel sem código cadastrado**. Mas uma placa sem código pode ser usada na saída se, no mesmo processo, o novo código for atribuído a ela.
+- Lista de materiais mostra apenas materiais-placa ativos com saldo total > 0.
+- Cada opção exibe o nome seguido do total disponível, ex: `Placa - Aluga (43)`.
+- Se nenhum material tiver saldo, a lista fica vazia com mensagem existente do combobox.
+- O nome exibido no botão do combobox (após selecionar) também mostra `(N)`.
+- Nada muda no fluxo de locais, códigos, criação de código ou gravação — apenas o filtro/label do material.
 
-E também se todas já tiverem códigos, não deve ser possível cadastrar um novo código, afinal não terá onde colocá-lo já que não tem placa disponível para vincular esse código.
+## Alterações
 
-## Correção proposta
+Arquivo único: `src/components/estoque/placas/NovaSaidaDialog.tsx`
 
-Arquivo: `src/components/estoque/placas/NovaSaidaDialog.tsx`
+1. Criar um `useMemo` que soma `quantidade` de `saldos` agrupado por `material_id` (apenas quantidades > 0 já entram naturalmente na soma).
+2. Derivar `materiaisPlacaComSaldo` a partir de `materiaisPlaca`:
+   - Filtrar `total > 0`.
+   - Mapear para `{ id, nome: \`${nome} (${total})\` }` para o combobox.
+3. Passar `materiaisPlacaComSaldo` ao `<MaterialCombobox>` em vez de `materiaisPlaca`.
+4. Ao resolver `materialSelecionado` e `syncAttributesFromMaterial`, continuar usando `materiaisPlaca` original (com nome sem sufixo) para não afetar atributos.
+5. Placeholder/emptyMessage: ajustar `emptyMessage` para "Nenhum material-placa com saldo em estoque. Registre uma entrada na aba Saldos." quando aplicável.
 
-### 1. Separar placas disponíveis em duas listas
+## Fora de escopo
 
-- `disponiveisComCodigo`: placas `disponivel` do material/local com `codigo` preenchido.
-- `disponiveisSemCodigo`: placas `disponivel` do material/local sem `codigo`.
-
-### 2. Campo “Selecionar disponível”
-
-- Mostrar apenas `disponiveisComCodigo`.
-- Nunca mostrar `(sem código) — id`.
-- O contador do radio deve contar apenas códigos reais disponíveis.
-
-### 3. Caminho “Criar novo código”
-
-- Ao confirmar, primeiro tentar usar uma placa de `disponiveisSemCodigo`.
-- Se existir, atualizar essa placa com:
-  - `codigo: novoCodigo`
-  - `status: instalada`
-  - imóvel e data da instalação
-- Se não existir placa física sem código, aí sim criar uma nova linha em `estoque_placas` com esse código e instalar.
-
-### 4. Validações
-
-- Não permitir confirmar sem código no caminho “Criar novo código”.
-- Manter verificação de duplicidade do código.
-- Manter consumo de 1 unidade do saldo como já ocorre.
-
-### 5. UI
-
-- Se houver código existente, permitir selecionar.
-- Se não houver código existente, deixar o usuário em “Criar novo código”.
-- A informação de tipo/tamanho continua somente leitura, derivada do material selecionado.
-
-## Resultado esperado
-
-Com 60 placas disponíveis sem código:
-
-- O select não mostra 60 itens sem código.
-- O usuário digita um novo código.
-- O sistema pega uma dessas 60 placas, vincula o código digitado e instala no imóvel.
-
-Com placas disponíveis com código:
-
-- O select mostra apenas os códigos cadastrados.
-- O usuário escolhe um código e instala no imóvel.
+- Diálogo/ferramenta de saída em outros locais (só este dialog foi pedido).
+- Regras de código de placa (mantidas como estão).
+- Alterações no `MaterialCombobox`.

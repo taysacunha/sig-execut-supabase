@@ -116,6 +116,26 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
     enabled: open,
   });
 
+  const totaisPorMaterial = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of saldos) {
+      if (s.quantidade > 0) {
+        map.set(s.material_id, (map.get(s.material_id) ?? 0) + s.quantidade);
+      }
+    }
+    return map;
+  }, [saldos]);
+
+  const materiaisPlacaComSaldo = useMemo(() => {
+    return materiaisPlaca
+      .map((m) => {
+        const total = totaisPorMaterial.get(m.id) ?? 0;
+        return { id: m.id, nome: `${m.nome} (${total})`, total };
+      })
+      .filter((m) => m.total > 0)
+      .map(({ id, nome }) => ({ id, nome }));
+  }, [materiaisPlaca, totaisPorMaterial]);
+
   const { data: placas = [] } = usePlacas();
 
   const locaisComSaldo = useMemo(() => {
