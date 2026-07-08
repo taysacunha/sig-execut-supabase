@@ -190,14 +190,6 @@ export default function EstoquePlacas() {
     });
   }, [resumoSaldosPlaca, tipoFiltro, tamanhoFiltro, materialFiltro, localFiltro]);
 
-  const saldosDisponiveisFiltrados = useMemo(() => {
-    const term = normalizeBusca(searchTerm.trim());
-    if (!term) return resumoFiltrado;
-    return resumoFiltrado.filter((r) =>
-      normalizeBusca(`${r.material_nome} ${localNome(r.local_armazenamento_id)}`).includes(term)
-    );
-  }, [resumoFiltrado, searchTerm, locais]);
-
   const placasDisponiveisPorSaldo = useMemo(() => {
     const map = new Map<string, PlacasDisponiveisInfo>();
     placas.forEach((p) => {
@@ -242,6 +234,14 @@ export default function EstoquePlacas() {
     searchField: ["codigo", "imovel_codigo_atual"] as any,
     defaultItemsPerPage: 25,
   });
+
+  const saldosDisponiveisFiltrados = useMemo(() => {
+    const term = normalizeBusca(searchTerm.trim());
+    if (!term) return resumoFiltrado;
+    return resumoFiltrado.filter((r) =>
+      normalizeBusca(`${r.material_nome} ${localNome(r.local_armazenamento_id)}`).includes(term)
+    );
+  }, [resumoFiltrado, searchTerm, locais]);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["estoque-placas"] });
