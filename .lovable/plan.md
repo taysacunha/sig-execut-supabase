@@ -1,27 +1,29 @@
-Plano para corrigir o filtro “Aluga” na página de Placas:
+Plano para corrigir o caso dos 67 disponíveis vs 23 exibidas:
 
-1. Ajustar a fonte de dados dos saldos de placas
-   - Refazer a consulta de `estoque-saldos-placas` para não depender de um filtro em memória frágil.
-   - Buscar os saldos e cruzar com materiais ativos de placa de forma consistente, garantindo que materiais recém-criados como `Placa Aluga 2x2 Lona` entrem no resumo.
-   - Garantir que materiais com `tipo_uso`/`tamanho` nulos ainda sejam classificados pelo nome como fallback.
+1. Corrigir a regra da aba “Disponíveis”
+   - A aba “Disponíveis” deve usar `estoque_saldos` como fonte principal, porque disponibilidade real de estoque é saldo agregado.
+   - O total 67 continuará vindo do saldo, e a lista principal também passará a listar esses 67 por material/local/tipo/tamanho, incluindo “Aluga”.
+   - A tabela de `estoque_placas` continuará sendo usada para placas físicas individualizadas, mas não será mais a única fonte da aba “Disponíveis”.
 
-2. Corrigir o comportamento do filtro “Tipo de uso”
-   - Aplicar o filtro “Aluga” corretamente no bloco superior “Saldos por material e local”.
-   - Manter o filtro também no bloco inferior de unidades físicas, mas deixar claro que ele lista apenas placas individualizadas/codificadas.
+2. Mostrar claramente quantidade total, códigos cadastrados e pendentes
+   - Na tabela de disponíveis, cada linha será por material + local.
+   - Colunas previstas: Material, Tipo, Tamanho, Local, Disponível, Códigos já cadastrados, Pendentes de código, Ações.
+   - Exemplo esperado: `Placa Aluga 2x2 Lona` aparece com sua quantidade mesmo sem código individual ainda.
 
-3. Tratar a brecha entre saldo agregado e placa física
-   - Hoje, adicionar saldo em `Saldos` aumenta `estoque_saldos`, mas não cria automaticamente linhas individuais em `estoque_placas`.
-   - Vou ajustar a página para que o usuário enxergue o saldo agregado filtrado por “Aluga” mesmo que ainda não existam placas físicas/códigos cadastrados.
-   - Se não houver unidades físicas no bloco inferior, a mensagem será mais clara: existe saldo, mas ainda não há placas individualizadas para listar.
+3. Ajustar filtros para “Aluga” funcionar de verdade
+   - O filtro Tipo de uso será aplicado em cima dos saldos resolvidos por material, não só em cima de registros físicos de `estoque_placas`.
+   - O filtro Material/Local/Tamanho também será aplicado na mesma fonte de dados.
 
-4. Sincronizar invalidações de cache
-   - Completar as invalidações relacionadas a placas/saldos após entrada, ajuste, transferência, saída e atribuição de código.
-   - Incluir `estoque-saldos-placas`, `estoque-materiais-placa` e `estoque-placas` onde necessário para evitar a tela ficar desatualizada após navegar entre Saldos, Materiais e Placas.
+4. Manter ações operacionais
+   - Para linhas de saldo disponível, manter ação de “Nova saída para imóvel” usando o material/local daquela linha.
+   - Ajustar `NovaSaidaDialog` para aceitar material/local pré-selecionados quando a ação vier da tabela de disponíveis.
+   - Quando houver unidades pendentes de código, permitir atribuir/criar um código para uma unidade física sem alterar o saldo, apenas criando o registro individual em `estoque_placas` vinculado ao material/local.
 
-5. Validar o fluxo afetado
-   - Conferir o cenário: material `Placa Aluga 2x2 Lona` ativo, saldo positivo cadastrado, página Placas com filtro `Tipo de uso = Aluga`.
-   - Resultado esperado: o saldo agregado aparece no bloco superior; se não houver unidade física, o bloco inferior informa isso de forma explícita em vez de parecer que a placa “sumiu”.
+5. Preservar a lista de placas físicas onde ela faz sentido
+   - Nas abas “Instaladas” e “Baixadas”, continuar mostrando registros físicos individuais de `estoque_placas`.
+   - Na aba “Disponíveis”, se necessário, mostrar os códigos físicos disponíveis como informação auxiliar/contagem, mas a lista principal será o saldo real.
 
-Detalhes técnicos:
-- Arquivos principais: `src/pages/estoque/EstoquePlacas.tsx`, `src/pages/estoque/EstoqueSaldos.tsx`, `src/components/estoque/placas/NovaSaidaDialog.tsx` e `src/components/estoque/placas/AtribuirCodigoDialog.tsx`.
-- Não pretendo alterar banco de dados neste passo; a correção é de consulta, filtro e sincronização da UI.
+6. Validar o cenário citado
+   - Com total de 67 disponíveis, a aba “Disponíveis” deve mostrar 67 no total e a tabela deve incluir as placas “Aluga”.
+   - Ao filtrar Tipo = Aluga, a linha da placa aluga deve aparecer com sua quantidade correta.
+   - Verificar TypeScript após a implementação.
