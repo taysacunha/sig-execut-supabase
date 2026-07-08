@@ -59,10 +59,6 @@ type ResumoSaldoPlaca = {
   tamanho_outro: string | null;
 };
 
-type SaldoPlacaComMaterial = SaldoPlacaRow & {
-  material?: MaterialPlaca | null;
-};
-
 type SaidaPreselect = {
   materialId: string;
   localId: string;
@@ -135,48 +131,26 @@ export default function EstoquePlacas() {
     queryKey: ["estoque-saldos-placas"],
     queryFn: async () => {
       const { data, error } = await fromEstoque("estoque_saldos")
-        .select(`
-          id,
-          material_id,
-          local_armazenamento_id,
-          quantidade,
-          material:estoque_materiais!inner(
-            id,
-            nome,
-            categoria_id,
-            categoria,
-            unidade_medida,
-            estoque_minimo,
-            is_placa,
-            is_active,
-            tipo_uso,
-            tamanho,
-            tamanho_outro
-          )
-        `)
-        .gt("quantidade", 0)
-        .eq("material.is_active", true);
+        .select("id, material_id, local_armazenamento_id, quantidade")
+        .gt("quantidade", 0);
       if (error) throw error;
-      const rows = (data as unknown as SaldoPlacaComMaterial[]) || [];
-      return rows.filter((s) => {
-        const material = s.material;
-        return !!material && (material.is_placa || material.nome.toLowerCase().startsWith("placa"));
-      });
+      return (data as unknown as SaldoPlacaRow[]) || [];
     },
   });
 
   const resumoSaldosPlaca = useMemo<ResumoSaldoPlaca[]>(() => {
-    return saldosPlaca.map((s) => {
-      const material = s.material || materiaisPlaca.find((m) => m.id === s.material_id);
+    return saldosPlaca.flatMap((s) => {
+      const material = materiaisPlaca.find((m) => m.id === s.material_id);
+      if (!material) return [];
       const attrs = resolvePlacaAttributes(material);
-      return {
+      return [{
         key: s.id,
         material_id: s.material_id,
         material_nome: material?.nome || "—",
         local_armazenamento_id: s.local_armazenamento_id,
         quantidade: s.quantidade,
         ...attrs,
-      };
+      }];
     });
   }, [saldosPlaca, materiaisPlaca]);
 
