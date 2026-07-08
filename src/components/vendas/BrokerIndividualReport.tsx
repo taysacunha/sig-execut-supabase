@@ -677,7 +677,9 @@ export function BrokerIndividualReport({ teamFilter = "all", showValues = true }
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-xl font-bold text-primary">{formatCurrencyFull(totalVGV)}</div>
+                <div className="text-xl font-bold text-primary">
+                  {showValues ? formatCurrencyFull(totalVGV) : "R$ ******"}
+                </div>
                 <Popover>
                   <PopoverTrigger asChild>
                     <p className="text-xs text-muted-foreground cursor-pointer hover:text-primary transition-colors underline">
