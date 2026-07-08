@@ -94,9 +94,10 @@ const queryConfig = {
 
 interface BrokerIndividualReportProps {
   teamFilter?: string;
+  showValues?: boolean;
 }
 
-export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualReportProps) {
+export function BrokerIndividualReport({ teamFilter = "all", showValues = true }: BrokerIndividualReportProps) {
   const [selectedBrokerId, setSelectedBrokerId] = useState<string>("");
   const [brokerSearchOpen, setBrokerSearchOpen] = useState(false);
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear().toString());
@@ -676,7 +677,9 @@ export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualR
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-xl font-bold text-primary">{formatCurrencyFull(totalVGV)}</div>
+                <div className="text-xl font-bold text-primary">
+                  {showValues ? formatCurrencyFull(totalVGV) : "R$ ******"}
+                </div>
                 <Popover>
                   <PopoverTrigger asChild>
                     <p className="text-xs text-muted-foreground cursor-pointer hover:text-primary transition-colors underline">

@@ -812,7 +812,7 @@ export default function SalesReports() {
               </p>
             </CardHeader>
             <CardContent>
-              <BrokerIndividualReport teamFilter={selectedTeamId} />
+              <BrokerIndividualReport teamFilter={selectedTeamId} showValues={showValues} />
             </CardContent>
           </Card>
         </TabsContent>
