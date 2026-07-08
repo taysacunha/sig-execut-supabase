@@ -337,7 +337,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
           <div className="space-y-2">
             <Label>Material da placa *</Label>
             <MaterialCombobox
-              materiais={materiaisPlaca}
+              materiais={materiaisPlacaComSaldo}
               value={materialId}
               onChange={(id) => {
                 setMaterialId(id);
@@ -346,7 +346,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
                 syncAttributesFromMaterial(materiaisPlaca.find((m) => m.id === id));
               }}
               placeholder="Selecione o material-placa"
-              emptyMessage="Nenhum material de placa ativo encontrado. Cadastre na aba Materiais."
+              emptyMessage="Nenhum material-placa com saldo em estoque. Registre uma entrada na aba Saldos."
             />
             {materialSelecionado && (
               <p className="text-xs text-muted-foreground">
