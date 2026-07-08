@@ -71,7 +71,13 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
       if (checkError) throw checkError;
       if (existente) {
         const { error: updateError } = await fromEstoque("estoque_materiais")
-          .update({ is_active: true, is_placa: true } as any)
+          .update({
+            is_active: true,
+            is_placa: true,
+            tipo_uso: tipoUso,
+            tamanho,
+            tamanho_outro: tamanho === "outro" ? (tamanhoOutro.trim() || null) : null,
+          } as any)
           .eq("id", (existente as any).id);
         if (updateError) throw updateError;
         return;
@@ -90,6 +96,9 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
         estoque_minimo: estoqueMinimo,
         is_placa: true,
         is_active: true,
+        tipo_uso: tipoUso,
+        tamanho,
+        tamanho_outro: tamanho === "outro" ? (tamanhoOutro.trim() || null) : null,
       } as any);
       if (error) throw error;
     },

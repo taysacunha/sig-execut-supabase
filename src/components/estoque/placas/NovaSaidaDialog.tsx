@@ -17,7 +17,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { MaterialCombobox } from "@/components/estoque/MaterialCombobox";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
 import {
-  Placa, TipoUso, Tamanho, TIPO_USO_LABELS, TAMANHO_LABELS, usePlacas, inferPlacaAttributes,
+  Placa, TipoUso, Tamanho, TIPO_USO_LABELS, TAMANHO_LABELS, usePlacas, resolvePlacaAttributes,
 } from "@/hooks/useEstoquePlacas";
 
 const fromEstoque = (t: string) => supabase.from(t as any);
@@ -29,7 +29,15 @@ interface Props {
 
 interface LocalRow { id: string; nome: string; }
 interface SaldoRow { id: string; material_id: string; local_armazenamento_id: string; quantidade: number; }
-interface MaterialPlacaRow { id: string; nome: string; is_placa: boolean; is_active: boolean; }
+interface MaterialPlacaRow {
+  id: string;
+  nome: string;
+  is_placa: boolean;
+  is_active: boolean;
+  tipo_uso: TipoUso | null;
+  tamanho: Tamanho | null;
+  tamanho_outro: string | null;
+}
 
 type Modo = "existente" | "novo";
 
@@ -60,7 +68,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
 
   const syncAttributesFromMaterial = (material: MaterialPlacaRow | undefined) => {
     if (!material) return;
-    const attrs = inferPlacaAttributes(material.nome);
+    const attrs = resolvePlacaAttributes(material);
     setTipoUso(attrs.tipo_uso);
     setTamanho(attrs.tamanho);
     setTamanhoOutro(attrs.tamanho_outro || "");
@@ -82,7 +90,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
     queryKey: ["estoque-materiais-placa"],
     queryFn: async () => {
       const { data, error } = await fromEstoque("estoque_materiais")
-        .select("id, nome, is_placa, is_active")
+        .select("id, nome, is_placa, is_active, tipo_uso, tamanho, tamanho_outro")
         .eq("is_active", true)
         .order("nome");
       if (error) throw error;
