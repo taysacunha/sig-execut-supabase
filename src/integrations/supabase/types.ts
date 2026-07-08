@@ -536,6 +536,9 @@ export type Database = {
           is_active: boolean | null
           is_placa: boolean
           nome: string
+          tamanho: string | null
+          tamanho_outro: string | null
+          tipo_uso: string | null
           unidade_medida: string
           updated_at: string | null
         }
@@ -549,6 +552,9 @@ export type Database = {
           is_active?: boolean | null
           is_placa?: boolean
           nome: string
+          tamanho?: string | null
+          tamanho_outro?: string | null
+          tipo_uso?: string | null
           unidade_medida?: string
           updated_at?: string | null
         }
@@ -562,6 +568,9 @@ export type Database = {
           is_active?: boolean | null
           is_placa?: boolean
           nome?: string
+          tamanho?: string | null
+          tamanho_outro?: string | null
+          tipo_uso?: string | null
           unidade_medida?: string
           updated_at?: string | null
         }
