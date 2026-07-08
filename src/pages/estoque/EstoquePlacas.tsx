@@ -990,6 +990,121 @@ function HistoricoDialog({
   );
 }
 
+function CriarCodigoSaldoDialog({
+  open, onOpenChange, saldo, localNome, onSuccess, userId, codigosExistentes,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  saldo: ResumoSaldoPlaca | null;
+  localNome: string;
+  onSuccess: () => void;
+  userId?: string;
+  codigosExistentes: number;
+}) {
+  const [codigo, setCodigo] = useState("");
+  const [check, setCheck] = useState<"ok" | "duplicado" | "vazio">("vazio");
+
+  useEffect(() => {
+    if (open) {
+      setCodigo("");
+      setCheck("vazio");
+    }
+  }, [open]);
+
+  useEffect(() => {
+    const c = codigo.trim();
+    if (!c) { setCheck("vazio"); return; }
+    let cancelled = false;
+    const t: ReturnType<typeof setTimeout> = setTimeout(async () => {
+      const { data } = await fromEstoque("estoque_placas")
+        .select("id").eq("codigo", c).limit(1).maybeSingle();
+      if (cancelled) return;
+      setCheck(data ? "duplicado" : "ok");
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [codigo]);
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      if (!saldo) throw new Error("Saldo inválido");
+      const c = codigo.trim();
+      if (!c) throw new Error("Informe o código");
+      if (c.length > 30) throw new Error("Código muito longo (máx 30)");
+      if (codigosExistentes >= saldo.quantidade) throw new Error("Todas as unidades disponíveis já possuem código.");
+
+      const { data: existente } = await fromEstoque("estoque_placas")
+        .select("id").eq("codigo", c).limit(1).maybeSingle();
+      if (existente) throw new Error(`Código "${c}" já existe.`);
+
+      const { data: placa, error } = await fromEstoque("estoque_placas").insert({
+        codigo: c,
+        material_id: saldo.material_id,
+        tipo_uso: saldo.tipo_uso,
+        tamanho: saldo.tamanho,
+        tamanho_outro: saldo.tamanho === "outro" ? saldo.tamanho_outro : null,
+        local_armazenamento_id: saldo.local_armazenamento_id,
+        status: "disponivel",
+        created_by: userId,
+      } as any).select("id").single();
+      if (error) throw error;
+
+      await fromEstoque("estoque_placas_historico").insert({
+        placa_id: (placa as any).id,
+        tipo: "criacao",
+        data_evento: new Date().toISOString().slice(0, 10),
+        observacoes: "Código criado a partir do saldo disponível",
+        user_id: userId,
+      } as any);
+    },
+    onSuccess: () => {
+      onSuccess();
+      toast.success("Código criado para a placa disponível!");
+      onOpenChange(false);
+    },
+    onError: (e: any) => toast.error(e?.message || "Erro ao criar código"),
+  });
+
+  if (!saldo) return null;
+  const pendentes = Math.max(saldo.quantidade - codigosExistentes, 0);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Criar código para placa disponível</DialogTitle>
+          <DialogDescription>
+            O código será vinculado a uma unidade já existente no saldo, sem alterar a quantidade em estoque.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 py-2">
+          <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
+            <div><span className="text-muted-foreground">Material:</span> <strong>{saldo.material_nome}</strong></div>
+            <div><span className="text-muted-foreground">Tipo:</span> {TIPO_USO_LABELS[saldo.tipo_uso]} · {formatPlacaTamanho(saldo.tamanho, saldo.tamanho_outro)}</div>
+            <div><span className="text-muted-foreground">Local:</span> {localNome}</div>
+            <div><span className="text-muted-foreground">Saldo:</span> {saldo.quantidade} · <span className="text-muted-foreground">Pendentes de código:</span> {pendentes}</div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Código *</Label>
+            <Input value={codigo} onChange={(e) => setCodigo(e.target.value)} maxLength={30} placeholder="Ex: P-1234" autoFocus />
+            {check === "duplicado" && <p className="text-xs text-destructive">Este código já está cadastrado.</p>}
+            {check === "ok" && <p className="text-xs text-green-600">Código disponível.</p>}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button disabled={mutation.isPending || !codigo.trim() || check === "duplicado" || pendentes <= 0} onClick={() => mutation.mutate()}>
+            {mutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Criar código
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ExcluirPlacaDialog({
   open, onOpenChange, placa, loading, onSubmit,
 }: {
