@@ -16,6 +16,9 @@ export interface MaterialPlaca {
   estoque_minimo: number;
   is_placa: boolean;
   is_active: boolean;
+  tipo_uso: TipoUso | null;
+  tamanho: Tamanho | null;
+  tamanho_outro: string | null;
 }
 
 export interface Placa {
@@ -106,6 +109,28 @@ export function inferPlacaAttributes(nome: string): {
 
 export function formatPlacaTamanho(tamanho: Tamanho, tamanhoOutro?: string | null) {
   return tamanho === "outro" ? `Outro (${tamanhoOutro || "não especificado"})` : TAMANHO_LABELS[tamanho];
+}
+
+/**
+ * Retorna tipo_uso/tamanho/tamanho_outro persistidos no material quando presentes.
+ * Cai no inferPlacaAttributes(nome) apenas como fallback para materiais legados
+ * que ainda não foram migrados.
+ */
+export function resolvePlacaAttributes(material: {
+  nome: string;
+  tipo_uso?: TipoUso | null;
+  tamanho?: Tamanho | null;
+  tamanho_outro?: string | null;
+} | null | undefined): { tipo_uso: TipoUso; tamanho: Tamanho; tamanho_outro: string | null } {
+  if (!material) return { tipo_uso: "venda", tamanho: "outro", tamanho_outro: null };
+  if (material.tipo_uso && material.tamanho) {
+    return {
+      tipo_uso: material.tipo_uso,
+      tamanho: material.tamanho,
+      tamanho_outro: material.tamanho_outro ?? null,
+    };
+  }
+  return inferPlacaAttributes(material.nome || "");
 }
 
 export function usePlacas() {
