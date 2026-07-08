@@ -1,29 +1,48 @@
-Plano para corrigir o caso dos 67 disponíveis vs 23 exibidas:
+## Correção de rumo
 
-1. Corrigir a regra da aba “Disponíveis”
-   - A aba “Disponíveis” deve usar `estoque_saldos` como fonte principal, porque disponibilidade real de estoque é saldo agregado.
-   - O total 67 continuará vindo do saldo, e a lista principal também passará a listar esses 67 por material/local/tipo/tamanho, incluindo “Aluga”.
-   - A tabela de `estoque_placas` continuará sendo usada para placas físicas individualizadas, mas não será mais a única fonte da aba “Disponíveis”.
+Você está certo: o pedido era só fazer as placas aparecerem e fazer o filtro funcionar. Eu não deveria ter refeito a aba nem removido campos/ações da página.
 
-2. Mostrar claramente quantidade total, códigos cadastrados e pendentes
-   - Na tabela de disponíveis, cada linha será por material + local.
-   - Colunas previstas: Material, Tipo, Tamanho, Local, Disponível, Códigos já cadastrados, Pendentes de código, Ações.
-   - Exemplo esperado: `Placa Aluga 2x2 Lona` aparece com sua quantidade mesmo sem código individual ainda.
+## Objetivo
 
-3. Ajustar filtros para “Aluga” funcionar de verdade
-   - O filtro Tipo de uso será aplicado em cima dos saldos resolvidos por material, não só em cima de registros físicos de `estoque_placas`.
-   - O filtro Material/Local/Tamanho também será aplicado na mesma fonte de dados.
+Na página **Placas**:
 
-4. Manter ações operacionais
-   - Para linhas de saldo disponível, manter ação de “Nova saída para imóvel” usando o material/local daquela linha.
-   - Ajustar `NovaSaidaDialog` para aceitar material/local pré-selecionados quando a ação vier da tabela de disponíveis.
-   - Quando houver unidades pendentes de código, permitir atribuir/criar um código para uma unidade física sem alterar o saldo, apenas criando o registro individual em `estoque_placas` vinculado ao material/local.
+- Mostrar as **67 placas disponíveis** que existem no estoque.
+- Manter os campos, colunas, códigos e ações da página como estavam.
+- Fazer os filtros funcionarem corretamente, principalmente **Tipo = Aluga**.
+- Não mudar regras de negócio fora disso.
 
-5. Preservar a lista de placas físicas onde ela faz sentido
-   - Nas abas “Instaladas” e “Baixadas”, continuar mostrando registros físicos individuais de `estoque_placas`.
-   - Na aba “Disponíveis”, se necessário, mostrar os códigos físicos disponíveis como informação auxiliar/contagem, mas a lista principal será o saldo real.
+## Plano
 
-6. Validar o cenário citado
-   - Com total de 67 disponíveis, a aba “Disponíveis” deve mostrar 67 no total e a tabela deve incluir as placas “Aluga”.
-   - Ao filtrar Tipo = Aluga, a linha da placa aluga deve aparecer com sua quantidade correta.
-   - Verificar TypeScript após a implementação.
+### 1. Restaurar a interface da tabela de placas
+- Recolocar a listagem de placas com os campos de placa/código que foram removidos.
+- Manter ações existentes da linha, como editar/atribuir código, instalar, histórico, baixar/remover, conforme já existiam.
+- Remover a tabela agregada por saldo que substituiu a tabela original.
+
+### 2. Corrigir a origem dos dados para aparecerem as 67 placas
+- A página deve continuar exibindo placas como itens individuais.
+- Se existem 67 unidades no saldo mas só 23 registros físicos em `estoque_placas`, a correção deve materializar/considerar essas unidades sem apagar os códigos existentes.
+- As placas já cadastradas com código permanecem como estão.
+- As unidades que existem em saldo e ainda não têm código individual devem aparecer como placas disponíveis sem código, para poderem receber código depois.
+
+### 3. Corrigir filtros
+- O filtro **Tipo** deve usar o tipo real do material da placa (`venda` ou `aluga`).
+- O filtro **Tamanho** deve usar o tamanho real do material.
+- O filtro **Material** e **Local** devem continuar funcionando.
+- Ao selecionar **Aluga**, as placas Aluga devem aparecer, mesmo que ainda estejam sem código.
+
+### 4. Preservar total e ações
+- O total disponível deve bater com as 67 unidades.
+- A tabela deve listar essas 67 unidades disponíveis, não só as 23 com código.
+- As placas sem código devem permitir atribuir código sem alterar saldo indevidamente.
+- Não mexer em instalação/baixa/histórico além do necessário para continuar funcionando com placas sem código.
+
+### 5. Validar
+- Conferir a tela `/estoque/placas`.
+- Confirmar que aparecem 67 disponíveis.
+- Confirmar que filtro **Tipo = Aluga** mostra as placas Aluga.
+- Confirmar que os campos de código/ações continuam visíveis.
+- Rodar verificação TypeScript.
+
+## Limite do ajuste
+
+Não vou redesenhar a página, não vou remover campos, não vou trocar a lógica da tela por saldo agregado e não vou mexer em outras páginas além do necessário para corrigir a listagem/filtros de placas.
