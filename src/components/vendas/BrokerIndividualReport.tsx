@@ -94,9 +94,10 @@ const queryConfig = {
 
 interface BrokerIndividualReportProps {
   teamFilter?: string;
+  showValues?: boolean;
 }
 
-export function BrokerIndividualReport({ teamFilter = "all" }: BrokerIndividualReportProps) {
+export function BrokerIndividualReport({ teamFilter = "all", showValues = true }: BrokerIndividualReportProps) {
   const [selectedBrokerId, setSelectedBrokerId] = useState<string>("");
   const [brokerSearchOpen, setBrokerSearchOpen] = useState(false);
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear().toString());

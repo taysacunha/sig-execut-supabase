@@ -1,29 +1,26 @@
-## Objetivo
-No relatório individual do corretor (`Relatórios > Corretores`), o card **Leads** hoje mostra apenas `Recebidos` (número grande) e a linha `Ativos: X | Visitas: Y`. Adicionar logo abaixo a informação de **Descartados**, com contagem, percentual e um ícone de alerta (âmbar) ou check (verde), seguindo exatamente o mesmo padrão visual já usado no dialog de Avaliação.
+## Problema
+Na página `Vendas > Relatórios`, aba **Corretores**, o botão de olho (`Eye`/`EyeOff`) no topo (`SalesReports.tsx`) alterna o state `showValues`, mas esse valor **não é repassado** ao componente `BrokerIndividualReport`. Por isso, o card **VGV Total** do relatório individual continua exibindo o valor mesmo com o olho desativado.
 
-## Regra do ícone (idêntica à Avaliação)
-- `archived / received > 0.5` (mais de 50% descartados) → `AlertTriangle` âmbar.
-- Caso contrário → `CheckCircle2` verde.
-- Se `received === 0` → considerar sem alerta (check verde), percentual `0%`.
+## Correção (apenas frontend, escopo mínimo)
 
-## Alterações (apenas frontend)
+### 1. `src/components/vendas/BrokerIndividualReport.tsx`
+- Adicionar prop opcional `showValues?: boolean` (default `true` para não quebrar outros usos) na interface `BrokerIndividualReportProps` e na assinatura da função.
+- No card **VGV Total** (linha ~679), trocar:
+  ```tsx
+  <div className="text-xl font-bold text-primary">{formatCurrencyFull(totalVGV)}</div>
+  ```
+  por:
+  ```tsx
+  <div className="text-xl font-bold text-primary">
+    {showValues ? formatCurrencyFull(totalVGV) : "R$ ******"}
+  </div>
+  ```
 
-### `src/components/vendas/BrokerIndividualReport.tsx`
-1. Query `broker-leads-history` (linha ~248): incluir `leads_archived` no `select` e no objeto retornado (novo campo `descartados`).
-2. Totais (linha ~376): adicionar
-   - `totalLeadsArchived = reportLeadsData.reduce((acc, l) => acc + l.descartados, 0)`
-   - `archivedPercent = totalLeads > 0 ? Math.round(totalLeadsArchived / totalLeads * 100) : 0`
-   - `hasLeadsAlert = totalLeads > 0 && totalLeadsArchived / totalLeads > 0.5`
-3. Imports: adicionar `AlertTriangle` e `CheckCircle2` de `lucide-react`.
-4. Card **Leads** (linhas ~724-737): manter valor grande (`totalLeads`) e a linha `Ativos: X | Visitas: Y`; adicionar logo abaixo uma segunda linha com o ícone (alerta/check) + `Descartados: N (P%)`, ex.:
+### 2. `src/pages/vendas/SalesReports.tsx`
+- Linha 815: passar a prop:
+  ```tsx
+  <BrokerIndividualReport teamFilter={selectedTeamId} showValues={showValues} />
+  ```
 
-   ```tsx
-   <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-     {hasLeadsAlert
-       ? <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-       : <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />}
-     Descartados: {totalLeadsArchived} ({archivedPercent}%)
-   </p>
-   ```
-
-Nenhum outro arquivo, query ou lógica de negócio é alterado. Sem mudanças no PDF/export nem no dialog de avaliação.
+## Fora do escopo
+- Gráfico "Evolução de VGV", tooltips, PDF export e demais lugares que exibem valores monetários no relatório individual não serão alterados, pois o usuário pediu especificamente o card **VGV Total**.
