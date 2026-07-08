@@ -59,6 +59,10 @@ type ResumoSaldoPlaca = {
   tamanho_outro: string | null;
 };
 
+type SaldoPlacaComMaterial = SaldoPlacaRow & {
+  material?: MaterialPlaca | null;
+};
+
 export default function EstoquePlacas() {
   const queryClient = useQueryClient();
   const { hasAccess, user } = useSystemAccess();
@@ -114,18 +118,39 @@ export default function EstoquePlacas() {
     queryKey: ["estoque-saldos-placas"],
     queryFn: async () => {
       const { data, error } = await fromEstoque("estoque_saldos")
-        .select("id, material_id, local_armazenamento_id, quantidade");
+        .select(`
+          id,
+          material_id,
+          local_armazenamento_id,
+          quantidade,
+          material:estoque_materiais!inner(
+            id,
+            nome,
+            categoria_id,
+            categoria,
+            unidade_medida,
+            estoque_minimo,
+            is_placa,
+            is_active,
+            tipo_uso,
+            tamanho,
+            tamanho_outro
+          )
+        `)
+        .gt("quantidade", 0)
+        .eq("material.is_active", true);
       if (error) throw error;
-      return ((data as unknown as SaldoPlacaRow[]) || []).filter((s) =>
-        s.quantidade > 0 && materiaisPlaca.some((m) => m.id === s.material_id)
-      );
+      const rows = (data as unknown as SaldoPlacaComMaterial[]) || [];
+      return rows.filter((s) => {
+        const material = s.material;
+        return !!material && (material.is_placa || material.nome.toLowerCase().startsWith("placa"));
+      });
     },
-    enabled: materiaisPlaca.length > 0,
   });
 
   const resumoSaldosPlaca = useMemo<ResumoSaldoPlaca[]>(() => {
     return saldosPlaca.map((s) => {
-      const material = materiaisPlaca.find((m) => m.id === s.material_id);
+      const material = s.material || materiaisPlaca.find((m) => m.id === s.material_id);
       const attrs = resolvePlacaAttributes(material);
       return {
         key: s.id,
@@ -182,8 +207,9 @@ export default function EstoquePlacas() {
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["estoque-placas"] });
-      queryClient.invalidateQueries({ queryKey: ["estoque-saldos"] });
-      queryClient.invalidateQueries({ queryKey: ["estoque-saldos-placas"] });
+    queryClient.invalidateQueries({ queryKey: ["estoque-saldos"] });
+    queryClient.invalidateQueries({ queryKey: ["estoque-saldos-placas"] });
+    queryClient.invalidateQueries({ queryKey: ["estoque-materiais-placa"] });
     queryClient.invalidateQueries({ queryKey: ["estoque-saldos-check"] });
     queryClient.invalidateQueries({ queryKey: ["estoque-movimentacoes"] });
   };
@@ -563,7 +589,12 @@ export default function EstoquePlacas() {
               ) : paginatedData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
                   <Tag className="h-12 w-12 mb-4 opacity-50" />
-                  <p>Nenhuma placa nesta categoria</p>
+                  <p>Nenhuma placa física individualizada nesta categoria</p>
+                  {aba === "disponivel" && resumoFiltrado.length > 0 && (
+                    <p className="mt-2 max-w-xl text-center text-sm">
+                      Há saldo agregado para estes filtros no bloco acima, mas ainda não há unidades físicas com código/registro individual para listar aqui.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <>
