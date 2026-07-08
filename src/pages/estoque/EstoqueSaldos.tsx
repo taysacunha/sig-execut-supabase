@@ -351,7 +351,11 @@ export default function EstoqueSaldos() {
   };
 
   // ─── Mutations ───
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["estoque-saldos"] });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["estoque-saldos"] });
+    queryClient.invalidateQueries({ queryKey: ["estoque-saldos-placas"] });
+    queryClient.invalidateQueries({ queryKey: ["estoque-materiais-placa"] });
+  };
 
   const entradaMutation = useMutation({
     mutationFn: async () => {

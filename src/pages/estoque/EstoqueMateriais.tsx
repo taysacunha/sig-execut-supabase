@@ -30,6 +30,10 @@ interface Material {
   categoria_id: string | null;
   estoque_minimo: number;
   is_active: boolean;
+  is_placa?: boolean | null;
+  tipo_uso?: "venda" | "aluga" | null;
+  tamanho?: "1x1" | "2x2" | "outro" | null;
+  tamanho_outro?: string | null;
 }
 
 const UNIDADES_MEDIDA = [
@@ -56,6 +60,7 @@ export default function EstoqueMateriais() {
   const [activeTab, setActiveTab] = useState("ativos");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [novaPlacaOpen, setNovaPlacaOpen] = useState(false);
+  const [editingPlaca, setEditingPlaca] = useState<Material | null>(null);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [toggleConfirm, setToggleConfirm] = useState<{ id: string; nome: string; newActive: boolean } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; nome: string } | null>(null);
@@ -192,6 +197,12 @@ export default function EstoqueMateriais() {
   };
 
   const openEdit = (m: Material) => {
+    // Placas usam o diálogo especializado (tem tipo_uso/tamanho/variante)
+    if (m.is_placa === true || m.nome.trim().toLowerCase().startsWith("placa")) {
+      setEditingPlaca(m);
+      setNovaPlacaOpen(true);
+      return;
+    }
     setEditingMaterial(m);
     setForm({
       nome: m.nome,
@@ -312,7 +323,23 @@ export default function EstoqueMateriais() {
         )}
       </div>
 
-      <NovaPlacaDialog open={novaPlacaOpen} onOpenChange={setNovaPlacaOpen} />
+      <NovaPlacaDialog
+        open={novaPlacaOpen}
+        onOpenChange={(o) => {
+          setNovaPlacaOpen(o);
+          if (!o) setEditingPlaca(null);
+        }}
+        editingMaterial={editingPlaca ? {
+          id: editingPlaca.id,
+          nome: editingPlaca.nome,
+          tipo_uso: editingPlaca.tipo_uso ?? null,
+          tamanho: editingPlaca.tamanho ?? null,
+          tamanho_outro: editingPlaca.tamanho_outro ?? null,
+          descricao: editingPlaca.descricao,
+          estoque_minimo: editingPlaca.estoque_minimo,
+          categoria_id: editingPlaca.categoria_id,
+        } : null}
+      />
 
       <Card>
         <CardHeader>
