@@ -1,28 +1,64 @@
-## Problema
+## Entendimento correto
 
-No diálogo **Nova saída para imóvel** (`src/components/estoque/placas/NovaSaidaDialog.tsx`):
+A placa pode sair para imóvel por dois caminhos:
 
-1. Aparecem campos **Tipo de uso** e **Tamanho** editáveis. Isso é incorreto: esses atributos pertencem ao material-placa selecionado e devem ser apenas exibidos como informação (read-only), nunca alterados na saída. Alterá-los cria inconsistência entre a placa física e o material.
-2. O select **Código da placa** mostra opções mesmo quando não há nenhum código cadastrado para o material/local — porque a lista `disponiveis` filtra por `tipo_uso`/`tamanho` que o usuário pode ter mudado, e/ou porque placas antigas com atributos inferidos passam pelo filtro.
+1. **Já existe uma placa disponível com código**
+  - O campo **Selecionar disponível** deve mostrar esses códigos.
+  - Ao confirmar, essa placa vai para o imóvel.
+2. **Só existem placas disponíveis sem código**
+  - O sistema não deve listar `(sem código) — id` como opção.
+  - Deve permitir **Criar novo código**.
+  - Ao confirmar, o sistema deve pegar **uma placa física disponível sem código** daquele material/local, atribuir o novo código a ela e então instalar no imóvel.
 
-## Correções
+Regra principal: **nenhuma placa sai para imóvel sem código cadastrado**. Mas uma placa sem código pode ser usada na saída se, no mesmo processo, o novo código for atribuído a ela.
 
-### 1. Remover edição de tipo de uso / tamanho no NovaSaidaDialog
-- Remover os `<Select>` de tipo de uso e tamanho e o input de "tamanho outro" do formulário.
-- Manter os estados internos (`tipoUso`, `tamanho`, `tamanhoOutro`) preenchidos automaticamente por `syncAttributesFromMaterial` a partir do material selecionado (via `resolvePlacaAttributes`), sem UI editável.
-- Exibir os atributos como texto informativo abaixo do material selecionado (ex.: "Aluga · 2x2"), apenas leitura.
-- Ao criar novo código (modo "novo"), usar os atributos do material — não do formulário.
+E também se todas já tiverem códigos, não deve ser possível cadastrar um novo código, afinal não terá onde colocá-lo já que não tem placa disponível para vincular esse código.
 
-### 2. Corrigir lista de códigos disponíveis
-- `disponiveis` deve filtrar estritamente por `material_id` + `local_armazenamento_id` + `status='disponivel'`. Como tipo/tamanho vêm do próprio material, o cruzamento por esses campos vira redundância e será removido do filtro.
-- Quando `disponiveis.length === 0`, esconder o Select (ou desabilitar com placeholder claro "Nenhum código disponível — crie um novo") e forçar o modo "novo".
-- Ajustar o rótulo do radio "Selecionar disponível (N)" para refletir a contagem real após o filtro corrigido.
+## Correção proposta
 
-### 3. Validação
-- Testar com material `Placa Aluga 2x2 Lona`: abrir Nova saída → confirmar que tipo/tamanho aparecem só como texto, e que o select de código está vazio quando não há placa cadastrada, oferecendo criar novo código.
+Arquivo: `src/components/estoque/placas/NovaSaidaDialog.tsx`
 
-## Arquivos
+### 1. Separar placas disponíveis em duas listas
 
-- `src/components/estoque/placas/NovaSaidaDialog.tsx` (única alteração — UI + filtro de `disponiveis`).
+- `disponiveisComCodigo`: placas `disponivel` do material/local com `codigo` preenchido.
+- `disponiveisSemCodigo`: placas `disponivel` do material/local sem `codigo`.
 
-Sem mudanças de banco, hooks ou outras telas.
+### 2. Campo “Selecionar disponível”
+
+- Mostrar apenas `disponiveisComCodigo`.
+- Nunca mostrar `(sem código) — id`.
+- O contador do radio deve contar apenas códigos reais disponíveis.
+
+### 3. Caminho “Criar novo código”
+
+- Ao confirmar, primeiro tentar usar uma placa de `disponiveisSemCodigo`.
+- Se existir, atualizar essa placa com:
+  - `codigo: novoCodigo`
+  - `status: instalada`
+  - imóvel e data da instalação
+- Se não existir placa física sem código, aí sim criar uma nova linha em `estoque_placas` com esse código e instalar.
+
+### 4. Validações
+
+- Não permitir confirmar sem código no caminho “Criar novo código”.
+- Manter verificação de duplicidade do código.
+- Manter consumo de 1 unidade do saldo como já ocorre.
+
+### 5. UI
+
+- Se houver código existente, permitir selecionar.
+- Se não houver código existente, deixar o usuário em “Criar novo código”.
+- A informação de tipo/tamanho continua somente leitura, derivada do material selecionado.
+
+## Resultado esperado
+
+Com 60 placas disponíveis sem código:
+
+- O select não mostra 60 itens sem código.
+- O usuário digita um novo código.
+- O sistema pega uma dessas 60 placas, vincula o código digitado e instala no imóvel.
+
+Com placas disponíveis com código:
+
+- O select mostra apenas os códigos cadastrados.
+- O usuário escolhe um código e instala no imóvel.
