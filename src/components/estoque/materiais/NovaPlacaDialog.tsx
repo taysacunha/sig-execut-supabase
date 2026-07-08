@@ -20,32 +20,76 @@ const fromEstoque = (t: string) => supabase.from(t as any);
 interface Props {
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  editingMaterial?: {
+    id: string;
+    nome: string;
+    tipo_uso: TipoUso | null;
+    tamanho: Tamanho | null;
+    tamanho_outro: string | null;
+    descricao: string | null;
+    estoque_minimo: number;
+    categoria_id: string | null;
+  } | null;
 }
 
 interface CategoriaRow { id: string; nome: string; is_active: boolean; }
 
-const buildNomePlaca = (tipoUso: TipoUso, tamanho: Tamanho, tamanhoOutro: string) => {
+const buildNomePlaca = (tipoUso: TipoUso, tamanho: Tamanho, tamanhoOutro: string, variante: string) => {
   const tipo = tipoUso === "aluga" ? "Aluga" : "Venda";
   const medida = tamanho === "outro" ? tamanhoOutro.trim() : tamanho.toUpperCase();
-  return `Placa ${tipo} ${medida}`.trim();
+  const base = `Placa ${tipo} ${medida}`.trim();
+  const v = variante.trim();
+  return v ? `${base} ${v}` : base;
 };
 
-export function NovaPlacaDialog({ open, onOpenChange }: Props) {
+/**
+ * Extrai a "variante" do nome preservando texto extra além do padrão
+ * "Placa <Venda|Aluga> <medida>". Ex.: "Placa Aluga 2x2 Lona" → "Lona".
+ */
+function extractVariante(nome: string, tipoUso: TipoUso | null, tamanho: Tamanho | null, tamanhoOutro: string | null): string {
+  if (!nome || !tipoUso || !tamanho) return "";
+  const tipo = tipoUso === "aluga" ? "Aluga" : "Venda";
+  const medida = tamanho === "outro" ? (tamanhoOutro || "").trim() : tamanho.toUpperCase();
+  const base = `Placa ${tipo} ${medida}`.trim();
+  if (!base) return "";
+  const lowerNome = nome.trim();
+  const lowerBase = base.toLowerCase();
+  if (lowerNome.toLowerCase().startsWith(lowerBase)) {
+    return lowerNome.slice(base.length).trim();
+  }
+  return "";
+}
+
+export function NovaPlacaDialog({ open, onOpenChange, editingMaterial }: Props) {
   const queryClient = useQueryClient();
+  const isEdit = !!editingMaterial;
 
   const [tipoUso, setTipoUso] = useState<TipoUso>("venda");
   const [tamanho, setTamanho] = useState<Tamanho>("1x1");
   const [tamanhoOutro, setTamanhoOutro] = useState("");
+  const [variante, setVariante] = useState("");
   const [categoriaId, setCategoriaId] = useState<string>("none");
   const [estoqueMinimo, setEstoqueMinimo] = useState(0);
   const [obs, setObs] = useState("");
 
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    if (editingMaterial) {
+      const tu: TipoUso = editingMaterial.tipo_uso || "venda";
+      const tm: Tamanho = editingMaterial.tamanho || "outro";
+      const to = editingMaterial.tamanho_outro || "";
+      setTipoUso(tu);
+      setTamanho(tm);
+      setTamanhoOutro(to);
+      setVariante(extractVariante(editingMaterial.nome, tu, tm, to));
+      setCategoriaId(editingMaterial.categoria_id || "none");
+      setEstoqueMinimo(editingMaterial.estoque_minimo ?? 0);
+      setObs(editingMaterial.descricao || "");
+    } else {
       setTipoUso("venda"); setTamanho("1x1"); setTamanhoOutro("");
-      setCategoriaId("none"); setEstoqueMinimo(0); setObs("");
+      setVariante(""); setCategoriaId("none"); setEstoqueMinimo(0); setObs("");
     }
-  }, [open]);
+  }, [open, editingMaterial]);
 
   const { data: categorias = [] } = useQuery({
     queryKey: ["estoque-categorias-nova-placa"],
@@ -61,7 +105,39 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
   const mutation = useMutation({
     mutationFn: async () => {
       if (tamanho === "outro" && !tamanhoOutro.trim()) throw new Error("Especifique o tamanho");
-      const nome = buildNomePlaca(tipoUso, tamanho, tamanhoOutro);
+      const nome = buildNomePlaca(tipoUso, tamanho, tamanhoOutro, variante);
+      const categoriaNome = categoriaId === "none"
+        ? null
+        : categorias.find((c) => c.id === categoriaId)?.nome || null;
+
+      if (isEdit && editingMaterial) {
+        // Se o nome mudou, checar colisão com outro material
+        if (nome.toLowerCase() !== editingMaterial.nome.toLowerCase()) {
+          const { data: colisao, error: colErr } = await fromEstoque("estoque_materiais")
+            .select("id")
+            .ilike("nome", nome)
+            .neq("id", editingMaterial.id)
+            .limit(1)
+            .maybeSingle();
+          if (colErr) throw colErr;
+          if (colisao) throw new Error(`Já existe outro material com o nome "${nome}"`);
+        }
+        const { error } = await fromEstoque("estoque_materiais")
+          .update({
+            nome,
+            descricao: obs.trim() || null,
+            categoria: categoriaNome,
+            categoria_id: categoriaId === "none" ? null : categoriaId,
+            estoque_minimo: estoqueMinimo,
+            is_placa: true,
+            tipo_uso: tipoUso,
+            tamanho,
+            tamanho_outro: tamanho === "outro" ? (tamanhoOutro.trim() || null) : null,
+          } as any)
+          .eq("id", editingMaterial.id);
+        if (error) throw error;
+        return;
+      }
 
       const { data: existente, error: checkError } = await fromEstoque("estoque_materiais")
         .select("id, is_active")
@@ -83,10 +159,6 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
         return;
       }
 
-      const categoriaNome = categoriaId === "none"
-        ? null
-        : categorias.find((c) => c.id === categoriaId)?.nome || null;
-
       const { error } = await fromEstoque("estoque_materiais").insert({
         nome,
         descricao: obs.trim() || null,
@@ -107,11 +179,12 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
       queryClient.invalidateQueries({ queryKey: ["estoque-materiais-ativos"] });
       queryClient.invalidateQueries({ queryKey: ["estoque-materiais-placa"] });
       queryClient.invalidateQueries({ queryKey: ["estoque-saldos"] });
+      queryClient.invalidateQueries({ queryKey: ["estoque-saldos-placas"] });
       queryClient.invalidateQueries({ queryKey: ["estoque-saldos-check"] });
-      toast.success("Material de placa cadastrado!");
+      toast.success(isEdit ? "Placa atualizada!" : "Material de placa cadastrado!");
       onOpenChange(false);
     },
-    onError: (e: any) => toast.error(e?.message || "Erro ao cadastrar material de placa"),
+    onError: (e: any) => toast.error(e?.message || (isEdit ? "Erro ao atualizar placa" : "Erro ao cadastrar material de placa")),
   });
 
   const podeSalvar =
@@ -119,21 +192,28 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
 
   const nomePreview = tamanho === "outro" && !tamanhoOutro.trim()
     ? "Placa Venda/Aluga ..."
-    : buildNomePlaca(tipoUso, tamanho, tamanhoOutro);
+    : buildNomePlaca(tipoUso, tamanho, tamanhoOutro, variante);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Nova Placa</DialogTitle>
+          <DialogTitle>{isEdit ? "Editar Placa" : "Nova Placa"}</DialogTitle>
           <DialogDescription>
-            Cadastre a placa como material. Depois registre o saldo na aba <strong>Saldos</strong> para ela aparecer na aba <strong>Placas</strong>.
+            {isEdit
+              ? "Ajuste os atributos da placa. O nome é recalculado a partir de Tipo de uso, Tamanho e Variante."
+              : <>Cadastre a placa como material. Depois registre o saldo na aba <strong>Saldos</strong> para ela aparecer na aba <strong>Placas</strong>.</>}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-2">
           <div className="rounded-md border bg-muted/40 p-3 text-sm">
-            Nome que será cadastrado: <strong>{nomePreview}</strong>
+            {isEdit ? "Novo nome:" : "Nome que será cadastrado:"} <strong>{nomePreview}</strong>
+            {isEdit && editingMaterial && editingMaterial.nome !== nomePreview && (
+              <div className="mt-1 text-xs text-muted-foreground">
+                (Nome atual: <em>{editingMaterial.nome}</em>)
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -182,6 +262,19 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
           )}
 
           <div className="space-y-2">
+            <Label>Variante / material da placa (opcional)</Label>
+            <Input
+              value={variante}
+              onChange={(e) => setVariante(e.target.value)}
+              maxLength={30}
+              placeholder="Ex.: Lona, PVC, MDF"
+            />
+            <p className="text-xs text-muted-foreground">
+              Aparece no final do nome, para diferenciar placas do mesmo tipo e tamanho.
+            </p>
+          </div>
+
+          <div className="space-y-2">
             <Label>Estoque mínimo</Label>
             <Input
               type="number"
@@ -201,7 +294,7 @@ export function NovaPlacaDialog({ open, onOpenChange }: Props) {
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button disabled={!podeSalvar || mutation.isPending} onClick={() => mutation.mutate()}>
             {mutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Cadastrar material
+            {isEdit ? "Salvar alterações" : "Cadastrar material"}
           </Button>
         </DialogFooter>
       </DialogContent>
