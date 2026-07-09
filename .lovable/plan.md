@@ -1,48 +1,55 @@
-## Objetivo
+# Atualizar registro em /dev
 
-Resolver apenas 2 findings do scanner de segurança:
+Objetivo: refletir na tabela `dev_tracker` o que foi implementado desde a última atualização e revisar itens que evoluíram.
 
-1. **`user_profiles_update_no_with_check`** — corrigir de fato.
-2. **`ferias_colaboradores_birthdate_exposure`** — ignorar com justificativa (regra de negócio: qualquer usuário com acesso ao módulo Férias deve continuar vendo a data de nascimento para o quadro de aniversariantes).
+## Como será feito
+Um único script SQL idempotente (usa `ON CONFLICT (system_name, feature_name)`) executado via ferramenta de migração:
+1. `INSERT ... ON CONFLICT DO NOTHING` para as novas funcionalidades.
+2. `UPDATE` para revisar descrição/horas dos itens antigos que ganharam funcionalidade nova.
 
-Nenhum outro finding será tocado.
+Nada existente é apagado.
 
-## 1. Fix: `user_profiles` UPDATE sem WITH CHECK
+## Novos itens a inserir
 
-Nova migration `supabase/migrations/<timestamp>_user_profiles_update_with_check.sql`:
+### Infraestrutura
+- Guards de autorização em RPCs (`rpc_authorization_guards`) — proteção server-side de funções sensíveis.
+- Null-guards em `is_admin_or_super` e política de DELETE (`security_null_guards_and_delete_policy`).
+- Correção de política INSERT em `module_audit_logs`.
+- Correção de segurança em `user_profiles` (WITH CHECK anti-hijack).
+- View `estoque_view_ferias_estrutura` — leitura da estrutura de Férias pelo Estoque.
 
-```sql
-DROP POLICY IF EXISTS "Users can update own profile" ON public.user_profiles;
+### Estoque — módulo de Placas (grande adição)
+- CRUD de placas de imóveis (`estoque_placas`, `estoque_placas_historico`).
+- Atribuição de código à placa.
+- Saída de placa para imóvel com baixa automática de saldo do material.
+- Fluxo de reparo de placa (histórico e retorno ao estoque).
+- Categoria e código opcional em placas.
+- Atributos de material como placa (`estoque_materiais_placa_atributos`).
+- Geração de PDF de placas.
+- Estado de recebimento da solicitação (`estoque_solicitacao_recebimento_state`) — refinamento do workflow.
+- RPC dedicada `confirmar_recebimento` para solicitante.
+- Restrição admin-only em `estoque_saldos` (RLS).
 
-CREATE POLICY "Users can update own profile"
-  ON public.user_profiles
-  FOR UPDATE
-  TO authenticated
-  USING (user_id = auth.uid())
-  WITH CHECK (user_id = auth.uid());
-```
+### Férias
+- Módulo de Premiações de férias (1º e 2º período) com ordem obrigatória e atesto (`ferias_premiacoes`, `premiacao_recebimento`) — expandir descrição do item existente com regras finalizadas.
+- Validação de range em `period_specific_day_configs`.
+- Correção do check de motivo de afastamento (`ferias_afastamentos_motivo_check_fix`).
+- Isolamento reforçado de dados sensíveis (`ferias_colaboradores_dados_sensiveis`) — revisar horas do item existente.
+- Backfill de quinzena de venda default 2.
 
-Efeito: além de restringir *qual* linha o usuário pode atualizar (`USING`), o `WITH CHECK` impede que ele reescreva `user_id` para apontar para outro usuário (evita sequestro de perfil).
+## Revisões de itens existentes
+- **Estoque › Solicitações de materiais**: descrição atualizada para incluir novo estado de recebimento + RPC.
+- **Estoque › Gestão de saldos**: descrição atualizada para RLS admin-only.
+- **Férias › Premiações**: descrição consolidada com regra de ordem, atesto e PDF.
+- **Infraestrutura › Correções de RLS de segurança**: adicionar menção aos null-guards, RPC guards e WITH CHECK de user_profiles.
 
-Nenhuma alteração de código no frontend — a policy é transparente para quem já só edita o próprio perfil.
-
-## 2. Ignore: exposição de `data_nascimento`
-
-Chamada de `security--manage_security_finding` com:
-
-- `operation`: `ignore`
-- `scanner_name`: `supabase_lov`
-- `internal_id`: `ferias_colaboradores_birthdate_exposure`
-- `explanation`: "Comportamento intencional. O módulo Férias mantém o quadro de Aniversariantes e o widget do dashboard visíveis a todos os usuários com `can_view_system('ferias')`. A data de nascimento é dado corporativo compartilhado internamente. CPF permanece isolado em `ferias_colaboradores_dados_sensiveis`."
-
-## 3. Atualização da `@security-memory`
-
-Adicionar nota curta registrando:
-- `user_profiles` UPDATE agora exige `WITH CHECK (user_id = auth.uid())`.
-- Exposição de `data_nascimento` em `ferias_colaboradores` para qualquer viewer de `ferias` é intencional (feature Aniversariantes). CPF continua em tabela sensível separada.
+## Detalhes técnicos
+- Um arquivo SQL será criado via migration tool (mesmo padrão dos seeds anteriores em `.lovable/dev_tracker_update_seed.sql`).
+- Horas estimadas seguem a mesma escala/heurística dos seeds anteriores (2h–20h por item conforme complexidade). Custo fica em 0 — o valor/hora é aplicado no frontend.
+- `display_order` continua na sequência de cada sistema.
+- Idempotente: rodar de novo não duplica nem sobrescreve.
 
 ## Fora de escopo
-
-- Qualquer refactor de aniversariantes/dashboard/PDFs.
-- Movimentação da coluna `data_nascimento` para tabela sensível.
-- Outros findings do scanner.
+- Mudanças na UI da página /dev.
+- Alterar `hourly_rate` (permanece controlado pelo usuário no frontend).
+- Excluir itens antigos.
