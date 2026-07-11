@@ -176,13 +176,11 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
   );
 
   useEffect(() => {
-    if (modo === "existente" && disponiveisComCodigo.length === 0 && disponiveisSemCodigo.length > 0 && materialId && localId) {
+    if (!materialId || !localId) return;
+    if (disponiveisComCodigo.length === 0 && modo === "existente") {
       setModo("novo");
     }
-    if (modo === "novo" && disponiveisSemCodigo.length === 0 && disponiveisComCodigo.length > 0 && materialId && localId) {
-      setModo("existente");
-    }
-  }, [disponiveisComCodigo.length, disponiveisSemCodigo.length, modo, materialId, localId]);
+  }, [disponiveisComCodigo.length, modo, materialId, localId]);
 
   const placaSelecionada = useMemo(
     () => placas.find((p) => p.id === placaId) || null,
@@ -241,26 +239,28 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
           .select("id").eq("codigo", c).limit(1).maybeSingle();
         if (existente) throw new Error(`Código "${c}" já existe.`);
 
-        const placaSemCodigo = disponiveisSemCodigo[0];
-        if (!placaSemCodigo) {
-          throw new Error("Não há placa física sem código disponível para receber este código.");
-        }
-
-        const updatePayload: any = {
+        const attrs = resolvePlacaAttributes(materialSelecionado);
+        const insertPayload: any = {
           codigo: c,
+          material_id: materialId,
+          categoria_id: null,
+          tipo_uso: attrs.tipo_uso,
+          tamanho: attrs.tamanho,
+          tamanho_outro: attrs.tamanho_outro,
+          local_armazenamento_id: localId,
           status: "instalada",
           imovel_codigo_atual: imv,
           data_instalacao_atual: data,
           observacoes: obs.trim() || null,
+          created_by: user?.id,
         };
 
-        const { data: atualizada, error } = await fromEstoque("estoque_placas")
-          .update(updatePayload)
-          .eq("id", placaSemCodigo.id)
+        const { data: criada, error } = await fromEstoque("estoque_placas")
+          .insert(insertPayload)
           .select("*")
           .single();
         if (error) throw error;
-        placa = atualizada as unknown as Placa;
+        placa = criada as unknown as Placa;
 
         await fromEstoque("estoque_placas_historico").insert({
           placa_id: placa.id,
@@ -321,7 +321,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
     && !!imovel.trim()
     && (modo === "existente"
         ? !!placaId
-        : disponiveisSemCodigo.length > 0 && !!novoCodigo.trim() && codigoCheck !== "duplicado");
+        : !!novoCodigo.trim() && codigoCheck !== "duplicado");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -398,7 +398,7 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="novo" id="modo-novo" disabled={disponiveisSemCodigo.length === 0} />
+                <RadioGroupItem value="novo" id="modo-novo" disabled={saldoLocal <= 0} />
                 <Label htmlFor="modo-novo" className="cursor-pointer text-sm font-normal">
                   Criar novo código
                 </Label>
@@ -431,11 +431,11 @@ export function NovaSaidaDialog({ open, onOpenChange }: Props) {
                   onChange={(e) => setNovoCodigo(e.target.value)}
                   maxLength={30}
                   placeholder="Ex: P-1234"
-                  disabled={disponiveisSemCodigo.length === 0}
+                  disabled={saldoLocal <= 0}
                 />
-                {disponiveisSemCodigo.length === 0 && (
-                  <p className="text-xs text-destructive">Não há placa sem código disponível para vincular um novo código.</p>
-                )}
+                <p className="text-xs text-muted-foreground">
+                  Uma nova placa física será criada com este código e marcada como instalada. 1 unidade do saldo será consumida.
+                </p>
                 {codigoCheck === "duplicado" && (
                   <p className="text-xs text-destructive">Este código já está cadastrado.</p>
                 )}
