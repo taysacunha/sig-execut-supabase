@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   Loader2, Tag, Wrench, ArrowLeftRight, AlertTriangle, Plus,
   History as HistoryIcon, ShieldAlert, Trash2, Tag as TagIcon, Layers, Package, Info,
+  RefreshCcw,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ import {
 import { PlacasPDFGenerator } from "@/components/estoque/placas/PlacasPDFGenerator";
 import { NovaSaidaDialog } from "@/components/estoque/placas/NovaSaidaDialog";
 import { AtribuirCodigoDialog } from "@/components/estoque/placas/AtribuirCodigoDialog";
+import { ReaproveitarCodigoDialog } from "@/components/estoque/placas/ReaproveitarCodigoDialog";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -101,6 +103,7 @@ export default function EstoquePlacas() {
   const [novaSaidaDialog, setNovaSaidaDialog] = useState(false);
   const [novaSaidaDefaults, setNovaSaidaDefaults] = useState<{ materialId?: string; localId?: string; mode?: "novo" | "existente" }>({});
   const [atribuirCodigoDialog, setAtribuirCodigoDialog] = useState(false);
+  const [reaproveitarDialog, setReaproveitarDialog] = useState(false);
   const [selected, setSelected] = useState<Placa | null>(null);
 
   const { data: placas = [], isLoading } = usePlacas();
