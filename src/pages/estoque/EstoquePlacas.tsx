@@ -534,7 +534,14 @@ export default function EstoquePlacas() {
         initialMode={novaSaidaDefaults.mode}
       />
 
-      <Tabs value={aba} onValueChange={(v) => { setAba(v as AbaStatus); setCurrentPage(1); }}>
+      <Tabs value={aba} onValueChange={(v) => {
+        setAba(v as AbaStatus);
+        setCurrentPage(1);
+        setTipoFiltro("todos");
+        setTamanhoFiltro("todos");
+        setMaterialFiltro("todos");
+        setLocalFiltro("todos");
+      }}>
         <TabsList>
           <TabsTrigger value="disponivel">
             Disponíveis <Badge variant="secondary" className="ml-2">{counts.disponivel}</Badge>
