@@ -3493,6 +3493,10 @@ export type Database = {
         Returns: boolean
       }
       make_first_admin: { Args: { _user_id: string }; Returns: boolean }
+      reaproveitar_codigo_placa: {
+        Args: { p_placa_destino_id: string; p_placa_origem_id: string }
+        Returns: string
+      }
       recalcular_saldo_placas: {
         Args: { _local_id: string; _material_id: string }
         Returns: undefined
