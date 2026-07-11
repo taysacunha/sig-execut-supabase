@@ -747,10 +747,16 @@ export default function EstoquePlacas() {
                                   <Plus className="h-4 w-4" />
                                 </Button>
                               ) : p && !p.codigo && (
-                                <Button size="sm" variant="ghost" title="Atribuir código"
-                                  onClick={() => { setSelected(p); setAtribuirCodigoDialog(true); }}>
-                                  <TagIcon className="h-4 w-4 text-amber-500" />
-                                </Button>
+                                <>
+                                  <Button size="sm" variant="ghost" title="Atribuir código"
+                                    onClick={() => { setSelected(p); setAtribuirCodigoDialog(true); }}>
+                                    <TagIcon className="h-4 w-4 text-amber-500" />
+                                  </Button>
+                                  <Button size="sm" variant="ghost" title="Reaproveitar código de placa roubada/perdida"
+                                    onClick={() => { setSelected(p); setReaproveitarDialog(true); }}>
+                                    <RefreshCcw className="h-4 w-4 text-blue-500" />
+                                  </Button>
+                                </>
                               )}
                               {p?.status === "disponivel" && (
                                 <Button size="sm" variant="ghost" title="Instalar esta placa em um imóvel"
