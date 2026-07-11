@@ -688,7 +688,7 @@ export default function EstoquePlacas() {
                         <TableHead>Material</TableHead>
                         <TableHead>Tipo</TableHead>
                         <TableHead>Tamanho</TableHead>
-                        <TableHead>Status</TableHead>
+                        {aba !== "disponivel" && <TableHead>Status</TableHead>}
                         <TableHead>Imóvel atual</TableHead>
                         <TableHead>Local armazenamento</TableHead>
                         <TableHead className="text-right">Ações</TableHead>
@@ -716,17 +716,15 @@ export default function EstoquePlacas() {
                           <TableCell>
                             {row.tamanho === "outro" ? `Outro (${row.tamanho_outro || "-"})` : TAMANHO_LABELS[row.tamanho]}
                           </TableCell>
-                          <TableCell>
-                            {row.rowType === "saldo" ? (
-                              <Badge variant="outline" className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30">
-                                Saldo agregado
-                              </Badge>
-                            ) : p ? (
-                              <Badge variant="outline" className={STATUS_COLORS[p.status]}>
-                                {STATUS_LABELS[p.status]}
-                              </Badge>
-                            ) : null}
-                          </TableCell>
+                          {aba !== "disponivel" && (
+                            <TableCell>
+                              {p ? (
+                                <Badge variant="outline" className={STATUS_COLORS[p.status]}>
+                                  {STATUS_LABELS[p.status]}
+                                </Badge>
+                              ) : null}
+                            </TableCell>
+                          )}
                           <TableCell className="text-sm">
                             {row.imovel_codigo_atual || "—"}
                             {row.data_instalacao_atual && (
