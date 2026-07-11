@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   Loader2, Tag, Wrench, ArrowLeftRight, AlertTriangle, Plus,
   History as HistoryIcon, ShieldAlert, Trash2, Tag as TagIcon, Layers, Package, Info,
+  RefreshCcw,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ import {
 import { PlacasPDFGenerator } from "@/components/estoque/placas/PlacasPDFGenerator";
 import { NovaSaidaDialog } from "@/components/estoque/placas/NovaSaidaDialog";
 import { AtribuirCodigoDialog } from "@/components/estoque/placas/AtribuirCodigoDialog";
+import { ReaproveitarCodigoDialog } from "@/components/estoque/placas/ReaproveitarCodigoDialog";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -101,6 +103,7 @@ export default function EstoquePlacas() {
   const [novaSaidaDialog, setNovaSaidaDialog] = useState(false);
   const [novaSaidaDefaults, setNovaSaidaDefaults] = useState<{ materialId?: string; localId?: string; mode?: "novo" | "existente" }>({});
   const [atribuirCodigoDialog, setAtribuirCodigoDialog] = useState(false);
+  const [reaproveitarDialog, setReaproveitarDialog] = useState(false);
   const [selected, setSelected] = useState<Placa | null>(null);
 
   const { data: placas = [], isLoading } = usePlacas();
@@ -744,10 +747,16 @@ export default function EstoquePlacas() {
                                   <Plus className="h-4 w-4" />
                                 </Button>
                               ) : p && !p.codigo && (
-                                <Button size="sm" variant="ghost" title="Atribuir código"
-                                  onClick={() => { setSelected(p); setAtribuirCodigoDialog(true); }}>
-                                  <TagIcon className="h-4 w-4 text-amber-500" />
-                                </Button>
+                                <>
+                                  <Button size="sm" variant="ghost" title="Atribuir código"
+                                    onClick={() => { setSelected(p); setAtribuirCodigoDialog(true); }}>
+                                    <TagIcon className="h-4 w-4 text-amber-500" />
+                                  </Button>
+                                  <Button size="sm" variant="ghost" title="Reaproveitar código de placa roubada/perdida"
+                                    onClick={() => { setSelected(p); setReaproveitarDialog(true); }}>
+                                    <RefreshCcw className="h-4 w-4 text-blue-500" />
+                                  </Button>
+                                </>
                               )}
                               {p?.status === "disponivel" && (
                                 <Button size="sm" variant="ghost" title="Instalar esta placa em um imóvel"
@@ -834,6 +843,14 @@ export default function EstoquePlacas() {
       <AtribuirCodigoDialog
         open={atribuirCodigoDialog}
         onOpenChange={setAtribuirCodigoDialog}
+        placa={selected}
+        materialNome={selected ? materialNome(selected.material_id) : ""}
+        localNome={selected ? localNome(selected.local_armazenamento_id) : ""}
+      />
+
+      <ReaproveitarCodigoDialog
+        open={reaproveitarDialog}
+        onOpenChange={setReaproveitarDialog}
         placa={selected}
         materialNome={selected ? materialNome(selected.material_id) : ""}
         localNome={selected ? localNome(selected.local_armazenamento_id) : ""}

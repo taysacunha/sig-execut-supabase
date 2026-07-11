@@ -41,7 +41,9 @@ export interface Placa {
 export interface PlacaHistorico {
   id: string;
   placa_id: string;
-  tipo: "criacao" | "reposicao" | "instalacao" | "retirada" | "roubo" | "perda" | "baixa";
+  tipo:
+    | "criacao" | "reposicao" | "instalacao" | "retirada"
+    | "roubo" | "perda" | "baixa" | "reaproveitamento_codigo";
   imovel_codigo: string | null;
   data_evento: string;
   data_retorno: string | null;
@@ -85,6 +87,7 @@ export const HIST_LABELS: Record<PlacaHistorico["tipo"], string> = {
   roubo: "Roubo",
   perda: "Perda",
   baixa: "Baixa",
+  reaproveitamento_codigo: "Reaproveitamento de código",
 };
 
 export function inferPlacaAttributes(nome: string): {
@@ -140,6 +143,25 @@ export function usePlacas() {
       const { data, error } = await fromEstoque("estoque_placas")
         .select("*")
         .order("codigo");
+      if (error) throw error;
+      return (data as unknown as Placa[]) || [];
+    },
+  });
+}
+
+/**
+ * Códigos de placas roubadas/perdidas que ainda possuem código (não reaproveitados).
+ * Fonte da lista de "códigos disponíveis para reaproveitamento".
+ */
+export function useCodigosReaproveitaveis() {
+  return useQuery({
+    queryKey: ["estoque-placas-codigos-reaproveitaveis"],
+    queryFn: async () => {
+      const { data, error } = await fromEstoque("estoque_placas")
+        .select("*")
+        .in("status", ["roubada", "perdida"])
+        .not("codigo", "is", null)
+        .order("updated_at", { ascending: false });
       if (error) throw error;
       return (data as unknown as Placa[]) || [];
     },
