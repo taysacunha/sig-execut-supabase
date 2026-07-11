@@ -99,6 +99,7 @@ export default function EstoquePlacas() {
   const [historicoDialog, setHistoricoDialog] = useState(false);
   const [excluirDialog, setExcluirDialog] = useState(false);
   const [novaSaidaDialog, setNovaSaidaDialog] = useState(false);
+  const [novaSaidaDefaults, setNovaSaidaDefaults] = useState<{ materialId?: string; localId?: string; mode?: "novo" | "existente" }>({});
   const [atribuirCodigoDialog, setAtribuirCodigoDialog] = useState(false);
   const [selected, setSelected] = useState<Placa | null>(null);
 
@@ -515,14 +516,20 @@ export default function EstoquePlacas() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => setNovaSaidaDialog(true)} title="Escolha o material e local. Para uma placa específica, use o ícone de chave inglesa na lista abaixo.">
+          <Button onClick={() => { setNovaSaidaDefaults({}); setNovaSaidaDialog(true); }} title="Escolha o material e local. Para uma placa específica, use o ícone de chave inglesa na lista abaixo.">
             <Plus className="h-4 w-4 mr-2" /> Nova saída para imóvel
           </Button>
           <PlacasPDFGenerator placas={placas} />
         </div>
       </div>
 
-      <NovaSaidaDialog open={novaSaidaDialog} onOpenChange={setNovaSaidaDialog} />
+      <NovaSaidaDialog
+        open={novaSaidaDialog}
+        onOpenChange={setNovaSaidaDialog}
+        initialMaterialId={novaSaidaDefaults.materialId}
+        initialLocalId={novaSaidaDefaults.localId}
+        initialMode={novaSaidaDefaults.mode}
+      />
 
       <Tabs value={aba} onValueChange={(v) => { setAba(v as AbaStatus); setCurrentPage(1); }}>
         <TabsList>
@@ -730,7 +737,10 @@ export default function EstoquePlacas() {
                             <div className="flex justify-end gap-1 flex-wrap">
                               {row.rowType === "saldo" ? (
                                 <Button size="sm" variant="ghost" title="Criar código e instalar em um imóvel"
-                                  onClick={() => setNovaSaidaDialog(true)}>
+                                  onClick={() => {
+                                    setNovaSaidaDefaults({ materialId: row.material_id, localId: row.local_armazenamento_id || undefined, mode: "novo" });
+                                    setNovaSaidaDialog(true);
+                                  }}>
                                   <Plus className="h-4 w-4" />
                                 </Button>
                               ) : p && !p.codigo && (
