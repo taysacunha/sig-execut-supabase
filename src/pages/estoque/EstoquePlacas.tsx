@@ -848,6 +848,14 @@ export default function EstoquePlacas() {
         localNome={selected ? localNome(selected.local_armazenamento_id) : ""}
       />
 
+      <ReaproveitarCodigoDialog
+        open={reaproveitarDialog}
+        onOpenChange={setReaproveitarDialog}
+        placa={selected}
+        materialNome={selected ? materialNome(selected.material_id) : ""}
+        localNome={selected ? localNome(selected.local_armazenamento_id) : ""}
+      />
+
       <ExcluirPlacaDialog
         open={excluirDialog}
         onOpenChange={setExcluirDialog}
