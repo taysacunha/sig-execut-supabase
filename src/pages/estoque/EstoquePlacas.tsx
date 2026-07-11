@@ -59,6 +59,24 @@ type ResumoSaldoPlaca = {
   tamanho_outro: string | null;
 };
 
+type PlacaTabelaRow = {
+  rowType: "placa" | "saldo";
+  id: string;
+  codigo: string | null;
+  material_id: string;
+  material_nome: string;
+  tipo_uso: "venda" | "aluga";
+  tamanho: "1x1" | "2x2" | "outro";
+  tamanho_outro: string | null;
+  local_armazenamento_id: string | null;
+  local_nome: string;
+  status: PlacaStatus | "saldo_agregado";
+  imovel_codigo_atual: string | null;
+  data_instalacao_atual: string | null;
+  quantidade: number;
+  placa?: Placa;
+};
+
 type SaldoPlacaComMaterial = SaldoPlacaRow & {
   material?: MaterialPlaca | null;
 };
@@ -81,6 +99,7 @@ export default function EstoquePlacas() {
   const [historicoDialog, setHistoricoDialog] = useState(false);
   const [excluirDialog, setExcluirDialog] = useState(false);
   const [novaSaidaDialog, setNovaSaidaDialog] = useState(false);
+  const [novaSaidaDefaults, setNovaSaidaDefaults] = useState<{ materialId?: string; localId?: string; mode?: "novo" | "existente" }>({});
   const [atribuirCodigoDialog, setAtribuirCodigoDialog] = useState(false);
   const [selected, setSelected] = useState<Placa | null>(null);
 
@@ -114,7 +133,7 @@ export default function EstoquePlacas() {
   const materialNome = (id: string | null) =>
     id ? (materiaisPlaca.find((m) => m.id === id)?.nome || "—") : "—";
 
-  const { data: saldosPlaca = [] } = useQuery({
+  const { data: saldosPlaca = [], isLoading: isLoadingSaldosPlaca } = useQuery({
     queryKey: ["estoque-saldos-placas"],
     queryFn: async () => {
       const { data, error } = await fromEstoque("estoque_saldos")
@@ -189,8 +208,63 @@ export default function EstoquePlacas() {
     });
   }, [placas, aba, tipoFiltro, tamanhoFiltro, materialFiltro, localFiltro]);
 
+  const linhasTabela = useMemo<PlacaTabelaRow[]>(() => {
+    const placaRows = placasFiltradas.map((p) => ({
+      rowType: "placa" as const,
+      id: p.id,
+      codigo: p.codigo,
+      material_id: p.material_id,
+      material_nome: materialNome(p.material_id),
+      tipo_uso: p.tipo_uso,
+      tamanho: p.tamanho,
+      tamanho_outro: p.tamanho_outro,
+      local_armazenamento_id: p.local_armazenamento_id,
+      local_nome: localNome(p.local_armazenamento_id),
+      status: p.status,
+      imovel_codigo_atual: p.imovel_codigo_atual,
+      data_instalacao_atual: p.data_instalacao_atual,
+      quantidade: 1,
+      placa: p,
+    }));
+
+    if (aba !== "disponivel") return placaRows;
+
+    const fisicasPorMaterialLocal = new Map<string, number>();
+    for (const p of placasFiltradas) {
+      const key = `${p.material_id}:${p.local_armazenamento_id ?? ""}`;
+      fisicasPorMaterialLocal.set(key, (fisicasPorMaterialLocal.get(key) ?? 0) + 1);
+    }
+
+    const saldoRows = resumoFiltrado.flatMap((r) => {
+      const key = `${r.material_id}:${r.local_armazenamento_id}`;
+      const quantidadeSemPlacaFisica = Math.max(r.quantidade - (fisicasPorMaterialLocal.get(key) ?? 0), 0);
+      if (quantidadeSemPlacaFisica <= 0) return [];
+      return [{
+        rowType: "saldo" as const,
+        id: `saldo-${r.key}`,
+        codigo: null,
+        material_id: r.material_id,
+        material_nome: r.material_nome,
+        tipo_uso: r.tipo_uso,
+        tamanho: r.tamanho,
+        tamanho_outro: r.tamanho_outro,
+        local_armazenamento_id: r.local_armazenamento_id,
+        local_nome: localNome(r.local_armazenamento_id),
+        status: "saldo_agregado" as const,
+        imovel_codigo_atual: null,
+        data_instalacao_atual: null,
+        quantidade: quantidadeSemPlacaFisica,
+      }];
+    });
+
+    return [...placaRows, ...saldoRows];
+  }, [placasFiltradas, aba, resumoFiltrado, materiaisPlaca, locais]);
+
   const counts = useMemo(() => ({
-    disponivel: resumoSaldosPlaca.reduce((acc, item) => acc + item.quantidade, 0),
+    disponivel: Math.max(
+      resumoSaldosPlaca.reduce((acc, item) => acc + item.quantidade, 0),
+      placas.filter((p) => p.status === "disponivel").length
+    ),
     instalada: placas.filter((p) => p.status === "instalada").length,
     baixadas: placas.filter((p) => ["roubada","perdida","baixada"].includes(p.status)).length,
   }), [placas, resumoSaldosPlaca]);
@@ -200,8 +274,8 @@ export default function EstoquePlacas() {
     itemsPerPage, setItemsPerPage, sortField, sortDirection, setSorting,
     paginatedData, filteredData, totalPages,
   } = useTableControls({
-    data: placasFiltradas,
-    searchField: ["codigo", "imovel_codigo_atual"] as any,
+    data: linhasTabela,
+    searchField: ["codigo", "imovel_codigo_atual", "material_nome", "local_nome"] as any,
     defaultItemsPerPage: 25,
   });
 
@@ -442,14 +516,20 @@ export default function EstoquePlacas() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => setNovaSaidaDialog(true)} title="Escolha o material e local. Para uma placa específica, use o ícone de chave inglesa na lista abaixo.">
+          <Button onClick={() => { setNovaSaidaDefaults({}); setNovaSaidaDialog(true); }} title="Escolha o material e local. Para uma placa específica, use o ícone de chave inglesa na lista abaixo.">
             <Plus className="h-4 w-4 mr-2" /> Nova saída para imóvel
           </Button>
           <PlacasPDFGenerator placas={placas} />
         </div>
       </div>
 
-      <NovaSaidaDialog open={novaSaidaDialog} onOpenChange={setNovaSaidaDialog} />
+      <NovaSaidaDialog
+        open={novaSaidaDialog}
+        onOpenChange={setNovaSaidaDialog}
+        initialMaterialId={novaSaidaDefaults.materialId}
+        initialLocalId={novaSaidaDefaults.localId}
+        initialMode={novaSaidaDefaults.mode}
+      />
 
       <Tabs value={aba} onValueChange={(v) => { setAba(v as AbaStatus); setCurrentPage(1); }}>
         <TabsList>
@@ -584,15 +664,15 @@ export default function EstoquePlacas() {
                   </Select>
                 </div>
               </div>
-              {isLoading ? (
+              {isLoading || isLoadingSaldosPlaca ? (
                 <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
               ) : paginatedData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
                   <Tag className="h-12 w-12 mb-4 opacity-50" />
-                  <p>Nenhuma placa física individualizada nesta categoria</p>
+                  <p>Nenhuma disponibilidade encontrada nesta categoria</p>
                   {aba === "disponivel" && resumoFiltrado.length > 0 && (
                     <p className="mt-2 max-w-xl text-center text-sm">
-                      Há saldo agregado para estes filtros no bloco acima, mas ainda não há unidades físicas com código/registro individual para listar aqui.
+                      Há saldo agregado para estes filtros, mas ele não corresponde aos filtros ou à busca aplicada nesta lista.
                     </p>
                   )}
                 </div>
@@ -612,51 +692,76 @@ export default function EstoquePlacas() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {paginatedData.map((p) => (
-                        <TableRow key={p.id}>
+                      {paginatedData.map((row) => {
+                        const p = row.placa;
+                        return (
+                        <TableRow key={row.id}>
                           <TableCell className="font-medium">
-                            {p.codigo || <span className="text-muted-foreground italic">sem código</span>}
-                          </TableCell>
-                          <TableCell>{materialNome(p.material_id)}</TableCell>
-                          <TableCell>{TIPO_USO_LABELS[p.tipo_uso]}</TableCell>
-                          <TableCell>
-                            {p.tamanho === "outro" ? `Outro (${p.tamanho_outro || "-"})` : TAMANHO_LABELS[p.tamanho]}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={STATUS_COLORS[p.status]}>
-                              {STATUS_LABELS[p.status]}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {p.imovel_codigo_atual || "—"}
-                            {p.data_instalacao_atual && (
-                              <div className="text-xs text-muted-foreground">
-                                desde {format(new Date(p.data_instalacao_atual), "dd/MM/yyyy", { locale: ptBR })}
+                            {row.codigo || (
+                              <div>
+                                <span className="text-muted-foreground italic">sem código</span>
+                                {row.rowType === "saldo" && (
+                                  <div className="text-xs text-muted-foreground">
+                                    {row.quantidade} unidade{row.quantidade !== 1 ? "s" : ""} em saldo
+                                  </div>
+                                )}
                               </div>
                             )}
                           </TableCell>
-                          <TableCell className="text-sm">{localNome(p.local_armazenamento_id)}</TableCell>
+                          <TableCell>{row.material_nome}</TableCell>
+                          <TableCell>{TIPO_USO_LABELS[row.tipo_uso]}</TableCell>
+                          <TableCell>
+                            {row.tamanho === "outro" ? `Outro (${row.tamanho_outro || "-"})` : TAMANHO_LABELS[row.tamanho]}
+                          </TableCell>
+                          <TableCell>
+                            {row.rowType === "saldo" ? (
+                              <Badge variant="outline" className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30">
+                                Saldo agregado
+                              </Badge>
+                            ) : p ? (
+                              <Badge variant="outline" className={STATUS_COLORS[p.status]}>
+                                {STATUS_LABELS[p.status]}
+                              </Badge>
+                            ) : null}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {row.imovel_codigo_atual || "—"}
+                            {row.data_instalacao_atual && (
+                              <div className="text-xs text-muted-foreground">
+                                desde {format(new Date(row.data_instalacao_atual), "dd/MM/yyyy", { locale: ptBR })}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm">{row.local_nome}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1 flex-wrap">
-                              {!p.codigo && (
+                              {row.rowType === "saldo" ? (
+                                <Button size="sm" variant="ghost" title="Criar código e instalar em um imóvel"
+                                  onClick={() => {
+                                    setNovaSaidaDefaults({ materialId: row.material_id, localId: row.local_armazenamento_id || undefined, mode: "novo" });
+                                    setNovaSaidaDialog(true);
+                                  }}>
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              ) : p && !p.codigo && (
                                 <Button size="sm" variant="ghost" title="Atribuir código"
                                   onClick={() => { setSelected(p); setAtribuirCodigoDialog(true); }}>
                                   <TagIcon className="h-4 w-4 text-amber-500" />
                                 </Button>
                               )}
-                              {p.status === "disponivel" && (
+                              {p?.status === "disponivel" && (
                                 <Button size="sm" variant="ghost" title="Instalar esta placa em um imóvel"
                                   onClick={() => { setSelected(p); setInstalarDialog(true); }}>
                                   <Wrench className="h-4 w-4" />
                                 </Button>
                               )}
-                              {p.status === "instalada" && (
+                              {p?.status === "instalada" && (
                                 <Button size="sm" variant="ghost" title="Retirar do imóvel"
                                   onClick={() => { setSelected(p); setRetirarDialog(true); }}>
                                   <ArrowLeftRight className="h-4 w-4" />
                                 </Button>
                               )}
-                              {(p.status === "disponivel" || p.status === "instalada") && (
+                              {p && (p.status === "disponivel" || p.status === "instalada") && (
                                 <>
                                   <Button size="sm" variant="ghost" title="Registrar roubo"
                                     onClick={() => { setSelected(p); setPerdaRouboDialog("roubo"); }}>
@@ -668,11 +773,13 @@ export default function EstoquePlacas() {
                                   </Button>
                                 </>
                               )}
-                              <Button size="sm" variant="ghost" title="Ver histórico"
-                                onClick={() => { setSelected(p); setHistoricoDialog(true); }}>
-                                <HistoryIcon className="h-4 w-4" />
-                              </Button>
-                              {isAdminOrSuper && (
+                              {p && (
+                                <Button size="sm" variant="ghost" title="Ver histórico"
+                                  onClick={() => { setSelected(p); setHistoricoDialog(true); }}>
+                                  <HistoryIcon className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {p && isAdminOrSuper && (
                                 <Button size="sm" variant="ghost" title="Excluir" className="text-destructive"
                                   onClick={() => { setSelected(p); setExcluirDialog(true); }}>
                                   <Trash2 className="h-4 w-4" />
@@ -681,7 +788,8 @@ export default function EstoquePlacas() {
                             </div>
                           </TableCell>
                         </TableRow>
-                      ))}
+                      );
+                      })}
                     </TableBody>
                   </Table>
                   <div className="p-4">
