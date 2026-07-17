@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.log-dev-work]
 verify_jwt = false
+
+[functions.despesas-scheduler]
+verify_jwt = false
