@@ -14,6 +14,11 @@ import {
   Lancamento, LancamentoInput, LancamentoTipo, useDespesasLookups,
   useSaveLancamento,
 } from "@/hooks/useDespesasLancamentos";
+import {
+  RecorrenciaBlock, RecorrenciaFormState,
+} from "./RecorrenciaBlock";
+import { useSaveRecorrencia } from "@/hooks/useDespesasRecorrencias";
+import { DuplicidadeAlert } from "./DuplicidadeAlert";
 
 interface Props {
   open: boolean;
@@ -25,6 +30,7 @@ interface Props {
 export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: Props) {
   const { centros, categorias, planos, subcategorias, contas, pessoas } = useDespesasLookups();
   const saveMut = useSaveLancamento();
+  const saveRecMut = useSaveRecorrencia();
 
   const emptyForm = (): LancamentoInput => ({
     tipo: tipoDefault ?? "a_pagar",
@@ -43,6 +49,14 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
   });
 
   const [form, setForm] = useState<LancamentoInput>(emptyForm());
+  const [rec, setRec] = useState<RecorrenciaFormState>({
+    ativa: false,
+    tipo: "mensal",
+    data_fim: null,
+    dia_vencimento: new Date().getDate(),
+    meses_fixos: [],
+    janela_geracao_meses: 12,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -62,8 +76,24 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
         valor_total: Number(editing.valor_total),
         observacao: editing.observacao,
       });
+      setRec({
+        ativa: false,
+        tipo: "mensal",
+        data_fim: null,
+        dia_vencimento: new Date(editing.data_vencimento + "T00:00:00").getDate(),
+        meses_fixos: [],
+        janela_geracao_meses: 12,
+      });
     } else {
       setForm(emptyForm());
+      setRec({
+        ativa: false,
+        tipo: "mensal",
+        data_fim: null,
+        dia_vencimento: new Date().getDate(),
+        meses_fixos: [],
+        janela_geracao_meses: 12,
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editing]);
@@ -83,7 +113,32 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
   async function salvar() {
     try {
       await saveMut.mutateAsync({ id: editing?.id, input: form });
-      toast.success(editing ? "Lançamento atualizado" : "Lançamento criado");
+      if (!editing && rec.ativa) {
+        await saveRecMut.mutateAsync({
+          input: {
+            ativo: true,
+            tipo: rec.tipo,
+            data_inicio: form.data_vencimento,
+            data_fim: rec.data_fim,
+            dia_vencimento: rec.dia_vencimento,
+            meses_fixos: rec.meses_fixos,
+            janela_geracao_meses: rec.janela_geracao_meses,
+            lanc_tipo: form.tipo,
+            descricao: form.descricao,
+            valor_total: form.valor_total,
+            centro_custo_id: form.centro_custo_id,
+            categoria_id: form.categoria_id ?? null,
+            plano_conta_id: form.plano_conta_id ?? null,
+            subcategoria_id: form.subcategoria_id ?? null,
+            conta_bancaria_id: form.conta_bancaria_id ?? null,
+            pessoa_id: form.pessoa_id ?? null,
+            observacao: form.observacao ?? null,
+          },
+        });
+        toast.success("Recorrência criada e ocorrências futuras geradas");
+      } else {
+        toast.success(editing ? "Lançamento atualizado" : "Lançamento criado");
+      }
       onOpenChange(false);
     } catch (e: any) {
       toast.error(e?.message ?? "Erro ao salvar lançamento");
@@ -272,12 +327,28 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
               rows={2}
             />
           </div>
+
+          <div className="md:col-span-2">
+            <DuplicidadeAlert
+              valor={form.valor_total}
+              data_vencimento={form.data_vencimento}
+              centro_custo_id={form.centro_custo_id}
+              pessoa_id={form.pessoa_id}
+              plano_conta_id={form.plano_conta_id}
+              conta_bancaria_id={form.conta_bancaria_id}
+              ignorar_id={editing?.id ?? null}
+            />
+          </div>
+
+          {!editing && (
+            <RecorrenciaBlock value={rec} onChange={setRec} />
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={salvar} disabled={!podeSalvar || saveMut.isPending}>
-            {saveMut.isPending ? "Salvando…" : "Salvar"}
+          <Button onClick={salvar} disabled={!podeSalvar || saveMut.isPending || saveRecMut.isPending}>
+            {(saveMut.isPending || saveRecMut.isPending) ? "Salvando…" : "Salvar"}
           </Button>
         </DialogFooter>
       </DialogContent>

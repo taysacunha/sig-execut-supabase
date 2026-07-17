@@ -84,6 +84,8 @@ const DespesasCadastros = lazy(() => import("./pages/despesas/DespesasCadastros"
 const DespesasPermissoes = lazy(() => import("./pages/despesas/DespesasPermissoes"));
 const DespesasHelp = lazy(() => import("./pages/despesas/DespesasHelp"));
 const DespesasAuditLogs = lazy(() => import("./pages/despesas/DespesasAuditLogs"));
+const DespesasRecorrencias = lazy(() => import("./pages/despesas/DespesasRecorrencias"));
+const DespesasNotificacoes = lazy(() => import("./pages/despesas/DespesasNotificacoes"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -224,6 +226,8 @@ const App = () => {
             >
               <Route index element={<DespesasDashboard />} />
               <Route path="calendario" element={<DespesasCalendario />} />
+              <Route path="recorrencias" element={<DespesasRecorrencias />} />
+              <Route path="notificacoes" element={<DespesasNotificacoes />} />
               <Route path="imoveis" element={<DespesasImoveis />} />
               <Route path="repasses" element={<DespesasRepasses />} />
               <Route path="cadastros" element={<DespesasCadastros />} />

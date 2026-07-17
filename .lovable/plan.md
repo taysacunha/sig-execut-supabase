@@ -1,58 +1,99 @@
-## Fase 3 — Imóveis, Veículos e Repasses
+# Fase 4 — Recorrências, notificações, duplicidade avançada e auditoria
 
-Fase 3 fecha o núcleo operacional do módulo Despesas ligando o Calendário (Fase 2) a três domínios recorrentes: imóveis, veículos e repasses de aluguel. Nada muda em Cadastros/Permissões/Auditoria já entregues nas fases anteriores.
+Fecha o módulo Despesas automatizando as regras que sobraram do escopo original. As Fases 1–3 já entregaram calendário, imóveis, veículos, repasses e a matriz de permissões por aba (`despesas_aba_permissoes`) — que é exatamente o modelo "usuário X vê aba Y" que você reforçou, no mesmo padrão do Estoque; nesta fase só a consumimos.
 
-### 1) Imóveis (`/despesas/imoveis`)
+## 1. Recorrências de lançamentos
 
-**Objetivo:** cadastrar a carteira de imóveis e gerar automaticamente as contas recorrentes (IPTU, TCR, SPU, condomínio) no Calendário.
+Tabela `despesas_recorrencias` com os campos que definem a série:
+`tipo` (mensal | anual | fixa_meses | intercalada), `data_inicio`, `data_fim` (null = indefinida), `dia_vencimento`, `meses_fixos` (int[] para "fixa"/"intercalada"), `janela_geracao_meses` (default 12) e todo o template do lançamento (tipo, valor, descrição, categoria, subcategoria, plano, centro, conta bancária, pessoa, imóvel, perfil de acesso, forma de pagamento padrão).
 
-Nova migration `db/migrations/20260718120000_despesas_fase3_imoveis.sql`:
-- `despesas_imoveis` — id, código, endereço completo, matrícula/inscrição, área, tipo (comercial/residencial/terreno), situação (`alugado | vago | vendido | proprio_uso`), proprietário (FK `despesas_pessoas`), inquilino atual (FK opcional), valor_aluguel, taxa_administracao (%), data_aquisicao, data_venda, observação, centro_custo_id (RLS por centro), created/updated.
-- `despesas_imovel_encargos` — id, imovel_id, tipo (`iptu | tcr | spu | condominio | outro`), valor_anual, parcelas (int), vencimento_primeira_parcela, ativo. Serve de "template" para gerar os `despesas_lancamentos` automaticamente todo início de exercício.
-- `despesas_imovel_situacao_historico` — id, imovel_id, situacao_anterior, situacao_nova, data, motivo, changed_by. Trigger `AFTER UPDATE OF situacao` grava a linha.
-- Função `despesas_gerar_encargos_imovel(_ano int, _imovel_id uuid)` que cria os lançamentos "a_pagar" no calendário, com `descricao` = "IPTU 2026 — Imóvel X, parcela 3/10". Idempotente por (imovel_id, tipo, ano, parcela).
-- GRANTs + RLS reaproveitando `despesas_pode_ver_aba('imoveis')` / `despesas_pode_editar_aba` + `centro_custo_id IN (SELECT despesas_centros_permitidos(auth.uid()))` (padrão da Fase 2).
-- Auditoria: estender o CASE de `audit_module_changes` para incluir as três tabelas novas.
+Coluna nova em `despesas_lancamentos`:
+- `serie_recorrencia_id uuid null references despesas_recorrencias(id) on delete set null`
+- `is_manual boolean default false` — marca lançamentos editados individualmente para não serem sobrescritos por regeneração.
 
-Frontend:
-- `useDespesasImoveis.ts` — CRUD + geração de encargos.
-- `ImovelDialog.tsx` — formulário com abas (Dados, Encargos, Histórico de situação).
-- `DespesasImoveis.tsx` — KPIs (total, alugados, vagos, vendidos, receita mensal potencial), filtros (situação, tipo, centro, proprietário), tabela com ações (editar, gerar encargos do ano, ver histórico) e exportação CSV.
+Função `despesas_gerar_ocorrencias(_serie uuid, _ate date)`:
+- Percorre a série do último vencimento gerado até `_ate` (default `now() + janela_geracao_meses`).
+- Insere lançamentos com `serie_recorrencia_id`, status `a_vencer`, respeitando `is_manual` (não recria uma ocorrência já existente na mesma data).
+- Idempotente: `on conflict do nothing` por `(serie_recorrencia_id, data_vencimento)`.
 
-### 2) Veículos — completar aba em Cadastros
+Trigger `after insert` em `despesas_recorrencias` chama a função com a janela padrão.
 
-`despesas_veiculos` já existe (Fase 1). Fase 3 adiciona a operação recorrente:
+Edge function `despesas-gerar-recorrencias` (rodar diariamente via `pg_cron`): itera todas as séries ativas e chama a RPC. Cron agendado via `supabase--insert` (não migration).
 
-Nova migration `db/migrations/20260718121000_despesas_fase3_veiculos.sql`:
-- `despesas_veiculo_documentos` — id, veiculo_id, tipo (`ipva | licenciamento | seguro | multa | manutencao`), descricao, valor, vencimento, parcelas, ativo. Mesma lógica de template dos encargos de imóvel.
-- `despesas_veiculo_baixa` — registra baixa por venda (data_venda, valor_venda, comprador, observação) e trava novos documentos após a baixa.
-- Função `despesas_gerar_encargos_veiculo(_ano, _veiculo_id)` análoga à de imóvel.
-- RLS/GRANTs no mesmo padrão + inclusão nas tabelas auditadas.
+Regras de edição:
+- Editar/excluir uma ocorrência individual não afeta a série e marca `is_manual = true`.
+- Editar a série abre AlertDialog com opções "só esta ocorrência" vs "esta e futuras" vs "toda a série" (regenera destruindo ocorrências futuras que não sejam `is_manual`).
 
 Frontend:
-- Substituir o placeholder atual em `DespesasCadastros.tsx` (aba Veículos) por `VeiculoDialog.tsx` completo (dados + documentos + baixa) e uma tabela dedicada. Botão "Gerar encargos do ano" idêntico ao de imóveis.
+- Em `LancamentoDialog`, novo bloco "Recorrência" (checkbox "Recorrente" + tipo + dia + fim). Ao salvar, cria a série e a primeira ocorrência.
+- Ícone de "série" na tabela do calendário para lançamentos com `serie_recorrencia_id`.
+- Nova página `/despesas/recorrencias` (dentro da aba Calendário, sub-tab): lista as séries ativas, permite pausar/reativar/editar/excluir a série toda.
 
-### 3) Repasses (`/despesas/repasses`)
+## 2. Notificações
 
-**Objetivo:** consolidar mensalmente o que a imobiliária deve repassar a cada proprietário.
+Novas tabelas:
+- `despesas_notificacoes_preferencias`: `user_id pk`, `dias_antecedencia int[] default '{7,1}'`, `notificar_vencidos bool default true`, `notificar_pagos bool default false`.
+- `despesas_notificacoes`: `id`, `user_id`, `lancamento_id`, `tipo` (proximidade | vencido | pago | cancelado), `dias_para_vencer`, `lida bool default false`, `created_at`.
 
-Nova migration `db/migrations/20260718122000_despesas_fase3_repasses.sql`:
-- `despesas_repasses` — id, proprietario_id (FK pessoas), competencia (date, dia 1), status (`aberto | fechado | pago | cancelado`), valor_bruto, taxa_administracao_valor, valor_liquido, observação, centro_custo_id, created/updated.
-- `despesas_repasse_itens` — id, repasse_id, tipo (`credito | debito`), origem (`aluguel | reembolso | encargo | ajuste | outro`), imovel_id (opcional), lancamento_id (opcional — liga a conta do calendário), descrição, valor. Trigger recalcula bruto/taxa/líquido no pai a cada mudança.
-- Função `despesas_montar_repasse(_proprietario_id, _competencia)` que, dado o mês, gera itens automáticos a partir dos aluguéis recebidos e encargos pagos vinculados aos imóveis do proprietário; retorna o `repasse_id`. Idempotente por (proprietario_id, competencia).
-- Ao marcar `status='pago'`: gera um `despesas_lancamentos` do tipo `a_pagar` no calendário (pagamento ao proprietário), amarrado ao `repasse_id`.
-- RLS/GRANTs no padrão + auditoria.
+Regras:
+- Índice único parcial por `(user_id, lancamento_id, tipo, dias_para_vencer)` para evitar duplicatas.
+- RLS: cada usuário só vê as próprias notificações; INSERT feito por edge function via service_role.
+
+Job diário `despesas-notificar-vencimentos` (edge function + cron):
+- Para cada preferência ativa, cruza com a view `despesas_lancamentos_visiveis` **por usuário** (respeita aba + centros permitidos + público/privado) e insere linhas em `despesas_notificacoes`.
+- Atualiza status `a_vencer → vencido` quando `data_vencimento < today`.
 
 Frontend:
-- `useDespesasRepasses.ts` — listar por competência, montar, editar itens, fechar, marcar pago.
-- `RepasseDialog.tsx` — cabeçalho com totais + tabela de créditos e débitos editáveis; botão "Gerar automaticamente".
-- `DespesasRepasses.tsx` — seletor de competência (mês/ano), KPIs (nº repasses, bruto, taxa, líquido, pendentes), tabela por proprietário e exportação CSV por CNPJ/CPF (uma linha por repasse com colunas de créditos, débitos, taxa e líquido).
+- Sino no header do `DespesasLayout` (padrão do `useEstoqueNotificacoes`) com contador de não lidas, popover com últimas 10 e link "ver todas".
+- Nova página `/despesas/notificacoes` com lista completa + marcar como lida / marcar todas.
+- Seção "Notificações" em `/despesas/perfil` para editar preferências (multi-select dos dias, toggles).
 
-### Ordem de execução
+## 3. Duplicidade avançada
 
-1. Migrations Fase 3 (imóveis → veículos → repasses) — você roda no SQL Editor.
-2. Hooks e diálogos.
-3. Páginas `DespesasImoveis` / `DespesasRepasses` + substituição da aba Veículos em `DespesasCadastros`.
-4. Fumaça manual: cadastro de 1 imóvel, geração de encargos do ano, verificação no Calendário; cadastro de 1 veículo, geração de IPVA; montagem de um repasse do mês.
+Sobe a validação simples da Fase 2 para uma RPC:
+`despesas_detectar_duplicidades(_lancamento jsonb, _janela_dias int default 3)` que retorna os candidatos comparando `valor + imovel_id/pessoa_id + centro_custo_id + plano_conta_id + conta_imobiliaria_id` dentro da janela e status ≠ cancelado.
 
-Fase 4 fica em aberto — depois de Fase 3 pronta você decide se ela vira Relatórios/BI (DRE, fluxo de caixa, dashboards) ou integrações (extratos bancários, OFX, boleto).
+No `LancamentoDialog`:
+- Ao clicar Salvar, chama a RPC antes do insert.
+- Se houver candidatos, abre AlertDialog listando cada um com link "abrir existente" (fecha o dialog atual e reabre no lançamento clicado) e botões "Cancelar" / "Salvar mesmo assim".
+- Janela configurável via input no próprio dialog (default 3 dias).
+
+## 4. Auditoria e polish
+
+- `/despesas/auditoria`: reaproveita `AuditLogsPanel` filtrado por `module_name='despesas'`, com filtros extras por aba (tabela → aba) e por usuário. Já temos triggers gravando em `module_audit_logs` desde a Fase 1.
+- Adiciona nas colunas da tabela do calendário: "criado por", "editado por", "pagamento confirmado por" (join com `user_profiles`), controlados por um toggle "Mostrar auditoria".
+- `/despesas/ajuda`: página estática em PT-BR com passo a passo por aba (mesmo padrão da ajuda do Estoque).
+- Atualização de `dev_tracker` com todas as entregas da Fase 4.
+
+## Detalhes técnicos
+
+Migração `db/migrations/20260719120000_despesas_fase4.sql` cria/altera nesta ordem:
+1. `despesas_recorrencias` + GRANTs + RLS (helpers `despesas_pode_*_aba('calendario', ...)`).
+2. `ALTER TABLE despesas_lancamentos ADD COLUMN serie_recorrencia_id`, `is_manual` + índice.
+3. `despesas_notificacoes_preferencias`, `despesas_notificacoes` + GRANTs + RLS por `user_id = auth.uid()`.
+4. Funções: `despesas_gerar_ocorrencias`, `despesas_detectar_duplicidades`, `despesas_marcar_vencidos`.
+5. Trigger `after insert` em `despesas_recorrencias`.
+6. Extensão da função de auditoria para as novas tabelas (segue padrão do bloco `CASE table_name`).
+
+Cron/pg_net agendados via `supabase--insert` (contém URL e anon key, portanto não vai para migration):
+- `despesas-gerar-recorrencias` — diário 03:00.
+- `despesas-notificar-vencimentos` — diário 06:00.
+
+Novos componentes/hooks:
+- `src/hooks/useDespesasRecorrencias.ts`, `useDespesasNotificacoes.ts`, `useDespesasDuplicidades.ts`.
+- `src/components/despesas/RecorrenciaBlock.tsx` (dentro do `LancamentoDialog`), `DuplicidadeAlert.tsx`, `NotificacoesBell.tsx`.
+- Páginas: `src/pages/despesas/DespesasRecorrencias.tsx`, `DespesasNotificacoes.tsx`, `DespesasAuditoria.tsx`, `DespesasPerfil.tsx` (upgrade), `DespesasAjuda.tsx`.
+
+Sem hardcode de cores — badges via `variant`, cores via tokens `--primary`/`--destructive`/`--muted`. Toda UI e toasts em PT-BR. Exclusões críticas (série, preferência) protegidas por `AlertDialog`.
+
+Sobre permissões por aba: nada muda no schema — o `useDespesasPermissions()` já entrega `podeVer/podeEditar/podeExcluir` por aba e a tela `/despesas/permissoes` já expõe a matriz por usuário. As novas rotas (`recorrencias`, `notificacoes`, `auditoria`, `ajuda`) reutilizam a permissão da aba pai correspondente (`calendario` para as duas primeiras, admin-only para auditoria, aberta para ajuda).
+
+## Ordem de execução sugerida
+
+1. Migration Fase 4 + GRANTs + RLS.
+2. Hooks e componentes de recorrência + integração no `LancamentoDialog`.
+3. Duplicidade avançada (RPC + AlertDialog).
+4. Notificações (tabelas, edge functions, sino, página de preferências).
+5. Auditoria e ajuda.
+6. Cron via `supabase--insert`.
+7. Atualização do `dev_tracker`.
