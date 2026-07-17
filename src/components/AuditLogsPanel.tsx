@@ -470,6 +470,16 @@ function useLookups() {
     loadLookup("brokers", "name");
     loadLookup("estoque_materiais", "nome");
     loadLookup("estoque_locais_armazenamento", "nome");
+    // Despesas
+    loadLookup("despesas_centros_custo", "nome");
+    loadLookup("despesas_planos_conta", "nome");
+    loadLookup("despesas_categorias", "nome");
+    loadLookup("despesas_subcategorias", "nome");
+    loadLookup("despesas_contas_bancarias", "nome");
+    loadLookup("despesas_pessoas", "nome");
+    loadLookup("despesas_imoveis", "descricao");
+    loadLookup("despesas_veiculos", "modelo");
+    loadLookup("despesas_recorrencias", "descricao");
     loadUserProfilesLookup();
     return () => { lookupListeners.delete(listener); };
   }, []);
@@ -498,6 +508,20 @@ function useLookups() {
       changed_by: ["user_profiles", "name"],
       recebido_por_user_id: ["user_profiles", "name"],
       responsavel_user_id: ["user_profiles", "name"],
+      // Despesas
+      centro_custo_id: ["despesas_centros_custo", "nome"],
+      plano_conta_id: ["despesas_planos_conta", "nome"],
+      categoria_id: ["despesas_categorias", "nome"],
+      subcategoria_id: ["despesas_subcategorias", "nome"],
+      conta_bancaria_id: ["despesas_contas_bancarias", "nome"],
+      pessoa_id: ["despesas_pessoas", "nome"],
+      proprietario_id: ["despesas_pessoas", "nome"],
+      locatario_id: ["despesas_pessoas", "nome"],
+      motorista_id: ["despesas_pessoas", "nome"],
+      imovel_id: ["despesas_imoveis", "descricao"],
+      veiculo_id: ["despesas_veiculos", "modelo"],
+      recorrencia_id: ["despesas_recorrencias", "descricao"],
+      serie_id: ["despesas_recorrencias", "descricao"],
     };
     const tuple = tableByField[field];
     if (!tuple) return null;
