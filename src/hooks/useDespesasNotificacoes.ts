@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -30,6 +31,21 @@ export const NOTIF_KEY = "despesas-notificacoes";
 export const NOTIF_PREFS_KEY = "despesas-notif-prefs";
 
 export function useNotificacoes() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const channel = supabase
+      .channel("despesas_notif_rt")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "despesas_notificacoes" },
+        () => qc.invalidateQueries({ queryKey: [NOTIF_KEY] }),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [qc]);
+
   return useQuery({
     queryKey: [NOTIF_KEY],
     queryFn: async () => {
