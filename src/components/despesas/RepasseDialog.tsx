@@ -16,6 +16,7 @@ import { Plus, Trash2, CheckCircle2, XCircle } from "lucide-react";
 import {
   Repasse, RepasseItemOrigem, RepasseItemTipo,
   useSaveRepasseItem, useDeleteRepasseItem, useUpdateRepasseStatus,
+  useUpdateRepasseCampos,
 } from "@/hooks/useDespesasRepasses";
 
 interface Props {
@@ -41,6 +42,12 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
   const saveItem = useSaveRepasseItem();
   const delItem = useDeleteRepasseItem();
   const updStatus = useUpdateRepasseStatus();
+  const updCampos = useUpdateRepasseCampos();
+  const [limite, setLimite] = useState<string>("");
+
+  useEffect(() => {
+    setLimite(repasse?.valor_limite_primeiro != null ? String(repasse.valor_limite_primeiro) : "");
+  }, [repasse?.id, repasse?.valor_limite_primeiro]);
 
   const [novo, setNovo] = useState<{
     tipo: RepasseItemTipo; origem: RepasseItemOrigem; descricao: string; valor: number;
