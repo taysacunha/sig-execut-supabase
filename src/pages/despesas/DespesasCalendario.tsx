@@ -273,6 +273,8 @@ export default function DespesasCalendario() {
                 <SelectItem value="pago_parcial">Pago parcial</SelectItem>
                 <SelectItem value="pago">Pago</SelectItem>
                 <SelectItem value="cancelado">Cancelado</SelectItem>
+                <SelectItem value="quitado">Quitado</SelectItem>
+                <SelectItem value="gimob">GIMOB</SelectItem>
               </SelectContent>
             </Select>
           </div>
