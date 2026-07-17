@@ -381,7 +381,9 @@ export default function DespesasCalendario() {
                     const Icon = meta.icon;
                     const dup = duplicados.has(r.id);
                     const restante = Number(r.valor_total) - Number(r.valor_pago);
-                    const podeRegistrar = canEdit && r.status !== "cancelado" && r.status !== "pago" && restante > 0;
+                    const podeRegistrar = canEdit
+                      && !["cancelado","pago","quitado","gimob"].includes(r.status)
+                      && restante > 0;
                     return (
                       <TableRow key={r.id} className={dup ? "bg-destructive/5" : ""}>
                         <TableCell className="whitespace-nowrap">{fmtDate(r.data_vencimento)}</TableCell>
