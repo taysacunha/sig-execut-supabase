@@ -95,6 +95,7 @@ const moduleLabels: Record<string, string> = {
   vendas: "Vendas",
   estoque: "Estoques",
   ferias: "Férias e Folgas",
+  despesas: "Despesas",
   sistema: "Sistema",
 };
 
@@ -139,6 +140,26 @@ const tableLabels: Record<string, string> = {
   ferias_periodos_quitados: "Períodos Quitados",
   ferias_setor_chefes: "Chefes de Setor",
   ferias_colaborador_setores_substitutos: "Setores Substitutos",
+  // Despesas
+  despesas_lancamentos: "Lançamentos",
+  despesas_lancamento_pagamentos: "Pagamentos",
+  despesas_recorrencias: "Recorrências",
+  despesas_imoveis: "Imóveis",
+  despesas_imovel_encargos: "Encargos de Imóvel",
+  despesas_veiculos: "Veículos",
+  despesas_veiculo_documentos: "Documentos de Veículo",
+  despesas_repasses: "Repasses",
+  despesas_repasse_itens: "Itens de Repasse",
+  despesas_categorias: "Categorias",
+  despesas_subcategorias: "Subcategorias",
+  despesas_planos_conta: "Planos de Conta",
+  despesas_centros_custo: "Centros de Custo",
+  despesas_contas_bancarias: "Contas Bancárias",
+  despesas_pessoas: "Pessoas",
+  despesas_aba_permissoes: "Permissões por Aba",
+  despesas_centros_custo_permissoes: "Permissões de Centro",
+  despesas_perfis_acesso: "Perfis de Acesso (Despesas)",
+  despesas_notificacoes_preferencias: "Preferências de Notificação",
 };
 
 const fieldLabels: Record<string, string> = {
@@ -228,6 +249,50 @@ const fieldLabels: Record<string, string> = {
   actor_email: "E-mail do ator",
   target_id: "Alvo",
   target_email: "E-mail do alvo",
+  // Despesas
+  valor_total: "Valor total",
+  valor_pago: "Valor pago",
+  valor_previsto: "Valor previsto",
+  data_competencia: "Competência",
+  data_vencimento: "Vencimento",
+  data_pagamento: "Pagamento",
+  forma_pagamento: "Forma de pagamento",
+  numero_documento: "Nº documento",
+  observacao: "Observação",
+  codigo: "Código",
+  banco: "Banco",
+  agencia: "Agência",
+  conta: "Conta",
+  centro_custo_id: "Centro de custo",
+  plano_conta_id: "Plano de conta",
+  subcategoria_id: "Subcategoria",
+  conta_bancaria_id: "Conta bancária",
+  pessoa_id: "Pessoa",
+  imovel_id: "Imóvel",
+  veiculo_id: "Veículo",
+  repasse_id: "Repasse",
+  recorrencia_id: "Recorrência",
+  serie_id: "Série",
+  periodicidade: "Periodicidade",
+  horizonte_meses: "Horizonte (meses)",
+  iptu: "IPTU",
+  tcr: "TCR",
+  spu: "SPU",
+  parcelas: "Parcelas",
+  proprietario_id: "Proprietário",
+  locatario_id: "Locatário",
+  motorista_id: "Motorista",
+  situacao: "Situação",
+  endereco: "Endereço",
+  modelo: "Modelo",
+  placa: "Placa",
+  renavam: "Renavam",
+  chassi: "Chassi",
+  ano: "Ano",
+  valor_anual: "Valor anual",
+  vencimento_primeira_parcela: "1ª parcela",
+  nivel: "Nível",
+  aba: "Aba",
 };
 
 // Tradução de valores específicos por campo
@@ -251,6 +316,55 @@ const valueLabels: Record<string, Record<string, string>> = {
     user_reactivated: "Usuário reativado",
     user_deleted: "Usuário removido",
     password_reset: "Senha redefinida",
+  },
+  tipo: {
+    a_pagar: "A pagar",
+    a_receber: "A receber",
+  },
+  status: {
+    a_vencer: "A vencer",
+    vencido: "Vencido",
+    pago: "Pago",
+    parcial: "Parcialmente pago",
+    cancelado: "Cancelado",
+  },
+  forma_pagamento: {
+    pix: "PIX",
+    boleto: "Boleto",
+    dinheiro: "Dinheiro",
+    cartao: "Cartão",
+    transferencia: "Transferência",
+    cheque: "Cheque",
+  },
+  situacao: {
+    alugado: "Alugado",
+    vago: "Vago",
+    proprio: "Próprio",
+    obra: "Em obra",
+    vendido: "Vendido",
+  },
+  periodicidade: {
+    mensal: "Mensal",
+    anual: "Anual",
+    meses_fixos: "Meses fixos",
+    intercalada: "Intercalada",
+  },
+  nivel: {
+    sem_acesso: "Sem acesso",
+    view: "Visualizar",
+    edit: "Editar",
+    delete: "Excluir",
+  },
+  aba: {
+    calendario: "Calendário",
+    recorrencias: "Recorrências",
+    imoveis: "Imóveis",
+    repasses: "Repasses",
+    veiculos: "Veículos",
+    cadastros: "Cadastros",
+    relatorios: "Relatórios",
+    permissoes: "Permissões",
+    auditoria: "Auditoria",
   },
 };
 
@@ -356,6 +470,16 @@ function useLookups() {
     loadLookup("brokers", "name");
     loadLookup("estoque_materiais", "nome");
     loadLookup("estoque_locais_armazenamento", "nome");
+    // Despesas
+    loadLookup("despesas_centros_custo", "nome");
+    loadLookup("despesas_planos_conta", "nome");
+    loadLookup("despesas_categorias", "nome");
+    loadLookup("despesas_subcategorias", "nome");
+    loadLookup("despesas_contas_bancarias", "nome");
+    loadLookup("despesas_pessoas", "nome");
+    loadLookup("despesas_imoveis", "descricao");
+    loadLookup("despesas_veiculos", "modelo");
+    loadLookup("despesas_recorrencias", "descricao");
     loadUserProfilesLookup();
     return () => { lookupListeners.delete(listener); };
   }, []);
@@ -384,6 +508,20 @@ function useLookups() {
       changed_by: ["user_profiles", "name"],
       recebido_por_user_id: ["user_profiles", "name"],
       responsavel_user_id: ["user_profiles", "name"],
+      // Despesas
+      centro_custo_id: ["despesas_centros_custo", "nome"],
+      plano_conta_id: ["despesas_planos_conta", "nome"],
+      categoria_id: ["despesas_categorias", "nome"],
+      subcategoria_id: ["despesas_subcategorias", "nome"],
+      conta_bancaria_id: ["despesas_contas_bancarias", "nome"],
+      pessoa_id: ["despesas_pessoas", "nome"],
+      proprietario_id: ["despesas_pessoas", "nome"],
+      locatario_id: ["despesas_pessoas", "nome"],
+      motorista_id: ["despesas_pessoas", "nome"],
+      imovel_id: ["despesas_imoveis", "descricao"],
+      veiculo_id: ["despesas_veiculos", "modelo"],
+      recorrencia_id: ["despesas_recorrencias", "descricao"],
+      serie_id: ["despesas_recorrencias", "descricao"],
     };
     const tuple = tableByField[field];
     if (!tuple) return null;
@@ -454,10 +592,13 @@ function computeChangedFields(oldData: unknown, newData: unknown): string[] {
 
 // Resumo curto para INSERT/DELETE com 3-4 campos relevantes
 const INSERT_SUMMARY_FIELDS = ["nome", "nome_exibicao", "status", "data_admissao", "data_inicio", "data_sabado", "data_fim", "tipo", "motivo"];
+// Campos extras usados para gerar resumos legíveis em Despesas.
+const INSERT_SUMMARY_FIELDS_EXTRA = ["descricao", "valor_total", "data_vencimento", "codigo"];
+const ALL_INSERT_SUMMARY_FIELDS = [...INSERT_SUMMARY_FIELDS, ...INSERT_SUMMARY_FIELDS_EXTRA];
 function buildInsertDeleteSummary(action: "INSERT" | "DELETE", data: Record<string, unknown> | null, resolve: (f: string, v: unknown) => string | null): string {
   if (!data) return action === "INSERT" ? "Registro criado" : "Registro removido";
   const parts: string[] = [];
-  for (const k of INSERT_SUMMARY_FIELDS) {
+  for (const k of ALL_INSERT_SUMMARY_FIELDS) {
     if (parts.length >= 4) break;
     const v = data[k];
     if (v == null || v === "") continue;
