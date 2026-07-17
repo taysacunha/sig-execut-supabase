@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
@@ -16,6 +16,7 @@ import { Plus, Trash2, CheckCircle2, XCircle } from "lucide-react";
 import {
   Repasse, RepasseItemOrigem, RepasseItemTipo,
   useSaveRepasseItem, useDeleteRepasseItem, useUpdateRepasseStatus,
+  useUpdateRepasseCampos,
 } from "@/hooks/useDespesasRepasses";
 
 interface Props {
@@ -41,6 +42,12 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
   const saveItem = useSaveRepasseItem();
   const delItem = useDeleteRepasseItem();
   const updStatus = useUpdateRepasseStatus();
+  const updCampos = useUpdateRepasseCampos();
+  const [limite, setLimite] = useState<string>("");
+
+  useEffect(() => {
+    setLimite(repasse?.valor_limite_primeiro != null ? String(repasse.valor_limite_primeiro) : "");
+  }, [repasse?.id, repasse?.valor_limite_primeiro]);
 
   const [novo, setNovo] = useState<{
     tipo: RepasseItemTipo; origem: RepasseItemOrigem; descricao: string; valor: number;
@@ -98,6 +105,39 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
             <div className="text-xs text-muted-foreground">Status</div>
             <div className="text-lg font-semibold capitalize">{repasse.status.replace("_", " ")}</div>
           </div>
+        </div>
+
+        <div className="border rounded-md p-3 mb-4 grid gap-3 md:grid-cols-[1fr_auto] items-end">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">
+              Valor limite ao 1º beneficiário (R$)
+            </Label>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              placeholder="Sem limite"
+              value={limite}
+              disabled={!podeEditarItens}
+              onChange={(e) => setLimite(e.target.value)}
+            />
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!podeEditarItens || updCampos.isPending}
+            onClick={async () => {
+              try {
+                await updCampos.mutateAsync({
+                  id: repasse.id,
+                  campos: { valor_limite_primeiro: limite === "" ? null : Number(limite) },
+                });
+                toast.success("Limite atualizado");
+              } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+            }}
+          >
+            Salvar limite
+          </Button>
         </div>
 
         <Table>

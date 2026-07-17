@@ -31,6 +31,7 @@ export interface Repasse {
   valor_bruto: number;
   taxa_administracao_valor: number;
   valor_liquido: number;
+  valor_limite_primeiro: number | null;
   data_pagamento: string | null;
   lancamento_pagamento_id: string | null;
   observacao: string | null;
@@ -137,6 +138,22 @@ export function useDeleteRepasse() {
       const { error } = await supabase
         .from("despesas_repasses" as any)
         .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [REPASSES_KEY] }),
+  });
+}
+
+export function useUpdateRepasseCampos() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id, campos,
+    }: { id: string; campos: Partial<Pick<Repasse, "valor_limite_primeiro" | "observacao">> }) => {
+      const { error } = await supabase
+        .from("despesas_repasses" as any)
+        .update(campos as any)
         .eq("id", id);
       if (error) throw error;
     },

@@ -7,7 +7,9 @@ export type LancamentoStatus =
   | "vencido"
   | "pago_parcial"
   | "pago"
-  | "cancelado";
+  | "cancelado"
+  | "quitado"
+  | "gimob";
 
 export type FormaPagamento =
   | "dinheiro"
@@ -48,6 +50,7 @@ export interface Lancamento {
   observacao: string | null;
   serie_recorrencia_id: string | null;
   is_manual: boolean | null;
+  credenciais?: Record<string, string> | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -119,6 +122,7 @@ export interface LancamentoInput {
   data_vencimento: string;
   valor_total: number;
   observacao?: string | null;
+  credenciais?: Record<string, string> | null;
 }
 
 export function useSaveLancamento() {
@@ -165,6 +169,20 @@ export function useCancelLancamento() {
       const { error } = await supabase
         .from("despesas_lancamentos" as any)
         .update({ status: "cancelado" })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [LANC_KEY] }),
+  });
+}
+
+export function useSetLancamentoStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: LancamentoStatus }) => {
+      const { error } = await supabase
+        .from("despesas_lancamentos" as any)
+        .update({ status })
         .eq("id", id);
       if (error) throw error;
     },
