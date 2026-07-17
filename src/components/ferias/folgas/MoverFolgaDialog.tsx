@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, ArrowRight } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface Folga {
   id: string;
@@ -54,6 +55,7 @@ export function MoverFolgaDialog({
 }: MoverFolgaDialogProps) {
   const queryClient = useQueryClient();
   const [newSaturday, setNewSaturday] = useState("");
+  const [modoMovimentacao, setModoMovimentacao] = useState<"ambos" | "apenas">("ambos");
 
   // Query para buscar folgas do mês (para encontrar familiar)
   const { data: allFolgas = [] } = useQuery({
@@ -87,7 +89,15 @@ export function MoverFolgaDialog({
       if (!folga || !newSaturday) throw new Error("Dados inválidos");
 
       const fmt = (s: string) => format(new Date(s + "T12:00:00"), "dd/MM");
-      const justificativa = `Movida de ${fmt(folga.data_sabado)} para ${fmt(newSaturday)}`;
+      const moverJuntos = !!familiarFolga && modoMovimentacao === "ambos";
+      const justificativa =
+        familiarFolga && modoMovimentacao === "apenas"
+          ? `Movida de ${fmt(folga.data_sabado)} para ${fmt(newSaturday)} (familiar mantido em ${fmt(familiarFolga.data_sabado)} — exceção à regra de familiares juntos)`
+          : `Movida de ${fmt(folga.data_sabado)} para ${fmt(newSaturday)}`;
+      const motivo =
+        familiarFolga && modoMovimentacao === "apenas"
+          ? "Mudança de sábado (familiar mantido)"
+          : "Mudança de sábado";
 
       // Mover a folga principal
       const { error } = await supabase
@@ -95,15 +105,15 @@ export function MoverFolgaDialog({
         .update({
           data_sabado: newSaturday,
           is_excecao: true,
-          excecao_motivo: "Mudança de sábado",
+          excecao_motivo: motivo,
           excecao_justificativa: justificativa,
         })
         .eq("id", folga.id);
 
       if (error) throw error;
 
-      // Se tem familiar com folga no mês, mover junto
-      if (familiarFolga) {
+      // Se tem familiar com folga no mês E o usuário optou por mover ambos, mover junto
+      if (moverJuntos && familiarFolga) {
         const familiarJust = `Movida de ${fmt(familiarFolga.data_sabado)} para ${fmt(newSaturday)} (junto com familiar)`;
         const { error: familiarError } = await supabase
           .from("ferias_folgas")
@@ -119,15 +129,19 @@ export function MoverFolgaDialog({
       }
     },
     onSuccess: () => {
-      toast.success(familiarFolga 
-        ? "Folgas movidas com sucesso (incluindo familiar)!" 
-        : "Folga movida com sucesso!"
-      );
+      if (familiarFolga && modoMovimentacao === "ambos") {
+        toast.success("Folgas movidas com sucesso (incluindo familiar)!");
+      } else if (familiarFolga && modoMovimentacao === "apenas") {
+        toast.success("Folga movida. Familiar mantido no sábado original.");
+      } else {
+        toast.success("Folga movida com sucesso!");
+      }
       queryClient.invalidateQueries({ queryKey: ["ferias-folgas"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-folgas-table"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-folgas-pdf"] });
       onOpenChange(false);
       setNewSaturday("");
+      setModoMovimentacao("ambos");
     },
     onError: () => toast.error("Erro ao mover folga"),
   });
@@ -164,8 +178,28 @@ export function MoverFolgaDialog({
           </div>
 
           {familiarFolga && (
-            <div className="p-3 rounded-lg bg-sky-50 border border-sky-200 text-sky-800 text-sm">
-              <strong>Atenção:</strong> O familiar também tem folga neste mês e será movido junto para manter a regra de familiares juntos.
+            <div className="p-3 rounded-lg bg-sky-50 border border-sky-200 text-sky-800 text-sm space-y-3">
+              <div>
+                <strong>Atenção:</strong> Este colaborador tem um familiar com folga neste mês. Escolha como aplicar a mudança:
+              </div>
+              <RadioGroup
+                value={modoMovimentacao}
+                onValueChange={(v) => setModoMovimentacao(v as "ambos" | "apenas")}
+                className="space-y-2"
+              >
+                <div className="flex items-start gap-2">
+                  <RadioGroupItem value="ambos" id="mov-ambos" className="mt-1" />
+                  <Label htmlFor="mov-ambos" className="font-normal cursor-pointer">
+                    <span className="font-medium">Mover ambos juntos</span> (recomendado) — mantém a regra de familiares folgando juntos.
+                  </Label>
+                </div>
+                <div className="flex items-start gap-2">
+                  <RadioGroupItem value="apenas" id="mov-apenas" className="mt-1" />
+                  <Label htmlFor="mov-apenas" className="font-normal cursor-pointer">
+                    <span className="font-medium">Mover apenas este colaborador (exceção)</span> — o familiar permanece no sábado original. Será registrado como exceção à regra.
+                  </Label>
+                </div>
+              </RadioGroup>
             </div>
           )}
 
@@ -199,7 +233,11 @@ export function MoverFolgaDialog({
             {mutation.isPending && (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             )}
-            {familiarFolga ? "Mover Ambos" : "Mover Folga"}
+            {familiarFolga
+              ? modoMovimentacao === "ambos"
+                ? "Mover Ambos"
+                : "Mover Apenas Este"
+              : "Mover Folga"}
           </Button>
         </DialogFooter>
       </DialogContent>
