@@ -250,6 +250,51 @@ export default function DespesasRelatorios() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Encargos por imóvel (IPTU / TCR / SPU / condomínio)</CardTitle>
+          <CardDescription>Cadastros ativos em despesas_imovel_encargos, com situação atual do imóvel.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {encargos.isLoading ? (
+            <p className="text-sm text-muted-foreground">Carregando…</p>
+          ) : (encargos.data ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhum encargo cadastrado.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Imóvel</TableHead>
+                  <TableHead>Centro</TableHead>
+                  <TableHead>Situação</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead className="text-right">Valor anual</TableHead>
+                  <TableHead className="text-right">Parcelas</TableHead>
+                  <TableHead>1ª parcela</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(encargos.data ?? []).map((e: any) => (
+                  <TableRow key={e.id}>
+                    <TableCell>{e.imovel?.codigo ? `${e.imovel.codigo} — ` : ""}{e.imovel?.descricao ?? "—"}</TableCell>
+                    <TableCell>{e.imovel?.centro_custo?.nome ?? "—"}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="capitalize">
+                        {String(e.imovel?.situacao ?? "—").replace("_", " ")}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="uppercase text-xs">{e.tipo}</TableCell>
+                    <TableCell className="text-right">{fmtBRL(Number(e.valor_anual))}</TableCell>
+                    <TableCell className="text-right">{e.parcelas}</TableCell>
+                    <TableCell>{e.vencimento_primeira_parcela}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
