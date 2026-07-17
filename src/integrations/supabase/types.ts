@@ -382,6 +382,367 @@ export type Database = {
         }
         Relationships: []
       }
+      despesas_aba_permissoes: {
+        Row: {
+          aba: string
+          created_at: string
+          id: string
+          nivel: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          aba: string
+          created_at?: string
+          id?: string
+          nivel?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          aba?: string
+          created_at?: string
+          id?: string
+          nivel?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      despesas_categorias: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          nome: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          nome: string
+          tipo?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          nome?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      despesas_centros_custo: {
+        Row: {
+          created_at: string
+          descricao: string | null
+          id: string
+          is_active: boolean
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          is_active?: boolean
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          is_active?: boolean
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      despesas_centros_custo_permissoes: {
+        Row: {
+          centro_custo_id: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          centro_custo_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          centro_custo_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_centros_custo_permissoes_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_centros_custo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      despesas_contas_bancarias: {
+        Row: {
+          agencia: string | null
+          banco: string | null
+          centro_custo_id: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          nome: string
+          numero_conta: string | null
+          updated_at: string
+        }
+        Insert: {
+          agencia?: string | null
+          banco?: string | null
+          centro_custo_id?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          nome: string
+          numero_conta?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agencia?: string | null
+          banco?: string | null
+          centro_custo_id?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          nome?: string
+          numero_conta?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_contas_bancarias_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_centros_custo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      despesas_perfis_acesso: {
+        Row: {
+          created_at: string
+          descricao: string | null
+          id: string
+          is_active: boolean
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          is_active?: boolean
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          is_active?: boolean
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      despesas_pessoas: {
+        Row: {
+          cpf_cnpj: string | null
+          created_at: string
+          creci: string | null
+          email: string | null
+          id: string
+          is_active: boolean
+          nome: string
+          oab: string | null
+          observacao: string | null
+          papeis: string[]
+          telefone: string | null
+          tipo_pessoa: string
+          updated_at: string
+        }
+        Insert: {
+          cpf_cnpj?: string | null
+          created_at?: string
+          creci?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean
+          nome: string
+          oab?: string | null
+          observacao?: string | null
+          papeis?: string[]
+          telefone?: string | null
+          tipo_pessoa?: string
+          updated_at?: string
+        }
+        Update: {
+          cpf_cnpj?: string | null
+          created_at?: string
+          creci?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean
+          nome?: string
+          oab?: string | null
+          observacao?: string | null
+          papeis?: string[]
+          telefone?: string | null
+          tipo_pessoa?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      despesas_planos_conta: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          nome: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          nome: string
+          tipo?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          nome?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      despesas_subcategorias: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          nome: string
+          plano_conta_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          nome: string
+          plano_conta_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          nome?: string
+          plano_conta_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_subcategorias_plano_conta_id_fkey"
+            columns: ["plano_conta_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_planos_conta"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      despesas_veiculos: {
+        Row: {
+          comprador_id: string | null
+          created_at: string
+          data_aquisicao: string | null
+          data_venda: string | null
+          id: string
+          is_active: boolean
+          modelo: string
+          motorista_id: string | null
+          nota_fiscal: string | null
+          observacao: string | null
+          placa: string | null
+          proprietario_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          comprador_id?: string | null
+          created_at?: string
+          data_aquisicao?: string | null
+          data_venda?: string | null
+          id?: string
+          is_active?: boolean
+          modelo: string
+          motorista_id?: string | null
+          nota_fiscal?: string | null
+          observacao?: string | null
+          placa?: string | null
+          proprietario_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          comprador_id?: string | null
+          created_at?: string
+          data_aquisicao?: string | null
+          data_venda?: string | null
+          id?: string
+          is_active?: boolean
+          modelo?: string
+          motorista_id?: string | null
+          nota_fiscal?: string | null
+          observacao?: string | null
+          placa?: string | null
+          proprietario_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_veiculos_comprador_id_fkey"
+            columns: ["comprador_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_pessoas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_veiculos_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_pessoas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_veiculos_proprietario_id_fkey"
+            columns: ["proprietario_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_pessoas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dev_tracker: {
         Row: {
           cost: number
@@ -3244,6 +3605,26 @@ export type Database = {
       delete_weekly_stats_for_period: {
         Args: { p_end_date: string; p_start_date: string }
         Returns: Json
+      }
+      despesas_centros_permitidos: {
+        Args: { _user_id: string }
+        Returns: string[]
+      }
+      despesas_nivel_aba: {
+        Args: { _aba: string; _user_id: string }
+        Returns: string
+      }
+      despesas_pode_editar_aba: {
+        Args: { _aba: string; _user_id: string }
+        Returns: boolean
+      }
+      despesas_pode_excluir_aba: {
+        Args: { _aba: string; _user_id: string }
+        Returns: boolean
+      }
+      despesas_pode_ver_aba: {
+        Args: { _aba: string; _user_id: string }
+        Returns: boolean
       }
       get_broker_performance: {
         Args: { end_date: string; start_date: string }
