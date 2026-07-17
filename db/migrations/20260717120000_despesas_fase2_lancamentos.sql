@@ -59,7 +59,7 @@ CREATE POLICY "desp_lanc_select"
   TO authenticated
   USING (
     public.despesas_pode_ver_aba(auth.uid(), 'calendario')
-    AND centro_custo_id = ANY (public.despesas_centros_permitidos(auth.uid()))
+    AND centro_custo_id IN (SELECT public.despesas_centros_permitidos(auth.uid()))
   );
 
 -- INSERT: precisa poder editar e o centro de custo escolhido estar na sua lista permitida.
@@ -68,7 +68,7 @@ CREATE POLICY "desp_lanc_insert"
   TO authenticated
   WITH CHECK (
     public.despesas_pode_editar_aba(auth.uid(), 'calendario')
-    AND centro_custo_id = ANY (public.despesas_centros_permitidos(auth.uid()))
+    AND centro_custo_id IN (SELECT public.despesas_centros_permitidos(auth.uid()))
   );
 
 -- UPDATE: precisa poder editar; both USING e WITH CHECK usam a mesma regra.
@@ -77,11 +77,11 @@ CREATE POLICY "desp_lanc_update"
   TO authenticated
   USING (
     public.despesas_pode_editar_aba(auth.uid(), 'calendario')
-    AND centro_custo_id = ANY (public.despesas_centros_permitidos(auth.uid()))
+    AND centro_custo_id IN (SELECT public.despesas_centros_permitidos(auth.uid()))
   )
   WITH CHECK (
     public.despesas_pode_editar_aba(auth.uid(), 'calendario')
-    AND centro_custo_id = ANY (public.despesas_centros_permitidos(auth.uid()))
+    AND centro_custo_id IN (SELECT public.despesas_centros_permitidos(auth.uid()))
   );
 
 -- DELETE: precisa da permissão explícita de excluir na aba.
@@ -90,7 +90,7 @@ CREATE POLICY "desp_lanc_delete"
   TO authenticated
   USING (
     public.despesas_pode_excluir_aba(auth.uid(), 'calendario')
-    AND centro_custo_id = ANY (public.despesas_centros_permitidos(auth.uid()))
+    AND centro_custo_id IN (SELECT public.despesas_centros_permitidos(auth.uid()))
   );
 
 -- ---------------------------------------------------------------------
@@ -127,7 +127,7 @@ CREATE POLICY "desp_pag_select"
       SELECT 1 FROM public.despesas_lancamentos l
       WHERE l.id = lancamento_id
         AND public.despesas_pode_ver_aba(auth.uid(), 'calendario')
-        AND l.centro_custo_id = ANY (public.despesas_centros_permitidos(auth.uid()))
+        AND l.centro_custo_id IN (SELECT public.despesas_centros_permitidos(auth.uid()))
     )
   );
 
@@ -139,7 +139,7 @@ CREATE POLICY "desp_pag_insert"
       SELECT 1 FROM public.despesas_lancamentos l
       WHERE l.id = lancamento_id
         AND public.despesas_pode_editar_aba(auth.uid(), 'calendario')
-        AND l.centro_custo_id = ANY (public.despesas_centros_permitidos(auth.uid()))
+        AND l.centro_custo_id IN (SELECT public.despesas_centros_permitidos(auth.uid()))
     )
   );
 
@@ -151,7 +151,7 @@ CREATE POLICY "desp_pag_update"
       SELECT 1 FROM public.despesas_lancamentos l
       WHERE l.id = lancamento_id
         AND public.despesas_pode_editar_aba(auth.uid(), 'calendario')
-        AND l.centro_custo_id = ANY (public.despesas_centros_permitidos(auth.uid()))
+        AND l.centro_custo_id IN (SELECT public.despesas_centros_permitidos(auth.uid()))
     )
   )
   WITH CHECK (
@@ -159,7 +159,7 @@ CREATE POLICY "desp_pag_update"
       SELECT 1 FROM public.despesas_lancamentos l
       WHERE l.id = lancamento_id
         AND public.despesas_pode_editar_aba(auth.uid(), 'calendario')
-        AND l.centro_custo_id = ANY (public.despesas_centros_permitidos(auth.uid()))
+        AND l.centro_custo_id IN (SELECT public.despesas_centros_permitidos(auth.uid()))
     )
   );
 
@@ -171,7 +171,7 @@ CREATE POLICY "desp_pag_delete"
       SELECT 1 FROM public.despesas_lancamentos l
       WHERE l.id = lancamento_id
         AND public.despesas_pode_editar_aba(auth.uid(), 'calendario')
-        AND l.centro_custo_id = ANY (public.despesas_centros_permitidos(auth.uid()))
+        AND l.centro_custo_id IN (SELECT public.despesas_centros_permitidos(auth.uid()))
     )
   );
 
