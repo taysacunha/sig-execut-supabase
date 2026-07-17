@@ -14,6 +14,8 @@ import {
 import { useDespesasPermissions } from "@/hooks/useDespesasPermissions";
 import { useLancamentos } from "@/hooks/useDespesasLancamentos";
 import * as XLSX from "xlsx";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 function fmtBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -97,6 +99,21 @@ export default function DespesasRelatorios() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(topPessoas), "Top pessoas");
     XLSX.writeFile(wb, `despesas-relatorios-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
+
+  const encargos = useQuery({
+    queryKey: ["despesas-relatorios-encargos"],
+    enabled: podeVer("imoveis") || podeVer("calendario"),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("despesas_imovel_encargos" as any)
+        .select(`id, tipo, descricao, valor_anual, parcelas, vencimento_primeira_parcela, ativo,
+                 imovel:despesas_imoveis(codigo, descricao, situacao, centro_custo:despesas_centros_custo(nome))`)
+        .eq("ativo", true)
+        .order("tipo");
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
 
   if (!podeVer("calendario")) {
     return (
