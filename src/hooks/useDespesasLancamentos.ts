@@ -215,7 +215,7 @@ export function useDespesasLookups() {
         .eq("is_active", true)
         .order("nome");
       if (error) throw error;
-      return (data ?? []) as { id: string; nome: string }[];
+      return (data ?? []) as unknown as { id: string; nome: string }[];
     },
   });
   const categorias = useQuery({
@@ -227,7 +227,7 @@ export function useDespesasLookups() {
         .eq("is_active", true)
         .order("nome");
       if (error) throw error;
-      return (data ?? []) as { id: string; nome: string; tipo: string }[];
+      return (data ?? []) as unknown as { id: string; nome: string; tipo: string }[];
     },
   });
   const planos = useQuery({
@@ -239,7 +239,7 @@ export function useDespesasLookups() {
         .eq("is_active", true)
         .order("nome");
       if (error) throw error;
-      return (data ?? []) as { id: string; nome: string; tipo: string }[];
+      return (data ?? []) as unknown as { id: string; nome: string; tipo: string }[];
     },
   });
   const subcategorias = useQuery({
@@ -251,7 +251,7 @@ export function useDespesasLookups() {
         .eq("is_active", true)
         .order("nome");
       if (error) throw error;
-      return (data ?? []) as { id: string; nome: string; plano_conta_id: string }[];
+      return (data ?? []) as unknown as { id: string; nome: string; plano_conta_id: string }[];
     },
   });
   const contas = useQuery({
@@ -263,7 +263,7 @@ export function useDespesasLookups() {
         .eq("is_active", true)
         .order("nome");
       if (error) throw error;
-      return (data ?? []) as { id: string; nome: string; banco: string | null }[];
+      return (data ?? []) as unknown as { id: string; nome: string; banco: string | null }[];
     },
   });
   const pessoas = useQuery({
@@ -275,7 +275,7 @@ export function useDespesasLookups() {
         .eq("is_active", true)
         .order("nome");
       if (error) throw error;
-      return (data ?? []) as { id: string; nome: string; tipo_pessoa: string }[];
+      return (data ?? []) as unknown as { id: string; nome: string; tipo_pessoa: string }[];
     },
   });
 
