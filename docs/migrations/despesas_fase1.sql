@@ -275,7 +275,7 @@ BEGIN
       WHERE v_old_data->key IS DISTINCT FROM value AND key NOT IN ('updated_at','created_at');
     IF v_changed_fields IS NULL OR array_length(v_changed_fields,1) IS NULL THEN RETURN NEW; END IF;
   END IF;
-  INSERT INTO public.module_audit_logs (module_name, table_name, record_id, action, old_data, new_data, changed_fields, user_id, user_email)
+  INSERT INTO public.module_audit_logs (module_name, table_name, record_id, action, old_data, new_data, changed_fields, changed_by, changed_by_email)
   VALUES (v_module_name, TG_TABLE_NAME,
     COALESCE((CASE WHEN TG_OP='DELETE' THEN (OLD).id ELSE (NEW).id END)::text, ''),
     TG_OP, v_old_data, v_new_data, v_changed_fields, v_user_id, v_user_email);
