@@ -19,8 +19,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Plus, Pencil, Trash2, ShieldAlert, DollarSign, AlertTriangle,
-  CheckCircle2, XCircle, Download, Ban,
+  CheckCircle2, XCircle, Download, Ban, Repeat,
 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDespesasPermissions } from "@/hooks/useDespesasPermissions";
 import {
   Lancamento, LancamentoFiltros, LancamentoStatus, LancamentoTipo,
@@ -357,6 +359,24 @@ export default function DespesasCalendario() {
                         </TableCell>
                         <TableCell className="max-w-[280px]">
                           <div className="font-medium truncate">{r.descricao}</div>
+                          {r.serie_recorrencia_id && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Link
+                                  to="/despesas/recorrencias"
+                                  className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline mt-0.5"
+                                >
+                                  <Repeat className="h-3 w-3" />
+                                  {r.is_manual ? "Série (editado)" : "Gerado por série"}
+                                </Link>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {r.is_manual
+                                  ? "Este lançamento veio de uma série, mas foi editado manualmente."
+                                  : "Lançamento gerado automaticamente por uma recorrência."}
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
                           {r.documento_numero && (
                             <div className="text-xs text-muted-foreground">Doc: {r.documento_numero}</div>
                           )}
