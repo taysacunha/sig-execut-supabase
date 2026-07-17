@@ -176,6 +176,20 @@ export function useCancelLancamento() {
   });
 }
 
+export function useSetLancamentoStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: LancamentoStatus }) => {
+      const { error } = await supabase
+        .from("despesas_lancamentos" as any)
+        .update({ status })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [LANC_KEY] }),
+  });
+}
+
 export interface PagamentoInput {
   lancamento_id: string;
   data_pagamento: string;
