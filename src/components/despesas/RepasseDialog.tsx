@@ -107,6 +107,39 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
           </div>
         </div>
 
+        <div className="border rounded-md p-3 mb-4 grid gap-3 md:grid-cols-[1fr_auto] items-end">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">
+              Valor limite ao 1º beneficiário (R$)
+            </Label>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              placeholder="Sem limite"
+              value={limite}
+              disabled={!podeEditarItens}
+              onChange={(e) => setLimite(e.target.value)}
+            />
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!podeEditarItens || updCampos.isPending}
+            onClick={async () => {
+              try {
+                await updCampos.mutateAsync({
+                  id: repasse.id,
+                  campos: { valor_limite_primeiro: limite === "" ? null : Number(limite) },
+                });
+                toast.success("Limite atualizado");
+              } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+            }}
+          >
+            Salvar limite
+          </Button>
+        </div>
+
         <Table>
           <TableHeader><TableRow>
             <TableHead>Tipo</TableHead><TableHead>Origem</TableHead>
