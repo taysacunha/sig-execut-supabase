@@ -330,6 +330,32 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
             />
           </div>
 
+          <div className="md:col-span-2 border rounded-md p-3 space-y-2">
+            <Label className="text-sm">Credenciais / contato (opcional)</Label>
+            <div className="grid gap-3 md:grid-cols-2">
+              {[
+                { k: "telefone", l: "Telefone" },
+                { k: "site", l: "Site / link" },
+                { k: "login", l: "Login" },
+                { k: "senha", l: "Senha" },
+                { k: "contato", l: "Contato" },
+              ].map(({ k, l }) => (
+                <div key={k} className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">{l}</Label>
+                  <Input
+                    value={(form.credenciais as any)?.[k] ?? ""}
+                    onChange={(e) => {
+                      const next = { ...(form.credenciais ?? {}) };
+                      if (e.target.value) next[k] = e.target.value;
+                      else delete next[k];
+                      setForm({ ...form, credenciais: next });
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="md:col-span-2">
             <DuplicidadeAlert
               valor={form.valor_total}
