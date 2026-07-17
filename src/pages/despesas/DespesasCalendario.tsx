@@ -118,6 +118,7 @@ export default function DespesasCalendario() {
   const [pagando, setPagando] = useState<Lancamento | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Lancamento | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<Lancamento | null>(null);
+  const [tipoDefault, setTipoDefault] = useState<LancamentoTipo>("a_pagar");
 
   const deleteMut = useDeleteLancamento();
   const cancelMut = useCancelLancamento();
@@ -172,7 +173,6 @@ export default function DespesasCalendario() {
     // repasse tipo default via state auxiliar
     setTipoDefault(tipo);
   }
-  const [tipoDefault, setTipoDefault] = useState<LancamentoTipo>("a_pagar");
 
   function openEdit(r: Lancamento) {
     setEditing(r);
