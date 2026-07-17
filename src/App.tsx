@@ -11,6 +11,7 @@ import { EscalasLayout } from "@/layouts/EscalasLayout";
 import { VendasLayout } from "@/layouts/VendasLayout";
 import { FeriasLayout } from "@/layouts/FeriasLayout";
 import { EstoqueLayout } from "@/layouts/EstoqueLayout";
+import { DespesasLayout } from "@/layouts/DespesasLayout";
 import { StandaloneLayout } from "@/layouts/StandaloneLayout";
 import { useSessionControl } from "@/hooks/useSessionControl";
 import { useInactivityLogout } from "@/hooks/useInactivityLogout";
@@ -73,6 +74,16 @@ const EstoqueNotificacoes = lazy(() => import("./pages/estoque/EstoqueNotificaco
 const EstoquePlacas = lazy(() => import("./pages/estoque/EstoquePlacas"));
 const EstoqueHelp = lazy(() => import("./pages/estoque/EstoqueHelp"));
 const VendasHelp = lazy(() => import("./pages/vendas/VendasHelp"));
+
+// Despesas
+const DespesasDashboard = lazy(() => import("./pages/despesas/DespesasDashboard"));
+const DespesasCalendario = lazy(() => import("./pages/despesas/DespesasCalendario"));
+const DespesasImoveis = lazy(() => import("./pages/despesas/DespesasImoveis"));
+const DespesasRepasses = lazy(() => import("./pages/despesas/DespesasRepasses"));
+const DespesasCadastros = lazy(() => import("./pages/despesas/DespesasCadastros"));
+const DespesasPermissoes = lazy(() => import("./pages/despesas/DespesasPermissoes"));
+const DespesasHelp = lazy(() => import("./pages/despesas/DespesasHelp"));
+const DespesasAuditLogs = lazy(() => import("./pages/despesas/DespesasAuditLogs"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -204,6 +215,23 @@ const App = () => {
               <Route path="usuarios" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><UserManagement /></RoleGuard>} />
               <Route path="auditoria" element={<RoleGuard allowedRoles={["super_admin", "admin"]}><EstoqueAuditLogs /></RoleGuard>} />
               <Route path="ajuda" element={<EstoqueHelp />} />
+            </Route>
+
+            {/* Sistema de Despesas */}
+            <Route
+              path="/despesas"
+              element={<ProtectedRoute><DespesasLayout /></ProtectedRoute>}
+            >
+              <Route index element={<DespesasDashboard />} />
+              <Route path="calendario" element={<DespesasCalendario />} />
+              <Route path="imoveis" element={<DespesasImoveis />} />
+              <Route path="repasses" element={<DespesasRepasses />} />
+              <Route path="cadastros" element={<DespesasCadastros />} />
+              <Route path="permissoes" element={<RoleGuard allowedRoles={["super_admin","admin"]}><DespesasPermissoes /></RoleGuard>} />
+              <Route path="perfil" element={<Profile />} />
+              <Route path="usuarios" element={<RoleGuard allowedRoles={["super_admin","admin"]}><UserManagement /></RoleGuard>} />
+              <Route path="auditoria" element={<RoleGuard allowedRoles={["super_admin","admin"]}><DespesasAuditLogs /></RoleGuard>} />
+              <Route path="ajuda" element={<DespesasHelp />} />
             </Route>
 
             {/* Dev (protegido por autenticação + role) */}

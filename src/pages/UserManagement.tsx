@@ -63,7 +63,7 @@ import {
 } from "@/components/ui/tooltip";
 
 type SystemRole = "super_admin" | "admin" | "manager" | "supervisor" | "collaborator";
-type SystemName = "escalas" | "vendas" | "ferias" | "estoque";
+type SystemName = "escalas" | "vendas" | "ferias" | "estoque" | "despesas";
 type PermissionType = "view_only" | "view_edit";
 
 interface SystemAccess {
@@ -111,6 +111,7 @@ const systemLabels: Record<SystemName, string> = {
   vendas: "Vendas",
   ferias: "Férias e Folgas",
   estoque: "Estoques",
+  despesas: "Despesas",
 };
 
 const systemIcons: Record<SystemName, React.ReactNode> = {
@@ -118,6 +119,7 @@ const systemIcons: Record<SystemName, React.ReactNode> = {
   vendas: <TrendingUp className="h-3 w-3" />,
   ferias: <Calendar className="h-3 w-3" />,
   estoque: <Package className="h-3 w-3" />,
+  despesas: <Package className="h-3 w-3" />,
 };
 
 const permissionLabels: Record<PermissionType, string> = {
@@ -591,7 +593,7 @@ function UserManagementContent() {
 
                 <div className="space-y-2">
                   <Label>Sistemas e Permissões</Label>
-                  {(["escalas", "vendas", "ferias", "estoque"] as SystemName[]).map(sys => {
+                  {(["escalas", "vendas", "ferias", "estoque", "despesas"] as SystemName[]).map(sys => {
                     const access = inviteSystems.find(s => s.system_name === sys);
                     return (
                       <div key={sys} className="flex items-center gap-3 p-2 border rounded">
@@ -879,7 +881,7 @@ function UserManagementContent() {
 
                   <div className="space-y-2">
                     <Label>Sistemas e Permissões</Label>
-                    {(["escalas", "vendas", "ferias", "estoque"] as SystemName[]).map(sys => {
+                    {(["escalas", "vendas", "ferias", "estoque", "despesas"] as SystemName[]).map(sys => {
                       const access = editSystems.find(s => s.system_name === sys);
                       return (
                         <div key={sys} className="flex items-center gap-3 p-2 border rounded">
