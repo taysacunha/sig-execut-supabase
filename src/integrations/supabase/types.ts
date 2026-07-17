@@ -536,6 +536,169 @@ export type Database = {
           },
         ]
       }
+      despesas_lancamento_pagamentos: {
+        Row: {
+          conta_bancaria_id: string | null
+          created_at: string
+          created_by: string | null
+          data_pagamento: string
+          forma_pagamento: string
+          id: string
+          lancamento_id: string
+          observacao: string | null
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          conta_bancaria_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_pagamento: string
+          forma_pagamento: string
+          id?: string
+          lancamento_id: string
+          observacao?: string | null
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          conta_bancaria_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_pagamento?: string
+          forma_pagamento?: string
+          id?: string
+          lancamento_id?: string
+          observacao?: string | null
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_lancamento_pagamentos_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_lancamento_pagamentos_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_lancamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      despesas_lancamentos: {
+        Row: {
+          categoria_id: string | null
+          centro_custo_id: string
+          conta_bancaria_id: string | null
+          created_at: string
+          created_by: string | null
+          data_competencia: string
+          data_vencimento: string
+          descricao: string
+          documento_numero: string | null
+          id: string
+          observacao: string | null
+          pessoa_id: string | null
+          plano_conta_id: string | null
+          status: string
+          subcategoria_id: string | null
+          tipo: string
+          updated_at: string
+          valor_pago: number
+          valor_total: number
+        }
+        Insert: {
+          categoria_id?: string | null
+          centro_custo_id: string
+          conta_bancaria_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_competencia: string
+          data_vencimento: string
+          descricao: string
+          documento_numero?: string | null
+          id?: string
+          observacao?: string | null
+          pessoa_id?: string | null
+          plano_conta_id?: string | null
+          status?: string
+          subcategoria_id?: string | null
+          tipo: string
+          updated_at?: string
+          valor_pago?: number
+          valor_total: number
+        }
+        Update: {
+          categoria_id?: string | null
+          centro_custo_id?: string
+          conta_bancaria_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_competencia?: string
+          data_vencimento?: string
+          descricao?: string
+          documento_numero?: string | null
+          id?: string
+          observacao?: string | null
+          pessoa_id?: string | null
+          plano_conta_id?: string | null
+          status?: string
+          subcategoria_id?: string | null
+          tipo?: string
+          updated_at?: string
+          valor_pago?: number
+          valor_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_lancamentos_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_categorias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_lancamentos_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_centros_custo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_lancamentos_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_lancamentos_pessoa_id_fkey"
+            columns: ["pessoa_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_pessoas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_lancamentos_plano_conta_id_fkey"
+            columns: ["plano_conta_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_planos_conta"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_lancamentos_subcategoria_id_fkey"
+            columns: ["subcategoria_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_subcategorias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       despesas_perfis_acesso: {
         Row: {
           created_at: string
@@ -3625,6 +3788,10 @@ export type Database = {
       despesas_pode_ver_aba: {
         Args: { _aba: string; _user_id: string }
         Returns: boolean
+      }
+      despesas_recalcular_lancamento: {
+        Args: { _lancamento_id: string }
+        Returns: undefined
       }
       get_broker_performance: {
         Args: { end_date: string; start_date: string }
