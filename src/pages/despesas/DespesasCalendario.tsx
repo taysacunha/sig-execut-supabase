@@ -188,6 +188,19 @@ export default function DespesasCalendario() {
           <p className="text-muted-foreground">
             Contas a pagar e receber, com múltiplas formas de pagamento.
           </p>
+          {serieParam && (
+            <Badge variant="secondary" className="mt-2 gap-2">
+              <Repeat className="h-3 w-3" />
+              Filtrando por série
+              <button
+                type="button"
+                onClick={limparSerie}
+                className="ml-1 text-xs underline hover:no-underline"
+              >
+                limpar
+              </button>
+            </Badge>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => exportarCsv(rows)} disabled={!rows.length}>
