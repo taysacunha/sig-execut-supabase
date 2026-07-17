@@ -27,6 +27,7 @@ import { useDespesasPermissions } from "@/hooks/useDespesasPermissions";
 import {
   Lancamento, LancamentoFiltros, LancamentoStatus, LancamentoTipo,
   useCancelLancamento, useDeleteLancamento, useDespesasLookups, useLancamentos,
+  useSetLancamentoStatus,
 } from "@/hooks/useDespesasLancamentos";
 import { LancamentoDialog } from "@/components/despesas/LancamentoDialog";
 import { PagamentoDialog } from "@/components/despesas/PagamentoDialog";
@@ -124,6 +125,7 @@ export default function DespesasCalendario() {
 
   const deleteMut = useDeleteLancamento();
   const cancelMut = useCancelLancamento();
+  const setStatusMut = useSetLancamentoStatus();
 
   const kpis = useMemo(() => {
     let aPagar = 0, aReceber = 0, pago = 0, vencido = 0;
@@ -440,6 +442,36 @@ export default function DespesasCalendario() {
                           {canEdit && r.status !== "cancelado" && r.status !== "pago" && (
                             <Button size="icon" variant="ghost" onClick={() => setConfirmCancel(r)} title="Cancelar">
                               <Ban className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {canEdit && !["cancelado","pago","quitado","gimob"].includes(r.status) && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              title="Marcar como quitado (baixa manual)"
+                              onClick={() =>
+                                setStatusMut.mutate(
+                                  { id: r.id, status: "quitado" },
+                                  { onSuccess: () => toast.success("Lançamento quitado") }
+                                )
+                              }
+                            >
+                              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                            </Button>
+                          )}
+                          {canEdit && !["cancelado","pago","quitado","gimob"].includes(r.status) && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              title="Marcar como tratado pelo GIMOB"
+                              onClick={() =>
+                                setStatusMut.mutate(
+                                  { id: r.id, status: "gimob" },
+                                  { onSuccess: () => toast.success("Marcado como GIMOB") }
+                                )
+                              }
+                            >
+                              <Repeat className="h-4 w-4" />
                             </Button>
                           )}
                           {canDelete && (
