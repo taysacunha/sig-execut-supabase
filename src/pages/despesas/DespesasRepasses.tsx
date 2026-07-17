@@ -1,9 +1,63 @@
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDespesasPermissions } from "@/hooks/useDespesasPermissions";
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert, Plus, Eye, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  useRepasses, useMontarRepasse, useDeleteRepasse, Repasse, RepasseFiltros, RepasseStatus,
+} from "@/hooks/useDespesasRepasses";
+import { useDespesasLookups } from "@/hooks/useDespesasLancamentos";
+import { RepasseDialog } from "@/components/despesas/RepasseDialog";
+
+function money(n: number | null | undefined) {
+  return `R$ ${Number(n ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+}
+function firstDayOfMonth(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+const statusLabel: Record<RepasseStatus, string> = {
+  aberto: "Aberto", fechado: "Fechado", pago: "Pago", cancelado: "Cancelado",
+};
 
 export default function DespesasRepasses() {
-  const { podeVer } = useDespesasPermissions();
+  const { podeVer, podeEditar, podeExcluir } = useDespesasPermissions();
+  const { centros, pessoas } = useDespesasLookups();
+
+  const [filtros, setFiltros] = useState<RepasseFiltros>({ competencia: firstDayOfMonth() });
+  const { data: repasses = [], isLoading } = useRepasses(filtros);
+  const montarMut = useMontarRepasse();
+  const delMut = useDeleteRepasse();
+
+  const [detalhe, setDetalhe] = useState<Repasse | null>(null);
+  const [dialogNovo, setDialogNovo] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<Repasse | null>(null);
+  const [novo, setNovo] = useState({ proprietarioId: "", centroCustoId: "", competencia: firstDayOfMonth() });
+
+  const kpis = useMemo(() => {
+    const totalBruto = repasses.reduce((s, r) => s + Number(r.valor_bruto), 0);
+    const totalTaxa = repasses.reduce((s, r) => s + Number(r.taxa_administracao_valor), 0);
+    const totalLiquido = repasses.reduce((s, r) => s + Number(r.valor_liquido), 0);
+    const pagos = repasses.filter((r) => r.status === "pago").length;
+    return { totalBruto, totalTaxa, totalLiquido, pagos, count: repasses.length };
+  }, [repasses]);
+
   if (!podeVer("repasses")) {
     return (
       <Card className="max-w-md mx-auto mt-8">
@@ -15,21 +69,190 @@ export default function DespesasRepasses() {
       </Card>
     );
   }
+
+  async function montar() {
+    if (!novo.proprietarioId || !novo.centroCustoId || !novo.competencia) {
+      toast.error("Selecione proprietário, centro e competência");
+      return;
+    }
+    try {
+      await montarMut.mutateAsync({
+        proprietarioId: novo.proprietarioId,
+        centroCustoId: novo.centroCustoId,
+        competencia: novo.competencia,
+      });
+      toast.success("Repasse montado com base nos lançamentos do mês");
+      setDialogNovo(false);
+    } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Repasses</h1>
-        <p className="text-muted-foreground">Repasses mensais de aluguel aos proprietários.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Repasses</h1>
+          <p className="text-muted-foreground">Consolidação mensal de créditos e débitos por proprietário.</p>
+        </div>
+        {podeEditar("repasses") && (
+          <Button onClick={() => setDialogNovo(true)}><Plus className="h-4 w-4 mr-2" />Montar repasse</Button>
+        )}
       </div>
+
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
+        <Card><CardContent className="pt-4"><div className="text-xs text-muted-foreground">Repasses</div><div className="text-2xl font-semibold">{kpis.count}</div></CardContent></Card>
+        <Card><CardContent className="pt-4"><div className="text-xs text-muted-foreground">Pagos</div><div className="text-2xl font-semibold text-emerald-600">{kpis.pagos}</div></CardContent></Card>
+        <Card><CardContent className="pt-4"><div className="text-xs text-muted-foreground">Bruto</div><div className="text-2xl font-semibold">{money(kpis.totalBruto)}</div></CardContent></Card>
+        <Card><CardContent className="pt-4"><div className="text-xs text-muted-foreground">Taxa admin.</div><div className="text-2xl font-semibold text-destructive">−{money(kpis.totalTaxa)}</div></CardContent></Card>
+        <Card><CardContent className="pt-4"><div className="text-xs text-muted-foreground">Líquido</div><div className="text-2xl font-semibold text-primary">{money(kpis.totalLiquido)}</div></CardContent></Card>
+      </div>
+
       <Card>
-        <CardHeader>
-          <CardTitle>Em construção — Fase 3</CardTitle>
-          <CardDescription>
-            Repasse mensal com créditos/débitos por categoria, taxa de administração, valor líquido calculado e exportação por CNPJ/CPF.
-          </CardDescription>
-        </CardHeader>
-        <CardContent />
+        <CardHeader><CardTitle>Filtros</CardTitle></CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-4">
+          <div className="space-y-1">
+            <Label>Competência</Label>
+            <Input type="month" value={(filtros.competencia ?? "").slice(0, 7)} onChange={(e) => setFiltros({ ...filtros, competencia: e.target.value ? `${e.target.value}-01` : undefined })} />
+          </div>
+          <div className="space-y-1">
+            <Label>Status</Label>
+            <Select value={filtros.status ?? "todos"} onValueChange={(v: any) => setFiltros({ ...filtros, status: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="aberto">Aberto</SelectItem>
+                <SelectItem value="fechado">Fechado</SelectItem>
+                <SelectItem value="pago">Pago</SelectItem>
+                <SelectItem value="cancelado">Cancelado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>Centro de custo</Label>
+            <Select value={filtros.centroCustoId ?? "__none__"} onValueChange={(v) => setFiltros({ ...filtros, centroCustoId: v === "__none__" ? undefined : v })}>
+              <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Todos</SelectItem>
+                {(centros.data ?? []).map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>Proprietário</Label>
+            <Select value={filtros.proprietarioId ?? "__none__"} onValueChange={(v) => setFiltros({ ...filtros, proprietarioId: v === "__none__" ? undefined : v })}>
+              <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Todos</SelectItem>
+                {(pessoas.data ?? []).map(p => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Repasses ({repasses.length})</CardTitle></CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">Carregando…</p>
+          ) : repasses.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhum repasse encontrado.</p>
+          ) : (
+            <Table>
+              <TableHeader><TableRow>
+                <TableHead>Competência</TableHead>
+                <TableHead>Proprietário</TableHead>
+                <TableHead>Centro</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Bruto</TableHead>
+                <TableHead className="text-right">Taxa</TableHead>
+                <TableHead className="text-right">Líquido</TableHead>
+                <TableHead className="text-right w-32">Ações</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>
+                {repasses.map((r) => (
+                  <TableRow key={r.id}>
+                    <TableCell>{new Date(r.competencia + "T00:00:00").toLocaleDateString("pt-BR", { month: "2-digit", year: "numeric" })}</TableCell>
+                    <TableCell className="font-medium">{r.proprietario?.nome ?? "—"}</TableCell>
+                    <TableCell>{r.centro_custo?.nome ?? "—"}</TableCell>
+                    <TableCell>{statusLabel[r.status]}</TableCell>
+                    <TableCell className="text-right">{money(r.valor_bruto)}</TableCell>
+                    <TableCell className="text-right text-destructive">−{money(r.taxa_administracao_valor)}</TableCell>
+                    <TableCell className="text-right font-semibold text-primary">{money(r.valor_liquido)}</TableCell>
+                    <TableCell className="text-right space-x-1">
+                      <Button size="icon" variant="ghost" onClick={() => setDetalhe(r)}><Eye className="h-4 w-4" /></Button>
+                      {podeExcluir("repasses") && r.status !== "pago" && (
+                        <Button size="icon" variant="ghost" onClick={() => setConfirmDelete(r)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <RepasseDialog open={!!detalhe} onOpenChange={(o) => !o && setDetalhe(null)} repasse={detalhe} />
+
+      <Dialog open={dialogNovo} onOpenChange={setDialogNovo}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Montar repasse</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1"><Label>Competência</Label>
+              <Input type="month" value={novo.competencia.slice(0, 7)} onChange={(e) => setNovo({ ...novo, competencia: e.target.value ? `${e.target.value}-01` : "" })} />
+            </div>
+            <div className="space-y-1"><Label>Proprietário *</Label>
+              <Select value={novo.proprietarioId} onValueChange={(v) => setNovo({ ...novo, proprietarioId: v })}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {(pessoas.data ?? []).map(p => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1"><Label>Centro de custo *</Label>
+              <Select value={novo.centroCustoId} onValueChange={(v) => setNovo({ ...novo, centroCustoId: v })}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {(centros.data ?? []).map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Consolida os lançamentos do mês para esse proprietário/centro em créditos e débitos, aplica a taxa de administração e calcula o líquido.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogNovo(false)}>Cancelar</Button>
+            <Button onClick={montar} disabled={montarMut.isPending}>Montar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir repasse?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação remove o repasse e seus itens. Não afeta os lançamentos originais no calendário.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                if (confirmDelete) delMut.mutate(confirmDelete.id, {
+                  onSuccess: () => { toast.success("Repasse excluído"); setConfirmDelete(null); },
+                  onError: (err: any) => toast.error(err?.message ?? "Erro"),
+                });
+              }}
+            >Excluir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
