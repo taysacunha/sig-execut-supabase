@@ -46,6 +46,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
     data_vencimento: new Date().toISOString().slice(0, 10),
     valor_total: 0,
     observacao: null,
+    credenciais: {},
   });
 
   const [form, setForm] = useState<LancamentoInput>(emptyForm());
@@ -75,6 +76,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
         data_vencimento: editing.data_vencimento,
         valor_total: Number(editing.valor_total),
         observacao: editing.observacao,
+        credenciais: (editing.credenciais as any) ?? {},
       });
       setRec({
         ativa: false,
