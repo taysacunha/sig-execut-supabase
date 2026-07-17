@@ -46,6 +46,9 @@ export interface Lancamento {
   valor_pago: number;
   status: LancamentoStatus;
   observacao: string | null;
+  serie_recorrencia_id: string | null;
+  is_manual: boolean | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   pessoa?: { nome: string } | null;
