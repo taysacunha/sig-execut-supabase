@@ -66,6 +66,7 @@ export interface LancamentoFiltros {
   dataInicio?: string;
   dataFim?: string;
   busca?: string;
+  serieId?: string;
 }
 
 export const LANC_KEY = "despesas-lancamentos";
@@ -92,6 +93,7 @@ export function useLancamentos(filtros: LancamentoFiltros) {
       if (filtros.categoriaId) query = query.eq("categoria_id", filtros.categoriaId);
       if (filtros.dataInicio) query = query.gte("data_vencimento", filtros.dataInicio);
       if (filtros.dataFim) query = query.lte("data_vencimento", filtros.dataFim);
+      if (filtros.serieId) query = query.eq("serie_recorrencia_id", filtros.serieId);
       if (filtros.busca && filtros.busca.trim()) {
         query = query.ilike("descricao", `%${filtros.busca.trim()}%`);
       }

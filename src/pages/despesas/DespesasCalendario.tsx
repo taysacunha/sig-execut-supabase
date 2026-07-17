@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
@@ -21,7 +21,7 @@ import {
   Plus, Pencil, Trash2, ShieldAlert, DollarSign, AlertTriangle,
   CheckCircle2, XCircle, Download, Ban, Repeat,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDespesasPermissions } from "@/hooks/useDespesasPermissions";
 import {
@@ -83,6 +83,9 @@ export default function DespesasCalendario() {
   const canEdit = podeEditar("calendario");
   const canDelete = podeExcluir("calendario");
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const serieParam = searchParams.get("serie") ?? undefined;
+
   const hoje = new Date();
   const primeiroDia = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
     .toISOString().slice(0, 10);
@@ -92,9 +95,20 @@ export default function DespesasCalendario() {
   const [filtros, setFiltros] = useState<LancamentoFiltros>({
     tipo: "todos",
     status: "todos",
-    dataInicio: primeiroDia,
-    dataFim: ultimoDia,
+    dataInicio: serieParam ? undefined : primeiroDia,
+    dataFim: serieParam ? undefined : ultimoDia,
+    serieId: serieParam,
   });
+
+  useEffect(() => {
+    setFiltros((f) => ({ ...f, serieId: serieParam }));
+  }, [serieParam]);
+
+  function limparSerie() {
+    const next = new URLSearchParams(searchParams);
+    next.delete("serie");
+    setSearchParams(next, { replace: true });
+  }
 
   const { data: rows = [], isLoading } = useLancamentos(filtros);
   const lookups = useDespesasLookups();
@@ -174,6 +188,19 @@ export default function DespesasCalendario() {
           <p className="text-muted-foreground">
             Contas a pagar e receber, com múltiplas formas de pagamento.
           </p>
+          {serieParam && (
+            <Badge variant="secondary" className="mt-2 gap-2">
+              <Repeat className="h-3 w-3" />
+              Filtrando por série
+              <button
+                type="button"
+                onClick={limparSerie}
+                className="ml-1 text-xs underline hover:no-underline"
+              >
+                limpar
+              </button>
+            </Badge>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => exportarCsv(rows)} disabled={!rows.length}>

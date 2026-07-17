@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDespesasPermissions } from "@/hooks/useDespesasPermissions";
-import { ShieldAlert, Plus, Eye, Trash2 } from "lucide-react";
+import { ShieldAlert, Plus, Eye, Trash2, Download } from "lucide-react";
+import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -96,6 +97,23 @@ export default function DespesasRepasses() {
         {podeEditar("repasses") && (
           <Button onClick={() => setDialogNovo(true)}><Plus className="h-4 w-4 mr-2" />Montar repasse</Button>
         )}
+        <Button variant="outline" onClick={() => {
+          const rows = repasses.map((r) => ({
+            Competência: new Date(r.competencia + "T00:00:00").toLocaleDateString("pt-BR", { month: "2-digit", year: "numeric" }),
+            Proprietário: r.proprietario?.nome ?? "",
+            Centro: r.centro_custo?.nome ?? "",
+            Status: statusLabel[r.status],
+            Bruto: Number(r.valor_bruto),
+            Taxa: Number(r.taxa_administracao_valor),
+            Líquido: Number(r.valor_liquido),
+            "Data pagamento": r.data_pagamento ?? "",
+          }));
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Repasses");
+          XLSX.writeFile(wb, `despesas-repasses-${new Date().toISOString().slice(0, 10)}.xlsx`);
+        }} disabled={!repasses.length}>
+          <Download className="h-4 w-4 mr-2" />Exportar XLSX
+        </Button>
       </div>
 
       <div className="grid gap-3 grid-cols-2 md:grid-cols-5">

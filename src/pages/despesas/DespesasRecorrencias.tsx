@@ -2,7 +2,8 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
-import { Loader2, Plus, Play, Power, Trash2 } from "lucide-react";
+import { Loader2, Play, Power, Trash2, ListChecks } from "lucide-react";
+import { Link } from "react-router-dom";
 import {
   Card, CardContent, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -145,6 +146,11 @@ export default function DespesasRecorrencias() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right space-x-1 whitespace-nowrap">
+                        <Button asChild size="sm" variant="ghost">
+                          <Link to={`/despesas/calendario?serie=${r.id}`}>
+                            <ListChecks className="h-3 w-3 mr-1" /> Ver ocorrências
+                          </Link>
+                        </Button>
                         <Button size="sm" variant="outline" onClick={() => gerar(r)} disabled={gerarMut.isPending}>
                           <Play className="h-3 w-3 mr-1" /> Gerar
                         </Button>
