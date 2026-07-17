@@ -33,8 +33,9 @@ export const NOTIF_PREFS_KEY = "despesas-notif-prefs";
 export function useNotificacoes() {
   const qc = useQueryClient();
   useEffect(() => {
+    const channelName = `despesas_notif_rt_${Math.random().toString(36).slice(2)}`;
     const channel = supabase
-      .channel("despesas_notif_rt")
+      .channel(channelName)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "despesas_notificacoes" },
