@@ -1,45 +1,127 @@
+## Diagnóstico
+
+Auditei o que já existe:
+
+**Tabelas com trigger de auditoria plugado hoje** (via `audit_module_changes`):
+- `despesas_lancamentos`
+- `despesas_imoveis`, `despesas_imovel_encargos`
+- `despesas_veiculo_documentos`
+- `despesas_repasses`, `despesas_repasse_itens`
+- `despesas_recorrencias`, `despesas_notificacoes_preferencias`
+
+**Tabelas SEM auditoria** (alterações ali passam invisíveis):
+- Cadastros base: `despesas_categorias`, `despesas_subcategorias`, `despesas_planos_conta`, `despesas_centros_custo`, `despesas_contas_bancarias`, `despesas_pessoas`, `despesas_veiculos`
+- Permissões: `despesas_aba_permissoes`, `despesas_centros_custo_permissoes`, `despesas_perfis_acesso`
+
+**Rótulos na UI**: nenhum campo específico de Despesas (centro_custo_id, plano_conta_id, valor_total, data_vencimento, etc.) está no dicionário `fieldLabels` de `AuditLogsPanel.tsx`, nem no `tableLabels`, nem no `resolve` de FK. Resultado: o log até é gravado, mas na tela aparece como `centro_custo_id: 3f4a…` em vez de "Centro de custo: Sede".
+
 ## Objetivo
 
-Reescrever `src/pages/despesas/DespesasHelp.tsx` transformando o guia atual — que só lista as abas — em um manual didático que explica **como o módulo funciona como um todo**, com foco especial em **centros de custo** (dúvida explícita do usuário).
+Fechar as duas lacunas: **cobrir 100% das tabelas de Despesas com auditoria** e **traduzir os rótulos, valores e FKs** para leitura humana.
 
-## Estrutura da nova página
+## Escopo
 
-Cards em ordem de leitura, do conceito ao detalhe:
+### Parte 1 — Nova migration `db/migrations/20260722120000_despesas_audit_gaps.sql`
 
-1. **Como o módulo funciona (visão geral)** — parágrafo de abertura com a "linha do tempo": cadastros → lançamentos → recorrências geram lançamentos → pagamentos mudam status → relatórios e calendário consomem → auditoria registra tudo.
+Adiciona o trigger `trg_<tabela>_audit` (AFTER INSERT OR UPDATE OR DELETE → `audit_module_changes`) nestas tabelas, via loop `DO $$`:
 
-2. **Centros de custo — o coração do módulo**
-   - O que é: o "bolso" de onde sai / para onde entra o dinheiro (ex: Sede, Imóvel Nammos, Frota, Obra Rua X).
-   - O que **não** é: não é fornecedor nem categoria contábil.
-   - Para que serve: responder "quanto o Nammos gastou este mês?", "a Frota deu prejuízo?", isolar resultado por unidade.
-   - Como aparece na prática: campo obrigatório em cada lançamento, filtro em Calendário e Relatórios, base das permissões.
-   - Exemplo concreto com 2–3 centros e como um mesmo fornecedor pode aparecer em vários.
+- `despesas_categorias`, `despesas_subcategorias`, `despesas_planos_conta`
+- `despesas_centros_custo`, `despesas_contas_bancarias`
+- `despesas_pessoas`, `despesas_veiculos`
+- `despesas_aba_permissoes`, `despesas_centros_custo_permissoes`, `despesas_perfis_acesso`
 
-3. **Cadastros (a base)** — subitens curtos para Plano de contas, Categorias/Subcategorias, Contas bancárias, Pessoas, Imóveis, Veículos. Cada um em uma linha explicando função.
+Cada bloco faz `DROP TRIGGER IF EXISTS` antes do `CREATE TRIGGER` (idempotente). Sem grants nem RLS novos: as tabelas alvo já existem e a função `audit_module_changes` já está em `public`.
 
-4. **Lançamentos** — ciclo de vida: previsto → pago (total/parcial) → atrasado. Papel do centro de custo e da conta bancária em cada lançamento.
+**Fora de escopo** (intencionalmente): `despesas_lancamento_pagamentos` (auditado no lançamento pai, para não dobrar), `despesas_notificacoes` e `despesas_lancamentos` de série gerada automaticamente pelo scheduler — o log já cobre a recorrência que os originou.
 
-5. **Recorrências e o agendador diário** — como o `despesas-scheduler` roda 06:00 BRT, materializa ocorrências e dispara notificações; edição isolada vs. série.
+### Parte 2 — Atualizar `src/components/AuditLogsPanel.tsx`
 
-6. **Repasses** — fluxo aluguel recebido → encargos descontados → líquido ao proprietário.
+Um único patch acrescentando entradas nos dicionários já existentes:
 
-7. **Permissões por aba + centros de custo** — reescrito com o modelo em cascata:
-   - Acesso ao módulo (via /usuarios) é o portão.
-   - Nível por aba diz **o que** a pessoa faz.
-   - Centros permitidos dizem **o que** a pessoa enxerga (vazio = todos).
-   - Exemplo: gerente do Nammos com nível "editar" em Calendário + centro "Imóvel Nammos" só vê/edita lançamentos daquele imóvel.
+**`tableLabels`** — nomes amigáveis:
+```
+despesas_lancamentos → "Lançamentos"
+despesas_lancamento_pagamentos → "Pagamentos"
+despesas_recorrencias → "Recorrências"
+despesas_imoveis → "Imóveis"
+despesas_imovel_encargos → "Encargos de Imóvel"
+despesas_veiculos → "Veículos"
+despesas_veiculo_documentos → "Documentos de Veículo"
+despesas_repasses → "Repasses"
+despesas_repasse_itens → "Itens de Repasse"
+despesas_categorias → "Categorias"
+despesas_subcategorias → "Subcategorias"
+despesas_planos_conta → "Planos de Conta"
+despesas_centros_custo → "Centros de Custo"
+despesas_contas_bancarias → "Contas Bancárias"
+despesas_pessoas → "Pessoas"
+despesas_aba_permissoes → "Permissões por Aba"
+despesas_centros_custo_permissoes → "Permissões de Centro"
+despesas_perfis_acesso → "Perfis de Acesso (Despesas)"
+```
+Adicionar `despesas → "Despesas"` em `moduleLabels`.
 
-8. **Notificações, Duplicidade e Auditoria** — mantém o conteúdo atual, condensado, pois já está claro.
+**`fieldLabels`** — campos específicos:
+```
+tipo → "Tipo"                         nivel → "Nível"
+descricao → "Descrição"                aba → "Aba"
+valor_total → "Valor total"            recorrencia_id → "Recorrência"
+valor_pago → "Valor pago"              serie_id → "Série"
+valor_previsto → "Valor previsto"      periodicidade → "Periodicidade"
+data_competencia → "Competência"       data_inicio → "Início"
+data_vencimento → "Vencimento"         data_fim → "Fim"
+data_pagamento → "Pagamento"           horizonte_meses → "Horizonte (meses)"
+forma_pagamento → "Forma de pagamento" iptu → "IPTU"
+numero_documento → "Nº documento"      tcr → "TCR"
+observacao → "Observação"              spu → "SPU"
+codigo → "Código"                      parcelas → "Parcelas"
+banco → "Banco"                        proprietario_id → "Proprietário"
+agencia → "Agência"                    locatario_id → "Locatário"
+conta → "Conta"                        motorista_id → "Motorista"
+centro_custo_id → "Centro de custo"    situacao → "Situação"
+plano_conta_id → "Plano de conta"      endereco → "Endereço"
+subcategoria_id → "Subcategoria"       modelo → "Modelo"
+categoria_id → "Categoria"             placa → "Placa"
+conta_bancaria_id → "Conta bancária"   renavam → "Renavam"
+pessoa_id → "Pessoa"                   chassi → "Chassi"
+imovel_id → "Imóvel"                   ano → "Ano"
+veiculo_id → "Veículo"                 valor_anual → "Valor anual"
+repasse_id → "Repasse"                 vencimento_primeira_parcela → "1ª parcela"
+```
 
-## Convenções
+**`valueLabels`** — enums de Despesas:
+```
+tipo: { a_pagar: "A pagar", a_receber: "A receber" }
+status: { a_vencer: "A vencer", vencido: "Vencido", pago: "Pago", parcial: "Parcialmente pago", cancelado: "Cancelado" }
+forma_pagamento: { pix: "PIX", boleto: "Boleto", dinheiro: "Dinheiro", cartao: "Cartão", transferencia: "Transferência", cheque: "Cheque" }
+situacao: { alugado: "Alugado", vago: "Vago", proprio: "Próprio", obra: "Em obra", vendido: "Vendido" }
+periodicidade: { mensal: "Mensal", anual: "Anual", meses_fixos: "Meses fixos", intercalada: "Intercalada" }
+nivel: { sem_acesso: "Sem acesso", view: "Visualizar", edit: "Editar", delete: "Excluir" }
+aba: { calendario: "Calendário", recorrencias: "Recorrências", imoveis: "Imóveis", repasses: "Repasses", veiculos: "Veículos", cadastros: "Cadastros", relatorios: "Relatórios", permissoes: "Permissões", auditoria: "Auditoria" }
+```
 
-- Tom didático em PT-BR, mesmo tom da explicação que dei no chat.
-- Sem emojis.
-- Usar `Card` / `CardHeader` / `CardTitle` / `CardDescription` / `CardContent` já importados.
-- Usar `<ul className="list-disc pl-5 space-y-1">` para listas dentro de descrições, e `<b>` para destacar termos-chave.
-- Sem novas dependências, sem mudanças de rota.
+**`useLookups` — FKs a resolver** (adicionar no mapa `tableByField` e no pré-carregamento):
+- `centro_custo_id → despesas_centros_custo.nome`
+- `plano_conta_id → despesas_planos_conta.nome`
+- `categoria_id → despesas_categorias.nome`
+- `subcategoria_id → despesas_subcategorias.nome`
+- `conta_bancaria_id → despesas_contas_bancarias.nome`
+- `pessoa_id / proprietario_id / locatario_id / motorista_id → despesas_pessoas.nome`
+- `imovel_id → despesas_imoveis.descricao`
+- `veiculo_id → despesas_veiculos.modelo`
+- `recorrencia_id → despesas_recorrencias.descricao`
 
-## Fora de escopo
+**`INSERT_SUMMARY_FIELDS`** — adicionar `valor_total`, `data_vencimento`, `codigo` para gerar resumos úteis em cadastros de Despesas (ex: "Cadastrou — Descrição: Aluguel; Valor total: 3.500; Vencimento: 05/08/2026").
 
-- Nada de mudanças em outras páginas, hooks ou banco.
-- Não gerar dados de exemplo (item recusado pelo usuário).
+### Parte 3 — Sem mudanças em outros arquivos
+
+Nem `DespesasAuditLogs.tsx` nem `DespesasHelp.tsx` precisam mudar — o `AuditLogsPanel` reaproveita tudo pelos dicionários.
+
+## Verificação
+
+- Após executar a migration, cadastrar/editar um item em cada tela (categoria, plano, centro, conta, pessoa, veículo, permissão) e conferir se aparece linha nova em `/despesas/auditoria` com rótulos legíveis.
+- `tsgo` roda automaticamente para garantir que os patches em `AuditLogsPanel.tsx` compilam.
+
+## O que você faz depois de eu implementar
+
+Executar `db/migrations/20260722120000_despesas_audit_gaps.sql` no SQL Editor do Supabase.
