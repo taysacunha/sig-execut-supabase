@@ -17,6 +17,11 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Plus, Pencil, Trash2, ShieldAlert } from "lucide-react";
+import {
+  useVeiculos, useDeleteVeiculo, useGerarEncargosVeiculo, Veiculo,
+} from "@/hooks/useDespesasVeiculos";
+import { VeiculoDialog } from "@/components/despesas/VeiculoDialog";
+import { CalendarClock } from "lucide-react";
 
 type NamedRow = { id: string; nome: string; descricao?: string | null; is_active: boolean };
 
@@ -254,16 +259,136 @@ export default function DespesasCadastros() {
           </Card>
         </TabsContent>
         <TabsContent value="veiculos" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Veículos</CardTitle>
-              <CardDescription>
-                Cadastro completo (modelo, placa, motorista, proprietário, nota fiscal, baixa de venda) entra junto com a Fase 3.
-              </CardDescription>
-            </CardHeader>
-          </Card>
+          <VeiculosTab canEdit={canEdit} canDelete={canDelete} />
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function VeiculosTab({ canEdit, canDelete }: { canEdit: boolean; canDelete: boolean }) {
+  const { data: veiculos = [], isLoading } = useVeiculos();
+  const delMut = useDeleteVeiculo();
+  const gerarMut = useGerarEncargosVeiculo();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Veiculo | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Veiculo | null>(null);
+  const [confirmGerar, setConfirmGerar] = useState<Veiculo | null>(null);
+  const [ano, setAno] = useState<number>(new Date().getFullYear());
+
+  async function gerar() {
+    if (!confirmGerar) return;
+    try {
+      const n = await gerarMut.mutateAsync({ veiculoId: confirmGerar.id, ano });
+      toast.success(`${n} lançamento(s) gerado(s)`);
+      setConfirmGerar(null);
+    } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle>Veículos</CardTitle>
+          <CardDescription>Frota, motorista, documentos (IPVA, seguro etc) e baixa por venda.</CardDescription>
+        </div>
+        {canEdit && (
+          <Button size="sm" onClick={() => { setEditing(null); setDialogOpen(true); }}>
+            <Plus className="h-4 w-4 mr-2" />Novo veículo
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Carregando…</p>
+        ) : veiculos.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nenhum veículo cadastrado.</p>
+        ) : (
+          <Table>
+            <TableHeader><TableRow>
+              <TableHead>Modelo</TableHead>
+              <TableHead>Placa</TableHead>
+              <TableHead>Motorista</TableHead>
+              <TableHead>Centro</TableHead>
+              <TableHead>Situação</TableHead>
+              <TableHead className="text-right w-40">Ações</TableHead>
+            </TableRow></TableHeader>
+            <TableBody>
+              {veiculos.map((v) => (
+                <TableRow key={v.id}>
+                  <TableCell className="font-medium">{v.modelo}</TableCell>
+                  <TableCell>{v.placa ?? "—"}</TableCell>
+                  <TableCell>{v.motorista?.nome ?? "—"}</TableCell>
+                  <TableCell>{v.centro_custo?.nome ?? "—"}</TableCell>
+                  <TableCell>{v.data_venda ? "Vendido" : "Ativo"}</TableCell>
+                  <TableCell className="text-right space-x-1">
+                    {canEdit && !v.data_venda && (
+                      <Button size="icon" variant="ghost" title="Gerar encargos" onClick={() => { setConfirmGerar(v); setAno(new Date().getFullYear()); }}>
+                        <CalendarClock className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canEdit && (
+                      <Button size="icon" variant="ghost" onClick={() => { setEditing(v); setDialogOpen(true); }}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button size="icon" variant="ghost" onClick={() => setConfirmDelete(v)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+
+      <VeiculoDialog open={dialogOpen} onOpenChange={setDialogOpen} editing={editing} />
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desativar veículo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O veículo <b>{confirmDelete?.modelo}</b> será marcado como inativo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                if (confirmDelete) delMut.mutate(confirmDelete.id, {
+                  onSuccess: () => { toast.success("Veículo desativado"); setConfirmDelete(null); },
+                  onError: (err: any) => toast.error(err?.message ?? "Erro"),
+                });
+              }}
+            >Desativar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!confirmGerar} onOpenChange={(o) => !o && setConfirmGerar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Gerar encargos do veículo</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cria lançamentos parcelados no calendário para <b>{confirmGerar?.modelo}</b>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2 space-y-2">
+            <Label>Ano</Label>
+            <Input type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); gerar(); }}>Gerar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
   );
 }
