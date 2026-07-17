@@ -1,86 +1,85 @@
 ## Objetivo
 
-Ativar a execução automática diária do `despesas-scheduler` (gerar ocorrências, marcar atrasos e disparar notificações) usando `pg_cron` + `pg_net` no Supabase.
+Reestruturar a página `/despesas/permissoes` para (a) ser mais fácil de escanear com muitos usuários e (b) permitir aplicar mudanças em lote em vários usuários ao mesmo tempo. Também deixar explícito na UI o vínculo com o acesso do sistema (`system_access`).
 
-## Passo 1 — Habilitar extensões
+## Nova estrutura da página (3 abas)
 
-No Supabase Dashboard → Database → Extensions, habilitar (se ainda não estiverem):
-- `pg_cron`
-- `pg_net`
+Trocar as duas Cards atuais empilhadas por um `Tabs` no topo:
 
-Ambas ficam no schema `extensions` (padrão do Supabase). Não é necessário migration para isso.
+1. **Aba "Níveis por aba"** — matriz usuário × aba (Calendário / Imóveis / Repasses / Cadastros).
+2. **Aba "Centros de custo"** — matriz usuário × centro de custo, igual hoje.
+3. **Aba "Ações em lote"** — formulário para aplicar mudanças em vários usuários selecionados ao mesmo tempo.
 
-## Passo 2 — Agendar o job (rodar no SQL Editor)
+Em todas as abas, no topo:
+- Campo de busca (nome/email).
+- Filtro rápido: "Todos" | "Com acesso ao módulo" | "Sem acesso ao módulo" (usando `system_access.system_name='despesas'`).
+- Contador: "X usuários exibidos · Y com acesso ao módulo".
 
-Como o SQL contém a URL do projeto e a anon key, ele **não** vai em migration — roda direto no SQL Editor do Supabase.
+## Aba 1 — Níveis por aba (matriz melhorada)
 
-```sql
-select cron.schedule(
-  'despesas-scheduler-diario',
-  '0 9 * * *',  -- todos os dias às 06:00 BRT (= 09:00 UTC)
-  $$
-  select net.http_post(
-    url := 'https://msbhhsrtfqfqcsofnsuy.supabase.co/functions/v1/despesas-scheduler',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'apikey', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zYmhoc3J0ZnFmcWNzb2Zuc3V5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1NDgxMTcsImV4cCI6MjA4NzEyNDExN30.ZWYn_dqPRD4GXL-I8qCdStZ2VawmeUN_uG10qwLT_Ic',
-      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zYmhoc3J0ZnFmcWNzb2Zuc3V5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1NDgxMTcsImV4cCI6MjA4NzEyNDExN30.ZWYn_dqPRD4GXL-I8qCdStZ2VawmeUN_uG10qwLT_Ic'
-    ),
-    body := jsonb_build_object('trigger', 'cron', 'time', now()::text)
-  ) as request_id;
-  $$
-);
-```
+- Cada linha ganha:
+  - Checkbox à esquerda para selecionar (usado pelo bloco de ações em lote logo acima da tabela quando houver seleção).
+  - Coluna "Acesso ao módulo" com Badge: `Ativo` (verde) / `Sem acesso` (cinza). Se estiver `Sem acesso`, exibir tooltip "Configure em /usuarios para o usuário conseguir entrar no módulo".
+  - Coluna por aba com o `Select` atual (Sem acesso / Visualizar / Editar / Excluir).
+  - Última coluna: "Resumo" — chip com o nível mais alto atribuído (ex.: "Editar em 2 abas").
 
-Por que o `Authorization` também? A edge function `despesas-scheduler` está deployada com `verify_jwt = true` (padrão) e valida via `getClaims()`. A anon key é um JWT válido e permite a chamada — o service role interno da própria função é usado dentro dela para as operações privilegiadas.
+- Barra de ação em lote (aparece só quando há linhas selecionadas):
+  - "N selecionados"
+  - Select "Aplicar em: [aba]" (ou "Todas as abas")
+  - Select "Nível: [Sem acesso / Visualizar / Editar / Excluir]"
+  - Botão "Aplicar" — dispara `upsert` para todas as combinações (usuário × aba escolhida) e invalida cache.
+  - Botão "Limpar seleção".
 
-## Passo 3 — Comandos de operação (opcionais, quando precisar)
+## Aba 2 — Centros de custo (matriz + lote)
 
-Verificar se o job existe:
-```sql
-select jobid, jobname, schedule, active
-from cron.job
-where jobname = 'despesas-scheduler-diario';
-```
+- Mantém a matriz de checkboxes atual, com melhorias:
+  - Checkbox por linha para seleção múltipla.
+  - Cabeçalho de cada centro clicável: "Marcar todos" / "Desmarcar todos" para a coluna (com confirmação se afetar >5 usuários).
+  - Barra de ação em lote: para usuários selecionados, permitir "Adicionar centro X", "Remover centro X" ou "Liberar todos (deixar em 'Todos')".
 
-Ver últimas execuções e status HTTP:
-```sql
-select j.jobname, r.status, r.return_message, r.start_time, r.end_time
-from cron.job_run_details r
-join cron.job j on j.jobid = r.jobid
-where j.jobname = 'despesas-scheduler-diario'
-order by r.start_time desc
-limit 20;
-```
+## Aba 3 — Ações em lote (assistente)
 
-Rodar manualmente uma vez agora (sem esperar o horário):
-```sql
-select net.http_post(
-  url := 'https://msbhhsrtfqfqcsofnsuy.supabase.co/functions/v1/despesas-scheduler',
-  headers := jsonb_build_object(
-    'Content-Type','application/json',
-    'apikey','<ANON_KEY>',
-    'Authorization','Bearer <ANON_KEY>'
-  ),
-  body := jsonb_build_object('trigger','manual')
-);
-```
+Um formulário guiado para casos maiores (ex.: novo time entrando):
+1. Selecionar usuários (multi-select com busca).
+2. Escolher perfil rápido:
+   - "Visualizador financeiro" → view em todas as abas.
+   - "Operador de contas" → edit em Calendário/Imóveis/Repasses, view em Cadastros.
+   - "Administrador de despesas" → delete em todas.
+   - "Personalizado" → escolher nível por aba manualmente.
+3. Opcional: escolher centros de custo permitidos.
+4. Botão "Aplicar" — faz upsert atômico (Promise.all) e mostra toast com contagem de mudanças.
 
-Alterar horário / remover:
-```sql
-select cron.unschedule('despesas-scheduler-diario');
--- e reexecutar o cron.schedule com o novo horário
-```
+Isso não substitui as matrizes; é um caminho rápido para configurar vários de uma vez.
 
-## Passo 4 — Validar
+## Realtime / novo usuário
 
-1. Após rodar o `cron.schedule`, consultar `cron.job` para confirmar `active = true`.
-2. Disparar manualmente (`net.http_post` acima) e checar em Edge Function logs (link abaixo) se a função respondeu 200 e processou.
-3. Confirmar que `despesas_lancamentos` recebeu novas ocorrências e `despesas_notificacoes` novas linhas.
+- Adicionar `refetch` ao montar o componente (já existe pelo React Query) + botão "Atualizar lista" no topo.
+- Opcional (leve): assinar `postgres_changes` em `user_profiles` INSERT para invalidar `despesas-permissoes-users` automaticamente. Fica como enhancement — o botão manual já resolve.
+- Uma "dica" (Alert) no topo da página, explicando o comportamento em cascata:
+  > "Um usuário só enxerga o módulo se tiver acesso configurado em `/usuarios`. As permissões abaixo controlam o que ele faz **dentro** do módulo."
 
-## Notas técnicas
+## Detalhes técnicos
 
-- Por que `pg_net`? `pg_cron` só executa SQL. Edge Functions rodam fora do Postgres, então a ponte é uma requisição HTTP interna ao próprio Supabase (não sai da infra). Nada externo é envolvido.
-- Fuso: `pg_cron` usa **UTC**. Para 06:00 BRT (UTC-3) → `0 9 * * *`.
-- Idempotência: a função já é segura para múltiplas execuções (não duplica ocorrências nem notificações).
-- Se preferir rodar mais de uma vez por dia (ex.: 06:00 e 18:00 BRT), use `'0 9,21 * * *'` no mesmo `cron.schedule`.
+- Componente principal: reescrever `src/pages/despesas/DespesasPermissoes.tsx` mantendo os hooks e mutations já existentes (`upsertNivel`, `toggleCentro`).
+- Novos estados locais:
+  - `selectedUserIds: Set<string>`
+  - `filtroAcesso: "todos" | "com" | "sem"`
+- Nova query: `useQuery` em `system_access` filtrando `system_name = 'despesas'` para saber quem tem acesso ao módulo (permissão para admin já existe via RLS).
+- Mutations em lote: `Promise.all(users.map(u => supabase.from(...).upsert({...})))` seguido de `queryClient.invalidateQueries`.
+- Sem migration nem mudanças de RLS — só UI.
+- Perfis rápidos ficam como constantes no arquivo (JSON de `{ aba: nivel }`), fácil de estender.
+
+## Fora do escopo (não incluir agora)
+
+- Alterar `system_access` diretamente pela página de despesas (isso continua em `/usuarios`, para manter fonte única de verdade).
+- Log de auditoria específico dessa página (já é coberto por `module_audit_logs` das tabelas envolvidas).
+
+## Passos de implementação
+
+1. Adicionar `useQuery` de `system_access` e barra de contexto (Alert + contador + filtro).
+2. Refatorar página em `Tabs` com as 3 abas.
+3. Adicionar coluna "Acesso ao módulo" + checkbox de seleção na aba 1.
+4. Implementar barra de ações em lote na aba 1.
+5. Replicar checkboxes de seleção + ação em lote na aba 2.
+6. Construir assistente da aba 3 com perfis rápidos.
+7. Verificar build e testar fluxos com um usuário admin e um sem acesso ao módulo.
