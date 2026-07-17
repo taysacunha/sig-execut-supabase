@@ -536,6 +536,229 @@ export type Database = {
           },
         ]
       }
+      despesas_imoveis: {
+        Row: {
+          area_total: number | null
+          bairro: string | null
+          centro_custo_id: string
+          cep: string | null
+          cidade: string | null
+          codigo: string | null
+          complemento: string | null
+          created_at: string
+          created_by: string | null
+          data_aquisicao: string | null
+          data_venda: string | null
+          descricao: string
+          endereco: string | null
+          id: string
+          inquilino_id: string | null
+          inscricao_municipal: string | null
+          is_active: boolean
+          matricula: string | null
+          numero: string | null
+          observacao: string | null
+          proprietario_id: string | null
+          situacao: string
+          taxa_administracao_pct: number | null
+          tipo: string
+          uf: string | null
+          updated_at: string
+          valor_aluguel: number | null
+        }
+        Insert: {
+          area_total?: number | null
+          bairro?: string | null
+          centro_custo_id: string
+          cep?: string | null
+          cidade?: string | null
+          codigo?: string | null
+          complemento?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_aquisicao?: string | null
+          data_venda?: string | null
+          descricao: string
+          endereco?: string | null
+          id?: string
+          inquilino_id?: string | null
+          inscricao_municipal?: string | null
+          is_active?: boolean
+          matricula?: string | null
+          numero?: string | null
+          observacao?: string | null
+          proprietario_id?: string | null
+          situacao?: string
+          taxa_administracao_pct?: number | null
+          tipo?: string
+          uf?: string | null
+          updated_at?: string
+          valor_aluguel?: number | null
+        }
+        Update: {
+          area_total?: number | null
+          bairro?: string | null
+          centro_custo_id?: string
+          cep?: string | null
+          cidade?: string | null
+          codigo?: string | null
+          complemento?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_aquisicao?: string | null
+          data_venda?: string | null
+          descricao?: string
+          endereco?: string | null
+          id?: string
+          inquilino_id?: string | null
+          inscricao_municipal?: string | null
+          is_active?: boolean
+          matricula?: string | null
+          numero?: string | null
+          observacao?: string | null
+          proprietario_id?: string | null
+          situacao?: string
+          taxa_administracao_pct?: number | null
+          tipo?: string
+          uf?: string | null
+          updated_at?: string
+          valor_aluguel?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_imoveis_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_centros_custo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_imoveis_inquilino_id_fkey"
+            columns: ["inquilino_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_pessoas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_imoveis_proprietario_id_fkey"
+            columns: ["proprietario_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_pessoas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      despesas_imovel_encargos: {
+        Row: {
+          ativo: boolean
+          categoria_id: string | null
+          created_at: string
+          descricao: string | null
+          id: string
+          imovel_id: string
+          observacao: string | null
+          parcelas: number
+          plano_conta_id: string | null
+          tipo: string
+          updated_at: string
+          valor_anual: number
+          vencimento_primeira_parcela: string
+        }
+        Insert: {
+          ativo?: boolean
+          categoria_id?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          imovel_id: string
+          observacao?: string | null
+          parcelas?: number
+          plano_conta_id?: string | null
+          tipo: string
+          updated_at?: string
+          valor_anual: number
+          vencimento_primeira_parcela: string
+        }
+        Update: {
+          ativo?: boolean
+          categoria_id?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          imovel_id?: string
+          observacao?: string | null
+          parcelas?: number
+          plano_conta_id?: string | null
+          tipo?: string
+          updated_at?: string
+          valor_anual?: number
+          vencimento_primeira_parcela?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_imovel_encargos_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_categorias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_imovel_encargos_imovel_id_fkey"
+            columns: ["imovel_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_imoveis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_imovel_encargos_plano_conta_id_fkey"
+            columns: ["plano_conta_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_planos_conta"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      despesas_imovel_situacao_historico: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          data: string
+          id: string
+          imovel_id: string
+          motivo: string | null
+          situacao_anterior: string | null
+          situacao_nova: string
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          data?: string
+          id?: string
+          imovel_id: string
+          motivo?: string | null
+          situacao_anterior?: string | null
+          situacao_nova: string
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          data?: string
+          id?: string
+          imovel_id?: string
+          motivo?: string | null
+          situacao_anterior?: string | null
+          situacao_nova?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_imovel_situacao_historico_imovel_id_fkey"
+            columns: ["imovel_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_imoveis"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       despesas_lancamento_pagamentos: {
         Row: {
           conta_bancaria_id: string | null
@@ -602,9 +825,11 @@ export type Database = {
           descricao: string
           documento_numero: string | null
           id: string
+          is_manual: boolean
           observacao: string | null
           pessoa_id: string | null
           plano_conta_id: string | null
+          serie_recorrencia_id: string | null
           status: string
           subcategoria_id: string | null
           tipo: string
@@ -623,9 +848,11 @@ export type Database = {
           descricao: string
           documento_numero?: string | null
           id?: string
+          is_manual?: boolean
           observacao?: string | null
           pessoa_id?: string | null
           plano_conta_id?: string | null
+          serie_recorrencia_id?: string | null
           status?: string
           subcategoria_id?: string | null
           tipo: string
@@ -644,9 +871,11 @@ export type Database = {
           descricao?: string
           documento_numero?: string | null
           id?: string
+          is_manual?: boolean
           observacao?: string | null
           pessoa_id?: string | null
           plano_conta_id?: string | null
+          serie_recorrencia_id?: string | null
           status?: string
           subcategoria_id?: string | null
           tipo?: string
@@ -691,6 +920,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "despesas_lancamentos_serie_recorrencia_id_fkey"
+            columns: ["serie_recorrencia_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_recorrencias"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "despesas_lancamentos_subcategoria_id_fkey"
             columns: ["subcategoria_id"]
             isOneToOne: false
@@ -698,6 +934,71 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      despesas_notificacoes: {
+        Row: {
+          created_at: string
+          dias_para_vencer: number | null
+          id: string
+          lancamento_id: string
+          lida: boolean
+          mensagem: string | null
+          tipo: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dias_para_vencer?: number | null
+          id?: string
+          lancamento_id: string
+          lida?: boolean
+          mensagem?: string | null
+          tipo: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          dias_para_vencer?: number | null
+          id?: string
+          lancamento_id?: string
+          lida?: boolean
+          mensagem?: string | null
+          tipo?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_notificacoes_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_lancamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      despesas_notificacoes_preferencias: {
+        Row: {
+          dias_antecedencia: number[]
+          notificar_pagos: boolean
+          notificar_vencidos: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          dias_antecedencia?: number[]
+          notificar_pagos?: boolean
+          notificar_vencidos?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          dias_antecedencia?: number[]
+          notificar_pagos?: boolean
+          notificar_vencidos?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       despesas_perfis_acesso: {
         Row: {
@@ -801,6 +1102,258 @@ export type Database = {
         }
         Relationships: []
       }
+      despesas_recorrencias: {
+        Row: {
+          ativo: boolean
+          categoria_id: string | null
+          centro_custo_id: string
+          conta_bancaria_id: string | null
+          created_at: string
+          created_by: string | null
+          data_fim: string | null
+          data_inicio: string
+          descricao: string
+          dia_vencimento: number
+          id: string
+          janela_geracao_meses: number
+          lanc_tipo: string
+          meses_fixos: number[]
+          observacao: string | null
+          pessoa_id: string | null
+          plano_conta_id: string | null
+          subcategoria_id: string | null
+          tipo: string
+          ultima_geracao_ate: string | null
+          updated_at: string
+          valor_total: number
+        }
+        Insert: {
+          ativo?: boolean
+          categoria_id?: string | null
+          centro_custo_id: string
+          conta_bancaria_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_fim?: string | null
+          data_inicio: string
+          descricao: string
+          dia_vencimento: number
+          id?: string
+          janela_geracao_meses?: number
+          lanc_tipo: string
+          meses_fixos?: number[]
+          observacao?: string | null
+          pessoa_id?: string | null
+          plano_conta_id?: string | null
+          subcategoria_id?: string | null
+          tipo: string
+          ultima_geracao_ate?: string | null
+          updated_at?: string
+          valor_total: number
+        }
+        Update: {
+          ativo?: boolean
+          categoria_id?: string | null
+          centro_custo_id?: string
+          conta_bancaria_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_fim?: string | null
+          data_inicio?: string
+          descricao?: string
+          dia_vencimento?: number
+          id?: string
+          janela_geracao_meses?: number
+          lanc_tipo?: string
+          meses_fixos?: number[]
+          observacao?: string | null
+          pessoa_id?: string | null
+          plano_conta_id?: string | null
+          subcategoria_id?: string | null
+          tipo?: string
+          ultima_geracao_ate?: string | null
+          updated_at?: string
+          valor_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_recorrencias_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_categorias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_recorrencias_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_centros_custo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_recorrencias_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_recorrencias_pessoa_id_fkey"
+            columns: ["pessoa_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_pessoas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_recorrencias_plano_conta_id_fkey"
+            columns: ["plano_conta_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_planos_conta"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_recorrencias_subcategoria_id_fkey"
+            columns: ["subcategoria_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_subcategorias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      despesas_repasse_itens: {
+        Row: {
+          created_at: string
+          descricao: string
+          id: string
+          imovel_id: string | null
+          lancamento_id: string | null
+          origem: string
+          repasse_id: string
+          tipo: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          created_at?: string
+          descricao: string
+          id?: string
+          imovel_id?: string | null
+          lancamento_id?: string | null
+          origem?: string
+          repasse_id: string
+          tipo: string
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          created_at?: string
+          descricao?: string
+          id?: string
+          imovel_id?: string | null
+          lancamento_id?: string | null
+          origem?: string
+          repasse_id?: string
+          tipo?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_repasse_itens_imovel_id_fkey"
+            columns: ["imovel_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_imoveis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_repasse_itens_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_lancamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_repasse_itens_repasse_id_fkey"
+            columns: ["repasse_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_repasses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      despesas_repasses: {
+        Row: {
+          centro_custo_id: string
+          competencia: string
+          created_at: string
+          created_by: string | null
+          data_pagamento: string | null
+          id: string
+          lancamento_pagamento_id: string | null
+          observacao: string | null
+          proprietario_id: string
+          status: string
+          taxa_administracao_valor: number
+          updated_at: string
+          valor_bruto: number
+          valor_liquido: number
+        }
+        Insert: {
+          centro_custo_id: string
+          competencia: string
+          created_at?: string
+          created_by?: string | null
+          data_pagamento?: string | null
+          id?: string
+          lancamento_pagamento_id?: string | null
+          observacao?: string | null
+          proprietario_id: string
+          status?: string
+          taxa_administracao_valor?: number
+          updated_at?: string
+          valor_bruto?: number
+          valor_liquido?: number
+        }
+        Update: {
+          centro_custo_id?: string
+          competencia?: string
+          created_at?: string
+          created_by?: string | null
+          data_pagamento?: string | null
+          id?: string
+          lancamento_pagamento_id?: string | null
+          observacao?: string | null
+          proprietario_id?: string
+          status?: string
+          taxa_administracao_valor?: number
+          updated_at?: string
+          valor_bruto?: number
+          valor_liquido?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_repasses_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_centros_custo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_repasses_lancamento_pagamento_id_fkey"
+            columns: ["lancamento_pagamento_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_lancamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_repasses_proprietario_id_fkey"
+            columns: ["proprietario_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_pessoas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       despesas_subcategorias: {
         Row: {
           created_at: string
@@ -836,8 +1389,69 @@ export type Database = {
           },
         ]
       }
+      despesas_veiculo_documentos: {
+        Row: {
+          ativo: boolean
+          categoria_id: string | null
+          created_at: string
+          descricao: string | null
+          id: string
+          observacao: string | null
+          parcelas: number
+          tipo: string
+          updated_at: string
+          valor: number
+          veiculo_id: string
+          vencimento_primeira_parcela: string
+        }
+        Insert: {
+          ativo?: boolean
+          categoria_id?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          observacao?: string | null
+          parcelas?: number
+          tipo: string
+          updated_at?: string
+          valor: number
+          veiculo_id: string
+          vencimento_primeira_parcela: string
+        }
+        Update: {
+          ativo?: boolean
+          categoria_id?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          observacao?: string | null
+          parcelas?: number
+          tipo?: string
+          updated_at?: string
+          valor?: number
+          veiculo_id?: string
+          vencimento_primeira_parcela?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_veiculo_documentos_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_categorias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_veiculo_documentos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_veiculos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       despesas_veiculos: {
         Row: {
+          centro_custo_id: string | null
           comprador_id: string | null
           created_at: string
           data_aquisicao: string | null
@@ -853,6 +1467,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          centro_custo_id?: string | null
           comprador_id?: string | null
           created_at?: string
           data_aquisicao?: string | null
@@ -868,6 +1483,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          centro_custo_id?: string | null
           comprador_id?: string | null
           created_at?: string
           data_aquisicao?: string | null
@@ -883,6 +1499,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "despesas_veiculos_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_centros_custo"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "despesas_veiculos_comprador_id_fkey"
             columns: ["comprador_id"]
@@ -3773,6 +4396,48 @@ export type Database = {
         Args: { _user_id: string }
         Returns: string[]
       }
+      despesas_detectar_duplicidades: {
+        Args: {
+          _centro_custo_id: string
+          _conta_bancaria_id: string
+          _data_venc: string
+          _ignorar_id?: string
+          _janela_dias?: number
+          _pessoa_id: string
+          _plano_conta_id: string
+          _valor: number
+        }
+        Returns: {
+          centro_nome: string
+          data_vencimento: string
+          descricao: string
+          id: string
+          pessoa_nome: string
+          status: string
+          valor_total: number
+        }[]
+      }
+      despesas_gerar_encargos_imovel: {
+        Args: { _ano: number; _imovel_id: string }
+        Returns: number
+      }
+      despesas_gerar_encargos_veiculo: {
+        Args: { _ano: number; _veiculo_id: string }
+        Returns: number
+      }
+      despesas_gerar_ocorrencias: {
+        Args: { _ate?: string; _serie: string }
+        Returns: number
+      }
+      despesas_marcar_vencidos: { Args: never; Returns: number }
+      despesas_montar_repasse: {
+        Args: {
+          _centro_custo_id: string
+          _competencia: string
+          _proprietario_id: string
+        }
+        Returns: string
+      }
       despesas_nivel_aba: {
         Args: { _aba: string; _user_id: string }
         Returns: string
@@ -3791,6 +4456,10 @@ export type Database = {
       }
       despesas_recalcular_lancamento: {
         Args: { _lancamento_id: string }
+        Returns: undefined
+      }
+      despesas_repasse_recalcular: {
+        Args: { _repasse_id: string }
         Returns: undefined
       }
       get_broker_performance: {
