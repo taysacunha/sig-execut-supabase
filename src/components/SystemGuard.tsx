@@ -18,6 +18,7 @@ function SystemAccessDenied({ system }: { system: SystemName }) {
     vendas: "Sistema de Vendas",
     ferias: "Gestão de Férias",
     estoque: "Gestão de Estoques",
+    despesas: "Gestão de Despesas",
   };
 
   return (
