@@ -1,85 +1,98 @@
 ## Objetivo
 
-Reestruturar a página `/despesas/permissoes` para (a) ser mais fácil de escanear com muitos usuários e (b) permitir aplicar mudanças em lote em vários usuários ao mesmo tempo. Também deixar explícito na UI o vínculo com o acesso do sistema (`system_access`).
+Confirmar que o `despesas-scheduler` está funcionando de ponta a ponta (cron → HTTP → edge function → banco), já que o teste manual anterior usou `<ANON_KEY>` literal e não chegou a invocar a função (os logs mostram apenas `shutdown`, sem execução recente).
 
-## Nova estrutura da página (3 abas)
+## O que já está OK
 
-Trocar as duas Cards atuais empilhadas por um `Tabs` no topo:
+- `cron.schedule('despesas-scheduler-diario', '0 9 * * *', ...)` foi criado com sucesso (job id = 2). Roda todo dia às 09:00 UTC = 06:00 BRT.
 
-1. **Aba "Níveis por aba"** — matriz usuário × aba (Calendário / Imóveis / Repasses / Cadastros).
-2. **Aba "Centros de custo"** — matriz usuário × centro de custo, igual hoje.
-3. **Aba "Ações em lote"** — formulário para aplicar mudanças em vários usuários selecionados ao mesmo tempo.
+## O que falta validar
 
-Em todas as abas, no topo:
-- Campo de busca (nome/email).
-- Filtro rápido: "Todos" | "Com acesso ao módulo" | "Sem acesso ao módulo" (usando `system_access.system_name='despesas'`).
-- Contador: "X usuários exibidos · Y com acesso ao módulo".
+### Passo 1 — Disparo manual REAL (com a anon key correta)
 
-## Aba 1 — Níveis por aba (matriz melhorada)
+Rode no SQL Editor exatamente este bloco (a chave já está preenchida, sem placeholder):
 
-- Cada linha ganha:
-  - Checkbox à esquerda para selecionar (usado pelo bloco de ações em lote logo acima da tabela quando houver seleção).
-  - Coluna "Acesso ao módulo" com Badge: `Ativo` (verde) / `Sem acesso` (cinza). Se estiver `Sem acesso`, exibir tooltip "Configure em /usuarios para o usuário conseguir entrar no módulo".
-  - Coluna por aba com o `Select` atual (Sem acesso / Visualizar / Editar / Excluir).
-  - Última coluna: "Resumo" — chip com o nível mais alto atribuído (ex.: "Editar em 2 abas").
+```sql
+select net.http_post(
+  url := 'https://msbhhsrtfqfqcsofnsuy.supabase.co/functions/v1/despesas-scheduler',
+  headers := jsonb_build_object(
+    'Content-Type','application/json',
+    'apikey','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zYmhoc3J0ZnFmcWNzb2Zuc3V5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1NDgxMTcsImV4cCI6MjA4NzEyNDExN30.ZWYn_dqPRD4GXL-I8qCdStZ2VawmeUN_uG10qwLT_Ic',
+    'Authorization','Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zYmhoc3J0ZnFmcWNzb2Zuc3V5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1NDgxMTcsImV4cCI6MjA4NzEyNDExN30.ZWYn_dqPRD4GXL-I8qCdStZ2VawmeUN_uG10qwLT_Ic'
+  ),
+  body := jsonb_build_object('trigger','manual','time', now()::text)
+);
+```
 
-- Barra de ação em lote (aparece só quando há linhas selecionadas):
-  - "N selecionados"
-  - Select "Aplicar em: [aba]" (ou "Todas as abas")
-  - Select "Nível: [Sem acesso / Visualizar / Editar / Excluir]"
-  - Botão "Aplicar" — dispara `upsert` para todas as combinações (usuário × aba escolhida) e invalida cache.
-  - Botão "Limpar seleção".
+Anote o `request_id` retornado.
 
-## Aba 2 — Centros de custo (matriz + lote)
+### Passo 2 — Conferir a resposta HTTP real
 
-- Mantém a matriz de checkboxes atual, com melhorias:
-  - Checkbox por linha para seleção múltipla.
-  - Cabeçalho de cada centro clicável: "Marcar todos" / "Desmarcar todos" para a coluna (com confirmação se afetar >5 usuários).
-  - Barra de ação em lote: para usuários selecionados, permitir "Adicionar centro X", "Remover centro X" ou "Liberar todos (deixar em 'Todos')".
+```sql
+select id, created, status_code, content::text, error_msg
+from net._http_response
+where id = <request_id_do_passo_1>;
+```
 
-## Aba 3 — Ações em lote (assistente)
+Esperado: `status_code = 200` e um `content` JSON de sucesso do scheduler.
 
-Um formulário guiado para casos maiores (ex.: novo time entrando):
-1. Selecionar usuários (multi-select com busca).
-2. Escolher perfil rápido:
-   - "Visualizador financeiro" → view em todas as abas.
-   - "Operador de contas" → edit em Calendário/Imóveis/Repasses, view em Cadastros.
-   - "Administrador de despesas" → delete em todas.
-   - "Personalizado" → escolher nível por aba manualmente.
-3. Opcional: escolher centros de custo permitidos.
-4. Botão "Aplicar" — faz upsert atômico (Promise.all) e mostra toast com contagem de mudanças.
+### Passo 3 — Conferir efeitos no banco
 
-Isso não substitui as matrizes; é um caminho rápido para configurar vários de uma vez.
+```sql
+-- Ocorrências geradas por recorrências
+select count(*) filter (where created_at > now() - interval '10 minutes') as novas_ocorrencias
+from despesas_lancamentos;
 
-## Realtime / novo usuário
+-- Notificações geradas
+select count(*) filter (where created_at > now() - interval '10 minutes') as novas_notificacoes
+from despesas_notificacoes;
+```
 
-- Adicionar `refetch` ao montar o componente (já existe pelo React Query) + botão "Atualizar lista" no topo.
-- Opcional (leve): assinar `postgres_changes` em `user_profiles` INSERT para invalidar `despesas-permissoes-users` automaticamente. Fica como enhancement — o botão manual já resolve.
-- Uma "dica" (Alert) no topo da página, explicando o comportamento em cascata:
-  > "Um usuário só enxerga o módulo se tiver acesso configurado em `/usuarios`. As permissões abaixo controlam o que ele faz **dentro** do módulo."
+Observação: se ainda não houver `despesas_recorrencias` ativas nem lançamentos próximos do vencimento, os contadores podem legitimamente ficar em `0` — nesse caso o sucesso é o `status_code = 200` do passo 2.
 
-## Detalhes técnicos
+### Passo 4 — Histórico do cron (quando quiser conferir amanhã)
 
-- Componente principal: reescrever `src/pages/despesas/DespesasPermissoes.tsx` mantendo os hooks e mutations já existentes (`upsertNivel`, `toggleCentro`).
-- Novos estados locais:
-  - `selectedUserIds: Set<string>`
-  - `filtroAcesso: "todos" | "com" | "sem"`
-- Nova query: `useQuery` em `system_access` filtrando `system_name = 'despesas'` para saber quem tem acesso ao módulo (permissão para admin já existe via RLS).
-- Mutations em lote: `Promise.all(users.map(u => supabase.from(...).upsert({...})))` seguido de `queryClient.invalidateQueries`.
-- Sem migration nem mudanças de RLS — só UI.
-- Perfis rápidos ficam como constantes no arquivo (JSON de `{ aba: nivel }`), fácil de estender.
+```sql
+select jobid, runid, status, return_message, start_time, end_time
+from cron.job_run_details
+where jobid = 2
+order by start_time desc
+limit 5;
+```
 
-## Fora do escopo (não incluir agora)
+## Diagnóstico
 
-- Alterar `system_access` diretamente pela página de despesas (isso continua em `/usuarios`, para manter fonte única de verdade).
-- Log de auditoria específico dessa página (já é coberto por `module_audit_logs` das tabelas envolvidas).
+- Se o passo 2 vier com `status_code = 401` → chave errada; refazer com a anon key deste projeto.
+- Se vier `status_code = 500` → me mande o `content` e eu ajusto a edge function.
+- Se `net._http_response` estiver vazio → `pg_net` não processou; verificar se a extensão está ativa em Dashboard → Database → Extensions.
 
-## Passos de implementação
+## Cole aqui
 
-1. Adicionar `useQuery` de `system_access` e barra de contexto (Alert + contador + filtro).
-2. Refatorar página em `Tabs` com as 3 abas.
-3. Adicionar coluna "Acesso ao módulo" + checkbox de seleção na aba 1.
-4. Implementar barra de ações em lote na aba 1.
-5. Replicar checkboxes de seleção + ação em lote na aba 2.
-6. Construir assistente da aba 3 com perfis rápidos.
-7. Verificar build e testar fluxos com um usuário admin e um sem acesso ao módulo.
+O resultado dos passos 2 e 3 (e o do passo 4 amanhã, se quiser confirmar a execução automática).  
+  
+Rodei o SQL do passo 1 e apareceu isso: | http_post |
+
+| --------- |
+
+| 4         |  
+
+
+Passo 2: Failed to run sql query: ERROR:  42601: syntax error at or near "<"
+
+```
+LINE 3: where id = <request_id_do_passo_1> limit 100;
+```
+
+```
+                   ^
+```
+
+Note: A limit of 100 was applied to your query. If this was the cause of a syntax error, try selecting "No limit" instead and re-run the query.  
+  
+Passo 3: | novas_notificacoes |
+
+| ------------------ |
+
+| 0                  |  
+  
+Passo 4: Success. No rows returned
