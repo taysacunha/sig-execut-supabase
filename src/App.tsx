@@ -86,6 +86,7 @@ const DespesasHelp = lazy(() => import("./pages/despesas/DespesasHelp"));
 const DespesasAuditLogs = lazy(() => import("./pages/despesas/DespesasAuditLogs"));
 const DespesasRecorrencias = lazy(() => import("./pages/despesas/DespesasRecorrencias"));
 const DespesasNotificacoes = lazy(() => import("./pages/despesas/DespesasNotificacoes"));
+const DespesasRelatorios = lazy(() => import("./pages/despesas/DespesasRelatorios"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -231,6 +232,7 @@ const App = () => {
               <Route path="imoveis" element={<DespesasImoveis />} />
               <Route path="repasses" element={<DespesasRepasses />} />
               <Route path="cadastros" element={<DespesasCadastros />} />
+              <Route path="relatorios" element={<DespesasRelatorios />} />
               <Route path="permissoes" element={<RoleGuard allowedRoles={["super_admin","admin"]}><DespesasPermissoes /></RoleGuard>} />
               <Route path="perfil" element={<Profile />} />
               <Route path="usuarios" element={<RoleGuard allowedRoles={["super_admin","admin"]}><UserManagement /></RoleGuard>} />
