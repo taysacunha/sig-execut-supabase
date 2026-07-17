@@ -1,54 +1,103 @@
-## Status atual
+## Por que o cron chama via HTTP?
 
-Fases 1 a 4 do módulo Despesas estão com backend (migrations) e frontend implementados. Falta apenas ativar os automatismos operacionais e revisar pontas soltas antes de considerar o módulo "pronto para produção".
+Rápido esclarecimento antes do plano: `pg_cron` roda **dentro do Postgres** e só sabe executar SQL. Ele não consegue "chamar" uma Edge Function diretamente porque Edge Functions rodam em outro runtime (Deno, fora do banco). A ponte entre os dois é o `pg_net`, que faz uma requisição HTTP de dentro do SQL. Ou seja: o "gatilho" é 100% interno (Postgres → Postgres via extensão), mas o "trabalho pesado" (gerar ocorrências, criar notificações, marcar atrasos) mora na Edge Function, que precisa ser acionada por HTTP porque é assim que Edge Functions são invocadas no Supabase. Não há exposição externa: a chamada sai do banco e volta pro mesmo projeto Supabase.
 
-## O que ainda falta
+Alternativa se quiser evitar HTTP: mover toda a lógica do scheduler para uma função PL/pgSQL e o cron chama direto via `SELECT despesas_rodar_scheduler();`. Vantagem: sem `pg_net`, sem HTTP. Desvantagem: perde flexibilidade (logs estruturados, testes locais, reaproveitar código TS). Posso fazer essa migração se preferir — só me avise.
 
-### 1. Geração automática de ocorrências e notificações (cron)
-Hoje `despesas_gerar_ocorrencias` e a criação de notificações de vencimento existem como RPC/funções, mas só rodam se alguém disparar manualmente. Precisamos:
-- Criar edge function `despesas-scheduler` que:
-  - Chama `despesas_gerar_ocorrencias` para todas as séries ativas (horizonte de 90 dias).
-  - Varre `despesas_lancamentos` com vencimento próximo e insere em `despesas_notificacoes` respeitando `despesas_notificacoes_preferencias`.
-  - Marca lançamentos vencidos como `atrasado`.
-- Agendar via `pg_cron` diariamente (06:00 BRT).
+---
 
-### 2. Tela de permissões por aba (Despesas)
-A tabela `despesas_aba_permissoes` existe, mas ainda não há UI para o admin configurar quem vê/edita cada aba (Calendário, Imóveis, Veículos, Repasses, Recorrências, Cadastros, Auditoria). Plano:
-- Nova aba "Permissões" dentro de `/despesas/cadastros` (ou página `/despesas/permissoes`) restrita a admins.
-- Grid usuário × aba com toggles Ver / Editar, similar ao padrão do Estoque.
-- Hook `useDespesasAbaPermissoes` + guards nas rotas/sidebar para ocultar abas sem permissão.
+## Plano — Pendências do módulo Despesas
 
-### 3. Página de Auditoria
-`module_audit_logs` já grava eventos de todas as tabelas do módulo, mas não há tela dedicada. Plano:
-- Página `/despesas/auditoria` com filtros por tabela, usuário, ação e período.
-- Exibir diff antes/depois quando aplicável.
+Ordem sugerida (da que mais destrava uso multi-usuário para a mais cosmética):
 
-### 4. Ajustes finos no Calendário
-- Colunas "Criado por" / "Editado por" na listagem de lançamentos (dados já existem em `module_audit_logs`).
-- Badge visual para lançamentos originados de série (`serie_recorrencia_id not null`) com link para a série.
-- Ação rápida "Pular esta ocorrência" e "Encerrar série a partir daqui".
+### 1. UI de Permissões por Aba (admin)
 
-### 5. Página de Ajuda (PT-BR)
-Rota `/despesas/ajuda` com explicações curtas de cada aba, fluxo de recorrências, notificações e permissões.
+Já existe `src/pages/despesas/DespesasPermissoes.tsx` implementado com grid usuário × aba (Calendário, Imóveis, Repasses, Cadastros) e níveis Sem acesso / Visualizar / Editar / Excluir, além de restrição por centro de custo. Falta:
 
-### 6. Validações finais
-- Testar RLS com um usuário não-admin com permissão parcial (ex.: só Veículos).
-- Confirmar que o sino de notificações atualiza em tempo real (Realtime na tabela `despesas_notificacoes`).
-- Conferir que `despesas_detectar_duplicidades` não bloqueia salvar, apenas alerta.
+- Registrar rota `/despesas/permissoes` em `src/App.tsx` protegida por `RoleGuard` (admin/super_admin).
+- Adicionar item "Permissões" no `DespesasSidebar.tsx` visível só para admin.
+- Adicionar abas faltantes no grid: **Veículos**, **Recorrências**, **Notificações**, **Auditoria** (o enum `despesas_aba` no banco já suporta ou precisa `ALTER TYPE ADD VALUE` — verificar e migrar se necessário).
+- Guards de rota: nas páginas `DespesasImoveis`, `DespesasRepasses`, `DespesasCadastros`, `DespesasCalendario`, `DespesasRecorrencias`, `DespesasNotificacoes` usar `useDespesasPermissions().podeVer(aba)` para redirect/AccessDenied.
+- Ocultar itens do sidebar conforme `podeVer`.
 
-## Ordem sugerida de execução
+### 2. Página de Auditoria
 
-1. Permissões por aba (destrava o uso multi-usuário).
-2. Página de Auditoria (visibilidade de mudanças).
-3. Edge function + cron de ocorrências/notificações.
-4. Ajustes finos no Calendário.
-5. Página de Ajuda.
-6. QA final com usuário de teste.
+Já existe `src/pages/despesas/DespesasAuditLogs.tsx` reaproveitando `AuditLogsPanel`. Falta:
+
+- Registrar rota `/despesas/auditoria` em `App.tsx`.
+- Adicionar item no `DespesasSidebar.tsx` (restrito a admin ou a quem tem `podeVer('auditoria')`).
+- Confirmar que `AuditLogsPanel` aceita `defaultModule="despesas"` (o valor já é passado com cast; validar que o filtro do painel reconhece esse módulo — se não, adicionar às opções do enum interno do painel).
+
+### 3. Polish do Calendário — filtro por série
+
+- No `DespesasCalendario.tsx`, ao clicar no badge de recorrência de uma linha, aplicar filtro `serie_recorrencia_id = X` e exibir chip removível "Filtrando série: [descrição]".
+- Adicionar botão "Ver todas ocorrências desta série" no `RecorrenciaBlock` / listagem de recorrências que navega para o calendário com o filtro pré-aplicado (querystring `?serie=<id>`).
+
+### 4. Relatórios / Dashboard consolidado
+
+Nova página `/despesas/relatorios` (ou expandir `DespesasDashboard`) com:
+
+- **KPIs do período**: total previsto, total pago, em aberto, atrasado, % inadimplência.
+- **Curva mensal** (bar/line chart via `recharts`): previsto vs pago por mês nos últimos 12 meses.
+- **Por centro de custo**: barra horizontal com top centros de custo por valor pago.
+- **Top fornecedores/pessoas**: tabela com valor pago no período.
+- **Repasses**: total previsto, liquidado, pendente por proprietário; alerta de repasses vencidos.
+- Filtros globais: período (date range), centro de custo, categoria, status.
+- Fonte: queries agregadas em `despesas_lancamentos` + `despesas_lancamento_pagamentos` + `despesas_repasses` (respeitando RLS existente — nenhuma nova policy necessária).
+
+### 5. Exportação CSV/XLSX
+
+- Reaproveitar `src/lib/exportUtils.ts` (já usa `xlsx`).
+- Botão `ExportButton` em: `DespesasCalendario` (lançamentos filtrados), `DespesasRepasses` (repasses + itens), `DespesasRecorrencias` (séries ativas), relatórios.
+- Novos formatters em `exportUtils.ts` para cada entidade (colunas em PT-BR, datas formatadas, valores em `pt-BR`).
+
+### 6. (Opcional, se pedir) Anexos/comprovantes
+
+Fora deste plano — envolve criar bucket `despesas-anexos`, policies de Storage e UI de upload. Posso propor separado quando quiser.
+
+---
 
 ## Detalhes técnicos
 
-- Migration adicional só será necessária para: (a) `ALTER PUBLICATION supabase_realtime ADD TABLE public.despesas_notificacoes;` e (b) `cron.schedule` do scheduler (usa dados sensíveis, então roda via ferramenta de insert do Supabase, não migration).
-- Edge function usa `SUPABASE_SERVICE_ROLE_KEY` internamente; nenhum secret novo precisa ser adicionado.
-- Guards de permissão reaproveitam o padrão de `can_view_system` / `can_edit_system` combinados com `despesas_aba_permissoes`.
+**Novas rotas em `src/App.tsx**` (dentro do `DespesasLayout`):
 
-Confirme se quer que eu siga nessa ordem ou prefere priorizar algo específico (ex.: cron primeiro).
+```
+/despesas/permissoes   → DespesasPermissoes   (RoleGuard admin)
+/despesas/auditoria    → DespesasAuditLogs    (podeVer('auditoria') || admin)
+/despesas/relatorios   → DespesasRelatorios   (novo, podeVer('relatorios') ou herdar calendário)
+```
+
+**Migration única** (se abas novas precisarem entrar no enum):
+
+```sql
+ALTER TYPE despesas_aba ADD VALUE IF NOT EXISTS 'veiculos';
+ALTER TYPE despesas_aba ADD VALUE IF NOT EXISTS 'recorrencias';
+ALTER TYPE despesas_aba ADD VALUE IF NOT EXISTS 'notificacoes';
+ALTER TYPE despesas_aba ADD VALUE IF NOT EXISTS 'auditoria';
+ALTER TYPE despesas_aba ADD VALUE IF NOT EXISTS 'relatorios';
+```
+
+Verificar antes se o tipo é enum ou text — ajustar constante `ABAS` do `DespesasPermissoes.tsx` acordemente.
+
+**Sidebar**: usar `useDespesasPermissions` para renderização condicional de cada item, exatamente como já é feito no Estoque.
+
+**Sem novos secrets**, sem novas edge functions, sem mudanças de RLS além do enum acima.
+
+---
+
+## Ordem de entrega e ponto de parada
+
+Sugestão de entregar em 2 blocos para você validar entre eles:
+
+- **Bloco A** (destrava operação): itens 1, 2, 3.
+- **Bloco B** (analítico): itens 4 e 5.
+
+Confirma se quer nessa ordem, ou prefere priorizar Relatórios/Exportação antes de Permissões? Pode seguir com os dois blocos.  
+  
+Sobre isso: Rápido esclarecimento antes do plano: `pg_cron` roda **dentro do Postgres** e só sabe executar SQL. Ele não consegue "chamar" uma Edge Function diretamente porque Edge Functions rodam em outro runtime (Deno, fora do banco). A ponte entre os dois é o `pg_net`, que faz uma requisição HTTP de dentro do SQL. Ou seja: o "gatilho" é 100% interno (Postgres → Postgres via extensão), mas o "trabalho pesado" (gerar ocorrências, criar notificações, marcar atrasos) mora na Edge Function, que precisa ser acionada por HTTP porque é assim que Edge Functions são invocadas no Supabase. Não há exposição externa: a chamada sai do banco e volta pro mesmo projeto Supabase.
+
+Alternativa se quiser evitar HTTP: mover toda a lógica do scheduler para uma função PL/pgSQL e o cron chama direto via `SELECT despesas_rodar_scheduler();`. Vantagem: sem `pg_net`, sem HTTP. Desvantagem: perde flexibilidade (logs estruturados, testes locais, reaproveitar código TS). Posso fazer essa migração se preferir — só me avise.  
+  
+Entendi. E depois de fazer o plano dos dois blocos quero que você me instrua de como fazer exatamente isso, pois não estou sabendo.
+
+&nbsp;
