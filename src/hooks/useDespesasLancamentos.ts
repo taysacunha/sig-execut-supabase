@@ -1,0 +1,283 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+export type LancamentoTipo = "a_pagar" | "a_receber";
+export type LancamentoStatus =
+  | "a_vencer"
+  | "vencido"
+  | "pago_parcial"
+  | "pago"
+  | "cancelado";
+
+export type FormaPagamento =
+  | "dinheiro"
+  | "pix"
+  | "boleto"
+  | "cartao"
+  | "transferencia"
+  | "cheque"
+  | "outro";
+
+export interface Pagamento {
+  id: string;
+  lancamento_id: string;
+  data_pagamento: string;
+  valor: number;
+  forma_pagamento: FormaPagamento;
+  conta_bancaria_id: string | null;
+  observacao: string | null;
+  created_at: string;
+}
+
+export interface Lancamento {
+  id: string;
+  tipo: LancamentoTipo;
+  descricao: string;
+  documento_numero: string | null;
+  pessoa_id: string | null;
+  centro_custo_id: string;
+  categoria_id: string | null;
+  plano_conta_id: string | null;
+  subcategoria_id: string | null;
+  conta_bancaria_id: string | null;
+  data_competencia: string;
+  data_vencimento: string;
+  valor_total: number;
+  valor_pago: number;
+  status: LancamentoStatus;
+  observacao: string | null;
+  created_at: string;
+  updated_at: string;
+  pessoa?: { nome: string } | null;
+  centro_custo?: { nome: string } | null;
+  categoria?: { nome: string } | null;
+  pagamentos?: Pagamento[];
+}
+
+export interface LancamentoFiltros {
+  tipo?: LancamentoTipo | "todos";
+  status?: LancamentoStatus | "todos";
+  centroCustoId?: string;
+  pessoaId?: string;
+  categoriaId?: string;
+  dataInicio?: string;
+  dataFim?: string;
+  busca?: string;
+}
+
+export const LANC_KEY = "despesas-lancamentos";
+
+export function useLancamentos(filtros: LancamentoFiltros) {
+  return useQuery({
+    queryKey: [LANC_KEY, filtros],
+    queryFn: async () => {
+      let query = supabase
+        .from("despesas_lancamentos" as any)
+        .select(
+          `*,
+           pessoa:despesas_pessoas(nome),
+           centro_custo:despesas_centros_custo(nome),
+           categoria:despesas_categorias(nome),
+           pagamentos:despesas_lancamento_pagamentos(*)`
+        )
+        .order("data_vencimento", { ascending: true });
+
+      if (filtros.tipo && filtros.tipo !== "todos") query = query.eq("tipo", filtros.tipo);
+      if (filtros.status && filtros.status !== "todos") query = query.eq("status", filtros.status);
+      if (filtros.centroCustoId) query = query.eq("centro_custo_id", filtros.centroCustoId);
+      if (filtros.pessoaId) query = query.eq("pessoa_id", filtros.pessoaId);
+      if (filtros.categoriaId) query = query.eq("categoria_id", filtros.categoriaId);
+      if (filtros.dataInicio) query = query.gte("data_vencimento", filtros.dataInicio);
+      if (filtros.dataFim) query = query.lte("data_vencimento", filtros.dataFim);
+      if (filtros.busca && filtros.busca.trim()) {
+        query = query.ilike("descricao", `%${filtros.busca.trim()}%`);
+      }
+
+      const { data, error } = await query.limit(1000);
+      if (error) throw error;
+      return (data ?? []) as unknown as Lancamento[];
+    },
+  });
+}
+
+export interface LancamentoInput {
+  tipo: LancamentoTipo;
+  descricao: string;
+  documento_numero?: string | null;
+  pessoa_id?: string | null;
+  centro_custo_id: string;
+  categoria_id?: string | null;
+  plano_conta_id?: string | null;
+  subcategoria_id?: string | null;
+  conta_bancaria_id?: string | null;
+  data_competencia: string;
+  data_vencimento: string;
+  valor_total: number;
+  observacao?: string | null;
+}
+
+export function useSaveLancamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id?: string; input: LancamentoInput }) => {
+      if (id) {
+        const { error } = await supabase
+          .from("despesas_lancamentos" as any)
+          .update(input as any)
+          .eq("id", id);
+        if (error) throw error;
+        return id;
+      }
+      const { data: userRes } = await supabase.auth.getUser();
+      const payload: any = { ...input, created_by: userRes.user?.id };
+      const { data, error } = await supabase
+        .from("despesas_lancamentos" as any)
+        .insert(payload)
+        .select("id")
+        .single();
+      if (error) throw error;
+      return (data as any).id as string;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [LANC_KEY] }),
+  });
+}
+
+export function useDeleteLancamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("despesas_lancamentos" as any).delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [LANC_KEY] }),
+  });
+}
+
+export function useCancelLancamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("despesas_lancamentos" as any)
+        .update({ status: "cancelado" })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [LANC_KEY] }),
+  });
+}
+
+export interface PagamentoInput {
+  lancamento_id: string;
+  data_pagamento: string;
+  valor: number;
+  forma_pagamento: FormaPagamento;
+  conta_bancaria_id?: string | null;
+  observacao?: string | null;
+}
+
+export function useAddPagamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: PagamentoInput) => {
+      const { data: userRes } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from("despesas_lancamento_pagamentos" as any)
+        .insert({ ...input, created_by: userRes.user?.id } as any);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [LANC_KEY] }),
+  });
+}
+
+export function useDeletePagamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("despesas_lancamento_pagamentos" as any)
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [LANC_KEY] }),
+  });
+}
+
+/** Lookup helpers para dropdowns do formulário. */
+export function useDespesasLookups() {
+  const centros = useQuery({
+    queryKey: ["desp-lookup", "centros"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("despesas_centros_custo" as any)
+        .select("id, nome")
+        .eq("is_active", true)
+        .order("nome");
+      if (error) throw error;
+      return (data ?? []) as unknown as { id: string; nome: string }[];
+    },
+  });
+  const categorias = useQuery({
+    queryKey: ["desp-lookup", "categorias"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("despesas_categorias" as any)
+        .select("id, nome, tipo")
+        .eq("is_active", true)
+        .order("nome");
+      if (error) throw error;
+      return (data ?? []) as unknown as { id: string; nome: string; tipo: string }[];
+    },
+  });
+  const planos = useQuery({
+    queryKey: ["desp-lookup", "planos"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("despesas_planos_conta" as any)
+        .select("id, nome, tipo")
+        .eq("is_active", true)
+        .order("nome");
+      if (error) throw error;
+      return (data ?? []) as unknown as { id: string; nome: string; tipo: string }[];
+    },
+  });
+  const subcategorias = useQuery({
+    queryKey: ["desp-lookup", "subcategorias"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("despesas_subcategorias" as any)
+        .select("id, nome, plano_conta_id")
+        .eq("is_active", true)
+        .order("nome");
+      if (error) throw error;
+      return (data ?? []) as unknown as { id: string; nome: string; plano_conta_id: string }[];
+    },
+  });
+  const contas = useQuery({
+    queryKey: ["desp-lookup", "contas"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("despesas_contas_bancarias" as any)
+        .select("id, nome, banco")
+        .eq("is_active", true)
+        .order("nome");
+      if (error) throw error;
+      return (data ?? []) as unknown as { id: string; nome: string; banco: string | null }[];
+    },
+  });
+  const pessoas = useQuery({
+    queryKey: ["desp-lookup", "pessoas"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("despesas_pessoas" as any)
+        .select("id, nome, tipo_pessoa")
+        .eq("is_active", true)
+        .order("nome");
+      if (error) throw error;
+      return (data ?? []) as unknown as { id: string; nome: string; tipo_pessoa: string }[];
+    },
+  });
+
+  return { centros, categorias, planos, subcategorias, contas, pessoas };
+}
