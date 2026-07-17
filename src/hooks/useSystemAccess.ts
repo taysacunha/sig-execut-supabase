@@ -6,6 +6,14 @@ import { User } from "@supabase/supabase-js";
 export type SystemName = "escalas" | "vendas" | "ferias" | "estoque" | "despesas";
 export type PermissionType = "view_only" | "view_edit";
 
+const SUPER_ADMIN_SYSTEMS: SystemPermission[] = [
+  { system_name: "escalas", permission_type: "view_edit" },
+  { system_name: "vendas", permission_type: "view_edit" },
+  { system_name: "ferias", permission_type: "view_edit" },
+  { system_name: "estoque", permission_type: "view_edit" },
+  { system_name: "despesas", permission_type: "view_edit" },
+];
+
 export interface SystemPermission {
   system_name: SystemName;
   permission_type: PermissionType;
@@ -21,6 +29,14 @@ export function useSystemAccess(): UseSystemAccessReturn {
     queryKey: ["system-access", user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
+
+      const { data: roleData, error: roleError } = await supabase.rpc("get_user_role", {
+        _user_id: user.id,
+      });
+
+      if (!roleError && roleData === "super_admin") {
+        return SUPER_ADMIN_SYSTEMS;
+      }
       
       const { data, error } = await supabase
         .from("system_access")
