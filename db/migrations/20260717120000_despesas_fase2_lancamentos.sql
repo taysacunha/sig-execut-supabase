@@ -253,6 +253,99 @@ FOR EACH ROW EXECUTE FUNCTION public.despesas_pagamento_trg();
 -- ---------------------------------------------------------------------
 -- 4) Trigger updated_at + auditoria (apenas na tabela pai)
 -- ---------------------------------------------------------------------
+-- Garante que audit_module_changes reconheça as tabelas do módulo despesas.
+-- A função da Fase 1 já usa TG_TABLE_NAME + CASE; estendemos o CASE aqui
+-- para incluir todas as tabelas 'despesas_*' que produzem log operacional.
+CREATE OR REPLACE FUNCTION public.audit_module_changes()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_module_name text;
+  v_old_data jsonb;
+  v_new_data jsonb;
+  v_changed_fields text[];
+  v_user_id uuid;
+  v_user_email text;
+BEGIN
+  CASE TG_TABLE_NAME
+    WHEN 'brokers', 'locations', 'schedule_assignments', 'generated_schedules',
+         'location_period_configs', 'saturday_queue', 'location_rotation_queues' THEN
+      v_module_name := 'escalas';
+    WHEN 'sales', 'sales_brokers', 'sales_teams', 'broker_evaluations',
+         'monthly_leads', 'proposals', 'sale_partners' THEN
+      v_module_name := 'vendas';
+    WHEN 'estoque_locais_armazenamento', 'estoque_materiais', 'estoque_saldos',
+         'estoque_gestores', 'estoque_solicitacoes', 'estoque_solicitacao_itens',
+         'estoque_movimentacoes', 'estoque_notificacoes' THEN
+      v_module_name := 'estoque';
+    WHEN 'despesas_lancamentos', 'despesas_lancamento_pagamentos',
+         'despesas_categorias', 'despesas_centros_custo', 'despesas_contas_bancarias',
+         'despesas_perfis_acesso', 'despesas_pessoas', 'despesas_planos_conta',
+         'despesas_subcategorias', 'despesas_veiculos',
+         'despesas_aba_permissoes', 'despesas_centros_custo_permissoes' THEN
+      v_module_name := 'despesas';
+    ELSE
+      v_module_name := 'sistema';
+  END CASE;
+
+  BEGIN
+    v_user_id := auth.uid();
+  EXCEPTION WHEN OTHERS THEN
+    v_user_id := NULL;
+  END;
+
+  IF v_user_id IS NULL THEN
+    BEGIN
+      v_user_id := (current_setting('request.jwt.claims', true)::jsonb->>'sub')::uuid;
+    EXCEPTION WHEN OTHERS THEN
+      v_user_id := NULL;
+    END;
+  END IF;
+
+  IF v_user_id IS NOT NULL THEN
+    SELECT email INTO v_user_email FROM auth.users WHERE id = v_user_id;
+  END IF;
+
+  v_user_email := COALESCE(v_user_email, 'sistema@interno');
+
+  IF TG_OP = 'INSERT' THEN
+    v_new_data := to_jsonb(NEW);
+    v_old_data := NULL;
+    v_changed_fields := ARRAY(SELECT jsonb_object_keys(v_new_data));
+  ELSIF TG_OP = 'UPDATE' THEN
+    v_old_data := to_jsonb(OLD);
+    v_new_data := to_jsonb(NEW);
+    SELECT ARRAY_AGG(changes.key) INTO v_changed_fields
+    FROM (
+      SELECT key
+      FROM jsonb_each(v_new_data)
+      WHERE v_old_data->key IS DISTINCT FROM v_new_data->key
+    ) AS changes;
+  ELSIF TG_OP = 'DELETE' THEN
+    v_old_data := to_jsonb(OLD);
+    v_new_data := NULL;
+    v_changed_fields := NULL;
+  END IF;
+
+  IF TG_OP != 'UPDATE' OR v_changed_fields IS NOT NULL THEN
+    INSERT INTO public.module_audit_logs (
+      module_name, table_name, record_id, action,
+      old_data, new_data, changed_fields,
+      changed_by, changed_by_email
+    ) VALUES (
+      v_module_name, TG_TABLE_NAME, COALESCE(NEW.id, OLD.id), TG_OP,
+      v_old_data, v_new_data, v_changed_fields,
+      v_user_id, v_user_email
+    );
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
+END;
+$function$;
+
 DO $$
 DECLARE
   t text;
@@ -269,5 +362,5 @@ BEGIN
   EXECUTE 'DROP TRIGGER IF EXISTS trg_despesas_lancamentos_audit ON public.despesas_lancamentos';
   EXECUTE 'CREATE TRIGGER trg_despesas_lancamentos_audit
            AFTER INSERT OR UPDATE OR DELETE ON public.despesas_lancamentos
-           FOR EACH ROW EXECUTE FUNCTION public.audit_module_changes(''despesas'')';
+           FOR EACH ROW EXECUTE FUNCTION public.audit_module_changes()';
 END $$;
