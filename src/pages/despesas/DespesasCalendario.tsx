@@ -37,6 +37,8 @@ const STATUS_META: Record<LancamentoStatus, { label: string; variant: any; icon:
   pago_parcial: { label: "Pago parcial", variant: "outline", icon: DollarSign },
   pago: { label: "Pago", variant: "default", icon: CheckCircle2 },
   cancelado: { label: "Cancelado", variant: "outline", icon: XCircle },
+  quitado: { label: "Quitado", variant: "default", icon: CheckCircle2 },
+  gimob: { label: "GIMOB", variant: "secondary", icon: CheckCircle2 },
 };
 
 function fmtBRL(v: number | string) {
