@@ -820,6 +820,7 @@ export type Database = {
           conta_bancaria_id: string | null
           created_at: string
           created_by: string | null
+          credenciais: Json
           data_competencia: string
           data_vencimento: string
           descricao: string
@@ -843,6 +844,7 @@ export type Database = {
           conta_bancaria_id?: string | null
           created_at?: string
           created_by?: string | null
+          credenciais?: Json
           data_competencia: string
           data_vencimento: string
           descricao: string
@@ -866,6 +868,7 @@ export type Database = {
           conta_bancaria_id?: string | null
           created_at?: string
           created_by?: string | null
+          credenciais?: Json
           data_competencia?: string
           data_vencimento?: string
           descricao?: string
@@ -1296,6 +1299,7 @@ export type Database = {
           taxa_administracao_valor: number
           updated_at: string
           valor_bruto: number
+          valor_limite_primeiro: number | null
           valor_liquido: number
         }
         Insert: {
@@ -1312,6 +1316,7 @@ export type Database = {
           taxa_administracao_valor?: number
           updated_at?: string
           valor_bruto?: number
+          valor_limite_primeiro?: number | null
           valor_liquido?: number
         }
         Update: {
@@ -1328,6 +1333,7 @@ export type Database = {
           taxa_administracao_valor?: number
           updated_at?: string
           valor_bruto?: number
+          valor_limite_primeiro?: number | null
           valor_liquido?: number
         }
         Relationships: [
