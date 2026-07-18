@@ -146,6 +146,10 @@ function UserManagementContent() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [updatingSystems, setUpdatingSystems] = useState<string | null>(null);
   const { user: currentUser, role: currentRole, isSuperAdmin, canManageRole } = useUserRole();
+
+  // Filtros por módulo / permissão
+  const [moduleFilter, setModuleFilter] = useState<SystemName | "all">("all");
+  const [permissionFilter, setPermissionFilter] = useState<PermissionType | "all">("all");
   
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteName, setInviteName] = useState("");
@@ -175,6 +179,18 @@ function UserManagementContent() {
     ? ["super_admin", "admin", "manager", "supervisor", "collaborator"]
     : ["admin", "manager", "supervisor", "collaborator"];
 
+  // Pré-filtro por módulo e permissão (super_admin sempre aparece pois tem acesso total)
+  const usersFilteredByModule = useMemo(() => {
+    if (moduleFilter === "all") return users;
+    return users.filter((u) => {
+      if (u.role === "super_admin") return true;
+      const access = u.systems.find((s) => s.system_name === moduleFilter);
+      if (!access) return false;
+      if (permissionFilter === "all") return true;
+      return access.permission_type === permissionFilter;
+    });
+  }, [users, moduleFilter, permissionFilter]);
+
   // Table controls for users
   const {
     searchTerm,
@@ -190,7 +206,7 @@ function UserManagementContent() {
     filteredData: filteredUsers,
     totalPages,
   } = useTableControls({
-    data: users,
+    data: usersFilteredByModule,
     searchField: ["name", "email"],
     defaultItemsPerPage: 20,
   });
