@@ -183,7 +183,6 @@ function UserManagementContent() {
   const usersFilteredByModule = useMemo(() => {
     if (moduleFilter === "all") return users;
     return users.filter((u) => {
-      if (u.role === "super_admin") return true;
       const access = u.systems.find((s) => s.system_name === moduleFilter);
       if (!access) return false;
       if (permissionFilter === "all") return true;
