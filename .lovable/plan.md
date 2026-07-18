@@ -1,34 +1,18 @@
-## Objetivo
+## Causa
 
-Na página **Gerenciamento de Usuários → aba Usuários**, permitir organizar/filtrar a lista por módulo do sistema (Escalas, Vendas, Férias, Estoque, Despesas) e por tipo de permissão (Ver / Editar), mostrando também os demais módulos aos quais o usuário pertence.
+No filtro que implementei, incluí a regra "super_admin aparece em qualquer módulo" porque tecnicamente têm acesso a tudo. Bruno tem linha explícita em `system_access` para `despesas`; Fabia, Germana e Marcia são super_admins (sem linha em `system_access` para despesas), por isso aparecem também.
 
-## Mudanças na UI (apenas `src/pages/UserManagement.tsx`)
+Isso não corresponde à sua expectativa: você quer ver só quem foi explicitamente habilitado no módulo.
 
-1. **Novos controles de filtro** (acima da tabela, ao lado do search existente):
-   - Select **"Módulo"**: `Todos | Escalas | Vendas | Férias | Estoque | Despesas`.
-   - Select **"Permissão"** (habilitado só quando um módulo é escolhido): `Todas | Somente ver | Ver e editar`.
-   - Botão "Limpar filtros" quando algum filtro estiver ativo.
+## Correção
 
-2. **Lógica de filtragem**:
-   - Reaproveitar o array `system_access` que já é carregado por usuário.
-   - `filteredUsers` passa a considerar: busca de texto + módulo + tipo de permissão.
-   - Super admins continuam aparecendo em qualquer filtro (têm acesso total).
+Em `src/pages/UserManagement.tsx`, no `useMemo` `usersFilteredByModule`:
 
-3. **Nova coluna "Módulos"** na tabela:
-   - Mostra um badge por módulo que o usuário tem acesso, com ícone indicando `Eye` (ver) ou `Pencil` (editar).
-   - Quando um módulo específico está filtrado: destacar o badge do módulo filtrado (cor primária) e exibir os demais em `variant="outline"` com tooltip "Também tem acesso a: …", cumprindo o requisito de "se está em mais de um módulo, mostrar também".
-   - Sem filtro: todos os badges no estilo padrão.
+- Remover a condição `if (u.role === "super_admin") return true;`.
+- Passar a filtrar estritamente por presença de linha em `u.systems` com o `system_name` selecionado (e, se aplicável, `permission_type`).
 
-4. **Contador**: exibir "N usuário(s) no módulo X" quando um módulo estiver selecionado.
+Assim, ao filtrar por Despesas, aparecerá apenas Bruno (e qualquer outro usuário com registro explícito em `system_access`), independentemente do papel.
 
-## Detalhes técnicos
+Observação: super_admins continuarão visíveis quando o filtro estiver em "Todos os módulos" e continuarão tendo acesso real ao sistema via `SystemGuard` — a mudança é apenas de exibição na lista filtrada.
 
-- Sem mudanças de banco/RLS. Os dados de `system_access` já vêm em `fetchUsers` (via `.select("system_name, permission_type")`).
-- Sem mudanças em outras páginas ou componentes.
-- Preservar ordenação (`useTableControls`) e paginação atuais — filtro é aplicado antes.
-- Manter i18n PT-BR e padrão visual dos badges já usados na página.
-
-## Fora de escopo
-
-- Editar permissões em lote a partir dessa aba (já existe página dedicada por módulo).
-- Alterações no backend ou nas policies.
+Nada mais é alterado (banco, RLS, outras telas, coluna de módulos).
