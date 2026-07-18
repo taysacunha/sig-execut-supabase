@@ -146,6 +146,10 @@ function UserManagementContent() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [updatingSystems, setUpdatingSystems] = useState<string | null>(null);
   const { user: currentUser, role: currentRole, isSuperAdmin, canManageRole } = useUserRole();
+
+  // Filtros por módulo / permissão
+  const [moduleFilter, setModuleFilter] = useState<SystemName | "all">("all");
+  const [permissionFilter, setPermissionFilter] = useState<PermissionType | "all">("all");
   
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteName, setInviteName] = useState("");
@@ -175,6 +179,18 @@ function UserManagementContent() {
     ? ["super_admin", "admin", "manager", "supervisor", "collaborator"]
     : ["admin", "manager", "supervisor", "collaborator"];
 
+  // Pré-filtro por módulo e permissão (super_admin sempre aparece pois tem acesso total)
+  const usersFilteredByModule = useMemo(() => {
+    if (moduleFilter === "all") return users;
+    return users.filter((u) => {
+      if (u.role === "super_admin") return true;
+      const access = u.systems.find((s) => s.system_name === moduleFilter);
+      if (!access) return false;
+      if (permissionFilter === "all") return true;
+      return access.permission_type === permissionFilter;
+    });
+  }, [users, moduleFilter, permissionFilter]);
+
   // Table controls for users
   const {
     searchTerm,
@@ -190,7 +206,7 @@ function UserManagementContent() {
     filteredData: filteredUsers,
     totalPages,
   } = useTableControls({
-    data: users,
+    data: usersFilteredByModule,
     searchField: ["name", "email"],
     defaultItemsPerPage: 20,
   });
@@ -645,13 +661,64 @@ function UserManagementContent() {
                 <div className="flex items-center justify-between flex-wrap gap-4">
                   <div>
                     <CardTitle className="flex items-center gap-2"><Shield className="h-5 w-5" />Usuários</CardTitle>
-                    <CardDescription>Gerencie perfis e permissões de acesso.</CardDescription>
+                    <CardDescription>
+                      Gerencie perfis e permissões de acesso.
+                      {moduleFilter !== "all" && (
+                        <span className="ml-2 text-primary font-medium">
+                          {filteredUsers.length} usuário{filteredUsers.length === 1 ? "" : "s"} em {systemLabels[moduleFilter]}
+                          {permissionFilter !== "all" && ` (${permissionFilter === "view_only" ? "somente ver" : "ver e editar"})`}
+                        </span>
+                      )}
+                    </CardDescription>
                   </div>
-                  <TableSearch 
+                  <TableSearch
                     value={searchTerm}
                     onChange={setSearchTerm}
                     placeholder="Buscar por nome ou email..."
                   />
+                </div>
+                <div className="flex items-center gap-2 flex-wrap mt-4">
+                  <Label className="text-sm text-muted-foreground">Filtrar por:</Label>
+                  <Select value={moduleFilter} onValueChange={(v) => { setModuleFilter(v as SystemName | "all"); setCurrentPage(1); }}>
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Módulo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os módulos</SelectItem>
+                      {(["escalas", "vendas", "ferias", "estoque", "despesas"] as SystemName[]).map((sys) => (
+                        <SelectItem key={sys} value={sys}>
+                          <span className="flex items-center gap-2">{systemIcons[sys]}{systemLabels[sys]}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={permissionFilter}
+                    onValueChange={(v) => { setPermissionFilter(v as PermissionType | "all"); setCurrentPage(1); }}
+                    disabled={moduleFilter === "all"}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Permissão" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas permissões</SelectItem>
+                      <SelectItem value="view_only">
+                        <span className="flex items-center gap-2"><Eye className="h-3 w-3" />Somente ver</span>
+                      </SelectItem>
+                      <SelectItem value="view_edit">
+                        <span className="flex items-center gap-2"><Edit className="h-3 w-3" />Ver e editar</span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {(moduleFilter !== "all" || permissionFilter !== "all") && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { setModuleFilter("all"); setPermissionFilter("all"); setCurrentPage(1); }}
+                    >
+                      Limpar filtros
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -719,17 +786,52 @@ function UserManagementContent() {
                               ) : <Badge variant="outline">Sem perfil</Badge>}
                             </TableCell>
                             <TableCell>
-                              <div className="flex flex-wrap gap-1">
-                                {user.systems.map(sys => (
-                                  <Badge key={sys.system_name} variant="secondary" className="text-xs">
-                                    <span className="flex items-center gap-1">
-                                      {systemIcons[sys.system_name]}
-                                      {systemLabels[sys.system_name]}
-                                      <span className="ml-1 opacity-70">({sys.permission_type === 'view_only' ? 'Ver' : 'Editar'})</span>
-                                    </span>
+                              <div className="flex flex-wrap gap-1 items-center">
+                                {user.role === "super_admin" && user.systems.length === 0 && (
+                                  <Badge variant="outline" className="text-xs border-purple-500 text-purple-600">
+                                    <span className="flex items-center gap-1"><Crown className="h-3 w-3" />Acesso total</span>
                                   </Badge>
-                                ))}
-                                {user.systems.length === 0 && <span className="text-xs text-muted-foreground">Nenhum</span>}
+                                )}
+                                {user.systems.map(sys => {
+                                  const isFiltered = moduleFilter !== "all" && sys.system_name === moduleFilter;
+                                  const permLabel = sys.permission_type === 'view_only' ? 'Ver' : 'Editar';
+                                  const badge = (
+                                    <Badge
+                                      key={sys.system_name}
+                                      variant={isFiltered ? "default" : moduleFilter !== "all" ? "outline" : "secondary"}
+                                      className={`text-xs ${isFiltered ? "bg-primary text-primary-foreground" : ""}`}
+                                    >
+                                      <span className="flex items-center gap-1">
+                                        {systemIcons[sys.system_name]}
+                                        {systemLabels[sys.system_name]}
+                                        <span className="ml-1 opacity-70">({permLabel})</span>
+                                      </span>
+                                    </Badge>
+                                  );
+                                  return badge;
+                                })}
+                                {moduleFilter !== "all" && user.systems.filter(s => s.system_name !== moduleFilter).length > 0 && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="text-xs text-muted-foreground cursor-help underline decoration-dotted">
+                                        +{user.systems.filter(s => s.system_name !== moduleFilter).length} outro(s)
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <div className="text-xs">
+                                        <div className="font-semibold mb-1">Também tem acesso a:</div>
+                                        {user.systems.filter(s => s.system_name !== moduleFilter).map(s => (
+                                          <div key={s.system_name}>
+                                            • {systemLabels[s.system_name]} ({s.permission_type === 'view_only' ? 'Ver' : 'Editar'})
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                )}
+                                {user.systems.length === 0 && user.role !== "super_admin" && (
+                                  <span className="text-xs text-muted-foreground">Nenhum</span>
+                                )}
                               </div>
                             </TableCell>
                             <TableCell className="text-right">
