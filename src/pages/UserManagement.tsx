@@ -661,13 +661,64 @@ function UserManagementContent() {
                 <div className="flex items-center justify-between flex-wrap gap-4">
                   <div>
                     <CardTitle className="flex items-center gap-2"><Shield className="h-5 w-5" />Usuários</CardTitle>
-                    <CardDescription>Gerencie perfis e permissões de acesso.</CardDescription>
+                    <CardDescription>
+                      Gerencie perfis e permissões de acesso.
+                      {moduleFilter !== "all" && (
+                        <span className="ml-2 text-primary font-medium">
+                          {filteredUsers.length} usuário{filteredUsers.length === 1 ? "" : "s"} em {systemLabels[moduleFilter]}
+                          {permissionFilter !== "all" && ` (${permissionFilter === "view_only" ? "somente ver" : "ver e editar"})`}
+                        </span>
+                      )}
+                    </CardDescription>
                   </div>
-                  <TableSearch 
+                  <TableSearch
                     value={searchTerm}
                     onChange={setSearchTerm}
                     placeholder="Buscar por nome ou email..."
                   />
+                </div>
+                <div className="flex items-center gap-2 flex-wrap mt-4">
+                  <Label className="text-sm text-muted-foreground">Filtrar por:</Label>
+                  <Select value={moduleFilter} onValueChange={(v) => { setModuleFilter(v as SystemName | "all"); setCurrentPage(1); }}>
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Módulo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os módulos</SelectItem>
+                      {(["escalas", "vendas", "ferias", "estoque", "despesas"] as SystemName[]).map((sys) => (
+                        <SelectItem key={sys} value={sys}>
+                          <span className="flex items-center gap-2">{systemIcons[sys]}{systemLabels[sys]}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={permissionFilter}
+                    onValueChange={(v) => { setPermissionFilter(v as PermissionType | "all"); setCurrentPage(1); }}
+                    disabled={moduleFilter === "all"}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Permissão" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas permissões</SelectItem>
+                      <SelectItem value="view_only">
+                        <span className="flex items-center gap-2"><Eye className="h-3 w-3" />Somente ver</span>
+                      </SelectItem>
+                      <SelectItem value="view_edit">
+                        <span className="flex items-center gap-2"><Edit className="h-3 w-3" />Ver e editar</span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {(moduleFilter !== "all" || permissionFilter !== "all") && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { setModuleFilter("all"); setPermissionFilter("all"); setCurrentPage(1); }}
+                    >
+                      Limpar filtros
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
