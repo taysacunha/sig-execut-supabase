@@ -786,17 +786,52 @@ function UserManagementContent() {
                               ) : <Badge variant="outline">Sem perfil</Badge>}
                             </TableCell>
                             <TableCell>
-                              <div className="flex flex-wrap gap-1">
-                                {user.systems.map(sys => (
-                                  <Badge key={sys.system_name} variant="secondary" className="text-xs">
-                                    <span className="flex items-center gap-1">
-                                      {systemIcons[sys.system_name]}
-                                      {systemLabels[sys.system_name]}
-                                      <span className="ml-1 opacity-70">({sys.permission_type === 'view_only' ? 'Ver' : 'Editar'})</span>
-                                    </span>
+                              <div className="flex flex-wrap gap-1 items-center">
+                                {user.role === "super_admin" && user.systems.length === 0 && (
+                                  <Badge variant="outline" className="text-xs border-purple-500 text-purple-600">
+                                    <span className="flex items-center gap-1"><Crown className="h-3 w-3" />Acesso total</span>
                                   </Badge>
-                                ))}
-                                {user.systems.length === 0 && <span className="text-xs text-muted-foreground">Nenhum</span>}
+                                )}
+                                {user.systems.map(sys => {
+                                  const isFiltered = moduleFilter !== "all" && sys.system_name === moduleFilter;
+                                  const permLabel = sys.permission_type === 'view_only' ? 'Ver' : 'Editar';
+                                  const badge = (
+                                    <Badge
+                                      key={sys.system_name}
+                                      variant={isFiltered ? "default" : moduleFilter !== "all" ? "outline" : "secondary"}
+                                      className={`text-xs ${isFiltered ? "bg-primary text-primary-foreground" : ""}`}
+                                    >
+                                      <span className="flex items-center gap-1">
+                                        {systemIcons[sys.system_name]}
+                                        {systemLabels[sys.system_name]}
+                                        <span className="ml-1 opacity-70">({permLabel})</span>
+                                      </span>
+                                    </Badge>
+                                  );
+                                  return badge;
+                                })}
+                                {moduleFilter !== "all" && user.systems.filter(s => s.system_name !== moduleFilter).length > 0 && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="text-xs text-muted-foreground cursor-help underline decoration-dotted">
+                                        +{user.systems.filter(s => s.system_name !== moduleFilter).length} outro(s)
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <div className="text-xs">
+                                        <div className="font-semibold mb-1">Também tem acesso a:</div>
+                                        {user.systems.filter(s => s.system_name !== moduleFilter).map(s => (
+                                          <div key={s.system_name}>
+                                            • {systemLabels[s.system_name]} ({s.permission_type === 'view_only' ? 'Ver' : 'Editar'})
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                )}
+                                {user.systems.length === 0 && user.role !== "super_admin" && (
+                                  <span className="text-xs text-muted-foreground">Nenhum</span>
+                                )}
                               </div>
                             </TableCell>
                             <TableCell className="text-right">
