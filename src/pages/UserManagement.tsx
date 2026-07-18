@@ -809,25 +809,6 @@ function UserManagementContent() {
                                   );
                                   return badge;
                                 })}
-                                {moduleFilter !== "all" && user.systems.filter(s => s.system_name !== moduleFilter).length > 0 && (
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <span className="text-xs text-muted-foreground cursor-help underline decoration-dotted">
-                                        +{user.systems.filter(s => s.system_name !== moduleFilter).length} outro(s)
-                                      </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <div className="text-xs">
-                                        <div className="font-semibold mb-1">Também tem acesso a:</div>
-                                        {user.systems.filter(s => s.system_name !== moduleFilter).map(s => (
-                                          <div key={s.system_name}>
-                                            • {systemLabels[s.system_name]} ({s.permission_type === 'view_only' ? 'Ver' : 'Editar'})
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                )}
                                 {user.systems.length === 0 && user.role !== "super_admin" && (
                                   <span className="text-xs text-muted-foreground">Nenhum</span>
                                 )}
