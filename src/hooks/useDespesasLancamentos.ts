@@ -50,7 +50,6 @@ export interface Lancamento {
   observacao: string | null;
   serie_recorrencia_id: string | null;
   is_manual: boolean | null;
-  credenciais?: Record<string, string> | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -122,7 +121,6 @@ export interface LancamentoInput {
   data_vencimento: string;
   valor_total: number;
   observacao?: string | null;
-  credenciais?: Record<string, string> | null;
 }
 
 export function useSaveLancamento() {
