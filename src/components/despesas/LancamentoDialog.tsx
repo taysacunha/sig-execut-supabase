@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/select";
 import {
   Lancamento, LancamentoInput, LancamentoTipo, useDespesasLookups,
-  useSaveLancamento,
+  useSaveLancamento, useLancamentoCredenciais, useSaveLancamentoCredenciais,
+  LancamentoCredenciais,
 } from "@/hooks/useDespesasLancamentos";
 import {
   RecorrenciaBlock, RecorrenciaFormState,
@@ -31,6 +32,8 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
   const { centros, categorias, planos, subcategorias, contas, pessoas } = useDespesasLookups();
   const saveMut = useSaveLancamento();
   const saveRecMut = useSaveRecorrencia();
+  const credQuery = useLancamentoCredenciais(editing?.id ?? null);
+  const saveCredMut = useSaveLancamentoCredenciais();
 
   const emptyForm = (): LancamentoInput => ({
     tipo: tipoDefault ?? "a_pagar",
@@ -46,10 +49,11 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
     data_vencimento: new Date().toISOString().slice(0, 10),
     valor_total: 0,
     observacao: null,
-    credenciais: {},
   });
 
   const [form, setForm] = useState<LancamentoInput>(emptyForm());
+  const [credenciais, setCredenciais] = useState<LancamentoCredenciais>({});
+  const canEditCredenciais = !credQuery.isError; // sem permissão → RLS bloqueia leitura
   const [rec, setRec] = useState<RecorrenciaFormState>({
     ativa: false,
     tipo: "mensal",
@@ -76,7 +80,6 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
         data_vencimento: editing.data_vencimento,
         valor_total: Number(editing.valor_total),
         observacao: editing.observacao,
-        credenciais: (editing.credenciais as any) ?? {},
       });
       setRec({
         ativa: false,
@@ -88,6 +91,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
       });
     } else {
       setForm(emptyForm());
+      setCredenciais({});
       setRec({
         ativa: false,
         tipo: "mensal",
@@ -99,6 +103,11 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editing]);
+
+  useEffect(() => {
+    if (editing && credQuery.data) setCredenciais(credQuery.data);
+    else if (editing && credQuery.isFetched && !credQuery.data) setCredenciais({});
+  }, [editing, credQuery.data, credQuery.isFetched]);
 
   const subcatsFiltradas = useMemo(() => {
     if (!form.plano_conta_id) return [];
@@ -114,7 +123,15 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
 
   async function salvar() {
     try {
-      await saveMut.mutateAsync({ id: editing?.id, input: form });
+      const savedId = await saveMut.mutateAsync({ id: editing?.id, input: form });
+      if (canEditCredenciais) {
+        try {
+          await saveCredMut.mutateAsync({ lancamentoId: savedId, credenciais });
+        } catch (credErr: any) {
+          // Se não tiver permissão, apenas ignora silenciosamente as credenciais.
+          if (credErr?.code !== "42501" && credErr?.code !== "PGRST301") throw credErr;
+        }
+      }
       if (!editing && rec.ativa) {
         await saveRecMut.mutateAsync({
           input: {
@@ -330,8 +347,12 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
             />
           </div>
 
+          {canEditCredenciais && (
           <div className="md:col-span-2 border rounded-md p-3 space-y-2">
             <Label className="text-sm">Credenciais / contato (opcional)</Label>
+            <p className="text-xs text-muted-foreground">
+              Visível apenas para editores/admins do módulo Despesas.
+            </p>
             <div className="grid gap-3 md:grid-cols-2">
               {[
                 { k: "telefone", l: "Telefone" },
@@ -343,18 +364,20 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
                 <div key={k} className="space-y-1">
                   <Label className="text-xs text-muted-foreground">{l}</Label>
                   <Input
-                    value={(form.credenciais as any)?.[k] ?? ""}
+                    type={k === "senha" ? "password" : "text"}
+                    value={credenciais?.[k] ?? ""}
                     onChange={(e) => {
-                      const next = { ...(form.credenciais ?? {}) };
+                      const next = { ...(credenciais ?? {}) };
                       if (e.target.value) next[k] = e.target.value;
                       else delete next[k];
-                      setForm({ ...form, credenciais: next });
+                      setCredenciais(next);
                     }}
                   />
                 </div>
               ))}
             </div>
           </div>
+          )}
 
           <div className="md:col-span-2">
             <DuplicidadeAlert

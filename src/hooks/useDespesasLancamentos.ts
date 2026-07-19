@@ -50,7 +50,6 @@ export interface Lancamento {
   observacao: string | null;
   serie_recorrencia_id: string | null;
   is_manual: boolean | null;
-  credenciais?: Record<string, string> | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -122,7 +121,6 @@ export interface LancamentoInput {
   data_vencimento: string;
   valor_total: number;
   observacao?: string | null;
-  credenciais?: Record<string, string> | null;
 }
 
 export function useSaveLancamento() {
@@ -224,6 +222,71 @@ export function useDeletePagamento() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [LANC_KEY] }),
+  });
+}
+
+/**
+ * Credenciais sensíveis (login/senha/contato) armazenadas em tabela
+ * separada com RLS restrita a editores/admin do módulo despesas.
+ */
+export type LancamentoCredenciais = Record<string, string>;
+
+export function useLancamentoCredenciais(lancamentoId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["despesas-lanc-cred", lancamentoId],
+    enabled: !!lancamentoId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("despesas_lancamentos_credenciais" as any)
+        .select("credenciais")
+        .eq("lancamento_id", lancamentoId!)
+        .maybeSingle();
+      // 42501 = insufficient privilege → usuário sem permissão; devolve null.
+      if (error && (error as any).code !== "PGRST116" && (error as any).code !== "42501") {
+        // Sem acesso: tratar como ausente em vez de propagar.
+        if ((error as any).code === "PGRST301") return null;
+      }
+      return ((data as any)?.credenciais ?? null) as LancamentoCredenciais | null;
+    },
+  });
+}
+
+export function useSaveLancamentoCredenciais() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      lancamentoId,
+      credenciais,
+    }: {
+      lancamentoId: string;
+      credenciais: LancamentoCredenciais;
+    }) => {
+      const { data: userRes } = await supabase.auth.getUser();
+      const hasData = Object.keys(credenciais ?? {}).length > 0;
+      if (!hasData) {
+        const { error } = await supabase
+          .from("despesas_lancamentos_credenciais" as any)
+          .delete()
+          .eq("lancamento_id", lancamentoId);
+        if (error && (error as any).code !== "PGRST116") throw error;
+        return;
+      }
+      const { error } = await supabase
+        .from("despesas_lancamentos_credenciais" as any)
+        .upsert(
+          {
+            lancamento_id: lancamentoId,
+            credenciais,
+            updated_by: userRes.user?.id ?? null,
+            updated_at: new Date().toISOString(),
+          } as any,
+          { onConflict: "lancamento_id" },
+        );
+      if (error) throw error;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["despesas-lanc-cred", vars.lancamentoId] });
+    },
   });
 }
 
