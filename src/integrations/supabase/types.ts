@@ -820,7 +820,6 @@ export type Database = {
           conta_bancaria_id: string | null
           created_at: string
           created_by: string | null
-          credenciais: Json
           data_competencia: string
           data_vencimento: string
           descricao: string
@@ -844,7 +843,6 @@ export type Database = {
           conta_bancaria_id?: string | null
           created_at?: string
           created_by?: string | null
-          credenciais?: Json
           data_competencia: string
           data_vencimento: string
           descricao: string
@@ -868,7 +866,6 @@ export type Database = {
           conta_bancaria_id?: string | null
           created_at?: string
           created_by?: string | null
-          credenciais?: Json
           data_competencia?: string
           data_vencimento?: string
           descricao?: string
@@ -934,6 +931,35 @@ export type Database = {
             columns: ["subcategoria_id"]
             isOneToOne: false
             referencedRelation: "despesas_subcategorias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      despesas_lancamentos_credenciais: {
+        Row: {
+          credenciais: Json
+          lancamento_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          credenciais?: Json
+          lancamento_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          credenciais?: Json
+          lancamento_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_lancamentos_credenciais_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: true
+            referencedRelation: "despesas_lancamentos"
             referencedColumns: ["id"]
           },
         ]
