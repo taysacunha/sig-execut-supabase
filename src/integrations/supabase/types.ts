@@ -4394,6 +4394,10 @@ export type Database = {
       }
     }
     Functions: {
+      admin_edits_system: {
+        Args: { _admin: string; _system: string }
+        Returns: boolean
+      }
       admin_exists: { Args: never; Returns: boolean }
       aggregate_month_data: { Args: { p_year_month: string }; Returns: Json }
       atualizar_status_ferias: { Args: never; Returns: undefined }
@@ -4741,6 +4745,7 @@ export type Database = {
         Args: { _solicitacao_id: string; _user_id: string }
         Returns: boolean
       }
+      is_super_admin: { Args: { _user_id: string }; Returns: boolean }
       make_first_admin: { Args: { _user_id: string }; Returns: boolean }
       reaproveitar_codigo_placa: {
         Args: { p_placa_destino_id: string; p_placa_origem_id: string }
