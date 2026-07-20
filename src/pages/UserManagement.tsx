@@ -655,30 +655,35 @@ function UserManagementContent() {
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Sistemas e Permissões</Label>
-                  {(["escalas", "vendas", "ferias", "estoque", "despesas"] as SystemName[]).map(sys => {
-                    const access = inviteSystems.find(s => s.system_name === sys);
-                    return (
-                      <div key={sys} className="flex items-center gap-3 p-2 border rounded">
-                        <Checkbox checked={!!access} onCheckedChange={(checked) => {
-                          if (checked) toggleInviteSystem(sys, 'view_edit');
-                          else setInviteSystems(prev => prev.filter(s => s.system_name !== sys));
-                        }} />
-                        <span className="flex items-center gap-1 text-sm">{systemIcons[sys]}{systemLabels[sys]}</span>
-                        {access && (
-                          <Select value={access.permission_type} onValueChange={(v) => toggleInviteSystem(sys, v as PermissionType)}>
-                            <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="view_only"><span className="flex items-center gap-1">{permissionIcons.view_only}Visualização</span></SelectItem>
-                              <SelectItem value="view_edit"><span className="flex items-center gap-1">{permissionIcons.view_edit}Edição</span></SelectItem>
-                            </SelectContent>
-                          </Select>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                 <div className="space-y-2">
+                   <Label>Sistemas e Permissões</Label>
+                   {scopedSystemsList.map(sys => {
+                     const access = inviteSystems.find(s => s.system_name === sys);
+                     return (
+                       <div key={sys} className="flex items-center gap-3 p-2 border rounded">
+                         <Checkbox checked={!!access} onCheckedChange={(checked) => {
+                           if (checked) toggleInviteSystem(sys, 'view_edit');
+                           else setInviteSystems(prev => prev.filter(s => s.system_name !== sys));
+                         }} />
+                         <span className="flex items-center gap-1 text-sm">{systemIcons[sys]}{systemLabels[sys]}</span>
+                         {access && (
+                           <Select value={access.permission_type} onValueChange={(v) => toggleInviteSystem(sys, v as PermissionType)}>
+                             <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
+                             <SelectContent>
+                               <SelectItem value="view_only"><span className="flex items-center gap-1">{permissionIcons.view_only}Visualização</span></SelectItem>
+                               <SelectItem value="view_edit"><span className="flex items-center gap-1">{permissionIcons.view_edit}Edição</span></SelectItem>
+                             </SelectContent>
+                           </Select>
+                         )}
+                       </div>
+                     );
+                   })}
+                   {adminScope !== null && (
+                     <p className="text-xs text-muted-foreground">
+                       Você só pode conceder acesso a sistemas em que é administrador.
+                     </p>
+                   )}
+                 </div>
               </div>
               
               <DialogFooter>
@@ -733,11 +738,11 @@ function UserManagementContent() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos os módulos</SelectItem>
-                      {(["escalas", "vendas", "ferias", "estoque", "despesas"] as SystemName[]).map((sys) => (
-                        <SelectItem key={sys} value={sys}>
-                          <span className="flex items-center gap-2">{systemIcons[sys]}{systemLabels[sys]}</span>
-                        </SelectItem>
-                      ))}
+                   {scopedSystemsList.map((sys) => (
+                     <SelectItem key={sys} value={sys}>
+                       <span className="flex items-center gap-2">{systemIcons[sys]}{systemLabels[sys]}</span>
+                     </SelectItem>
+                   ))}
                     </SelectContent>
                   </Select>
                   <Select
@@ -869,14 +874,14 @@ function UserManagementContent() {
                                   <Tooltip><TooltipTrigger asChild>
                                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditDialog(user)}><Pencil className="h-4 w-4" /></Button>
                                   </TooltipTrigger><TooltipContent>{canSelfEdit && !canFullEdit ? "Editar meu perfil" : "Editar"}</TooltipContent></Tooltip>
-                                  {canFullEdit && !user.confirmed && (
+                                   {canFullEdit && isSuperAdmin && !user.confirmed && (
                                     <Tooltip><TooltipTrigger asChild>
                                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleResendInvite(user)} disabled={resendingInvite === user.id}>
                                         {resendingInvite === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                                       </Button>
                                     </TooltipTrigger><TooltipContent>Reenviar convite</TooltipContent></Tooltip>
                                   )}
-                                  {canFullEdit && (
+                                  {canFullEdit && isSuperAdmin && (
                                     <>
                                       <Tooltip><TooltipTrigger asChild>
                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600" onClick={() => setDeactivateUser(user)}><Ban className="h-4 w-4" /></Button>
@@ -993,47 +998,59 @@ function UserManagementContent() {
                 </>
               )}
               
-              {/* Perfil e Sistemas - desabilitados para auto-edição */}
-              {editUser?.id !== currentUser?.id && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Perfil</Label>
-                    <Select value={editRole} onValueChange={(v) => setEditRole(v as SystemRole)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {availableRoles.filter(r => canManageRole(r as AppRole)).map(r => (
-                          <SelectItem key={r} value={r}>
-                            <span className="flex items-center gap-2">{roleIcons[r]}{roleLabels[r]}</span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+               {/* Perfil e Sistemas - desabilitados para auto-edição */}
+               {editUser?.id !== currentUser?.id && (
+                 <>
+                   {isSuperAdmin && (
+                     <div className="space-y-2">
+                       <Label>Perfil</Label>
+                       <Select value={editRole} onValueChange={(v) => setEditRole(v as SystemRole)}>
+                         <SelectTrigger><SelectValue /></SelectTrigger>
+                         <SelectContent>
+                           {availableRoles.filter(r => canManageRole(r as AppRole)).map(r => (
+                             <SelectItem key={r} value={r}>
+                               <span className="flex items-center gap-2">{roleIcons[r]}{roleLabels[r]}</span>
+                             </SelectItem>
+                           ))}
+                         </SelectContent>
+                       </Select>
+                     </div>
+                   )}
 
-                  <div className="space-y-2">
-                    <Label>Sistemas e Permissões</Label>
-                    {(["escalas", "vendas", "ferias", "estoque", "despesas"] as SystemName[]).map(sys => {
-                      const access = editSystems.find(s => s.system_name === sys);
-                      return (
-                        <div key={sys} className="flex items-center gap-3 p-2 border rounded">
-                          <Checkbox checked={!!access} onCheckedChange={(checked) => {
-                            if (checked) toggleEditSystem(sys, 'view_edit');
-                            else setEditSystems(prev => prev.filter(s => s.system_name !== sys));
-                          }} />
-                          <span className="flex items-center gap-1 text-sm">{systemIcons[sys]}{systemLabels[sys]}</span>
-                          {access && (
-                            <Select value={access.permission_type} onValueChange={(v) => toggleEditSystem(sys, v as PermissionType)}>
-                              <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="view_only"><span className="flex items-center gap-1">{permissionIcons.view_only}Visualização</span></SelectItem>
-                                <SelectItem value="view_edit"><span className="flex items-center gap-1">{permissionIcons.view_edit}Edição</span></SelectItem>
-                              </SelectContent>
-                            </Select>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                   <div className="space-y-2">
+                     <Label>Sistemas e Permissões</Label>
+                     {(["escalas", "vendas", "ferias", "estoque", "despesas"] as SystemName[]).map(sys => {
+                       const access = editSystems.find(s => s.system_name === sys);
+                       const editable = isInScope(sys);
+                       return (
+                         <div key={sys} className={`flex items-center gap-3 p-2 border rounded ${!editable ? "opacity-60" : ""}`}>
+                           <Checkbox checked={!!access} disabled={!editable} onCheckedChange={(checked) => {
+                             if (!editable) return;
+                             if (checked) toggleEditSystem(sys, 'view_edit');
+                             else setEditSystems(prev => prev.filter(s => s.system_name !== sys));
+                           }} />
+                           <span className="flex items-center gap-1 text-sm">{systemIcons[sys]}{systemLabels[sys]}</span>
+                           {access && (
+                             <Select value={access.permission_type} disabled={!editable} onValueChange={(v) => toggleEditSystem(sys, v as PermissionType)}>
+                               <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
+                               <SelectContent>
+                                 <SelectItem value="view_only"><span className="flex items-center gap-1">{permissionIcons.view_only}Visualização</span></SelectItem>
+                                 <SelectItem value="view_edit"><span className="flex items-center gap-1">{permissionIcons.view_edit}Edição</span></SelectItem>
+                               </SelectContent>
+                             </Select>
+                           )}
+                           {!editable && (
+                             <span className="ml-auto text-[10px] text-muted-foreground">fora do seu escopo</span>
+                           )}
+                         </div>
+                       );
+                     })}
+                     {adminScope !== null && (
+                       <p className="text-xs text-muted-foreground">
+                         Você só pode alterar acessos em sistemas em que é administrador.
+                       </p>
+                     )}
+                   </div>
                 </>
               )}
               
