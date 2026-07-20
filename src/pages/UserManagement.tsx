@@ -541,8 +541,8 @@ function UserManagementContent() {
         .upsert({ user_id: editUser.id, name: editName.trim() }, { onConflict: 'user_id' });
       if (profileError) throw profileError;
 
-      // 4. Update role if changed (não permitir auto-edição de role)
-      if (!isSelfEdit && editRole !== editUser.role) {
+      // 4. Update role if changed (apenas super_admin altera roles)
+      if (!isSelfEdit && isSuperAdmin && editRole !== editUser.role) {
         const { error: roleError } = await supabase.rpc("set_user_role", {
           _target_user_id: editUser.id,
           _new_role: editRole,
@@ -550,23 +550,34 @@ function UserManagementContent() {
         if (roleError) throw roleError;
       }
 
-      // 5. Update systems - delete all and insert new (não permitir auto-edição de sistemas)
+      // 5. Atualiza sistemas apenas dentro do escopo do usuário logado.
+      //    Super admin manipula todos; admin somente os sistemas em que edita.
       if (!isSelfEdit) {
-        const { error: deleteError } = await supabase
-          .from("system_access")
-          .delete()
-          .eq("user_id", editUser.id);
-        if (deleteError) throw deleteError;
+        const scopeList: SystemName[] = adminScope === null
+          ? (["escalas", "vendas", "ferias", "estoque", "despesas"] as SystemName[])
+          : (Array.from(adminScope) as SystemName[]);
 
-        if (editSystems.length > 0) {
-          const { error: insertError } = await supabase
+        if (scopeList.length > 0) {
+          const { error: deleteError } = await supabase
             .from("system_access")
-            .insert(editSystems.map(sys => ({
+            .delete()
+            .eq("user_id", editUser.id)
+            .in("system_name", scopeList);
+          if (deleteError) throw deleteError;
+
+          const inserts = editSystems
+            .filter((s) => scopeList.includes(s.system_name))
+            .map((sys) => ({
               user_id: editUser.id,
               system_name: sys.system_name,
               permission_type: sys.permission_type,
-            })));
-          if (insertError) throw insertError;
+            }));
+          if (inserts.length > 0) {
+            const { error: insertError } = await supabase
+              .from("system_access")
+              .insert(inserts);
+            if (insertError) throw insertError;
+          }
         }
       }
 
@@ -581,6 +592,11 @@ function UserManagementContent() {
   };
 
   const canManageUser = (user: UserWithRole): boolean => {
+    if (isSuperAdmin) return true;
+    if (currentRole === "admin" && adminScope) {
+      if (user.role === "super_admin") return false;
+      return user.systems.some((s) => adminScope.has(s.system_name));
+    }
     if (!user.role) return true;
     return canManageRole(user.role as AppRole);
   };
