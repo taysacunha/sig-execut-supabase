@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole, AppRole } from "@/hooks/useUserRole";
+import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { RoleGuard } from "@/components/RoleGuard";
 import { toast } from "sonner";
 import { Loader2, Shield, Crown, Briefcase, UserPlus, Mail, Ban, Trash2, RefreshCw, Calendar, TrendingUp, User, Eye, Edit, Pencil, History, Users, Package } from "lucide-react";
@@ -146,6 +147,21 @@ function UserManagementContent() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [updatingSystems, setUpdatingSystems] = useState<string | null>(null);
   const { user: currentUser, role: currentRole, isSuperAdmin, canManageRole } = useUserRole();
+  const { systems: mySystems } = useSystemAccess();
+
+  // Escopo do admin logado: sistemas com permissão view_edit.
+  // Para super_admin retornamos null (sem restrição).
+  const adminScope = useMemo<Set<SystemName> | null>(() => {
+    if (isSuperAdmin) return null;
+    if (currentRole !== "admin") return new Set<SystemName>();
+    return new Set(
+      mySystems
+        .filter((s) => s.permission_type === "view_edit")
+        .map((s) => s.system_name as SystemName)
+    );
+  }, [isSuperAdmin, currentRole, mySystems]);
+  const isInScope = (sys: SystemName) => adminScope === null || adminScope.has(sys);
+  const scopedSystemsList = (["escalas", "vendas", "ferias", "estoque", "despesas"] as SystemName[]).filter(isInScope);
 
   // Filtros por módulo / permissão
   const [moduleFilter, setModuleFilter] = useState<SystemName | "all">("all");
@@ -175,20 +191,37 @@ function UserManagementContent() {
   const [editSystems, setEditSystems] = useState<SystemAccess[]>([]);
   const [editingUser, setEditingUser] = useState(false);
 
-  const availableRoles: SystemRole[] = isSuperAdmin 
+  const availableRoles: SystemRole[] = isSuperAdmin
     ? ["super_admin", "admin", "manager", "supervisor", "collaborator"]
-    : ["admin", "manager", "supervisor", "collaborator"];
+    : ["collaborator"];
 
-  // Pré-filtro por módulo e permissão (super_admin sempre aparece pois tem acesso total)
+  // Garantir que admin não fique preso em perfil que não pode atribuir.
+  useEffect(() => {
+    if (!isSuperAdmin && currentRole === "admin" && inviteRole !== "collaborator") {
+      setInviteRole("collaborator");
+    }
+  }, [isSuperAdmin, currentRole, inviteRole]);
+
+  // Pré-filtro por módulo/permissão + restrição de escopo para admin.
   const usersFilteredByModule = useMemo(() => {
-    if (moduleFilter === "all") return users;
-    return users.filter((u) => {
-      const access = u.systems.find((s) => s.system_name === moduleFilter);
-      if (!access) return false;
-      if (permissionFilter === "all") return true;
-      return access.permission_type === permissionFilter;
-    });
-  }, [users, moduleFilter, permissionFilter]);
+    let list = users;
+    if (adminScope !== null) {
+      list = list.filter(
+        (u) =>
+          u.id === currentUser?.id ||
+          (u.role !== "super_admin" && u.systems.some((s) => adminScope.has(s.system_name)))
+      );
+    }
+    if (moduleFilter !== "all") {
+      list = list.filter((u) => {
+        const access = u.systems.find((s) => s.system_name === moduleFilter);
+        if (!access) return false;
+        if (permissionFilter === "all") return true;
+        return access.permission_type === permissionFilter;
+      });
+    }
+    return list;
+  }, [users, moduleFilter, permissionFilter, adminScope, currentUser?.id]);
 
   // Table controls for users
   const {
@@ -508,8 +541,8 @@ function UserManagementContent() {
         .upsert({ user_id: editUser.id, name: editName.trim() }, { onConflict: 'user_id' });
       if (profileError) throw profileError;
 
-      // 4. Update role if changed (não permitir auto-edição de role)
-      if (!isSelfEdit && editRole !== editUser.role) {
+      // 4. Update role if changed (apenas super_admin altera roles)
+      if (!isSelfEdit && isSuperAdmin && editRole !== editUser.role) {
         const { error: roleError } = await supabase.rpc("set_user_role", {
           _target_user_id: editUser.id,
           _new_role: editRole,
@@ -517,23 +550,34 @@ function UserManagementContent() {
         if (roleError) throw roleError;
       }
 
-      // 5. Update systems - delete all and insert new (não permitir auto-edição de sistemas)
+      // 5. Atualiza sistemas apenas dentro do escopo do usuário logado.
+      //    Super admin manipula todos; admin somente os sistemas em que edita.
       if (!isSelfEdit) {
-        const { error: deleteError } = await supabase
-          .from("system_access")
-          .delete()
-          .eq("user_id", editUser.id);
-        if (deleteError) throw deleteError;
+        const scopeList: SystemName[] = adminScope === null
+          ? (["escalas", "vendas", "ferias", "estoque", "despesas"] as SystemName[])
+          : (Array.from(adminScope) as SystemName[]);
 
-        if (editSystems.length > 0) {
-          const { error: insertError } = await supabase
+        if (scopeList.length > 0) {
+          const { error: deleteError } = await supabase
             .from("system_access")
-            .insert(editSystems.map(sys => ({
+            .delete()
+            .eq("user_id", editUser.id)
+            .in("system_name", scopeList);
+          if (deleteError) throw deleteError;
+
+          const inserts = editSystems
+            .filter((s) => scopeList.includes(s.system_name))
+            .map((sys) => ({
               user_id: editUser.id,
               system_name: sys.system_name,
               permission_type: sys.permission_type,
-            })));
-          if (insertError) throw insertError;
+            }));
+          if (inserts.length > 0) {
+            const { error: insertError } = await supabase
+              .from("system_access")
+              .insert(inserts);
+            if (insertError) throw insertError;
+          }
         }
       }
 
@@ -548,6 +592,11 @@ function UserManagementContent() {
   };
 
   const canManageUser = (user: UserWithRole): boolean => {
+    if (isSuperAdmin) return true;
+    if (currentRole === "admin" && adminScope) {
+      if (user.role === "super_admin") return false;
+      return user.systems.some((s) => adminScope.has(s.system_name));
+    }
     if (!user.role) return true;
     return canManageRole(user.role as AppRole);
   };
@@ -606,30 +655,35 @@ function UserManagementContent() {
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Sistemas e Permissões</Label>
-                  {(["escalas", "vendas", "ferias", "estoque", "despesas"] as SystemName[]).map(sys => {
-                    const access = inviteSystems.find(s => s.system_name === sys);
-                    return (
-                      <div key={sys} className="flex items-center gap-3 p-2 border rounded">
-                        <Checkbox checked={!!access} onCheckedChange={(checked) => {
-                          if (checked) toggleInviteSystem(sys, 'view_edit');
-                          else setInviteSystems(prev => prev.filter(s => s.system_name !== sys));
-                        }} />
-                        <span className="flex items-center gap-1 text-sm">{systemIcons[sys]}{systemLabels[sys]}</span>
-                        {access && (
-                          <Select value={access.permission_type} onValueChange={(v) => toggleInviteSystem(sys, v as PermissionType)}>
-                            <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="view_only"><span className="flex items-center gap-1">{permissionIcons.view_only}Visualização</span></SelectItem>
-                              <SelectItem value="view_edit"><span className="flex items-center gap-1">{permissionIcons.view_edit}Edição</span></SelectItem>
-                            </SelectContent>
-                          </Select>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                 <div className="space-y-2">
+                   <Label>Sistemas e Permissões</Label>
+                   {scopedSystemsList.map(sys => {
+                     const access = inviteSystems.find(s => s.system_name === sys);
+                     return (
+                       <div key={sys} className="flex items-center gap-3 p-2 border rounded">
+                         <Checkbox checked={!!access} onCheckedChange={(checked) => {
+                           if (checked) toggleInviteSystem(sys, 'view_edit');
+                           else setInviteSystems(prev => prev.filter(s => s.system_name !== sys));
+                         }} />
+                         <span className="flex items-center gap-1 text-sm">{systemIcons[sys]}{systemLabels[sys]}</span>
+                         {access && (
+                           <Select value={access.permission_type} onValueChange={(v) => toggleInviteSystem(sys, v as PermissionType)}>
+                             <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
+                             <SelectContent>
+                               <SelectItem value="view_only"><span className="flex items-center gap-1">{permissionIcons.view_only}Visualização</span></SelectItem>
+                               <SelectItem value="view_edit"><span className="flex items-center gap-1">{permissionIcons.view_edit}Edição</span></SelectItem>
+                             </SelectContent>
+                           </Select>
+                         )}
+                       </div>
+                     );
+                   })}
+                   {adminScope !== null && (
+                     <p className="text-xs text-muted-foreground">
+                       Você só pode conceder acesso a sistemas em que é administrador.
+                     </p>
+                   )}
+                 </div>
               </div>
               
               <DialogFooter>
@@ -684,11 +738,11 @@ function UserManagementContent() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos os módulos</SelectItem>
-                      {(["escalas", "vendas", "ferias", "estoque", "despesas"] as SystemName[]).map((sys) => (
-                        <SelectItem key={sys} value={sys}>
-                          <span className="flex items-center gap-2">{systemIcons[sys]}{systemLabels[sys]}</span>
-                        </SelectItem>
-                      ))}
+                   {scopedSystemsList.map((sys) => (
+                     <SelectItem key={sys} value={sys}>
+                       <span className="flex items-center gap-2">{systemIcons[sys]}{systemLabels[sys]}</span>
+                     </SelectItem>
+                   ))}
                     </SelectContent>
                   </Select>
                   <Select
@@ -820,14 +874,14 @@ function UserManagementContent() {
                                   <Tooltip><TooltipTrigger asChild>
                                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditDialog(user)}><Pencil className="h-4 w-4" /></Button>
                                   </TooltipTrigger><TooltipContent>{canSelfEdit && !canFullEdit ? "Editar meu perfil" : "Editar"}</TooltipContent></Tooltip>
-                                  {canFullEdit && !user.confirmed && (
+                                   {canFullEdit && isSuperAdmin && !user.confirmed && (
                                     <Tooltip><TooltipTrigger asChild>
                                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleResendInvite(user)} disabled={resendingInvite === user.id}>
                                         {resendingInvite === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                                       </Button>
                                     </TooltipTrigger><TooltipContent>Reenviar convite</TooltipContent></Tooltip>
                                   )}
-                                  {canFullEdit && (
+                                  {canFullEdit && isSuperAdmin && (
                                     <>
                                       <Tooltip><TooltipTrigger asChild>
                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600" onClick={() => setDeactivateUser(user)}><Ban className="h-4 w-4" /></Button>
@@ -944,47 +998,59 @@ function UserManagementContent() {
                 </>
               )}
               
-              {/* Perfil e Sistemas - desabilitados para auto-edição */}
-              {editUser?.id !== currentUser?.id && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Perfil</Label>
-                    <Select value={editRole} onValueChange={(v) => setEditRole(v as SystemRole)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {availableRoles.filter(r => canManageRole(r as AppRole)).map(r => (
-                          <SelectItem key={r} value={r}>
-                            <span className="flex items-center gap-2">{roleIcons[r]}{roleLabels[r]}</span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+               {/* Perfil e Sistemas - desabilitados para auto-edição */}
+               {editUser?.id !== currentUser?.id && (
+                 <>
+                   {isSuperAdmin && (
+                     <div className="space-y-2">
+                       <Label>Perfil</Label>
+                       <Select value={editRole} onValueChange={(v) => setEditRole(v as SystemRole)}>
+                         <SelectTrigger><SelectValue /></SelectTrigger>
+                         <SelectContent>
+                           {availableRoles.filter(r => canManageRole(r as AppRole)).map(r => (
+                             <SelectItem key={r} value={r}>
+                               <span className="flex items-center gap-2">{roleIcons[r]}{roleLabels[r]}</span>
+                             </SelectItem>
+                           ))}
+                         </SelectContent>
+                       </Select>
+                     </div>
+                   )}
 
-                  <div className="space-y-2">
-                    <Label>Sistemas e Permissões</Label>
-                    {(["escalas", "vendas", "ferias", "estoque", "despesas"] as SystemName[]).map(sys => {
-                      const access = editSystems.find(s => s.system_name === sys);
-                      return (
-                        <div key={sys} className="flex items-center gap-3 p-2 border rounded">
-                          <Checkbox checked={!!access} onCheckedChange={(checked) => {
-                            if (checked) toggleEditSystem(sys, 'view_edit');
-                            else setEditSystems(prev => prev.filter(s => s.system_name !== sys));
-                          }} />
-                          <span className="flex items-center gap-1 text-sm">{systemIcons[sys]}{systemLabels[sys]}</span>
-                          {access && (
-                            <Select value={access.permission_type} onValueChange={(v) => toggleEditSystem(sys, v as PermissionType)}>
-                              <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="view_only"><span className="flex items-center gap-1">{permissionIcons.view_only}Visualização</span></SelectItem>
-                                <SelectItem value="view_edit"><span className="flex items-center gap-1">{permissionIcons.view_edit}Edição</span></SelectItem>
-                              </SelectContent>
-                            </Select>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                   <div className="space-y-2">
+                     <Label>Sistemas e Permissões</Label>
+                     {(["escalas", "vendas", "ferias", "estoque", "despesas"] as SystemName[]).map(sys => {
+                       const access = editSystems.find(s => s.system_name === sys);
+                       const editable = isInScope(sys);
+                       return (
+                         <div key={sys} className={`flex items-center gap-3 p-2 border rounded ${!editable ? "opacity-60" : ""}`}>
+                           <Checkbox checked={!!access} disabled={!editable} onCheckedChange={(checked) => {
+                             if (!editable) return;
+                             if (checked) toggleEditSystem(sys, 'view_edit');
+                             else setEditSystems(prev => prev.filter(s => s.system_name !== sys));
+                           }} />
+                           <span className="flex items-center gap-1 text-sm">{systemIcons[sys]}{systemLabels[sys]}</span>
+                           {access && (
+                             <Select value={access.permission_type} disabled={!editable} onValueChange={(v) => toggleEditSystem(sys, v as PermissionType)}>
+                               <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
+                               <SelectContent>
+                                 <SelectItem value="view_only"><span className="flex items-center gap-1">{permissionIcons.view_only}Visualização</span></SelectItem>
+                                 <SelectItem value="view_edit"><span className="flex items-center gap-1">{permissionIcons.view_edit}Edição</span></SelectItem>
+                               </SelectContent>
+                             </Select>
+                           )}
+                           {!editable && (
+                             <span className="ml-auto text-[10px] text-muted-foreground">fora do seu escopo</span>
+                           )}
+                         </div>
+                       );
+                     })}
+                     {adminScope !== null && (
+                       <p className="text-xs text-muted-foreground">
+                         Você só pode alterar acessos em sistemas em que é administrador.
+                       </p>
+                     )}
+                   </div>
                 </>
               )}
               

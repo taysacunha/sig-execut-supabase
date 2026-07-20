@@ -113,6 +113,15 @@ serve(async (req: Request) => {
       );
     }
 
+    // Perfil admin não pode executar ações destrutivas ou alterar e-mail de terceiros.
+    // Apenas super_admin pode desativar/reativar/excluir/alterar e-mail alheio.
+    if (callerRole === "admin" && !isSelfAction) {
+      return new Response(
+        JSON.stringify({ error: "Administradores não podem desativar, excluir ou alterar dados de outros usuários. Solicite a um Super Administrador." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Create admin client
     const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
