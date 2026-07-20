@@ -132,6 +132,31 @@ serve(async (req: Request) => {
       },
     });
 
+    // Escopo do admin: sistemas com view_edit
+    let adminScope: Set<string> | null = null;
+    if (callerRole === "admin") {
+      const { data: mySystems } = await adminClient
+        .from("system_access")
+        .select("system_name")
+        .eq("user_id", caller.id)
+        .eq("permission_type", "view_edit");
+      adminScope = new Set((mySystems || []).map((r: any) => r.system_name));
+      const requested = (systems || []).map((s) => s.system_name);
+      if (requested.length === 0) {
+        return new Response(
+          JSON.stringify({ error: "Selecione pelo menos um sistema para o novo usuário." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const outOfScope = requested.filter((s) => !adminScope!.has(s));
+      if (!resend && outOfScope.length > 0) {
+        return new Response(
+          JSON.stringify({ error: `Você só pode conceder acesso a sistemas em que é administrador. Fora do escopo: ${outOfScope.join(", ")}` }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     let email = providedEmail;
     
     // SEMPRE usar o domínio publicado para links de email (nunca preview)
