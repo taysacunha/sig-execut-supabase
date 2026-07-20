@@ -115,6 +115,16 @@ serve(async (req: Request) => {
       );
     }
 
+    // Admin: pode apenas convidar collaborator e somente para sistemas do seu escopo.
+    if (callerRole === "admin") {
+      if (role !== "collaborator") {
+        return new Response(
+          JSON.stringify({ error: "Administradores só podem convidar usuários com perfil Colaborador." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
