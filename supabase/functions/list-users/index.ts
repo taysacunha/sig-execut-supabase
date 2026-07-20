@@ -84,10 +84,44 @@ serve(async (req: Request) => {
       profilesByUserId[profile.user_id] = profile.name;
     });
 
-    console.log(`Found ${usersData.users.length} users`);
+    // Escopo do chamador (para role='admin' restringir aos usuários com sistemas em comum)
+    let visibleIds: Set<string> | null = null;
+    if (callerRole === "admin") {
+      const { data: mySystems } = await adminClient
+        .from("system_access")
+        .select("system_name")
+        .eq("user_id", caller.id)
+        .eq("permission_type", "view_edit");
+      const scope = new Set((mySystems || []).map((r: any) => r.system_name));
+
+      const { data: allAccess } = await adminClient
+        .from("system_access")
+        .select("user_id, system_name");
+      const inScope = new Set<string>();
+      (allAccess || []).forEach((r: any) => {
+        if (scope.has(r.system_name)) inScope.add(r.user_id);
+      });
+
+      const { data: superRoles } = await adminClient
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "super_admin");
+      const superIds = new Set((superRoles || []).map((r: any) => r.user_id));
+
+      visibleIds = new Set<string>([caller.id]);
+      inScope.forEach((id) => {
+        if (!superIds.has(id)) visibleIds!.add(id);
+      });
+    }
+
+    const filteredUsers = visibleIds
+      ? usersData.users.filter((u) => visibleIds!.has(u.id))
+      : usersData.users;
+
+    console.log(`Found ${filteredUsers.length} users (of ${usersData.users.length}) for caller role ${callerRole}`);
 
     // Map users to return only necessary data
-    const users = usersData.users.map((user) => ({
+    const users = filteredUsers.map((user) => ({
       id: user.id,
       email: user.email,
       name: profilesByUserId[user.id] || null,
