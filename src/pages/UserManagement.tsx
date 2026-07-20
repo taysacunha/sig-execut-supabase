@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole, AppRole } from "@/hooks/useUserRole";
+import { useSystemAccess } from "@/hooks/useSystemAccess";
 import { RoleGuard } from "@/components/RoleGuard";
 import { toast } from "sonner";
 import { Loader2, Shield, Crown, Briefcase, UserPlus, Mail, Ban, Trash2, RefreshCw, Calendar, TrendingUp, User, Eye, Edit, Pencil, History, Users, Package } from "lucide-react";
@@ -146,6 +147,21 @@ function UserManagementContent() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [updatingSystems, setUpdatingSystems] = useState<string | null>(null);
   const { user: currentUser, role: currentRole, isSuperAdmin, canManageRole } = useUserRole();
+  const { systems: mySystems } = useSystemAccess();
+
+  // Escopo do admin logado: sistemas com permissão view_edit.
+  // Para super_admin retornamos null (sem restrição).
+  const adminScope = useMemo<Set<SystemName> | null>(() => {
+    if (isSuperAdmin) return null;
+    if (currentRole !== "admin") return new Set<SystemName>();
+    return new Set(
+      mySystems
+        .filter((s) => s.permission_type === "view_edit")
+        .map((s) => s.system_name as SystemName)
+    );
+  }, [isSuperAdmin, currentRole, mySystems]);
+  const isInScope = (sys: SystemName) => adminScope === null || adminScope.has(sys);
+  const scopedSystemsList = (["escalas", "vendas", "ferias", "estoque", "despesas"] as SystemName[]).filter(isInScope);
 
   // Filtros por módulo / permissão
   const [moduleFilter, setModuleFilter] = useState<SystemName | "all">("all");
@@ -175,20 +191,37 @@ function UserManagementContent() {
   const [editSystems, setEditSystems] = useState<SystemAccess[]>([]);
   const [editingUser, setEditingUser] = useState(false);
 
-  const availableRoles: SystemRole[] = isSuperAdmin 
+  const availableRoles: SystemRole[] = isSuperAdmin
     ? ["super_admin", "admin", "manager", "supervisor", "collaborator"]
-    : ["admin", "manager", "supervisor", "collaborator"];
+    : ["collaborator"];
 
-  // Pré-filtro por módulo e permissão (super_admin sempre aparece pois tem acesso total)
+  // Garantir que admin não fique preso em perfil que não pode atribuir.
+  useEffect(() => {
+    if (!isSuperAdmin && currentRole === "admin" && inviteRole !== "collaborator") {
+      setInviteRole("collaborator");
+    }
+  }, [isSuperAdmin, currentRole, inviteRole]);
+
+  // Pré-filtro por módulo/permissão + restrição de escopo para admin.
   const usersFilteredByModule = useMemo(() => {
-    if (moduleFilter === "all") return users;
-    return users.filter((u) => {
-      const access = u.systems.find((s) => s.system_name === moduleFilter);
-      if (!access) return false;
-      if (permissionFilter === "all") return true;
-      return access.permission_type === permissionFilter;
-    });
-  }, [users, moduleFilter, permissionFilter]);
+    let list = users;
+    if (adminScope !== null) {
+      list = list.filter(
+        (u) =>
+          u.id === currentUser?.id ||
+          (u.role !== "super_admin" && u.systems.some((s) => adminScope.has(s.system_name)))
+      );
+    }
+    if (moduleFilter !== "all") {
+      list = list.filter((u) => {
+        const access = u.systems.find((s) => s.system_name === moduleFilter);
+        if (!access) return false;
+        if (permissionFilter === "all") return true;
+        return access.permission_type === permissionFilter;
+      });
+    }
+    return list;
+  }, [users, moduleFilter, permissionFilter, adminScope, currentUser?.id]);
 
   // Table controls for users
   const {
