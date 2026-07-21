@@ -30,7 +30,7 @@ interface Props {
 
 const situacoes: { v: ImovelSituacao; l: string }[] = [
   { v: "alugado", l: "Alugado" },
-  { v: "vago", l: "Vago" },
+  { v: "vago", l: "Desocupado" },
   { v: "vendido", l: "Vendido" },
   { v: "proprio_uso", l: "Uso próprio" },
 ];
