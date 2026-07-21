@@ -21,7 +21,7 @@ AS $$
   -- Super admin: acesso irrestrito a todos os centros ativos.
   SELECT c.id
   FROM public.despesas_centros_custo c
-  WHERE c.ativo = true
+  WHERE c.is_active = true
     AND public.has_role(_user_id, 'super_admin'::app_role)
   UNION
   -- Demais usuários: somente centros explicitamente permitidos.
@@ -29,7 +29,7 @@ AS $$
   FROM public.despesas_centros_custo_permissoes p
   JOIN public.despesas_centros_custo c ON c.id = p.centro_custo_id
   WHERE p.user_id = _user_id
-    AND c.ativo = true;
+    AND c.is_active = true;
 $$;
 
 COMMENT ON FUNCTION public.despesas_centros_permitidos(uuid) IS
