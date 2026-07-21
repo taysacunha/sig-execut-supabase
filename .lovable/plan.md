@@ -1,60 +1,57 @@
+## Problema confirmado
 
-# Restringir poderes do perfil "Admin" no Gerenciamento de Usuários
+Na aba Usuários, para um admin (não super_admin):
 
-Hoje `admin` tem praticamente os mesmos poderes de `super_admin`: enxerga todos os usuários, pode desativar/excluir, mudar role e conceder acesso a qualquer sistema. O plano abaixo cria um escopo por sistema para o perfil `admin`, mantendo `super_admin` intocado.
+- `availableRoles = ["collaborator"]` (src/pages/UserManagement.tsx:194-196).
+- A célula "Perfil" renderiza `<Select value={user.role}>` mas só popula a opção "Colaborador". Para usuários que já são `manager` ou `supervisor`, o valor atual não bate com nenhum item e o campo aparece em branco. Se o admin selecionar "Colaborador" ali, ele rebaixa silenciosamente o perfil (a chamada `set_user_role` falha porque hoje exige super_admin, mas a UX é enganosa).
+- Regra no banco (`set_user_role`, migration 20260725120000): apenas super_admin altera role — admin não consegue trocar nada.
 
-## Regras de negócio (perfil `admin`)
+Ou seja, o admin não deveria mediar `super_admin`/`admin`, mas faz sentido permitir troca entre os perfis operacionais (`manager`, `supervisor`, `collaborator`).
 
-Escopo do admin = conjunto de `system_name` em que ele possui `system_access` com `permission_type = 'view_edit'` (ou seja, os sistemas onde ele é "editor/admin do módulo").
+## Sugestão
 
-1. **Listagem**: só enxerga usuários que possuem acesso a pelo menos um sistema dentro do seu escopo. Não vê `super_admin`s nem usuários sem nenhum sistema em comum. Ele próprio continua visível (linha "Você").
-2. **Ações destrutivas removidas**: sem desativar, reativar, excluir ou reenviar convite; sem alteração de e-mail de terceiros; sem alteração de role de terceiros.
-3. **Permissões por sistema**: pode alternar habilitar/desabilitar e trocar `view_only`/`view_edit` **somente** para sistemas dentro do seu escopo. Sistemas fora do escopo aparecem como badges somente-leitura (para dar contexto), sem permitir edição.
-4. **Convite de novo usuário**: só pode selecionar sistemas dentro do seu escopo, e o convidado precisa receber pelo menos um sistema. Role fixada em `collaborator` (admin não cria admin/manager/etc.).
-5. **Auto-edição**: continua podendo editar o próprio nome e senha (fluxo atual `update_password` / `auth.updateUser`).
+Dar ao admin um "conjunto operacional" de perfis gerenciáveis (`manager`, `supervisor`, `collaborator`) e blindar tudo que estiver acima:
 
-`super_admin` mantém comportamento atual: vê tudo, faz tudo.
+- Se o usuário-alvo tem perfil `super_admin` ou `admin` → mostrar somente um badge somente-leitura ("Administrador"/"Super Administrador") + tooltip "Somente Super Administrador pode alterar este perfil".
+- Se o usuário-alvo tem perfil operacional ou nenhum → mostrar Select com as três opções (`manager`, `supervisor`, `collaborator`), pré-selecionado com o valor atual (não fica mais em branco).
+- Super_admin continua com o conjunto completo, como hoje.
 
-## Backend (Supabase)
+## Mudanças
 
-### Migration `db/migrations/20260725120000_admin_scope_restrictions.sql`
-- Função `public.admin_scoped_systems(_user_id uuid) returns setof text` (SECURITY DEFINER): retorna os `system_name` em que o usuário tem `permission_type = 'view_edit'`.
-- Função `public.admin_can_see_user(_admin uuid, _target uuid) returns boolean` (SECURITY DEFINER): `true` se `_admin = _target`, se `is_super_admin(_admin)`, ou se existe interseção não-vazia entre `admin_scoped_systems(_admin)` e os `system_access.system_name` de `_target` — desde que `_target` **não** seja `super_admin`.
-- Atualizar policies de `system_access`:
-  - Substituir policies amplas de INSERT/UPDATE/DELETE por versão que exige:
-    `is_super_admin(auth.uid()) OR (has_role(auth.uid(),'admin') AND system_name = ANY(SELECT admin_scoped_systems(auth.uid())) AND NOT is_super_admin(user_id))`.
-  - Manter SELECT já existente.
-- Ajustar policies de `user_profiles` e `user_roles` de leitura para retornar apenas linhas de usuários que `admin_can_see_user(auth.uid(), user_id)` retorna `true` (sem quebrar `super_admin`, que continua vendo tudo).
-- Bloquear `set_user_role` para admin: acrescentar guard `RAISE EXCEPTION` quando `caller` for `admin` (permanece liberado para `super_admin`).
-- Grants padrão para as novas funções (`GRANT EXECUTE ... TO authenticated`).
+### Banco (nova migration)
 
-### Edge functions
-- `list-users/index.ts`: quando `callerRole = 'admin'`, filtrar `usersData.users` para incluir apenas ids retornados por consulta em `system_access` cujo `system_name` esteja no escopo do admin (query auxiliar após o listUsers). Excluir `super_admin`s.
-- `manage-user/index.ts`: rejeitar (`403`) qualquer ação diferente de `update_password`/`update_email` quando `isSelfAction=false` e `callerRole = 'admin'`. `update_email` de terceiros também bloqueado para admin.
-- `invite-user/index.ts`: se `callerRole = 'admin'`, exigir `role === 'collaborator'` e validar que todos `systems[].system_name` pertencem ao escopo do admin (retornar 403 caso contrário). Bloquear `resend` para usuários fora do escopo.
+Atualizar `public.set_user_role(_target_user_id uuid, _new_role app_role)`:
 
-## Frontend (`src/pages/UserManagement.tsx`)
+- super_admin: qualquer alvo, qualquer role (comportamento atual).
+- admin: só se
+  - `_new_role IN ('manager','supervisor','collaborator')` e
+  - alvo NÃO é `super_admin` nem `admin` (checar `user_roles` do alvo) e
+  - alvo compartilha ao menos um sistema em que o admin tem `view_edit` (usa `admin_edits_system` para pelo menos um `system_access` do alvo).
+- Erros claros ("Admin não pode alterar perfis administrativos", "Sem escopo de sistema em comum", "Perfil não permitido para Admin").
 
-- Novo hook local (ou uso direto de `useSystemAccess`): derivar `adminScope = Set<SystemName>` a partir dos sistemas com `canEdit(sys) === true` do usuário logado. Só aplicável quando `role === 'admin'` (não super_admin).
-- `availableRoles` para admin: `['collaborator']`.
-- Botões desativar (`Ban`), excluir (`Trash2`) e "reenviar convite" ocultados quando `!isSuperAdmin`.
-- Diálogo "Editar usuário":
-  - Admin: campos `role` e `email` desabilitados para terceiros; lista de sistemas mostra todos, porém checkbox e select de permissão só editáveis para sistemas dentro do `adminScope` (demais aparecem em cinza com tooltip "Fora do seu escopo").
-  - Salvamento: enviar apenas mutações de `system_access` referentes ao escopo, ignorando o resto (proteção redundante ao RLS).
-- Diálogo "Adicionar usuário": para admin, ocultar select de perfil (fixar `collaborator`) e listar apenas sistemas do escopo.
-- Filtro por módulo: continuar existindo, mas para admin restringir o `Select` de módulo ao escopo.
-- `canManageUser`: passar a considerar `adminScope`; admin só devolve `true` para usuários com interseção não vazia.
-- Coluna Ações: quando não houver nenhuma ação disponível (admin vendo um usuário editável só via sistemas), mostrar apenas o botão "Editar" (que abrirá o dialog limitado).
+### Frontend (`src/pages/UserManagement.tsx`)
 
-## Verificação
+1. Trocar `availableRoles` para expor um conjunto por chamador:
+   - super_admin: todos.
+   - admin: `["manager","supervisor","collaborator"]`.
+2. Nova função `canEditRole(user)`:
+   - super_admin → true (exceto ele mesmo).
+   - admin → `user.role` é null OU `user.role ∈ {manager, supervisor, collaborator}` E `canManageUser(user)`.
+3. Célula "Perfil":
+   - se `canEditRole` → Select com `availableRoles`; usar `user.role || undefined` para exibir placeholder "Sem perfil" quando nulo, e mostrar o valor atual quando for um dos três.
+   - senão → badge somente-leitura já existente + tooltip explicativo para admin/super_admin.
+4. Ajustar `useUserRole.canManageRole` (ou usar lista local) para não deixar o admin ver "Administrador" no dropdown — hoje `canManageRole('admin')` retorna `true` para admin (nível 2<=2). Restringir localmente à lista `availableRoles`.
+5. Diálogo de edição (linha ~1010) usa a mesma lista; herdar a nova regra.
+6. Convite (`inviteRole`) já força `collaborator` para admin; passar a permitir também `manager`/`supervisor` no dropdown quando o chamador for admin.
 
-1. Login como `super_admin`: fluxo atual permanece igual (lista completa, todas as ações).
-2. Login como Ruan (`admin` com acesso a Estoque): lista deve conter apenas usuários com Estoque + ele próprio; sem botões de desativar/excluir; ao editar outro usuário só consegue alterar sistemas de Estoque; ao convidar, só pode marcar Estoque e o novo perfil é Collaborator.
-3. Tentar chamar diretamente `manage-user` com `action=delete` como admin → resposta 403.
-4. Tentar `upsert` em `system_access` para sistema fora do escopo como admin → bloqueado pela RLS.
+### Sem impacto
 
-## Fora do escopo
+RLS de `system_access`, list-users e manage-user permanecem como estão — a mudança é só no `set_user_role` e na UI.
 
-- Nenhuma mudança em módulos além de Gerenciamento de Usuários.
-- Sem mudanças nos poderes de `manager`, `supervisor` ou `collaborator`.
-- Sem mudanças no fluxo de autoedição (nome/senha do próprio admin).
+## Resumo do comportamento após o ajuste
+
+| Chamador | Perfil do alvo | O que pode fazer no campo "Perfil" |
+|---|---|---|
+| super_admin | qualquer | trocar para qualquer perfil |
+| admin | super_admin / admin | apenas ver (badge, tooltip) |
+| admin | manager / supervisor / collaborator / null | trocar entre manager, supervisor, collaborator |
