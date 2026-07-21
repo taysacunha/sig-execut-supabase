@@ -13,7 +13,7 @@ import {
 import {
   Lancamento, LancamentoInput, LancamentoTipo, useDespesasLookups,
   useSaveLancamento, useLancamentoCredenciais, useSaveLancamentoCredenciais,
-  LancamentoCredenciais,
+  LancamentoCredenciais, DespesaReferenciaTipo,
 } from "@/hooks/useDespesasLancamentos";
 import {
   RecorrenciaBlock, RecorrenciaFormState,
@@ -29,7 +29,7 @@ interface Props {
 }
 
 export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: Props) {
-  const { centros, categorias, planos, subcategorias, contas, pessoas } = useDespesasLookups();
+  const { centros, categorias, planos, subcategorias, contas, pessoas, imoveis } = useDespesasLookups();
   const saveMut = useSaveLancamento();
   const saveRecMut = useSaveRecorrencia();
   const credQuery = useLancamentoCredenciais(editing?.id ?? null);
@@ -40,6 +40,9 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
     descricao: "",
     documento_numero: null,
     pessoa_id: null,
+    imovel_id: null,
+    referencia_tipo: null,
+    referencia_numero: null,
     centro_custo_id: "",
     categoria_id: null,
     plano_conta_id: null,
@@ -71,6 +74,9 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
         descricao: editing.descricao,
         documento_numero: editing.documento_numero,
         pessoa_id: editing.pessoa_id,
+        imovel_id: editing.imovel_id,
+        referencia_tipo: editing.referencia_tipo,
+        referencia_numero: editing.referencia_numero,
         centro_custo_id: editing.centro_custo_id,
         categoria_id: editing.categoria_id,
         plano_conta_id: editing.plano_conta_id,
@@ -119,7 +125,14 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
     !!form.centro_custo_id &&
     form.valor_total > 0 &&
     !!form.data_vencimento &&
-    !!form.data_competencia;
+    !!form.data_competencia &&
+    (
+      !form.referencia_tipo ||
+      (form.referencia_tipo === "pessoa" && !!form.pessoa_id) ||
+      (form.referencia_tipo === "imovel" && !!form.imovel_id) ||
+      ((form.referencia_tipo === "pasta" || form.referencia_tipo === "venda") &&
+        !!form.referencia_numero && /^[0-9]+$/.test(form.referencia_numero))
+    );
 
   async function salvar() {
     try {
@@ -151,6 +164,9 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
             subcategoria_id: form.subcategoria_id ?? null,
             conta_bancaria_id: form.conta_bancaria_id ?? null,
             pessoa_id: form.pessoa_id ?? null,
+              imovel_id: form.imovel_id ?? null,
+              referencia_tipo: form.referencia_tipo ?? null,
+              referencia_numero: form.referencia_numero ?? null,
             observacao: form.observacao ?? null,
           },
         });
