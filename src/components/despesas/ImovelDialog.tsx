@@ -34,6 +34,7 @@ const situacoes: { v: ImovelSituacao; l: string }[] = [
   { v: "vago", l: "Desocupado" },
   { v: "vendido", l: "Vendido" },
   { v: "proprio_uso", l: "Uso próprio" },
+  { v: "em_aquisicao", l: "Em aquisição" },
 ];
 const tipos: { v: ImovelTipo; l: string }[] = [
   { v: "comercial", l: "Comercial" },
@@ -166,7 +167,7 @@ export function ImovelDialog({ open, onOpenChange, editing }: Props) {
               <div className="space-y-2"><Label>Cidade</Label><Input value={form.cidade ?? ""} onChange={(e) => setForm({ ...form, cidade: e.target.value || null })} /></div>
               <div className="space-y-2"><Label>UF</Label><Input value={form.uf ?? ""} onChange={(e) => setForm({ ...form, uf: e.target.value || null })} maxLength={2} /></div>
               <div className="space-y-2"><Label>CEP</Label><Input value={form.cep ?? ""} onChange={(e) => setForm({ ...form, cep: e.target.value || null })} maxLength={10} /></div>
-              <div className="space-y-2"><Label>Matrícula</Label><Input value={form.matricula ?? ""} onChange={(e) => setForm({ ...form, matricula: e.target.value || null })} /></div>
+              <div className="space-y-2"><Label>RIP</Label><Input value={form.matricula ?? ""} onChange={(e) => setForm({ ...form, matricula: e.target.value || null })} /></div>
               <div className="space-y-2"><Label>Inscrição municipal</Label><Input value={form.inscricao_municipal ?? ""} onChange={(e) => setForm({ ...form, inscricao_municipal: e.target.value || null })} /></div>
               <div className="space-y-2"><Label>Área total (m²)</Label><Input type="number" step="0.01" value={form.area_total ?? ""} onChange={(e) => setForm({ ...form, area_total: e.target.value ? Number(e.target.value) : null })} /></div>
               <div className="space-y-2"><Label>Valor de aluguel</Label><Input type="number" step="0.01" value={form.valor_aluguel ?? 0} onChange={(e) => setForm({ ...form, valor_aluguel: Number(e.target.value) })} /></div>
