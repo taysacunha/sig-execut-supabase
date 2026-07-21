@@ -374,6 +374,20 @@ export function useDespesasLookups() {
       return (data ?? []) as unknown as { id: string; nome: string; tipo_pessoa: string }[];
     },
   });
+  const imoveis = useQuery({
+    queryKey: ["desp-lookup", "imoveis"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("despesas_imoveis" as any)
+        .select("id, codigo, descricao, endereco")
+        .eq("is_active", true)
+        .order("descricao");
+      if (error) throw error;
+      return (data ?? []) as unknown as {
+        id: string; codigo: string | null; descricao: string; endereco: string | null;
+      }[];
+    },
+  });
 
-  return { centros, categorias, planos, subcategorias, contas, pessoas };
+  return { centros, categorias, planos, subcategorias, contas, pessoas, imoveis };
 }
