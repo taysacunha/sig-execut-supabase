@@ -223,6 +223,81 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
             />
           </div>
 
+          <div className="space-y-2 md:col-span-2 border rounded-md p-3">
+            <Label className="text-sm">Referência (opcional)</Label>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Select
+                value={form.referencia_tipo ?? "__none__"}
+                onValueChange={(v) => {
+                  const tipo = v === "__none__" ? null : (v as DespesaReferenciaTipo);
+                  setForm({
+                    ...form,
+                    referencia_tipo: tipo,
+                    referencia_numero: null,
+                    pessoa_id: tipo === "pessoa" ? form.pessoa_id : null,
+                    imovel_id: tipo === "imovel" ? form.imovel_id : null,
+                  });
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Sem referência" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Sem referência —</SelectItem>
+                  <SelectItem value="pasta">Nº de Pasta</SelectItem>
+                  <SelectItem value="venda">Cód. Venda</SelectItem>
+                  <SelectItem value="imovel">Imóvel</SelectItem>
+                  <SelectItem value="pessoa">Pessoa</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {(form.referencia_tipo === "pasta" || form.referencia_tipo === "venda") && (
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder={form.referencia_tipo === "pasta" ? "Número da pasta" : "Código da venda"}
+                  value={form.referencia_numero ?? ""}
+                  onChange={(e) => {
+                    const only = e.target.value.replace(/\D+/g, "");
+                    setForm({ ...form, referencia_numero: only || null });
+                  }}
+                  maxLength={20}
+                />
+              )}
+
+              {form.referencia_tipo === "imovel" && (
+                <Select
+                  value={form.imovel_id ?? "__none__"}
+                  onValueChange={(v) => setForm({ ...form, imovel_id: v === "__none__" ? null : v })}
+                >
+                  <SelectTrigger><SelectValue placeholder="Selecione o imóvel" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— Selecione —</SelectItem>
+                    {(imoveis.data ?? []).map((i) => (
+                      <SelectItem key={i.id} value={i.id}>
+                        {i.codigo ? `${i.codigo} — ` : ""}{i.descricao}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {form.referencia_tipo === "pessoa" && (
+                <Select
+                  value={form.pessoa_id ?? "__none__"}
+                  onValueChange={(v) => setForm({ ...form, pessoa_id: v === "__none__" ? null : v })}
+                >
+                  <SelectTrigger><SelectValue placeholder="Selecione a pessoa" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— Selecione —</SelectItem>
+                    {(pessoas.data ?? []).map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label>Centro de custo *</Label>
             <Select
@@ -233,22 +308,6 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
               <SelectContent>
                 {(centros.data ?? []).map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Pessoa</Label>
-            <Select
-              value={form.pessoa_id ?? "__none__"}
-              onValueChange={(v) => setForm({ ...form, pessoa_id: v === "__none__" ? null : v })}
-            >
-              <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">— Sem pessoa —</SelectItem>
-                {(pessoas.data ?? []).map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
