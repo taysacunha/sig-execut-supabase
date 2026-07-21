@@ -1,53 +1,60 @@
-# Corrigir dialogs que ultrapassam a altura da tela
+## Objetivo
 
-## Problema
-No `/despesas/calendario`, ao clicar em "A pagar" o `LancamentoDialog` abre com muitos campos (tipo, documento, descrição, centro de custo, pessoa, categoria, plano, subcategoria, conta, competência, vencimento, valor, observação, credenciais e recorrência). Como o `DialogContent` base (`src/components/ui/dialog.tsx`) só define `max-w-lg` — sem `max-height` nem scroll interno — o conteúdo estica verticalmente além da viewport, escondendo o título e o rodapé com os botões Cancelar/Salvar. O mesmo padrão afeta outros diálogos grandes do sistema (ex.: `ImovelDialog`, `VeiculoDialog`, `RepasseDialog`, colaboradores, férias, etc.).
+No diálogo "Novo lançamento" (a pagar/a receber), logo abaixo do campo **Descrição**, o usuário escolherá um **tipo de referência** e informará o valor correspondente:
 
-## Causa raiz
-O primitivo `DialogContent` não limita a altura nem torna o corpo rolável. Cada tela pode passar `max-w-*`, mas nenhuma trata altura, então o dialog cresce conforme o conteúdo.
+- **Nº de Pasta** — numérico
+- **Cód. Venda** — numérico
+- **Imóvel** — numérico
+- **Pessoa** — seleção da lista de pessoas cadastradas
 
-## Correção (mínima e global)
+Apenas um tipo por lançamento. A referência aparece nas listagens/relatórios como contexto do lançamento.
 
-### 1. Ajustar o primitivo `src/components/ui/dialog.tsx`
-Adicionar limites de altura e layout em coluna com corpo rolável, sem alterar API:
+## Mudanças
 
-- No `DialogContent`, mudar de `grid gap-4 ... p-6` para:
-  - `flex flex-col`
-  - `max-h-[calc(100vh-2rem)] sm:max-h-[85vh]`
-  - `overflow-hidden` no container externo
-  - Manter `w-full max-w-lg` (cada diálogo continua podendo sobrescrever a largura via `className`).
-- `DialogHeader`: adicionar `shrink-0` para nunca sumir no topo.
-- `DialogFooter`: adicionar `shrink-0 pt-2 mt-2 border-t` (opcional visual) para nunca sumir.
-- Envolver o `{children}` do meio? Não — em vez disso, criar um novo wrapper `DialogBody` opcional. Como isso exigiria refatorar 40+ arquivos, escolher abordagem alternativa mais simples:
+### 1. Banco (`db/migrations/20260729120000_despesas_lancamento_referencia.sql`)
 
-### Abordagem escolhida
-1. `DialogContent`: `flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[85vh] overflow-hidden p-0 sm:rounded-lg` — remove padding do container.
-2. Adicionar padding interno via um wrapper `<div className="flex flex-col gap-4 p-6 overflow-hidden max-h-full">` dentro do primitivo, mas isso quebra layout. 
+- Criar enum `despesa_referencia_tipo` com valores `pasta`, `venda`, `imovel`, `pessoa`.
+- Adicionar em `despesas_lancamentos`:
+  - `referencia_tipo despesa_referencia_tipo NULL`
+  - `referencia_numero text NULL` (armazena o valor numérico como texto p/ preservar zeros à esquerda)
+- Reaproveitar `pessoa_id` já existente quando `referencia_tipo = 'pessoa'`.
+- Constraint de consistência:
+  - se `referencia_tipo = 'pessoa'` → `pessoa_id NOT NULL` e `referencia_numero NULL`
+  - se `referencia_tipo` em (`pasta`,`venda`,`imovel`) → `referencia_numero` obrigatório (`~ '^[0-9]+$'`) e `pessoa_id NULL`
+  - se `referencia_tipo` NULL → ambos NULL (compatibilidade retroativa).
+- Propagar as mesmas colunas em `despesas_recorrencias` para que ocorrências geradas herdem a referência.
+- Índice `(referencia_tipo, referencia_numero)` e manter `(pessoa_id)`.
 
-Melhor: **manter o `p-6` no `DialogContent` e não mexer em wrappers**, e delegar scroll ao conteúdo entre `Header` e `Footer`. Aplicar direto:
+### 2. UI — `src/components/despesas/LancamentoDialog.tsx`
 
-- No primitivo: `DialogContent` recebe `flex flex-col max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] overflow-hidden`.
-- `DialogHeader` e `DialogFooter` recebem `shrink-0`.
-- Todo elemento filho entre header/footer é responsabilidade de cada dialog envolver em `overflow-y-auto`. Para não quebrar retroativamente, **também** adicionar no primitivo: qualquer child direto que não seja `header/footer` fica auto (via CSS regra `[&>*:not(:first-child):not(:last-child)]:overflow-y-auto [&>*:not(:first-child):not(:last-child)]:min-h-0`).
+- Remover o Select "Pessoa" isolado.
+- Adicionar bloco **Referência** logo abaixo de Descrição (ocupa `md:col-span-2`) com:
+  - Toggle/Select "Tipo de referência" (Nenhuma / Nº Pasta / Cód. Venda / Imóvel / Pessoa).
+  - Campo condicional: `Input type="number"` (Pasta/Venda/Imóvel) OU Select de pessoas (Pessoa).
+- Validação: se um tipo é escolhido, valor obrigatório e ≥ 0 (numérico) ou pessoa selecionada.
+- Enviar `referencia_tipo`, `referencia_numero`, `pessoa_id` corretos ao salvar; ao editar, hidratar o estado a partir dos campos existentes.
 
-### 2. Ajustes específicos nos diálogos maiores
-Confirmar em `LancamentoDialog.tsx`, `PagamentoDialog.tsx`, `ImovelDialog.tsx`, `RepasseDialog.tsx`, `VeiculoDialog.tsx`, `ColaboradorDialog.tsx`, `FeriasDialog.tsx`:
-- Envolver o corpo (o `<div className="grid gap-4 py-2 md:grid-cols-2">` do `LancamentoDialog`, por exemplo) com `className="... overflow-y-auto pr-1 -mr-1 min-h-0 flex-1"` para garantir rolagem interna correta mesmo se a regra CSS global não pegar.
+### 3. Hooks / listagens
 
-### 3. Testes visuais
-- `/despesas/calendario` → clicar em card "A Pagar" → dialog deve ter altura limitada, título fixo no topo, rodapé fixo embaixo, e conteúdo do meio rolável.
-- Verificar em viewport 1126×735 (atual do usuário) e em telas menores (mobile).
-- Testar também PagamentoDialog, ImovelDialog, RepasseDialog, VeiculoDialog.
+- `src/hooks/useDespesasLancamentos.ts`: incluir `referencia_tipo`/`referencia_numero` em `Lancamento`, `LancamentoInput`, no `select` e no `insert/update`. Manter filtro `pessoaId` inalterado.
+- `src/hooks/useDespesasRecorrencias.ts`: propagar os novos campos na criação e nas ocorrências geradas.
+- `src/pages/despesas/DespesasCalendario.tsx` (linha do lançamento) e `DespesasRelatorios.tsx`: mostrar rótulo curto (ex.: `Pasta 1234`, `Venda 987`, `Imóvel 55`, `Pessoa: Fulano`).
 
-## Arquivos afetados
-- `src/components/ui/dialog.tsx` (correção estrutural)
-- `src/components/despesas/LancamentoDialog.tsx`
-- `src/components/despesas/PagamentoDialog.tsx`
-- `src/components/despesas/ImovelDialog.tsx`
-- `src/components/despesas/RepasseDialog.tsx`
-- `src/components/despesas/VeiculoDialog.tsx`
-- (Outros diálogos longos: aplicar wrapper de rolagem apenas se necessário após verificação visual.)
+### 4. Ajuda
 
-## Fora de escopo
-- Redesenho dos formulários (número de campos, separação em abas/steps).
-- Alterações de lógica/regra de negócio nos diálogos.
+- `src/pages/despesas/DespesasHelp.tsx`: parágrafo curto explicando a referência (para que serve, quando usar cada tipo).
+
+## Sem impacto
+
+- Regras de RLS, credenciais, pagamentos e permissões permanecem iguais.
+- Lançamentos antigos ficam com `referencia_tipo = NULL` — nada quebra.
+
+## Detalhes técnicos
+
+- Validação do input numérico só aceita dígitos (regex client-side + `pattern="[0-9]*"`).
+- Ao mudar o tipo, limpar o valor anterior para não persistir campo do tipo errado.
+- Cast em TypeScript: adicionar `DespesaReferenciaTipo = 'pasta' | 'venda' | 'imovel' | 'pessoa'`.
+
+## Pergunta pendente
+
+Deseja que o campo **Imóvel** seja um número livre (como Pasta/Venda) ou um **select vinculado à tabela `despesas_imoveis**` já existente? Se preferir vínculo, ajusto o plano para usar `imovel_id` (FK) em vez de número. Select vinculado à tabela despesas_imóveis já existente.
