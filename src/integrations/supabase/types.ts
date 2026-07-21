@@ -825,10 +825,15 @@ export type Database = {
           descricao: string
           documento_numero: string | null
           id: string
+          imovel_id: string | null
           is_manual: boolean
           observacao: string | null
           pessoa_id: string | null
           plano_conta_id: string | null
+          referencia_numero: string | null
+          referencia_tipo:
+            | Database["public"]["Enums"]["despesa_referencia_tipo"]
+            | null
           serie_recorrencia_id: string | null
           status: string
           subcategoria_id: string | null
@@ -848,10 +853,15 @@ export type Database = {
           descricao: string
           documento_numero?: string | null
           id?: string
+          imovel_id?: string | null
           is_manual?: boolean
           observacao?: string | null
           pessoa_id?: string | null
           plano_conta_id?: string | null
+          referencia_numero?: string | null
+          referencia_tipo?:
+            | Database["public"]["Enums"]["despesa_referencia_tipo"]
+            | null
           serie_recorrencia_id?: string | null
           status?: string
           subcategoria_id?: string | null
@@ -871,10 +881,15 @@ export type Database = {
           descricao?: string
           documento_numero?: string | null
           id?: string
+          imovel_id?: string | null
           is_manual?: boolean
           observacao?: string | null
           pessoa_id?: string | null
           plano_conta_id?: string | null
+          referencia_numero?: string | null
+          referencia_tipo?:
+            | Database["public"]["Enums"]["despesa_referencia_tipo"]
+            | null
           serie_recorrencia_id?: string | null
           status?: string
           subcategoria_id?: string | null
@@ -903,6 +918,13 @@ export type Database = {
             columns: ["conta_bancaria_id"]
             isOneToOne: false
             referencedRelation: "despesas_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_lancamentos_imovel_id_fkey"
+            columns: ["imovel_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_imoveis"
             referencedColumns: ["id"]
           },
           {
@@ -1144,12 +1166,17 @@ export type Database = {
           descricao: string
           dia_vencimento: number
           id: string
+          imovel_id: string | null
           janela_geracao_meses: number
           lanc_tipo: string
           meses_fixos: number[]
           observacao: string | null
           pessoa_id: string | null
           plano_conta_id: string | null
+          referencia_numero: string | null
+          referencia_tipo:
+            | Database["public"]["Enums"]["despesa_referencia_tipo"]
+            | null
           subcategoria_id: string | null
           tipo: string
           ultima_geracao_ate: string | null
@@ -1168,12 +1195,17 @@ export type Database = {
           descricao: string
           dia_vencimento: number
           id?: string
+          imovel_id?: string | null
           janela_geracao_meses?: number
           lanc_tipo: string
           meses_fixos?: number[]
           observacao?: string | null
           pessoa_id?: string | null
           plano_conta_id?: string | null
+          referencia_numero?: string | null
+          referencia_tipo?:
+            | Database["public"]["Enums"]["despesa_referencia_tipo"]
+            | null
           subcategoria_id?: string | null
           tipo: string
           ultima_geracao_ate?: string | null
@@ -1192,12 +1224,17 @@ export type Database = {
           descricao?: string
           dia_vencimento?: number
           id?: string
+          imovel_id?: string | null
           janela_geracao_meses?: number
           lanc_tipo?: string
           meses_fixos?: number[]
           observacao?: string | null
           pessoa_id?: string | null
           plano_conta_id?: string | null
+          referencia_numero?: string | null
+          referencia_tipo?:
+            | Database["public"]["Enums"]["despesa_referencia_tipo"]
+            | null
           subcategoria_id?: string | null
           tipo?: string
           ultima_geracao_ate?: string | null
@@ -1224,6 +1261,13 @@ export type Database = {
             columns: ["conta_bancaria_id"]
             isOneToOne: false
             referencedRelation: "despesas_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_recorrencias_imovel_id_fkey"
+            columns: ["imovel_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_imoveis"
             referencedColumns: ["id"]
           },
           {
@@ -4803,6 +4847,7 @@ export type Database = {
         | "super_admin"
         | "supervisor"
         | "collaborator"
+      despesa_referencia_tipo: "pasta" | "venda" | "imovel" | "pessoa"
       shift_type: "morning" | "afternoon" | "full"
       weekday:
         | "monday"
@@ -4947,6 +4992,7 @@ export const Constants = {
         "supervisor",
         "collaborator",
       ],
+      despesa_referencia_tipo: ["pasta", "venda", "imovel", "pessoa"],
       shift_type: ["morning", "afternoon", "full"],
       weekday: [
         "monday",
