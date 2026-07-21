@@ -193,14 +193,16 @@ function UserManagementContent() {
 
   const availableRoles: SystemRole[] = isSuperAdmin
     ? ["super_admin", "admin", "manager", "supervisor", "collaborator"]
-    : ["collaborator"];
+    : currentRole === "admin"
+      ? ["manager", "supervisor", "collaborator"]
+      : ["collaborator"];
 
-  // Garantir que admin não fique preso em perfil que não pode atribuir.
+  // Garantir que admin não fique com um perfil de convite fora da lista permitida.
   useEffect(() => {
-    if (!isSuperAdmin && currentRole === "admin" && inviteRole !== "collaborator") {
+    if (!isSuperAdmin && currentRole === "admin" && !availableRoles.includes(inviteRole)) {
       setInviteRole("collaborator");
     }
-  }, [isSuperAdmin, currentRole, inviteRole]);
+  }, [isSuperAdmin, currentRole, inviteRole, availableRoles]);
 
   // Pré-filtro por módulo/permissão + restrição de escopo para admin.
   const usersFilteredByModule = useMemo(() => {
