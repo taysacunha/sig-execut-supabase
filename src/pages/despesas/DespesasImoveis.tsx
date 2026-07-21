@@ -24,7 +24,7 @@ import { useDespesasLookups } from "@/hooks/useDespesasLancamentos";
 import { ImovelDialog } from "@/components/despesas/ImovelDialog";
 
 const situacaoLabel: Record<string, string> = {
-  alugado: "Alugado", vago: "Vago", vendido: "Vendido", proprio_uso: "Uso próprio",
+  alugado: "Alugado", vago: "Desocupado", vendido: "Vendido", proprio_uso: "Uso próprio",
 };
 
 function money(n: number | null | undefined) {
@@ -96,7 +96,7 @@ export default function DespesasImoveis() {
         {[
           { l: "Total", v: kpis.total },
           { l: "Alugados", v: kpis.alugados },
-          { l: "Vagos", v: kpis.vagos },
+          { l: "Desocupados", v: kpis.vagos },
           { l: "Vendidos", v: kpis.vendidos },
           { l: "Receita mensal potencial", v: money(kpis.receita), primary: true },
         ].map((k) => (
@@ -128,7 +128,7 @@ export default function DespesasImoveis() {
               <SelectContent>
                 <SelectItem value="todos">Todas</SelectItem>
                 <SelectItem value="alugado">Alugado</SelectItem>
-                <SelectItem value="vago">Vago</SelectItem>
+                <SelectItem value="vago">Desocupado</SelectItem>
                 <SelectItem value="vendido">Vendido</SelectItem>
                 <SelectItem value="proprio_uso">Uso próprio</SelectItem>
               </SelectContent>

@@ -128,7 +128,7 @@ export default function DespesasHelp() {
           <CardTitle>Imóveis e Repasses</CardTitle>
           <CardDescription>
             Em <b>Imóveis</b> você cadastra o ativo, os encargos (IPTU, TCR, SPU) e a
-            situação atual (alugado, vago, próprio, em obra).
+            situação atual (alugado, desocupado, próprio, em obra).
           </CardDescription>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">

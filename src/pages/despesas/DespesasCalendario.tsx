@@ -6,6 +6,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ComboboxSelect } from "@/components/ui/combobox-select";
 import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -282,37 +283,25 @@ export default function DespesasCalendario() {
           </div>
           <div className="space-y-1">
             <Label>Centro de custo</Label>
-            <Select
-              value={filtros.centroCustoId ?? "__todos__"}
-              onValueChange={(v) =>
-                setFiltros({ ...filtros, centroCustoId: v === "__todos__" ? undefined : v })
-              }
-            >
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__todos__">Todos</SelectItem>
-                {(lookups.centros.data ?? []).map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ComboboxSelect
+              value={filtros.centroCustoId ?? null}
+              onChange={(v) => setFiltros({ ...filtros, centroCustoId: v ?? undefined })}
+              options={(lookups.centros.data ?? []).map((c) => ({ value: c.id, label: c.nome }))}
+              placeholder="Todos"
+              searchPlaceholder="Buscar centro de custo…"
+              allowClear
+            />
           </div>
           <div className="space-y-1">
             <Label>Pessoa</Label>
-            <Select
-              value={filtros.pessoaId ?? "__todos__"}
-              onValueChange={(v) =>
-                setFiltros({ ...filtros, pessoaId: v === "__todos__" ? undefined : v })
-              }
-            >
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__todos__">Todas</SelectItem>
-                {(lookups.pessoas.data ?? []).map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ComboboxSelect
+              value={filtros.pessoaId ?? null}
+              onChange={(v) => setFiltros({ ...filtros, pessoaId: v ?? undefined })}
+              options={(lookups.pessoas.data ?? []).map((p) => ({ value: p.id, label: p.nome }))}
+              placeholder="Todas"
+              searchPlaceholder="Buscar pessoa…"
+              allowClear
+            />
           </div>
           <div className="space-y-1">
             <Label>Vencimento — de</Label>

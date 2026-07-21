@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/command";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ComboboxSelect } from "@/components/ui/combobox-select";
 import {
   Lancamento, LancamentoInput, LancamentoTipo, useDespesasLookups,
   useSaveLancamento, useLancamentoCredenciais, useSaveLancamentoCredenciais,
@@ -333,108 +334,76 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
               )}
 
               {form.referencia_tipo === "pessoa" && (
-                <Select
-                  value={form.pessoa_id ?? "__none__"}
-                  onValueChange={(v) => setForm({ ...form, pessoa_id: v === "__none__" ? null : v })}
-                >
-                  <SelectTrigger><SelectValue placeholder="Selecione a pessoa" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">— Selecione —</SelectItem>
-                    {(pessoas.data ?? []).map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ComboboxSelect
+                  value={form.pessoa_id}
+                  onChange={(v) => setForm({ ...form, pessoa_id: v })}
+                  options={(pessoas.data ?? []).map((p) => ({ value: p.id, label: p.nome }))}
+                  placeholder="Selecione a pessoa"
+                  searchPlaceholder="Buscar pessoa…"
+                  emptyText="Nenhuma pessoa encontrada."
+                />
               )}
             </div>
           </div>
 
           <div className="space-y-2">
             <Label>Centro de custo *</Label>
-            <Select
-              value={form.centro_custo_id}
-              onValueChange={(v) => setForm({ ...form, centro_custo_id: v })}
-            >
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                {(centros.data ?? []).map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ComboboxSelect
+              value={form.centro_custo_id || null}
+              onChange={(v) => setForm({ ...form, centro_custo_id: v ?? "" })}
+              options={(centros.data ?? []).map((c) => ({ value: c.id, label: c.nome }))}
+              placeholder="Selecione"
+              searchPlaceholder="Buscar centro de custo…"
+            />
           </div>
 
           <div className="space-y-2">
             <Label>Categoria</Label>
-            <Select
-              value={form.categoria_id ?? "__none__"}
-              onValueChange={(v) => setForm({ ...form, categoria_id: v === "__none__" ? null : v })}
-            >
-              <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">— Sem categoria —</SelectItem>
-                {(categorias.data ?? []).map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ComboboxSelect
+              value={form.categoria_id}
+              onChange={(v) => setForm({ ...form, categoria_id: v })}
+              options={(categorias.data ?? []).map((c) => ({ value: c.id, label: c.nome }))}
+              placeholder="Opcional"
+              searchPlaceholder="Buscar categoria…"
+              allowClear
+            />
           </div>
 
           <div className="space-y-2">
             <Label>Plano de conta</Label>
-            <Select
-              value={form.plano_conta_id ?? "__none__"}
-              onValueChange={(v) =>
-                setForm({
-                  ...form,
-                  plano_conta_id: v === "__none__" ? null : v,
-                  subcategoria_id: null,
-                })
-              }
-            >
-              <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">— Sem plano —</SelectItem>
-                {(planos.data ?? []).map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ComboboxSelect
+              value={form.plano_conta_id}
+              onChange={(v) => setForm({ ...form, plano_conta_id: v, subcategoria_id: null })}
+              options={(planos.data ?? []).map((p) => ({ value: p.id, label: p.nome }))}
+              placeholder="Opcional"
+              searchPlaceholder="Buscar plano…"
+              allowClear
+            />
           </div>
 
           <div className="space-y-2">
             <Label>Subcategoria</Label>
-            <Select
-              value={form.subcategoria_id ?? "__none__"}
-              onValueChange={(v) => setForm({ ...form, subcategoria_id: v === "__none__" ? null : v })}
+            <ComboboxSelect
+              value={form.subcategoria_id}
+              onChange={(v) => setForm({ ...form, subcategoria_id: v })}
+              options={subcatsFiltradas.map((s) => ({ value: s.id, label: s.nome }))}
+              placeholder={form.plano_conta_id ? "Opcional" : "Escolha um plano primeiro"}
+              searchPlaceholder="Buscar subcategoria…"
               disabled={!form.plano_conta_id}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={form.plano_conta_id ? "Opcional" : "Escolha um plano primeiro"} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">— Sem subcategoria —</SelectItem>
-                {subcatsFiltradas.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              allowClear
+            />
           </div>
 
           <div className="space-y-2">
             <Label>Conta bancária (previsão)</Label>
-            <Select
-              value={form.conta_bancaria_id ?? "__none__"}
-              onValueChange={(v) => setForm({ ...form, conta_bancaria_id: v === "__none__" ? null : v })}
-            >
-              <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">— Sem conta —</SelectItem>
-                {(contas.data ?? []).map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ComboboxSelect
+              value={form.conta_bancaria_id}
+              onChange={(v) => setForm({ ...form, conta_bancaria_id: v })}
+              options={(contas.data ?? []).map((c) => ({ value: c.id, label: c.nome }))}
+              placeholder="Opcional"
+              searchPlaceholder="Buscar conta…"
+              allowClear
+            />
           </div>
 
           <div className="space-y-2">

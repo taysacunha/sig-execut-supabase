@@ -21,6 +21,7 @@ import {
   useImovelHistorico, ImovelEncargo, EncargoTipo,
 } from "@/hooks/useDespesasImoveis";
 import { useDespesasLookups } from "@/hooks/useDespesasLancamentos";
+import { ComboboxSelect } from "@/components/ui/combobox-select";
 
 interface Props {
   open: boolean;
@@ -30,7 +31,7 @@ interface Props {
 
 const situacoes: { v: ImovelSituacao; l: string }[] = [
   { v: "alugado", l: "Alugado" },
-  { v: "vago", l: "Vago" },
+  { v: "vago", l: "Desocupado" },
   { v: "vendido", l: "Vendido" },
   { v: "proprio_uso", l: "Uso próprio" },
 ];
@@ -125,30 +126,35 @@ export function ImovelDialog({ open, onOpenChange, editing }: Props) {
               </div>
               <div className="space-y-2">
                 <Label>Centro de custo *</Label>
-                <Select value={form.centro_custo_id} onValueChange={(v) => setForm({ ...form, centro_custo_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>{(centros.data ?? []).map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}</SelectContent>
-                </Select>
+                <ComboboxSelect
+                  value={form.centro_custo_id || null}
+                  onChange={(v) => setForm({ ...form, centro_custo_id: v ?? "" })}
+                  options={(centros.data ?? []).map(c => ({ value: c.id, label: c.nome }))}
+                  placeholder="Selecione"
+                  searchPlaceholder="Buscar centro de custo…"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Proprietário</Label>
-                <Select value={form.proprietario_id ?? "__none__"} onValueChange={(v) => setForm({ ...form, proprietario_id: v === "__none__" ? null : v })}>
-                  <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">— Sem —</SelectItem>
-                    {(pessoas.data ?? []).map(p => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <ComboboxSelect
+                  value={form.proprietario_id}
+                  onChange={(v) => setForm({ ...form, proprietario_id: v })}
+                  options={(pessoas.data ?? []).map(p => ({ value: p.id, label: p.nome }))}
+                  placeholder="Opcional"
+                  searchPlaceholder="Buscar pessoa…"
+                  allowClear
+                />
               </div>
               <div className="space-y-2">
                 <Label>Inquilino atual</Label>
-                <Select value={form.inquilino_id ?? "__none__"} onValueChange={(v) => setForm({ ...form, inquilino_id: v === "__none__" ? null : v })}>
-                  <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">— Sem —</SelectItem>
-                    {(pessoas.data ?? []).map(p => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <ComboboxSelect
+                  value={form.inquilino_id}
+                  onChange={(v) => setForm({ ...form, inquilino_id: v })}
+                  options={(pessoas.data ?? []).map(p => ({ value: p.id, label: p.nome }))}
+                  placeholder="Opcional"
+                  searchPlaceholder="Buscar pessoa…"
+                  allowClear
+                />
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label>Endereço</Label>

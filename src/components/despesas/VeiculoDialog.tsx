@@ -20,6 +20,7 @@ import {
   useSaveVeiculo, useVeiculoDocumentos, useSaveVeiculoDocumento, useDeleteVeiculoDocumento,
 } from "@/hooks/useDespesasVeiculos";
 import { useDespesasLookups } from "@/hooks/useDespesasLancamentos";
+import { ComboboxSelect } from "@/components/ui/combobox-select";
 
 interface Props {
   open: boolean;
@@ -91,31 +92,34 @@ export function VeiculoDialog({ open, onOpenChange, editing }: Props) {
                 <Input value={form.placa ?? ""} onChange={(e) => setForm({ ...form, placa: e.target.value.toUpperCase() || null })} maxLength={10} />
               </div>
               <div className="space-y-2"><Label>Centro de custo</Label>
-                <Select value={form.centro_custo_id ?? "__none__"} onValueChange={(v) => setForm({ ...form, centro_custo_id: v === "__none__" ? null : v })}>
-                  <SelectTrigger><SelectValue placeholder="Necessário para gerar encargos" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">— Sem —</SelectItem>
-                    {(centros.data ?? []).map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <ComboboxSelect
+                  value={form.centro_custo_id}
+                  onChange={(v) => setForm({ ...form, centro_custo_id: v })}
+                  options={(centros.data ?? []).map(c => ({ value: c.id, label: c.nome }))}
+                  placeholder="Necessário para gerar encargos"
+                  searchPlaceholder="Buscar centro de custo…"
+                  allowClear
+                />
               </div>
               <div className="space-y-2"><Label>Motorista</Label>
-                <Select value={form.motorista_id ?? "__none__"} onValueChange={(v) => setForm({ ...form, motorista_id: v === "__none__" ? null : v })}>
-                  <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">— Sem —</SelectItem>
-                    {(pessoas.data ?? []).map(p => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <ComboboxSelect
+                  value={form.motorista_id}
+                  onChange={(v) => setForm({ ...form, motorista_id: v })}
+                  options={(pessoas.data ?? []).map(p => ({ value: p.id, label: p.nome }))}
+                  placeholder="Opcional"
+                  searchPlaceholder="Buscar pessoa…"
+                  allowClear
+                />
               </div>
               <div className="space-y-2"><Label>Proprietário</Label>
-                <Select value={form.proprietario_id ?? "__none__"} onValueChange={(v) => setForm({ ...form, proprietario_id: v === "__none__" ? null : v })}>
-                  <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">— Sem —</SelectItem>
-                    {(pessoas.data ?? []).map(p => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <ComboboxSelect
+                  value={form.proprietario_id}
+                  onChange={(v) => setForm({ ...form, proprietario_id: v })}
+                  options={(pessoas.data ?? []).map(p => ({ value: p.id, label: p.nome }))}
+                  placeholder="Opcional"
+                  searchPlaceholder="Buscar pessoa…"
+                  allowClear
+                />
               </div>
               <div className="space-y-2"><Label>Nota fiscal</Label>
                 <Input value={form.nota_fiscal ?? ""} onChange={(e) => setForm({ ...form, nota_fiscal: e.target.value || null })} />
@@ -140,13 +144,14 @@ export function VeiculoDialog({ open, onOpenChange, editing }: Props) {
                   <Input type="date" value={form.data_venda ?? ""} onChange={(e) => setForm({ ...form, data_venda: e.target.value || null })} />
                 </div>
                 <div className="space-y-2"><Label>Comprador</Label>
-                  <Select value={form.comprador_id ?? "__none__"} onValueChange={(v) => setForm({ ...form, comprador_id: v === "__none__" ? null : v })}>
-                    <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">— Sem —</SelectItem>
-                      {(pessoas.data ?? []).map(p => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <ComboboxSelect
+                    value={form.comprador_id}
+                    onChange={(v) => setForm({ ...form, comprador_id: v })}
+                    options={(pessoas.data ?? []).map(p => ({ value: p.id, label: p.nome }))}
+                    placeholder="Opcional"
+                    searchPlaceholder="Buscar pessoa…"
+                    allowClear
+                  />
                 </div>
                 <div className="md:col-span-2 text-sm text-muted-foreground">
                   Após informar data de venda, novos documentos deste veículo ficarão bloqueados na UI.

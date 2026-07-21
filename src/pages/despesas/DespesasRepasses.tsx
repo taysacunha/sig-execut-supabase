@@ -7,6 +7,7 @@ import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ComboboxSelect } from "@/components/ui/combobox-select";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -146,23 +147,25 @@ export default function DespesasRepasses() {
           </div>
           <div className="space-y-1">
             <Label>Centro de custo</Label>
-            <Select value={filtros.centroCustoId ?? "__none__"} onValueChange={(v) => setFiltros({ ...filtros, centroCustoId: v === "__none__" ? undefined : v })}>
-              <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Todos</SelectItem>
-                {(centros.data ?? []).map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <ComboboxSelect
+              value={filtros.centroCustoId ?? null}
+              onChange={(v) => setFiltros({ ...filtros, centroCustoId: v ?? undefined })}
+              options={(centros.data ?? []).map(c => ({ value: c.id, label: c.nome }))}
+              placeholder="Todos"
+              searchPlaceholder="Buscar centro de custo…"
+              allowClear
+            />
           </div>
           <div className="space-y-1">
             <Label>Proprietário</Label>
-            <Select value={filtros.proprietarioId ?? "__none__"} onValueChange={(v) => setFiltros({ ...filtros, proprietarioId: v === "__none__" ? undefined : v })}>
-              <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Todos</SelectItem>
-                {(pessoas.data ?? []).map(p => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <ComboboxSelect
+              value={filtros.proprietarioId ?? null}
+              onChange={(v) => setFiltros({ ...filtros, proprietarioId: v ?? undefined })}
+              options={(pessoas.data ?? []).map(p => ({ value: p.id, label: p.nome }))}
+              placeholder="Todos"
+              searchPlaceholder="Buscar pessoa…"
+              allowClear
+            />
           </div>
         </CardContent>
       </Card>
@@ -222,20 +225,22 @@ export default function DespesasRepasses() {
               <Input type="month" value={novo.competencia.slice(0, 7)} onChange={(e) => setNovo({ ...novo, competencia: e.target.value ? `${e.target.value}-01` : "" })} />
             </div>
             <div className="space-y-1"><Label>Proprietário *</Label>
-              <Select value={novo.proprietarioId} onValueChange={(v) => setNovo({ ...novo, proprietarioId: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  {(pessoas.data ?? []).map(p => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <ComboboxSelect
+                value={novo.proprietarioId || null}
+                onChange={(v) => setNovo({ ...novo, proprietarioId: v ?? "" })}
+                options={(pessoas.data ?? []).map(p => ({ value: p.id, label: p.nome }))}
+                placeholder="Selecione"
+                searchPlaceholder="Buscar pessoa…"
+              />
             </div>
             <div className="space-y-1"><Label>Centro de custo *</Label>
-              <Select value={novo.centroCustoId} onValueChange={(v) => setNovo({ ...novo, centroCustoId: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  {(centros.data ?? []).map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <ComboboxSelect
+                value={novo.centroCustoId || null}
+                onChange={(v) => setNovo({ ...novo, centroCustoId: v ?? "" })}
+                options={(centros.data ?? []).map(c => ({ value: c.id, label: c.nome }))}
+                placeholder="Selecione"
+                searchPlaceholder="Buscar centro de custo…"
+              />
             </div>
             <p className="text-xs text-muted-foreground">
               Consolida os lançamentos do mês para esse proprietário/centro em créditos e débitos, aplica a taxa de administração e calcula o líquido.

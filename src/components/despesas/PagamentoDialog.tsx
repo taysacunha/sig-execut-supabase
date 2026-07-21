@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { ComboboxSelect } from "@/components/ui/combobox-select";
 import {
   FormaPagamento, Lancamento,
   useAddPagamento, useDespesasLookups,
@@ -118,18 +119,14 @@ export function PagamentoDialog({ open, onOpenChange, lancamento }: Props) {
             </div>
             <div className="space-y-2">
               <Label>Conta bancária</Label>
-              <Select
-                value={contaId ?? "__none__"}
-                onValueChange={(v) => setContaId(v === "__none__" ? null : v)}
-              >
-                <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">— Sem conta —</SelectItem>
-                  {(contas.data ?? []).map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ComboboxSelect
+                value={contaId}
+                onChange={setContaId}
+                options={(contas.data ?? []).map((c) => ({ value: c.id, label: c.nome }))}
+                placeholder="Opcional"
+                searchPlaceholder="Buscar conta…"
+                allowClear
+              />
             </div>
           </div>
 
