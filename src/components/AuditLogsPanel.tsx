@@ -339,6 +339,9 @@ const valueLabels: Record<string, Record<string, string>> = {
   situacao: {
     alugado: "Alugado",
     vago: "Desocupado",
+    vendido: "Vendido",
+    proprio_uso: "Uso próprio",
+    em_aquisicao: "Em aquisição",
     proprio: "Próprio",
     obra: "Em obra",
     vendido: "Vendido",
