@@ -226,7 +226,6 @@ export default function DespesasCadastros() {
         <TabsList className="flex-wrap">
           <TabsTrigger value="centros">Centros de custo</TabsTrigger>
           <TabsTrigger value="categorias">Categorias</TabsTrigger>
-          <TabsTrigger value="perfis">Perfis de acesso</TabsTrigger>
           <TabsTrigger value="planos">Planos de conta</TabsTrigger>
           <TabsTrigger value="contas">Contas bancárias</TabsTrigger>
           <TabsTrigger value="pessoas">Pessoas</TabsTrigger>
@@ -238,9 +237,6 @@ export default function DespesasCadastros() {
         </TabsContent>
         <TabsContent value="categorias" className="mt-4">
           <SimpleCadastroCrud tabela="despesas_categorias" singular="Categoria" plural="Categorias" canEdit={canEdit} canDelete={canDelete} />
-        </TabsContent>
-        <TabsContent value="perfis" className="mt-4">
-          <SimpleCadastroCrud tabela="despesas_perfis_acesso" singular="Perfil de acesso" plural="Perfis de acesso" temDescricao canEdit={canEdit} canDelete={canDelete} />
         </TabsContent>
         <TabsContent value="planos" className="mt-4">
           <SimpleCadastroCrud tabela="despesas_planos_conta" singular="Plano de conta" plural="Planos de conta" canEdit={canEdit} canDelete={canDelete} />
