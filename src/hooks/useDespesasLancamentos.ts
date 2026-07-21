@@ -20,6 +20,8 @@ export type FormaPagamento =
   | "cheque"
   | "outro";
 
+export type DespesaReferenciaTipo = "pasta" | "venda" | "imovel" | "pessoa";
+
 export interface Pagamento {
   id: string;
   lancamento_id: string;
@@ -37,6 +39,9 @@ export interface Lancamento {
   descricao: string;
   documento_numero: string | null;
   pessoa_id: string | null;
+  imovel_id: string | null;
+  referencia_tipo: DespesaReferenciaTipo | null;
+  referencia_numero: string | null;
   centro_custo_id: string;
   categoria_id: string | null;
   plano_conta_id: string | null;
@@ -54,6 +59,7 @@ export interface Lancamento {
   created_at: string;
   updated_at: string;
   pessoa?: { nome: string } | null;
+  imovel?: { codigo: string | null; endereco: string | null } | null;
   centro_custo?: { nome: string } | null;
   categoria?: { nome: string } | null;
   pagamentos?: Pagamento[];
@@ -82,6 +88,7 @@ export function useLancamentos(filtros: LancamentoFiltros) {
         .select(
           `*,
            pessoa:despesas_pessoas(nome),
+           imovel:despesas_imoveis(codigo, endereco),
            centro_custo:despesas_centros_custo(nome),
            categoria:despesas_categorias(nome),
            pagamentos:despesas_lancamento_pagamentos(*)`
@@ -112,6 +119,9 @@ export interface LancamentoInput {
   descricao: string;
   documento_numero?: string | null;
   pessoa_id?: string | null;
+  imovel_id?: string | null;
+  referencia_tipo?: DespesaReferenciaTipo | null;
+  referencia_numero?: string | null;
   centro_custo_id: string;
   categoria_id?: string | null;
   plano_conta_id?: string | null;
@@ -364,6 +374,20 @@ export function useDespesasLookups() {
       return (data ?? []) as unknown as { id: string; nome: string; tipo_pessoa: string }[];
     },
   });
+  const imoveis = useQuery({
+    queryKey: ["desp-lookup", "imoveis"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("despesas_imoveis" as any)
+        .select("id, codigo, descricao, endereco")
+        .eq("is_active", true)
+        .order("descricao");
+      if (error) throw error;
+      return (data ?? []) as unknown as {
+        id: string; codigo: string | null; descricao: string; endereco: string | null;
+      }[];
+    },
+  });
 
-  return { centros, categorias, planos, subcategorias, contas, pessoas };
+  return { centros, categorias, planos, subcategorias, contas, pessoas, imoveis };
 }

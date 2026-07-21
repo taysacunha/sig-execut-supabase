@@ -56,6 +56,9 @@ export default function DespesasRecorrencias() {
           subcategoria_id: r.subcategoria_id,
           conta_bancaria_id: r.conta_bancaria_id,
           pessoa_id: r.pessoa_id,
+          imovel_id: r.imovel_id,
+          referencia_tipo: r.referencia_tipo,
+          referencia_numero: r.referencia_numero,
           observacao: r.observacao,
         },
       });
