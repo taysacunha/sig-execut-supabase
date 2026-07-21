@@ -603,6 +603,17 @@ function UserManagementContent() {
     return canManageRole(user.role as AppRole);
   };
 
+  const OPERATIONAL_ROLES: SystemRole[] = ["manager", "supervisor", "collaborator"];
+
+  const canEditRole = (user: UserWithRole): boolean => {
+    if (user.id === currentUser?.id) return false;
+    if (isSuperAdmin) return true;
+    if (currentRole !== "admin") return false;
+    if (!canManageUser(user)) return false;
+    // admin não altera perfis administrativos
+    return !user.role || OPERATIONAL_ROLES.includes(user.role);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -825,19 +836,38 @@ function UserManagementContent() {
                             </TableCell>
                             <TableCell>{user.email}</TableCell>
                             <TableCell>
-                              {canManage ? (
-                                <Select value={user.role || ""} onValueChange={(v) => handleRoleChange(user.id, v as SystemRole)} disabled={updating === user.id}>
+                              {canEditRole(user) ? (
+                                <Select
+                                  value={user.role ?? undefined}
+                                  onValueChange={(v) => handleRoleChange(user.id, v as SystemRole)}
+                                  disabled={updating === user.id}
+                                >
                                   <SelectTrigger className="w-[180px]">
-                                    {updating === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <SelectValue />}
+                                    {updating === user.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <SelectValue placeholder="Sem perfil" />
+                                    )}
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {availableRoles.filter(r => canManageRole(r as AppRole)).map(r => (
-                                      <SelectItem key={r} value={r}>{roleLabels[r]}</SelectItem>
+                                    {availableRoles.map(r => (
+                                      <SelectItem key={r} value={r}>
+                                        <span className="flex items-center gap-2">{roleIcons[r]}{roleLabels[r]}</span>
+                                      </SelectItem>
                                     ))}
                                   </SelectContent>
                                 </Select>
                               ) : user.role ? (
-                                <Badge className={roleColors[user.role]}><span className="flex items-center gap-1">{roleIcons[user.role]}{roleLabels[user.role]}</span></Badge>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge className={roleColors[user.role]}>
+                                      <span className="flex items-center gap-1">{roleIcons[user.role]}{roleLabels[user.role]}</span>
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  {!isSuperAdmin && currentRole === "admin" && (user.role === "admin" || user.role === "super_admin") && (
+                                    <TooltipContent>Somente Super Administrador pode alterar este perfil</TooltipContent>
+                                  )}
+                                </Tooltip>
                               ) : <Badge variant="outline">Sem perfil</Badge>}
                             </TableCell>
                             <TableCell>
