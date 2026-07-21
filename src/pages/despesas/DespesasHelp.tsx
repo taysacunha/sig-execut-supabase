@@ -153,7 +153,8 @@ export default function DespesasHelp() {
             </li>
             <li>
               <b>Nível por aba</b> (em <i>Despesas → Permissões</i>): diz <u>o que</u> ele
-              faz em cada aba — sem acesso, visualizar, editar ou excluir.
+              faz em cada aba — sem acesso, visualizar, editar ou excluir. Esse nível é salvo
+              na tabela <i>despesas_aba_permissoes</i>.
             </li>
             <li>
               <b>Centros permitidos</b>: dizem <u>o que</u> ele enxerga. <b>Vazio = todos</b>.
@@ -165,6 +166,41 @@ export default function DespesasHelp() {
             Se você tirar o acesso ao módulo em <i>/usuarios</i>, as permissões internas
             <b> não são apagadas</b> — ficam guardadas e voltam a valer assim que você
             reconceder o acesso.
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Perfis de acesso</CardTitle>
+          <CardDescription>
+            A aba "Perfis de acesso" que existia em <i>Cadastros</i> era um cadastro auxiliar
+            (tabela <i>despesas_perfis_acesso</i>) e <b>não influenciava</b> quem podia acessar
+            o módulo ou cada aba.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground space-y-2">
+          <div>
+            O controle de acesso real é feito por três mecanismos independentes:
+          </div>
+          <ul className="list-disc pl-5 space-y-1">
+            <li>
+              <b>Perfil do usuário</b> (Super Admin, Admin, Gerente, Supervisor, Colaborador,
+              Corretor): definido em <i>Gerenciamento de usuários → Perfil</i> e salvo na tabela
+              <i>user_roles</i>.
+            </li>
+            <li>
+              <b>Acesso ao sistema</b>: em <i>Gerenciamento de usuários</i> você habilita ou
+              desabilita o módulo Despesas para cada usuário.
+            </li>
+            <li>
+              <b>Permissões por aba</b>: em <i>Despesas → Permissões</i> você define, para cada
+              aba, se o usuário pode ver, editar ou excluir.
+            </li>
+          </ul>
+          <div>
+            Por isso a aba foi removida da tela. Os dados antigos permanecem no banco, mas não
+            têm efeito nas permissões.
           </div>
         </CardContent>
       </Card>
