@@ -193,14 +193,16 @@ function UserManagementContent() {
 
   const availableRoles: SystemRole[] = isSuperAdmin
     ? ["super_admin", "admin", "manager", "supervisor", "collaborator"]
-    : ["collaborator"];
+    : currentRole === "admin"
+      ? ["manager", "supervisor", "collaborator"]
+      : ["collaborator"];
 
-  // Garantir que admin não fique preso em perfil que não pode atribuir.
+  // Garantir que admin não fique com um perfil de convite fora da lista permitida.
   useEffect(() => {
-    if (!isSuperAdmin && currentRole === "admin" && inviteRole !== "collaborator") {
+    if (!isSuperAdmin && currentRole === "admin" && !availableRoles.includes(inviteRole)) {
       setInviteRole("collaborator");
     }
-  }, [isSuperAdmin, currentRole, inviteRole]);
+  }, [isSuperAdmin, currentRole, inviteRole, availableRoles]);
 
   // Pré-filtro por módulo/permissão + restrição de escopo para admin.
   const usersFilteredByModule = useMemo(() => {
@@ -541,8 +543,8 @@ function UserManagementContent() {
         .upsert({ user_id: editUser.id, name: editName.trim() }, { onConflict: 'user_id' });
       if (profileError) throw profileError;
 
-      // 4. Update role if changed (apenas super_admin altera roles)
-      if (!isSelfEdit && isSuperAdmin && editRole !== editUser.role) {
+      // 4. Update role if changed (super_admin sempre; admin apenas dentro do escopo operacional)
+      if (!isSelfEdit && editRole !== editUser.role && canEditRole(editUser)) {
         const { error: roleError } = await supabase.rpc("set_user_role", {
           _target_user_id: editUser.id,
           _new_role: editRole,
@@ -599,6 +601,17 @@ function UserManagementContent() {
     }
     if (!user.role) return true;
     return canManageRole(user.role as AppRole);
+  };
+
+  const OPERATIONAL_ROLES: SystemRole[] = ["manager", "supervisor", "collaborator"];
+
+  const canEditRole = (user: UserWithRole): boolean => {
+    if (user.id === currentUser?.id) return false;
+    if (isSuperAdmin) return true;
+    if (currentRole !== "admin") return false;
+    if (!canManageUser(user)) return false;
+    // admin não altera perfis administrativos
+    return !user.role || OPERATIONAL_ROLES.includes(user.role);
   };
 
   if (loading) {
@@ -823,19 +836,38 @@ function UserManagementContent() {
                             </TableCell>
                             <TableCell>{user.email}</TableCell>
                             <TableCell>
-                              {canManage ? (
-                                <Select value={user.role || ""} onValueChange={(v) => handleRoleChange(user.id, v as SystemRole)} disabled={updating === user.id}>
+                              {canEditRole(user) ? (
+                                <Select
+                                  value={user.role ?? undefined}
+                                  onValueChange={(v) => handleRoleChange(user.id, v as SystemRole)}
+                                  disabled={updating === user.id}
+                                >
                                   <SelectTrigger className="w-[180px]">
-                                    {updating === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <SelectValue />}
+                                    {updating === user.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <SelectValue placeholder="Sem perfil" />
+                                    )}
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {availableRoles.filter(r => canManageRole(r as AppRole)).map(r => (
-                                      <SelectItem key={r} value={r}>{roleLabels[r]}</SelectItem>
+                                    {availableRoles.map(r => (
+                                      <SelectItem key={r} value={r}>
+                                        <span className="flex items-center gap-2">{roleIcons[r]}{roleLabels[r]}</span>
+                                      </SelectItem>
                                     ))}
                                   </SelectContent>
                                 </Select>
                               ) : user.role ? (
-                                <Badge className={roleColors[user.role]}><span className="flex items-center gap-1">{roleIcons[user.role]}{roleLabels[user.role]}</span></Badge>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge className={roleColors[user.role]}>
+                                      <span className="flex items-center gap-1">{roleIcons[user.role]}{roleLabels[user.role]}</span>
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  {!isSuperAdmin && currentRole === "admin" && (user.role === "admin" || user.role === "super_admin") && (
+                                    <TooltipContent>Somente Super Administrador pode alterar este perfil</TooltipContent>
+                                  )}
+                                </Tooltip>
                               ) : <Badge variant="outline">Sem perfil</Badge>}
                             </TableCell>
                             <TableCell>
@@ -1001,13 +1033,13 @@ function UserManagementContent() {
                {/* Perfil e Sistemas - desabilitados para auto-edição */}
                {editUser?.id !== currentUser?.id && (
                  <>
-                   {isSuperAdmin && (
+                    {editUser && canEditRole(editUser) && (
                      <div className="space-y-2">
                        <Label>Perfil</Label>
                        <Select value={editRole} onValueChange={(v) => setEditRole(v as SystemRole)}>
                          <SelectTrigger><SelectValue /></SelectTrigger>
                          <SelectContent>
-                           {availableRoles.filter(r => canManageRole(r as AppRole)).map(r => (
+                            {availableRoles.map(r => (
                              <SelectItem key={r} value={r}>
                                <span className="flex items-center gap-2">{roleIcons[r]}{roleLabels[r]}</span>
                              </SelectItem>
