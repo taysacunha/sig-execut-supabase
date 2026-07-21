@@ -10,6 +10,12 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
+} from "@/components/ui/command";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   Lancamento, LancamentoInput, LancamentoTipo, useDespesasLookups,
   useSaveLancamento, useLancamentoCredenciais, useSaveLancamentoCredenciais,
@@ -56,6 +62,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
 
   const [form, setForm] = useState<LancamentoInput>(emptyForm());
   const [credenciais, setCredenciais] = useState<LancamentoCredenciais>({});
+  const [imovelPopoverOpen, setImovelPopoverOpen] = useState(false);
   const canEditCredenciais = !credQuery.isError; // sem permissão → RLS bloqueia leitura
   const [rec, setRec] = useState<RecorrenciaFormState>({
     ativa: false,
@@ -126,8 +133,8 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
     form.valor_total > 0 &&
     !!form.data_vencimento &&
     !!form.data_competencia &&
+    !!form.referencia_tipo &&
     (
-      !form.referencia_tipo ||
       (form.referencia_tipo === "pessoa" && !!form.pessoa_id) ||
       (form.referencia_tipo === "imovel" && !!form.imovel_id) ||
       ((form.referencia_tipo === "pasta" || form.referencia_tipo === "venda") &&
@@ -136,6 +143,10 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
 
   async function salvar() {
     try {
+      if (!form.referencia_tipo) {
+        toast.error("Selecione o tipo de referência");
+        return;
+      }
       const savedId = await saveMut.mutateAsync({ id: editing?.id, input: form });
       if (canEditCredenciais) {
         try {
@@ -224,12 +235,12 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
           </div>
 
           <div className="space-y-2 md:col-span-2 border rounded-md p-3">
-            <Label className="text-sm">Referência (opcional)</Label>
+            <Label className="text-sm">Referência *</Label>
             <div className="grid gap-3 md:grid-cols-2">
               <Select
-                value={form.referencia_tipo ?? "__none__"}
+                value={form.referencia_tipo ?? ""}
                 onValueChange={(v) => {
-                  const tipo = v === "__none__" ? null : (v as DespesaReferenciaTipo);
+                  const tipo = v as DespesaReferenciaTipo;
                   setForm({
                     ...form,
                     referencia_tipo: tipo,
@@ -239,9 +250,8 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
                   });
                 }}
               >
-                <SelectTrigger><SelectValue placeholder="Sem referência" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">— Sem referência —</SelectItem>
                   <SelectItem value="pasta">Nº de Pasta</SelectItem>
                   <SelectItem value="venda">Cód. Venda</SelectItem>
                   <SelectItem value="imovel">Imóvel</SelectItem>
@@ -265,20 +275,61 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
               )}
 
               {form.referencia_tipo === "imovel" && (
-                <Select
-                  value={form.imovel_id ?? "__none__"}
-                  onValueChange={(v) => setForm({ ...form, imovel_id: v === "__none__" ? null : v })}
-                >
-                  <SelectTrigger><SelectValue placeholder="Selecione o imóvel" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">— Selecione —</SelectItem>
-                    {(imoveis.data ?? []).map((i) => (
-                      <SelectItem key={i.id} value={i.id}>
-                        {i.codigo ? `${i.codigo} — ` : ""}{i.descricao}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={imovelPopoverOpen} onOpenChange={setImovelPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={imovelPopoverOpen}
+                      className="w-full justify-between font-normal"
+                    >
+                      {(() => {
+                        const sel = (imoveis.data ?? []).find((i) => i.id === form.imovel_id);
+                        if (!sel) return <span className="text-muted-foreground">Selecione o imóvel</span>;
+                        return <span className="truncate">{sel.codigo ? `${sel.codigo} — ` : ""}{sel.descricao}</span>;
+                      })()}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                    <Command
+                      filter={(value, search) => {
+                        return value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0;
+                      }}
+                    >
+                      <CommandInput placeholder="Buscar por código ou descrição…" />
+                      <CommandList>
+                        <CommandEmpty>Nenhum imóvel encontrado.</CommandEmpty>
+                        <CommandGroup>
+                          {(imoveis.data ?? []).map((i) => {
+                            const label = `${i.codigo ?? ""} ${i.descricao} ${i.endereco ?? ""}`.trim();
+                            return (
+                              <CommandItem
+                                key={i.id}
+                                value={label}
+                                onSelect={() => {
+                                  setForm({ ...form, imovel_id: i.id });
+                                  setImovelPopoverOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    form.imovel_id === i.id ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                <span className="truncate">
+                                  {i.codigo ? `${i.codigo} — ` : ""}{i.descricao}
+                                </span>
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               )}
 
               {form.referencia_tipo === "pessoa" && (
