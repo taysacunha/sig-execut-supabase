@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { DespesaReferenciaTipo } from "./useDespesasLancamentos";
 
 export type RecorrenciaTipo = "mensal" | "anual" | "fixa_meses" | "intercalada";
 
@@ -22,6 +23,9 @@ export interface Recorrencia {
   subcategoria_id: string | null;
   conta_bancaria_id: string | null;
   pessoa_id: string | null;
+  imovel_id: string | null;
+  referencia_tipo: DespesaReferenciaTipo | null;
+  referencia_numero: string | null;
   observacao: string | null;
   created_at: string;
   updated_at: string;
