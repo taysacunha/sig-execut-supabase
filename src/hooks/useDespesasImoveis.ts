@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export type ImovelSituacao = "alugado" | "vago" | "vendido" | "proprio_uso";
+export type ImovelSituacao = "alugado" | "vago" | "vendido" | "proprio_uso" | "em_aquisicao";
 export type ImovelTipo = "comercial" | "residencial" | "terreno" | "outro";
 export type EncargoTipo = "iptu" | "tcr" | "spu" | "condominio" | "outro";
 
