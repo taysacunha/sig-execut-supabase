@@ -1,20 +1,53 @@
-Contexto: Na tela de Cadastros de Despesas existe uma aba "Perfis de acesso" (`despesas_perfis_acesso`). Ela é apenas um cadastro genérico e não está integrada ao controle de acesso real do módulo, que usa `user_roles` (perfis globais do usuário) e `despesas_aba_permissoes` (nível por aba). O usuário não encontrou essa explicação na página de ajuda e prefere remover a aba e documentar corretamente.
+# Corrigir dialogs que ultrapassam a altura da tela
 
-Objetivo: Remover a aba do menu de Cadastros e deixar a página de ajuda transparente sobre o que esse cadastro era e onde funcionam as permissões de fato.
+## Problema
+No `/despesas/calendario`, ao clicar em "A pagar" o `LancamentoDialog` abre com muitos campos (tipo, documento, descrição, centro de custo, pessoa, categoria, plano, subcategoria, conta, competência, vencimento, valor, observação, credenciais e recorrência). Como o `DialogContent` base (`src/components/ui/dialog.tsx`) só define `max-w-lg` — sem `max-height` nem scroll interno — o conteúdo estica verticalmente além da viewport, escondendo o título e o rodapé com os botões Cancelar/Salvar. O mesmo padrão afeta outros diálogos grandes do sistema (ex.: `ImovelDialog`, `VeiculoDialog`, `RepasseDialog`, colaboradores, férias, etc.).
 
-Escopo técnico:
+## Causa raiz
+O primitivo `DialogContent` não limita a altura nem torna o corpo rolável. Cada tela pode passar `max-w-*`, mas nenhuma trata altura, então o dialog cresce conforme o conteúdo.
 
-1. Remover a aba "Perfis de acesso" de `src/pages/despesas/DespesasCadastros.tsx`
-   - Remover o `<TabsTrigger value="perfis">`.
-   - Remover o `<TabsContent value="perfis">` com o `SimpleCadastroCrud` para `despesas_perfis_acesso`.
-   - Não alterar a tabela `despesas_perfis_acesso` no banco (dados permanecem intactos; apenas escondemos a interface).
+## Correção (mínima e global)
 
-2. Atualizar a página de ajuda `src/pages/despesas/DespesasHelp.tsx`
-   - Adicionar um card explicando que "Perfis de acesso" era um cadastro auxiliar não utilizado no controle de permissões e que a aba foi removida.
-   - Reforçar no card "Permissões por aba + centros de custo" quais são os mecanismos reais de controle de acesso: `user_roles` (Super Admin, Admin, Gerente, Supervisor, Colaborador, Corretor), acesso ao módulo em `/usuarios` e `despesas_aba_permissoes`.
+### 1. Ajustar o primitivo `src/components/ui/dialog.tsx`
+Adicionar limites de altura e layout em coluna com corpo rolável, sem alterar API:
 
-3. (Opcional) Remover o rótulo de auditória `despesas_perfis_acesso` em `src/components/AuditLogsPanel.tsx` apenas se não houver risco de quebrar a exibição de logs históricos. Se mantiver, o rótulo fica, já que a tabela ainda existe e pode ter registros antigos.
+- No `DialogContent`, mudar de `grid gap-4 ... p-6` para:
+  - `flex flex-col`
+  - `max-h-[calc(100vh-2rem)] sm:max-h-[85vh]`
+  - `overflow-hidden` no container externo
+  - Manter `w-full max-w-lg` (cada diálogo continua podendo sobrescrever a largura via `className`).
+- `DialogHeader`: adicionar `shrink-0` para nunca sumir no topo.
+- `DialogFooter`: adicionar `shrink-0 pt-2 mt-2 border-t` (opcional visual) para nunca sumir.
+- Envolver o `{children}` do meio? Não — em vez disso, criar um novo wrapper `DialogBody` opcional. Como isso exigiria refatorar 40+ arquivos, escolher abordagem alternativa mais simples:
 
-Não está no escopo: excluir a tabela do banco, alterar RLS, alterar o funcionamento real de permissões (`user_roles`, `system_access`, `despesas_aba_permissoes`).
+### Abordagem escolhida
+1. `DialogContent`: `flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[85vh] overflow-hidden p-0 sm:rounded-lg` — remove padding do container.
+2. Adicionar padding interno via um wrapper `<div className="flex flex-col gap-4 p-6 overflow-hidden max-h-full">` dentro do primitivo, mas isso quebra layout. 
 
-Validação: Após a mudança, a tela de Cadastros de Despesas não deve mais mostrar a aba "Perfis de acesso", e a página de ajuda deve conter a explicação correspondente.
+Melhor: **manter o `p-6` no `DialogContent` e não mexer em wrappers**, e delegar scroll ao conteúdo entre `Header` e `Footer`. Aplicar direto:
+
+- No primitivo: `DialogContent` recebe `flex flex-col max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] overflow-hidden`.
+- `DialogHeader` e `DialogFooter` recebem `shrink-0`.
+- Todo elemento filho entre header/footer é responsabilidade de cada dialog envolver em `overflow-y-auto`. Para não quebrar retroativamente, **também** adicionar no primitivo: qualquer child direto que não seja `header/footer` fica auto (via CSS regra `[&>*:not(:first-child):not(:last-child)]:overflow-y-auto [&>*:not(:first-child):not(:last-child)]:min-h-0`).
+
+### 2. Ajustes específicos nos diálogos maiores
+Confirmar em `LancamentoDialog.tsx`, `PagamentoDialog.tsx`, `ImovelDialog.tsx`, `RepasseDialog.tsx`, `VeiculoDialog.tsx`, `ColaboradorDialog.tsx`, `FeriasDialog.tsx`:
+- Envolver o corpo (o `<div className="grid gap-4 py-2 md:grid-cols-2">` do `LancamentoDialog`, por exemplo) com `className="... overflow-y-auto pr-1 -mr-1 min-h-0 flex-1"` para garantir rolagem interna correta mesmo se a regra CSS global não pegar.
+
+### 3. Testes visuais
+- `/despesas/calendario` → clicar em card "A Pagar" → dialog deve ter altura limitada, título fixo no topo, rodapé fixo embaixo, e conteúdo do meio rolável.
+- Verificar em viewport 1126×735 (atual do usuário) e em telas menores (mobile).
+- Testar também PagamentoDialog, ImovelDialog, RepasseDialog, VeiculoDialog.
+
+## Arquivos afetados
+- `src/components/ui/dialog.tsx` (correção estrutural)
+- `src/components/despesas/LancamentoDialog.tsx`
+- `src/components/despesas/PagamentoDialog.tsx`
+- `src/components/despesas/ImovelDialog.tsx`
+- `src/components/despesas/RepasseDialog.tsx`
+- `src/components/despesas/VeiculoDialog.tsx`
+- (Outros diálogos longos: aplicar wrapper de rolagem apenas se necessário após verificação visual.)
+
+## Fora de escopo
+- Redesenho dos formulários (número de campos, separação em abas/steps).
+- Alterações de lógica/regra de negócio nos diálogos.
