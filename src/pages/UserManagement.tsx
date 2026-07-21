@@ -543,8 +543,8 @@ function UserManagementContent() {
         .upsert({ user_id: editUser.id, name: editName.trim() }, { onConflict: 'user_id' });
       if (profileError) throw profileError;
 
-      // 4. Update role if changed (apenas super_admin altera roles)
-      if (!isSelfEdit && isSuperAdmin && editRole !== editUser.role) {
+      // 4. Update role if changed (super_admin sempre; admin apenas dentro do escopo operacional)
+      if (!isSelfEdit && editRole !== editUser.role && canEditRole(editUser)) {
         const { error: roleError } = await supabase.rpc("set_user_role", {
           _target_user_id: editUser.id,
           _new_role: editRole,
@@ -1033,13 +1033,13 @@ function UserManagementContent() {
                {/* Perfil e Sistemas - desabilitados para auto-edição */}
                {editUser?.id !== currentUser?.id && (
                  <>
-                   {isSuperAdmin && (
+                    {editUser && canEditRole(editUser) && (
                      <div className="space-y-2">
                        <Label>Perfil</Label>
                        <Select value={editRole} onValueChange={(v) => setEditRole(v as SystemRole)}>
                          <SelectTrigger><SelectValue /></SelectTrigger>
                          <SelectContent>
-                           {availableRoles.filter(r => canManageRole(r as AppRole)).map(r => (
+                            {availableRoles.map(r => (
                              <SelectItem key={r} value={r}>
                                <span className="flex items-center gap-2">{roleIcons[r]}{roleLabels[r]}</span>
                              </SelectItem>
