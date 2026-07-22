@@ -831,6 +831,8 @@ export type Database = {
           pessoa_id: string | null
           plano_conta_id: string | null
           referencia_numero: string | null
+          referencia_numero_pasta: string | null
+          referencia_numero_venda: string | null
           referencia_tipo:
             | Database["public"]["Enums"]["despesa_referencia_tipo"]
             | null
@@ -840,7 +842,7 @@ export type Database = {
           tipo: string
           updated_at: string
           valor_pago: number
-          valor_total: number
+          valor_total: number | null
         }
         Insert: {
           categoria_id?: string | null
@@ -859,6 +861,8 @@ export type Database = {
           pessoa_id?: string | null
           plano_conta_id?: string | null
           referencia_numero?: string | null
+          referencia_numero_pasta?: string | null
+          referencia_numero_venda?: string | null
           referencia_tipo?:
             | Database["public"]["Enums"]["despesa_referencia_tipo"]
             | null
@@ -868,7 +872,7 @@ export type Database = {
           tipo: string
           updated_at?: string
           valor_pago?: number
-          valor_total: number
+          valor_total?: number | null
         }
         Update: {
           categoria_id?: string | null
@@ -887,6 +891,8 @@ export type Database = {
           pessoa_id?: string | null
           plano_conta_id?: string | null
           referencia_numero?: string | null
+          referencia_numero_pasta?: string | null
+          referencia_numero_venda?: string | null
           referencia_tipo?:
             | Database["public"]["Enums"]["despesa_referencia_tipo"]
             | null
@@ -896,7 +902,7 @@ export type Database = {
           tipo?: string
           updated_at?: string
           valor_pago?: number
-          valor_total?: number
+          valor_total?: number | null
         }
         Relationships: [
           {
@@ -1174,6 +1180,8 @@ export type Database = {
           pessoa_id: string | null
           plano_conta_id: string | null
           referencia_numero: string | null
+          referencia_numero_pasta: string | null
+          referencia_numero_venda: string | null
           referencia_tipo:
             | Database["public"]["Enums"]["despesa_referencia_tipo"]
             | null
@@ -1181,7 +1189,7 @@ export type Database = {
           tipo: string
           ultima_geracao_ate: string | null
           updated_at: string
-          valor_total: number
+          valor_total: number | null
         }
         Insert: {
           ativo?: boolean
@@ -1203,6 +1211,8 @@ export type Database = {
           pessoa_id?: string | null
           plano_conta_id?: string | null
           referencia_numero?: string | null
+          referencia_numero_pasta?: string | null
+          referencia_numero_venda?: string | null
           referencia_tipo?:
             | Database["public"]["Enums"]["despesa_referencia_tipo"]
             | null
@@ -1210,7 +1220,7 @@ export type Database = {
           tipo: string
           ultima_geracao_ate?: string | null
           updated_at?: string
-          valor_total: number
+          valor_total?: number | null
         }
         Update: {
           ativo?: boolean
@@ -1232,6 +1242,8 @@ export type Database = {
           pessoa_id?: string | null
           plano_conta_id?: string | null
           referencia_numero?: string | null
+          referencia_numero_pasta?: string | null
+          referencia_numero_venda?: string | null
           referencia_tipo?:
             | Database["public"]["Enums"]["despesa_referencia_tipo"]
             | null
@@ -1239,7 +1251,7 @@ export type Database = {
           tipo?: string
           ultima_geracao_ate?: string | null
           updated_at?: string
-          valor_total?: number
+          valor_total?: number | null
         }
         Relationships: [
           {
