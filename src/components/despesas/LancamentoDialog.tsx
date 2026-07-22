@@ -422,14 +422,21 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
             />
           </div>
           <div className="space-y-2">
-            <Label>Valor total (R$) *</Label>
+            <Label>Valor total (R$)</Label>
             <Input
               type="number"
               min={0}
               step="0.01"
-              value={form.valor_total}
-              onChange={(e) => setForm({ ...form, valor_total: Number(e.target.value) })}
+              placeholder="Opcional"
+              value={form.valor_total ?? ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                setForm({ ...form, valor_total: v === "" ? null : Number(v) });
+              }}
             />
+            <p className="text-[11px] text-muted-foreground">
+              Este módulo é uma agenda de acompanhamento. O valor é opcional e pode variar a cada ocorrência.
+            </p>
           </div>
 
           <div className="space-y-2 md:col-span-2">
@@ -475,7 +482,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
 
           <div className="md:col-span-2">
             <DuplicidadeAlert
-              valor={form.valor_total}
+              valor={form.valor_total ?? 0}
               data_vencimento={form.data_vencimento}
               centro_custo_id={form.centro_custo_id}
               pessoa_id={form.pessoa_id}
