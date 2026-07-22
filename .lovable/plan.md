@@ -1,79 +1,67 @@
-## Ajustes no módulo Despesas
+## Contexto
 
-### 1. Campo "Valor total" opcional
+A tabela `despesas_pessoas` já existe na base (nome, tipo_pessoa, cpf_cnpj, oab, creci, papeis[], email, telefone, observacao, is_active) e é referenciada por Imóveis (`proprietario_id`, `inquilino_id`), Veículos (`motorista_id`, `proprietario_id`, `comprador_id`) e Lançamentos (`pessoa_id`). Mas a aba **Pessoas** em `/despesas/cadastros` só mostra um card de aviso — não existe UI para cadastrar. Por isso, ao abrir o diálogo de Imóvel, os comboboxes de Proprietário e Inquilino ficam vazios e o usuário não consegue "alocar" ninguém.
 
-- Em `src/components/despesas/LancamentoDialog.tsx`: remover asterisco do label, remover `form.valor_total > 0` do `podeSalvar`, aceitar vazio/`null`.
-- Em `src/hooks/useDespesasLancamentos.ts`: `valor_total` no `LancamentoInput` passa a ser `number | null`.
-- Migration nova `db/migrations/20260731120000_despesas_valor_opcional.sql`:
-  - `ALTER TABLE despesas_lancamentos ALTER COLUMN valor_total DROP NOT NULL;`
-  - `ALTER TABLE despesas_recorrencias ALTER COLUMN valor_total DROP NOT NULL;`
-  - Ajustar `despesas_gerar_ocorrencias` para propagar `NULL` normalmente (já propaga; sem mudança lógica).
-  - Ajustar cálculos/relatórios que usam `valor_total` para `COALESCE(valor_total, 0)` onde necessário.
-- Exibir valor como opcional em listagens: se `NULL`, mostrar "—" no calendário e relatórios.
+## Objetivo
 
-### 2. Valores que variam por mês (recorrência com valor por ocorrência)
+1. Transformar a aba **Pessoas** num CRUD completo.
+2. Modelar **papéis** de forma explícita e reutilizável (proprietário, inquilino, loja/fornecedor, cliente, funcionário, motorista, corretor, outro), permitindo múltiplos papéis por pessoa.
+3. Fazer os seletores de Proprietário/Inquilino (e demais) filtrarem por papel, com atalho para cadastrar uma nova pessoa direto do diálogo do Imóvel.
 
-- Reforçar mensagem no bloco de recorrência: "O valor definido aqui é apenas uma previsão. Cada ocorrência gerada pode ser editada individualmente com o valor real do mês."
-- Como cada ocorrência já vira uma linha em `despesas_lancamentos` editável, basta permitir editar `valor_total` na ocorrência (já é possível). Nada de schema novo — apenas texto de ajuda e permitir salvar recorrência sem valor (usa `NULL` como previsão em aberto).
+## O que será construído
 
-### 3. Remover campo "Subcategoria"
+### 1. Backend (uma migration em `db/migrations/`)
 
-- Remover o bloco `<Label>Subcategoria</Label>` em `LancamentoDialog.tsx`.
-- Remover `subcategorias` do hook `useDespesasLookups` e `subcategoria_id` de `LancamentoInput`/`emptyForm`/`setForm`/`salvar`.
-- Remover referências em `RecorrenciaBlock` e `useDespesasRecorrencias` (manter coluna no BD para não quebrar dados antigos; apenas parar de expor e enviar sempre `null`).
-- Não remover a tabela `despesas_subcategorias` do BD (mantém histórico).
+- Padronizar o vocabulário de `despesas_pessoas.papeis` (array de text) com um CHECK controlado:
+  - Valores aceitos: `proprietario`, `inquilino`, `loja`, `fornecedor`, `cliente`, `funcionario`, `motorista`, `corretor`, `outro`.
+- Índice GIN em `papeis` para busca rápida por papel.
+- Trigger `updated_at`.
+- Confirmar/ajustar policies existentes (view liberada às abas cadastros/calendario/repasses/imoveis; edit exige `cadastros` edit).
+- **Não** exigir CPF/CNPJ único (permitir nulo e evitar bloqueios); apenas normalizar (remover máscara) via trigger opcional.
 
-### 4. Referências: 4 campos simultâneos, ao menos 1 obrigatório
+### 2. Hook novo — `src/hooks/useDespesasPessoas.ts`
 
-Substituir o Select "tipo de referência + um campo dinâmico" por um bloco com os quatro campos visíveis em paralelo:
+- Types: `Pessoa`, `PessoaInput`, `PapelPessoa`.
+- `usePessoas({ papel?, busca?, apenasAtivas? })` — lista com filtro por papel via `.contains("papeis", [papel])` e busca ilike em nome/cpf_cnpj.
+- `useSavePessoa()` (insert/update).
+- `useDeletePessoa()` (soft-delete via `is_active=false`; bloqueia se estiver referenciada em imóveis/veículos/lançamentos → tratar erro FK com mensagem amigável).
 
-```text
-Referência (informe ao menos um):
-[ Nº de Pasta ]  [ Cód. Venda ]
-[ Imóvel (combobox) ]  [ Pessoa (combobox) ]
-```
+### 3. UI da aba Pessoas — `PessoasTab` em `DespesasCadastros.tsx`
 
-- Remover `referencia_tipo` da UI e do payload enviado (mantida no BD para dados antigos; nova regra grava sempre `NULL`).
-- Migration `db/migrations/20260731130000_despesas_referencia_multi.sql`:
-  - `DROP` do CHECK `despesas_lancamentos_referencia_ck` e `despesas_recorrencias_referencia_ck`.
-  - Novo CHECK exigindo ao menos um preenchido:
-  `CHECK (pessoa_id IS NOT NULL OR imovel_id IS NOT NULL OR (referencia_numero_pasta IS NOT NULL) OR (referencia_numero_venda IS NOT NULL))`.
-  - Adicionar `referencia_numero_pasta text` e `referencia_numero_venda text` (ambos `~ '^[0-9]+$'` quando não nulo). Backfill a partir de `referencia_tipo`+`referencia_numero`.
-- Atualizar `LancamentoInput`, `useSaveLancamento`, `RecorrenciaBlock`, `despesas_gerar_ocorrencias` para propagar os quatro campos.
-- Validação no `podeSalvar`: exigir pelo menos um dos quatro.
+- Tabela com: Nome, Tipo (PF/PJ), CPF/CNPJ, Papéis (badges), Contato, Ações.
+- Barra superior: busca por nome/documento, filtro por papel (multi), botão "Nova pessoa".
+- `PessoaDialog` (novo componente `src/components/despesas/PessoaDialog.tsx`) com:
+  - Nome*, Tipo (Física/Jurídica), CPF/CNPJ (com máscara), OAB, CRECI, Email, Telefone.
+  - **Papéis** como grupo de checkboxes (multi-seleção) — obrigatório ao menos um.
+  - Observação.
+- AlertDialog para confirmar exclusão/desativação (padrão do projeto).
 
-### 5. Admin (Taysa) sem imóveis visíveis
+### 4. Diálogo de Imóvel — ajustes em `ImovelDialog.tsx`
 
-Causa confirmada: após o fix `despesas_centros_permitidos_deny_default`, a função só retorna centros para `super_admin` ou usuários com entradas em `despesas_centros_custo_permissoes`. Admin comum sem entradas explícitas fica com lista vazia → RLS de `despesas_imoveis` (e outras tabelas escopadas por centro) filtra tudo.
+- Filtrar `pessoas` do combobox de **Proprietário** por papel `proprietario` e **Inquilino** por papel `inquilino` (usar `usePessoas({ papel })`).
+- Ordenar por nome e mostrar CPF/CNPJ ao lado no label (`João Silva — 123.456.789-00`) para diferenciar homônimos.
+- Botão "+ Nova pessoa" ao lado de cada combobox, abrindo o `PessoaDialog` já com o papel pré-marcado; ao salvar, refetch e auto-selecionar a pessoa criada.
+- Se o registro editado tem `proprietario_id`/`inquilino_id` cujo papel não bate mais (ex.: papel removido), exibir alerta discreto e ainda permitir manter a seleção atual.
 
-Correção: tratar `admin` como super no escopo de leitura de despesas.
+### 5. Aproveitar em outros pontos
 
-- Migration `db/migrations/20260731140000_despesas_centros_admin_scope.sql`:
-  - Atualizar `public.despesas_centros_permitidos(uuid)` para retornar todos os centros ativos também quando o usuário tiver role `admin` (não apenas `super_admin`).
-  - Manter deny-default para colaboradores/gerentes/supervisores sem entradas explícitas.
-- Nenhuma mudança no frontend.
+- `LancamentoDialog` já usa `pessoas` via `useDespesasLookups`; adicionar botão "+ Nova pessoa" no combobox e continuar mostrando todas (qualquer papel).
+- `VeiculoDialog`: filtrar por papéis `motorista`, `proprietario`, `cliente` conforme o campo.
 
-### 6. Reforço do posicionamento do sistema (registro, não controle financeiro)
+### 6. Ajuda
 
-- Ajustar `src/pages/despesas/DespesasHelp.tsx`: bloco no topo deixando explícito "Este é um sistema de acompanhamento (agenda de contas); valores são opcionais e servem apenas de referência. O controle financeiro é feito em sistema externo." **Não precisa desse texto, só quero que você verifique o que já foi feito e crie um sistema de registro e controle, e não financeiro**
-- Ajustar títulos/labels de valor para "Valor (opcional)".
+- Atualizar `DespesasHelp.tsx`: seção "Pessoas" explicando papéis e como isso alimenta os demais cadastros.
 
 ## Detalhes técnicos
 
-Arquivos alterados:
+- Papéis vivem em coluna `text[]` (não criar tabela auxiliar) — simples e suficiente. Consulta: `.contains("papeis", ["proprietario"])`.
+- Nenhum breaking change em FKs — apenas passamos a preencher a tabela.
+- Sem alteração de RLS além do CHECK/índice.
+- Confirmações destrutivas via `AlertDialog` (memória do projeto).
+- Timers/debounce continuam com `ReturnType<typeof setTimeout>`.
 
-- `src/components/despesas/LancamentoDialog.tsx`
-- `src/components/despesas/RecorrenciaBlock.tsx`
-- `src/hooks/useDespesasLancamentos.ts`
-- `src/hooks/useDespesasRecorrencias.ts`
-- `src/pages/despesas/DespesasCalendario.tsx` (exibir "—" quando `valor_total` nulo)
-- `src/pages/despesas/DespesasHelp.tsx`
-- `src/pages/despesas/DespesasRelatorios.tsx` (COALESCE em somas)
+## Fora do escopo (para depois)
 
-Migrations novas (executar na ordem):
-
-1. `20260731120000_despesas_valor_opcional.sql`
-2. `20260731130000_despesas_referencia_multi.sql`
-3. `20260731140000_despesas_centros_admin_scope.sql`
-
-Sem mudanças em RLS além do item 5. `referencia_tipo`/`referencia_numero`/`subcategoria_id` permanecem no schema para preservar histórico.
+- Endereço completo por pessoa.
+- Histórico de troca de inquilino no imóvel (já existe `despesas_imovel_situacao_historico`; ligação com pessoa fica para próxima etapa).
+- Importação em lote de pessoas.
