@@ -26,15 +26,3 @@ CREATE INDEX IF NOT EXISTS idx_desp_pessoas_papeis
 
 CREATE INDEX IF NOT EXISTS idx_desp_pessoas_nome_lower
   ON public.despesas_pessoas (lower(nome));
-
--- Trigger de updated_at (idempotente).
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_desp_pessoas_updated_at'
-  ) THEN
-    CREATE TRIGGER trg_desp_pessoas_updated_at
-      BEFORE UPDATE ON public.despesas_pessoas
-      FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-  END IF;
-END $$;
