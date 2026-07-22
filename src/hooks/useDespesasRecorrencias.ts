@@ -16,7 +16,7 @@ export interface Recorrencia {
   ultima_geracao_ate: string | null;
   lanc_tipo: "a_pagar" | "a_receber";
   descricao: string;
-  valor_total: number;
+  valor_total: number | null;
   centro_custo_id: string;
   categoria_id: string | null;
   plano_conta_id: string | null;
@@ -26,6 +26,8 @@ export interface Recorrencia {
   imovel_id: string | null;
   referencia_tipo: DespesaReferenciaTipo | null;
   referencia_numero: string | null;
+  referencia_numero_pasta: string | null;
+  referencia_numero_venda: string | null;
   observacao: string | null;
   created_at: string;
   updated_at: string;

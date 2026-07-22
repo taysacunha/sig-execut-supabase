@@ -59,6 +59,8 @@ export default function DespesasRecorrencias() {
           imovel_id: r.imovel_id,
           referencia_tipo: r.referencia_tipo,
           referencia_numero: r.referencia_numero,
+          referencia_numero_pasta: r.referencia_numero_pasta,
+          referencia_numero_venda: r.referencia_numero_venda,
           observacao: r.observacao,
         },
       });
@@ -133,7 +135,9 @@ export default function DespesasRecorrencias() {
                     <TableRow key={r.id}>
                       <TableCell className="font-medium">{r.descricao}</TableCell>
                       <TableCell>{TIPO_LABEL[r.tipo] ?? r.tipo}</TableCell>
-                      <TableCell>R$ {Number(r.valor_total).toFixed(2)}</TableCell>
+                      <TableCell>
+                        {r.valor_total == null ? "—" : `R$ ${Number(r.valor_total).toFixed(2)}`}
+                      </TableCell>
                       <TableCell>{r.centro_custo?.nome ?? "—"}</TableCell>
                       <TableCell>
                         {format(new Date(r.data_inicio + "T00:00:00"), "dd/MM/yyyy", { locale: ptBR })}

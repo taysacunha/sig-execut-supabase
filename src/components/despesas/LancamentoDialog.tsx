@@ -20,7 +20,7 @@ import { ComboboxSelect } from "@/components/ui/combobox-select";
 import {
   Lancamento, LancamentoInput, LancamentoTipo, useDespesasLookups,
   useSaveLancamento, useLancamentoCredenciais, useSaveLancamentoCredenciais,
-  LancamentoCredenciais, DespesaReferenciaTipo,
+  LancamentoCredenciais,
 } from "@/hooks/useDespesasLancamentos";
 import {
   RecorrenciaBlock, RecorrenciaFormState,
@@ -36,7 +36,7 @@ interface Props {
 }
 
 export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: Props) {
-  const { centros, categorias, planos, subcategorias, contas, pessoas, imoveis } = useDespesasLookups();
+  const { centros, categorias, planos, contas, pessoas, imoveis } = useDespesasLookups();
   const saveMut = useSaveLancamento();
   const saveRecMut = useSaveRecorrencia();
   const credQuery = useLancamentoCredenciais(editing?.id ?? null);
@@ -50,6 +50,8 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
     imovel_id: null,
     referencia_tipo: null,
     referencia_numero: null,
+    referencia_numero_pasta: null,
+    referencia_numero_venda: null,
     centro_custo_id: "",
     categoria_id: null,
     plano_conta_id: null,
@@ -57,7 +59,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
     conta_bancaria_id: null,
     data_competencia: new Date().toISOString().slice(0, 10),
     data_vencimento: new Date().toISOString().slice(0, 10),
-    valor_total: 0,
+    valor_total: null,
     observacao: null,
   });
 
@@ -85,6 +87,8 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
         imovel_id: editing.imovel_id,
         referencia_tipo: editing.referencia_tipo,
         referencia_numero: editing.referencia_numero,
+        referencia_numero_pasta: editing.referencia_numero_pasta,
+        referencia_numero_venda: editing.referencia_numero_venda,
         centro_custo_id: editing.centro_custo_id,
         categoria_id: editing.categoria_id,
         plano_conta_id: editing.plano_conta_id,
@@ -92,7 +96,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
         conta_bancaria_id: editing.conta_bancaria_id,
         data_competencia: editing.data_competencia,
         data_vencimento: editing.data_vencimento,
-        valor_total: Number(editing.valor_total),
+        valor_total: editing.valor_total == null ? null : Number(editing.valor_total),
         observacao: editing.observacao,
       });
       setRec({
@@ -123,32 +127,29 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
     else if (editing && credQuery.isFetched && !credQuery.data) setCredenciais({});
   }, [editing, credQuery.data, credQuery.isFetched]);
 
-  const subcatsFiltradas = useMemo(() => {
-    if (!form.plano_conta_id) return [];
-    return (subcategorias.data ?? []).filter((s) => s.plano_conta_id === form.plano_conta_id);
-  }, [subcategorias.data, form.plano_conta_id]);
+  const referenciaPreenchida =
+    !!form.pessoa_id ||
+    !!form.imovel_id ||
+    (!!form.referencia_numero_pasta && /^[0-9]+$/.test(form.referencia_numero_pasta)) ||
+    (!!form.referencia_numero_venda && /^[0-9]+$/.test(form.referencia_numero_venda));
 
   const podeSalvar =
     form.descricao.trim().length > 0 &&
     !!form.centro_custo_id &&
-    form.valor_total > 0 &&
     !!form.data_vencimento &&
     !!form.data_competencia &&
-    !!form.referencia_tipo &&
-    (
-      (form.referencia_tipo === "pessoa" && !!form.pessoa_id) ||
-      (form.referencia_tipo === "imovel" && !!form.imovel_id) ||
-      ((form.referencia_tipo === "pasta" || form.referencia_tipo === "venda") &&
-        !!form.referencia_numero && /^[0-9]+$/.test(form.referencia_numero))
-    );
+    referenciaPreenchida;
 
   async function salvar() {
     try {
-      if (!form.referencia_tipo) {
-        toast.error("Selecione o tipo de referência");
+      if (!referenciaPreenchida) {
+        toast.error("Preencha pelo menos um campo de referência (Pasta, Venda, Imóvel ou Pessoa)");
         return;
       }
-      const savedId = await saveMut.mutateAsync({ id: editing?.id, input: form });
+      // Novos lançamentos gravam sempre nos campos novos; referencia_tipo/número
+      // legado permanece apenas para histórico.
+      const payload: LancamentoInput = { ...form, referencia_tipo: null, referencia_numero: null };
+      const savedId = await saveMut.mutateAsync({ id: editing?.id, input: payload });
       if (canEditCredenciais) {
         try {
           await saveCredMut.mutateAsync({ lancamentoId: savedId, credenciais });
@@ -173,12 +174,14 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
             centro_custo_id: form.centro_custo_id,
             categoria_id: form.categoria_id ?? null,
             plano_conta_id: form.plano_conta_id ?? null,
-            subcategoria_id: form.subcategoria_id ?? null,
+            subcategoria_id: null,
             conta_bancaria_id: form.conta_bancaria_id ?? null,
             pessoa_id: form.pessoa_id ?? null,
-              imovel_id: form.imovel_id ?? null,
-              referencia_tipo: form.referencia_tipo ?? null,
-              referencia_numero: form.referencia_numero ?? null,
+            imovel_id: form.imovel_id ?? null,
+            referencia_tipo: null,
+            referencia_numero: null,
+            referencia_numero_pasta: form.referencia_numero_pasta ?? null,
+            referencia_numero_venda: form.referencia_numero_venda ?? null,
             observacao: form.observacao ?? null,
           },
         });
@@ -237,45 +240,42 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
 
           <div className="space-y-2 md:col-span-2 border rounded-md p-3">
             <Label className="text-sm">Referência *</Label>
+            <p className="text-xs text-muted-foreground">
+              Informe ao menos um dos campos abaixo. Você pode preencher mais de um.
+            </p>
             <div className="grid gap-3 md:grid-cols-2">
-              <Select
-                value={form.referencia_tipo ?? ""}
-                onValueChange={(v) => {
-                  const tipo = v as DespesaReferenciaTipo;
-                  setForm({
-                    ...form,
-                    referencia_tipo: tipo,
-                    referencia_numero: null,
-                    pessoa_id: tipo === "pessoa" ? form.pessoa_id : null,
-                    imovel_id: tipo === "imovel" ? form.imovel_id : null,
-                  });
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pasta">Nº de Pasta</SelectItem>
-                  <SelectItem value="venda">Cód. Venda</SelectItem>
-                  <SelectItem value="imovel">Imóvel</SelectItem>
-                  <SelectItem value="pessoa">Pessoa</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {(form.referencia_tipo === "pasta" || form.referencia_tipo === "venda") && (
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Nº de Pasta</Label>
                 <Input
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
-                  placeholder={form.referencia_tipo === "pasta" ? "Número da pasta" : "Código da venda"}
-                  value={form.referencia_numero ?? ""}
+                  placeholder="Somente números"
+                  value={form.referencia_numero_pasta ?? ""}
                   onChange={(e) => {
                     const only = e.target.value.replace(/\D+/g, "");
-                    setForm({ ...form, referencia_numero: only || null });
+                    setForm({ ...form, referencia_numero_pasta: only || null });
                   }}
                   maxLength={20}
                 />
-              )}
-
-              {form.referencia_tipo === "imovel" && (
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Cód. Venda</Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="Somente números"
+                  value={form.referencia_numero_venda ?? ""}
+                  onChange={(e) => {
+                    const only = e.target.value.replace(/\D+/g, "");
+                    setForm({ ...form, referencia_numero_venda: only || null });
+                  }}
+                  maxLength={20}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Imóvel</Label>
                 <Popover open={imovelPopoverOpen} onOpenChange={setImovelPopoverOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -303,6 +303,17 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
                       <CommandList>
                         <CommandEmpty>Nenhum imóvel encontrado.</CommandEmpty>
                         <CommandGroup>
+                          {form.imovel_id && (
+                            <CommandItem
+                              value="__limpar__"
+                              onSelect={() => {
+                                setForm({ ...form, imovel_id: null });
+                                setImovelPopoverOpen(false);
+                              }}
+                            >
+                              <span className="text-xs text-muted-foreground">Limpar seleção</span>
+                            </CommandItem>
+                          )}
                           {(imoveis.data ?? []).map((i) => {
                             const label = `${i.codigo ?? ""} ${i.descricao} ${i.endereco ?? ""}`.trim();
                             return (
@@ -331,9 +342,9 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
                     </Command>
                   </PopoverContent>
                 </Popover>
-              )}
-
-              {form.referencia_tipo === "pessoa" && (
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Pessoa</Label>
                 <ComboboxSelect
                   value={form.pessoa_id}
                   onChange={(v) => setForm({ ...form, pessoa_id: v })}
@@ -341,8 +352,9 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
                   placeholder="Selecione a pessoa"
                   searchPlaceholder="Buscar pessoa…"
                   emptyText="Nenhuma pessoa encontrada."
+                  allowClear
                 />
-              )}
+              </div>
             </div>
           </div>
 
@@ -373,23 +385,10 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
             <Label>Plano de conta</Label>
             <ComboboxSelect
               value={form.plano_conta_id}
-              onChange={(v) => setForm({ ...form, plano_conta_id: v, subcategoria_id: null })}
+              onChange={(v) => setForm({ ...form, plano_conta_id: v })}
               options={(planos.data ?? []).map((p) => ({ value: p.id, label: p.nome }))}
               placeholder="Opcional"
               searchPlaceholder="Buscar plano…"
-              allowClear
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Subcategoria</Label>
-            <ComboboxSelect
-              value={form.subcategoria_id}
-              onChange={(v) => setForm({ ...form, subcategoria_id: v })}
-              options={subcatsFiltradas.map((s) => ({ value: s.id, label: s.nome }))}
-              placeholder={form.plano_conta_id ? "Opcional" : "Escolha um plano primeiro"}
-              searchPlaceholder="Buscar subcategoria…"
-              disabled={!form.plano_conta_id}
               allowClear
             />
           </div>
@@ -423,14 +422,21 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
             />
           </div>
           <div className="space-y-2">
-            <Label>Valor total (R$) *</Label>
+            <Label>Valor total (R$)</Label>
             <Input
               type="number"
               min={0}
               step="0.01"
-              value={form.valor_total}
-              onChange={(e) => setForm({ ...form, valor_total: Number(e.target.value) })}
+              placeholder="Opcional"
+              value={form.valor_total ?? ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                setForm({ ...form, valor_total: v === "" ? null : Number(v) });
+              }}
             />
+            <p className="text-[11px] text-muted-foreground">
+              Este módulo é uma agenda de acompanhamento. O valor é opcional e pode variar a cada ocorrência.
+            </p>
           </div>
 
           <div className="space-y-2 md:col-span-2">
@@ -476,7 +482,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
 
           <div className="md:col-span-2">
             <DuplicidadeAlert
-              valor={form.valor_total}
+              valor={form.valor_total ?? 0}
               data_vencimento={form.data_vencimento}
               centro_custo_id={form.centro_custo_id}
               pessoa_id={form.pessoa_id}
