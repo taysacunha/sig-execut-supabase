@@ -22,6 +22,8 @@ import {
 } from "@/hooks/useDespesasImoveis";
 import { useDespesasLookups } from "@/hooks/useDespesasLancamentos";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
+import { usePessoas, PapelPessoa } from "@/hooks/useDespesasPessoas";
+import { PessoaDialog } from "@/components/despesas/PessoaDialog";
 
 interface Props {
   open: boolean;
@@ -46,6 +48,11 @@ const tipos: { v: ImovelTipo; l: string }[] = [
 export function ImovelDialog({ open, onOpenChange, editing }: Props) {
   const { centros, pessoas } = useDespesasLookups();
   const saveMut = useSaveImovel();
+
+  const proprietarios = usePessoas({ papel: "proprietario" });
+  const inquilinos = usePessoas({ papel: "inquilino" });
+  const [novaPessoaPapel, setNovaPessoaPapel] = useState<PapelPessoa | null>(null);
+  const [pessoaAlvo, setPessoaAlvo] = useState<"proprietario" | "inquilino" | null>(null);
 
   const empty = (): ImovelInput => ({
     codigo: null,
@@ -76,6 +83,9 @@ export function ImovelDialog({ open, onOpenChange, editing }: Props) {
   }, [open, editing]);
 
   const podeSalvar = form.descricao.trim().length > 0 && !!form.centro_custo_id;
+
+  const pessoaLabel = (p: { nome: string; cpf_cnpj?: string | null }) =>
+    p.cpf_cnpj ? `${p.nome} — ${p.cpf_cnpj}` : p.nome;
 
   async function salvar() {
     try {
@@ -137,25 +147,61 @@ export function ImovelDialog({ open, onOpenChange, editing }: Props) {
               </div>
               <div className="space-y-2">
                 <Label>Proprietário</Label>
-                <ComboboxSelect
-                  value={form.proprietario_id}
-                  onChange={(v) => setForm({ ...form, proprietario_id: v })}
-                  options={(pessoas.data ?? []).map(p => ({ value: p.id, label: p.nome }))}
-                  placeholder="Opcional"
-                  searchPlaceholder="Buscar pessoa…"
-                  allowClear
-                />
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <ComboboxSelect
+                      value={form.proprietario_id}
+                      onChange={(v) => setForm({ ...form, proprietario_id: v })}
+                      options={(proprietarios.data ?? []).map(p => ({
+                        value: p.id,
+                        label: pessoaLabel(p),
+                        keywords: [p.cpf_cnpj ?? ""],
+                      }))}
+                      placeholder="Selecione um proprietário"
+                      searchPlaceholder="Buscar por nome ou documento…"
+                      emptyText="Nenhum proprietário cadastrado."
+                      allowClear
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => { setPessoaAlvo("proprietario"); setNovaPessoaPapel("proprietario"); }}
+                    title="Cadastrar nova pessoa"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Inquilino atual</Label>
-                <ComboboxSelect
-                  value={form.inquilino_id}
-                  onChange={(v) => setForm({ ...form, inquilino_id: v })}
-                  options={(pessoas.data ?? []).map(p => ({ value: p.id, label: p.nome }))}
-                  placeholder="Opcional"
-                  searchPlaceholder="Buscar pessoa…"
-                  allowClear
-                />
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <ComboboxSelect
+                      value={form.inquilino_id}
+                      onChange={(v) => setForm({ ...form, inquilino_id: v })}
+                      options={(inquilinos.data ?? []).map(p => ({
+                        value: p.id,
+                        label: pessoaLabel(p),
+                        keywords: [p.cpf_cnpj ?? ""],
+                      }))}
+                      placeholder="Selecione um inquilino"
+                      searchPlaceholder="Buscar por nome ou documento…"
+                      emptyText="Nenhum inquilino cadastrado."
+                      allowClear
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => { setPessoaAlvo("inquilino"); setNovaPessoaPapel("inquilino"); }}
+                    title="Cadastrar nova pessoa"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label>Endereço</Label>
@@ -196,6 +242,17 @@ export function ImovelDialog({ open, onOpenChange, editing }: Props) {
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <PessoaDialog
+        open={!!novaPessoaPapel}
+        onOpenChange={(o) => { if (!o) { setNovaPessoaPapel(null); setPessoaAlvo(null); } }}
+        editing={null}
+        papelPreSelecionado={novaPessoaPapel ?? undefined}
+        onSaved={(id) => {
+          if (pessoaAlvo === "proprietario") setForm((f) => ({ ...f, proprietario_id: id }));
+          if (pessoaAlvo === "inquilino") setForm((f) => ({ ...f, inquilino_id: id }));
+        }}
+      />
     </Dialog>
   );
 }

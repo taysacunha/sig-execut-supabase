@@ -22,6 +22,15 @@ import {
 } from "@/hooks/useDespesasVeiculos";
 import { VeiculoDialog } from "@/components/despesas/VeiculoDialog";
 import { CalendarClock } from "lucide-react";
+import {
+  usePessoas, useDeletePessoa, Pessoa, PAPEIS_PESSOA, PapelPessoa, labelPapel,
+} from "@/hooks/useDespesasPessoas";
+import { PessoaDialog } from "@/components/despesas/PessoaDialog";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select as SelectRoot, SelectContent as SelectContentRoot, SelectItem as SelectItemRoot,
+  SelectTrigger as SelectTriggerRoot, SelectValue as SelectValueRoot,
+} from "@/components/ui/select";
 
 type NamedRow = { id: string; nome: string; descricao?: string | null; is_active: boolean };
 
@@ -245,14 +254,7 @@ export default function DespesasCadastros() {
           <SimpleCadastroCrud tabela="despesas_contas_bancarias" singular="Conta bancária" plural="Contas bancárias" canEdit={canEdit} canDelete={canDelete} />
         </TabsContent>
         <TabsContent value="pessoas" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Pessoas</CardTitle>
-              <CardDescription>
-                Cadastro completo (CPF/CNPJ, OAB, CRECI, papéis) entra na Fase 2 quando ligamos a Pessoa aos lançamentos. Já está disponível na base para uso via consulta.
-              </CardDescription>
-            </CardHeader>
-          </Card>
+          <PessoasTab canEdit={canEdit} canDelete={canDelete} />
         </TabsContent>
         <TabsContent value="veiculos" className="mt-4">
           <VeiculosTab canEdit={canEdit} canDelete={canDelete} />
@@ -382,6 +384,148 @@ function VeiculosTab({ canEdit, canDelete }: { canEdit: boolean; canDelete: bool
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={(e) => { e.preventDefault(); gerar(); }}>Gerar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  );
+}
+
+function PessoasTab({ canEdit, canDelete }: { canEdit: boolean; canDelete: boolean }) {
+  const [busca, setBusca] = useState("");
+  const [papelFiltro, setPapelFiltro] = useState<PapelPessoa | "todos">("todos");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Pessoa | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Pessoa | null>(null);
+
+  const { data: rows = [], isLoading } = usePessoas({
+    busca,
+    papel: papelFiltro === "todos" ? undefined : papelFiltro,
+  });
+  const delMut = useDeletePessoa();
+
+  const openNew = () => { setEditing(null); setDialogOpen(true); };
+  const openEdit = (p: Pessoa) => { setEditing(p); setDialogOpen(true); };
+
+  async function excluir() {
+    if (!confirmDelete) return;
+    try {
+      await delMut.mutateAsync(confirmDelete.id);
+      toast.success("Pessoa desativada");
+      setConfirmDelete(null);
+    } catch (e: any) {
+      const msg = /foreign key|violates|referenced/i.test(e?.message ?? "")
+        ? "Não é possível desativar: pessoa está vinculada a imóveis, veículos ou lançamentos."
+        : (e?.message ?? "Erro ao desativar");
+      toast.error(msg);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-3 flex-wrap">
+        <div>
+          <CardTitle>Pessoas</CardTitle>
+          <CardDescription>
+            Proprietários, inquilinos, lojas, fornecedores, motoristas e demais contatos usados no módulo.
+          </CardDescription>
+        </div>
+        {canEdit && (
+          <Button onClick={openNew} size="sm"><Plus className="h-4 w-4 mr-2" />Nova pessoa</Button>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex gap-2 flex-wrap">
+          <Input
+            className="max-w-sm"
+            placeholder="Buscar por nome ou CPF/CNPJ…"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+          />
+          <SelectRoot value={papelFiltro} onValueChange={(v: any) => setPapelFiltro(v)}>
+            <SelectTriggerRoot className="w-56"><SelectValueRoot placeholder="Papel" /></SelectTriggerRoot>
+            <SelectContentRoot>
+              <SelectItemRoot value="todos">Todos os papéis</SelectItemRoot>
+              {PAPEIS_PESSOA.map((p) => (
+                <SelectItemRoot key={p.v} value={p.v}>{p.l}</SelectItemRoot>
+              ))}
+            </SelectContentRoot>
+          </SelectRoot>
+        </div>
+
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Carregando…</p>
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nenhuma pessoa cadastrada.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead>CPF/CNPJ</TableHead>
+                <TableHead>Papéis</TableHead>
+                <TableHead>Contato</TableHead>
+                <TableHead className="w-24 text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((p) => (
+                <TableRow key={p.id}>
+                  <TableCell className="font-medium">{p.nome}</TableCell>
+                  <TableCell className="text-muted-foreground">{p.tipo_pessoa === "juridica" ? "PJ" : "PF"}</TableCell>
+                  <TableCell className="text-muted-foreground">{p.cpf_cnpj ?? "—"}</TableCell>
+                  <TableCell>
+                    <div className="flex gap-1 flex-wrap">
+                      {p.papeis.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      ) : p.papeis.map((pp) => (
+                        <Badge key={pp} variant="secondary" className="text-xs">{labelPapel(pp)}</Badge>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-xs">
+                    {p.email && <div>{p.email}</div>}
+                    {p.telefone && <div>{p.telefone}</div>}
+                    {!p.email && !p.telefone && "—"}
+                  </TableCell>
+                  <TableCell className="text-right space-x-1">
+                    {canEdit && (
+                      <Button size="icon" variant="ghost" onClick={() => openEdit(p)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button size="icon" variant="ghost" onClick={() => setConfirmDelete(p)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+
+      <PessoaDialog open={dialogOpen} onOpenChange={setDialogOpen} editing={editing} />
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desativar pessoa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <b>{confirmDelete?.nome}</b> deixará de aparecer nas listas. Se estiver vinculada a imóveis, veículos ou lançamentos, a desativação será bloqueada.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => { e.preventDefault(); excluir(); }}
+            >
+              Desativar
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
