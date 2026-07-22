@@ -43,8 +43,10 @@ const STATUS_META: Record<LancamentoStatus, { label: string; variant: any; icon:
   gimob: { label: "GIMOB", variant: "secondary", icon: CheckCircle2 },
 };
 
-function fmtBRL(v: number | string) {
+function fmtBRL(v: number | string | null | undefined) {
+  if (v === null || v === undefined || v === "") return "—";
   const n = typeof v === "string" ? Number(v) : v;
+  if (!Number.isFinite(n)) return "—";
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 function fmtDate(iso: string) {
