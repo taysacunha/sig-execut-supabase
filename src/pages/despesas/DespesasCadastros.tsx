@@ -22,6 +22,15 @@ import {
 } from "@/hooks/useDespesasVeiculos";
 import { VeiculoDialog } from "@/components/despesas/VeiculoDialog";
 import { CalendarClock } from "lucide-react";
+import {
+  usePessoas, useDeletePessoa, Pessoa, PAPEIS_PESSOA, PapelPessoa, labelPapel,
+} from "@/hooks/useDespesasPessoas";
+import { PessoaDialog } from "@/components/despesas/PessoaDialog";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select as SelectRoot, SelectContent as SelectContentRoot, SelectItem as SelectItemRoot,
+  SelectTrigger as SelectTriggerRoot, SelectValue as SelectValueRoot,
+} from "@/components/ui/select";
 
 type NamedRow = { id: string; nome: string; descricao?: string | null; is_active: boolean };
 
@@ -245,14 +254,7 @@ export default function DespesasCadastros() {
           <SimpleCadastroCrud tabela="despesas_contas_bancarias" singular="Conta bancária" plural="Contas bancárias" canEdit={canEdit} canDelete={canDelete} />
         </TabsContent>
         <TabsContent value="pessoas" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Pessoas</CardTitle>
-              <CardDescription>
-                Cadastro completo (CPF/CNPJ, OAB, CRECI, papéis) entra na Fase 2 quando ligamos a Pessoa aos lançamentos. Já está disponível na base para uso via consulta.
-              </CardDescription>
-            </CardHeader>
-          </Card>
+          <PessoasTab canEdit={canEdit} canDelete={canDelete} />
         </TabsContent>
         <TabsContent value="veiculos" className="mt-4">
           <VeiculosTab canEdit={canEdit} canDelete={canDelete} />
