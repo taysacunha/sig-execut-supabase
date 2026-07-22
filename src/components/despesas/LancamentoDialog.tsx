@@ -240,45 +240,42 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
 
           <div className="space-y-2 md:col-span-2 border rounded-md p-3">
             <Label className="text-sm">Referência *</Label>
+            <p className="text-xs text-muted-foreground">
+              Informe ao menos um dos campos abaixo. Você pode preencher mais de um.
+            </p>
             <div className="grid gap-3 md:grid-cols-2">
-              <Select
-                value={form.referencia_tipo ?? ""}
-                onValueChange={(v) => {
-                  const tipo = v as DespesaReferenciaTipo;
-                  setForm({
-                    ...form,
-                    referencia_tipo: tipo,
-                    referencia_numero: null,
-                    pessoa_id: tipo === "pessoa" ? form.pessoa_id : null,
-                    imovel_id: tipo === "imovel" ? form.imovel_id : null,
-                  });
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pasta">Nº de Pasta</SelectItem>
-                  <SelectItem value="venda">Cód. Venda</SelectItem>
-                  <SelectItem value="imovel">Imóvel</SelectItem>
-                  <SelectItem value="pessoa">Pessoa</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {(form.referencia_tipo === "pasta" || form.referencia_tipo === "venda") && (
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Nº de Pasta</Label>
                 <Input
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
-                  placeholder={form.referencia_tipo === "pasta" ? "Número da pasta" : "Código da venda"}
-                  value={form.referencia_numero ?? ""}
+                  placeholder="Somente números"
+                  value={form.referencia_numero_pasta ?? ""}
                   onChange={(e) => {
                     const only = e.target.value.replace(/\D+/g, "");
-                    setForm({ ...form, referencia_numero: only || null });
+                    setForm({ ...form, referencia_numero_pasta: only || null });
                   }}
                   maxLength={20}
                 />
-              )}
-
-              {form.referencia_tipo === "imovel" && (
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Cód. Venda</Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="Somente números"
+                  value={form.referencia_numero_venda ?? ""}
+                  onChange={(e) => {
+                    const only = e.target.value.replace(/\D+/g, "");
+                    setForm({ ...form, referencia_numero_venda: only || null });
+                  }}
+                  maxLength={20}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Imóvel</Label>
                 <Popover open={imovelPopoverOpen} onOpenChange={setImovelPopoverOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -306,6 +303,17 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
                       <CommandList>
                         <CommandEmpty>Nenhum imóvel encontrado.</CommandEmpty>
                         <CommandGroup>
+                          {form.imovel_id && (
+                            <CommandItem
+                              value="__limpar__"
+                              onSelect={() => {
+                                setForm({ ...form, imovel_id: null });
+                                setImovelPopoverOpen(false);
+                              }}
+                            >
+                              <span className="text-xs text-muted-foreground">Limpar seleção</span>
+                            </CommandItem>
+                          )}
                           {(imoveis.data ?? []).map((i) => {
                             const label = `${i.codigo ?? ""} ${i.descricao} ${i.endereco ?? ""}`.trim();
                             return (
@@ -334,9 +342,9 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
                     </Command>
                   </PopoverContent>
                 </Popover>
-              )}
-
-              {form.referencia_tipo === "pessoa" && (
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Pessoa</Label>
                 <ComboboxSelect
                   value={form.pessoa_id}
                   onChange={(v) => setForm({ ...form, pessoa_id: v })}
@@ -344,8 +352,9 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
                   placeholder="Selecione a pessoa"
                   searchPlaceholder="Buscar pessoa…"
                   emptyText="Nenhuma pessoa encontrada."
+                  allowClear
                 />
-              )}
+              </div>
             </div>
           </div>
 
@@ -376,23 +385,10 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
             <Label>Plano de conta</Label>
             <ComboboxSelect
               value={form.plano_conta_id}
-              onChange={(v) => setForm({ ...form, plano_conta_id: v, subcategoria_id: null })}
+              onChange={(v) => setForm({ ...form, plano_conta_id: v })}
               options={(planos.data ?? []).map((p) => ({ value: p.id, label: p.nome }))}
               placeholder="Opcional"
               searchPlaceholder="Buscar plano…"
-              allowClear
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Subcategoria</Label>
-            <ComboboxSelect
-              value={form.subcategoria_id}
-              onChange={(v) => setForm({ ...form, subcategoria_id: v })}
-              options={subcatsFiltradas.map((s) => ({ value: s.id, label: s.nome }))}
-              placeholder={form.plano_conta_id ? "Opcional" : "Escolha um plano primeiro"}
-              searchPlaceholder="Buscar subcategoria…"
-              disabled={!form.plano_conta_id}
               allowClear
             />
           </div>
