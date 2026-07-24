@@ -434,7 +434,7 @@ export default function FeriasFerias() {
   });
 
   const toggleEnviadoContadorMutation = useMutation({
-    mutationFn: async ({ id, q1, q2 }: { id: string; q1: boolean; q2: boolean }) => {
+    mutationFn: async ({ id, q1, q2, motivo, q1Antes, q2Antes }: { id: string; q1: boolean; q2: boolean; motivo?: string; q1Antes: boolean; q2Antes: boolean }) => {
       const enviado = q1 || q2;
       const { error } = await supabase.from("ferias_ferias").update({
         enviado_contador: enviado,
@@ -443,11 +443,30 @@ export default function FeriasFerias() {
         enviado_contador_q2: q2,
       } as any).eq("id", id);
       if (error) throw error;
+
+      // Se houve reversão (q1 ou q2 passou de true -> false), registra evento auditado.
+      const houveReversao = (q1Antes && !q1) || (q2Antes && !q2);
+      if (houveReversao) {
+        const { error: auditError } = await (supabase as any).rpc("registrar_evento_ferias", {
+          p_record_id: id,
+          p_action: "REVERSAO_ENVIO_CONTADOR",
+          p_payload: {
+            motivo: motivo || null,
+            q1_antes: q1Antes,
+            q2_antes: q2Antes,
+            q1_depois: q1,
+            q2_depois: q2,
+            revertido_em: new Date().toISOString(),
+          },
+        });
+        if (auditError) throw auditError;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ferias-ferias"] });
       toast.success("Status de envio ao contador atualizado");
       setContadorConfirmId(null);
+      setContadorMotivo("");
     },
     onError: () => toast.error("Erro ao atualizar status de envio"),
   });
