@@ -2053,5 +2053,59 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         </Form>
       </DialogContent>
     </Dialog>
+
+    <Dialog open={correcaoDialogOpen} onOpenChange={setCorrecaoDialogOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ShieldAlert className="h-5 w-5 text-amber-600" />
+            Corrigir período histórico da venda
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <p>
+            O 1º período aquisitivo já foi gozado. Ative essa correção apenas quando o
+            <strong> período informado ao contador estiver incorreto</strong> e for necessário
+            realocar a venda para o 1º período. A alteração será registrada na auditoria com seu
+            usuário, motivo e horário.
+          </p>
+          <div>
+            <Label className="text-xs">Motivo (mínimo 10 caracteres)</Label>
+            <Textarea
+              rows={3}
+              value={correcaoDialogMotivo}
+              onChange={(e) => setCorrecaoDialogMotivo(e.target.value)}
+              placeholder="Ex.: envio ao contador anterior estava com o período errado; venda ocorreu no 1º período."
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              {correcaoDialogMotivo.trim().length}/10 caracteres mínimos
+            </p>
+          </div>
+          <label className="flex items-start gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={correcaoDialogConfirmado}
+              onChange={(e) => setCorrecaoDialogConfirmado(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>Confirmo que a correção reflete a realidade e será auditada.</span>
+          </label>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={() => setCorrecaoDialogOpen(false)}>Cancelar</Button>
+          <Button
+            disabled={correcaoDialogMotivo.trim().length < 10 || !correcaoDialogConfirmado}
+            onClick={() => {
+              setMotivoCorrecaoQV(correcaoDialogMotivo.trim());
+              setPermitirCorrecaoQV(true);
+              setCorrecaoDialogOpen(false);
+            }}
+          >
+            Ativar correção
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
