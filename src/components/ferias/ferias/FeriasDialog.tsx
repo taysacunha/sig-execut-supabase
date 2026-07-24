@@ -365,13 +365,13 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   }, [forceSingleGozo]);
 
   useEffect(() => {
-    if (q1JaGozada && isVenda && quinzenaVenda !== 2) {
+    if (q1BloqueadoParaVenda && isVenda && quinzenaVenda !== 2) {
       form.setValue("quinzena_venda", 2);
       form.setValue("gozo_venda_inicio", "");
       form.setValue("gozo_venda_fim", "");
       setGozoDateError(null);
     }
-  }, [q1JaGozada, isVenda, quinzenaVenda]);
+  }, [q1BloqueadoParaVenda, isVenda, quinzenaVenda]);
 
   useEffect(() => {
     if (isResettingRef.current) return;
