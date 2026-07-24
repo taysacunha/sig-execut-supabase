@@ -33,6 +33,8 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { format, parseISO, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -162,6 +164,7 @@ export default function FeriasFerias() {
   const [contadorConfirmId, setContadorConfirmId] = useState<string | null>(null);
   const [contadorQ1Checked, setContadorQ1Checked] = useState(false);
   const [contadorQ2Checked, setContadorQ2Checked] = useState(false);
+  const [contadorMotivo, setContadorMotivo] = useState("");
   const [contadorMesFilter, setContadorMesFilter] = useState<string>("all");
   const [contadorPeriodoFilter, setContadorPeriodoFilter] = useState<string>("all");
   const [contadorAnosAquisitivos, setContadorAnosAquisitivos] = useState<string[]>([]);
