@@ -1590,6 +1590,7 @@ export default function FeriasFerias() {
                                       setContadorConfirmId(f.id);
                                       setContadorQ1Checked(isQ1Sent);
                                       setContadorQ2Checked(isQ2Sent);
+                                      setContadorMotivo("");
                                     }}
                                   >
                                     {isFullySent ? <CheckCircle2 className="h-4 w-4" /> : isPartiallySent ? <Clock className="h-4 w-4" /> : <Send className="h-4 w-4" />}
@@ -1661,19 +1662,34 @@ export default function FeriasFerias() {
 
         const handleConfirm = () => {
           if (!contadorConfirmId) return;
+          if (!confirmFerias) return;
+          const q1Antes = !!confirmFerias.enviado_contador_q1;
+          const q2Antes = !!confirmFerias.enviado_contador_q2;
+          const houveReversao = (q1Antes && !contadorQ1Checked) || (q2Antes && !contadorQ2Checked);
+          if (houveReversao && contadorMotivo.trim().length < 10) {
+            toast.error("Informe o motivo da reversão (mínimo 10 caracteres)");
+            return;
+          }
           toggleEnviadoContadorMutation.mutate({
             id: contadorConfirmId,
             q1: contadorQ1Checked,
             q2: contadorQ2Checked,
+            motivo: houveReversao ? contadorMotivo.trim() : undefined,
+            q1Antes,
+            q2Antes,
           });
         };
 
         const hasChanges = confirmFerias
           ? contadorQ1Checked !== !!confirmFerias.enviado_contador_q1 || contadorQ2Checked !== !!confirmFerias.enviado_contador_q2
           : false;
+        const houveReversaoUI = confirmFerias
+          ? (!!confirmFerias.enviado_contador_q1 && !contadorQ1Checked) || (!!confirmFerias.enviado_contador_q2 && !contadorQ2Checked)
+          : false;
+        const motivoOK = !houveReversaoUI || contadorMotivo.trim().length >= 10;
 
         return (
-          <Dialog open={!!contadorConfirmId} onOpenChange={(open) => { if (!open) setContadorConfirmId(null); }}>
+          <Dialog open={!!contadorConfirmId} onOpenChange={(open) => { if (!open) { setContadorConfirmId(null); setContadorMotivo(""); } }}>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Gerenciar envio ao contador</DialogTitle>
@@ -1715,9 +1731,30 @@ export default function FeriasFerias() {
                   </div>
                 )}
               </div>
+              {houveReversaoUI && (
+                <Alert variant="destructive" className="mt-2">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="space-y-2">
+                    <p className="text-sm font-medium">
+                      Você está revertendo um envio já registrado ao contador.
+                    </p>
+                    <p className="text-xs">
+                      Informe o motivo — a reversão fica registrada na auditoria com seu usuário e data.
+                    </p>
+                    <Textarea
+                      placeholder="Motivo da reversão (mín. 10 caracteres). Ex.: envio incorreto, dados divergentes, cancelamento pelo contador…"
+                      value={contadorMotivo}
+                      onChange={(e) => setContadorMotivo(e.target.value)}
+                      rows={3}
+                      className="bg-background text-foreground"
+                    />
+                    <p className="text-[10px] text-muted-foreground">{contadorMotivo.trim().length}/10 caracteres mínimos</p>
+                  </AlertDescription>
+                </Alert>
+              )}
               <DialogFooter>
-                <Button variant="outline" onClick={() => setContadorConfirmId(null)}>Cancelar</Button>
-                <Button onClick={handleConfirm} disabled={toggleEnviadoContadorMutation.isPending || !hasChanges}>
+                <Button variant="outline" onClick={() => { setContadorConfirmId(null); setContadorMotivo(""); }}>Cancelar</Button>
+                <Button onClick={handleConfirm} disabled={toggleEnviadoContadorMutation.isPending || !hasChanges || !motivoOK}>
                   {toggleEnviadoContadorMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                   Salvar
                 </Button>
