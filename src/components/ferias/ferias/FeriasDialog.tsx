@@ -1881,13 +1881,37 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                         <Select onValueChange={(v) => { field.onChange(parseInt(v)); form.setValue("gozo_venda_inicio", ""); form.setValue("gozo_venda_fim", ""); setGozoDateError(null); }} value={String(field.value || 1)}>
                           <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                           <SelectContent>
-                            {!q1JaGozada && <SelectItem value="1">1º Período</SelectItem>}
+                            {(!q1JaGozada || permitirCorrecaoQV) && <SelectItem value="1">1º Período</SelectItem>}
                             <SelectItem value="2">2º Período</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
                       </FormItem>
                     )} />
+
+                    {q1JaGozada && (
+                      <div className="flex items-center gap-2">
+                        {!permitirCorrecaoQV ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => { setCorrecaoDialogMotivo(""); setCorrecaoDialogConfirmado(false); setCorrecaoDialogOpen(true); }}
+                          >
+                            Corrigir período histórico
+                          </Button>
+                        ) : (
+                          <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
+                            <ShieldAlert className="h-3.5 w-3.5" />
+                            Correção histórica ativa — a mudança será auditada
+                            <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setPermitirCorrecaoQV(false); setMotivoCorrecaoQV(""); form.setValue("quinzena_venda", 2); }}>
+                              Cancelar
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {q1JaGozada && (
                       <Alert className="border-amber-500/40 bg-amber-500/10">
