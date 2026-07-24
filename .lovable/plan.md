@@ -1,67 +1,65 @@
 ## Contexto
 
-A tabela `despesas_pessoas` já existe na base (nome, tipo_pessoa, cpf_cnpj, oab, creci, papeis[], email, telefone, observacao, is_active) e é referenciada por Imóveis (`proprietario_id`, `inquilino_id`), Veículos (`motorista_id`, `proprietario_id`, `comprador_id`) e Lançamentos (`pessoa_id`). Mas a aba **Pessoas** em `/despesas/cadastros` só mostra um card de aviso — não existe UI para cadastrar. Por isso, ao abrir o diálogo de Imóvel, os comboboxes de Proprietário e Inquilino ficam vazios e o usuário não consegue "alocar" ninguém.
+Dois problemas relacionados no fluxo "enviado ao contador" das férias:
 
-## Objetivo
+**1. Ivone — só aparece o 2º período no seletor "Período da venda"**
 
-1. Transformar a aba **Pessoas** num CRUD completo.
-2. Modelar **papéis** de forma explícita e reutilizável (proprietário, inquilino, loja/fornecedor, cliente, funcionário, motorista, corretor, outro), permitindo múltiplos papéis por pessoa.
-3. Fazer os seletores de Proprietário/Inquilino (e demais) filtrarem por papel, com atalho para cadastrar uma nova pessoa direto do diálogo do Imóvel.
+Em `FeriasDialog.tsx` (linhas 280-288, 1731, 1842), a variável `q1JaGozada` esconde a opção "1º Período" sempre que o fim do 1º período já passou (`fimQ1JaPassou`) OU o status é `q1_concluida | em_gozo_q2 | em_gozo | concluida`. Como as férias da Ivone estão editadas depois do fim do 1º período, o sistema assume que Q1 já foi gozado e só oferece o 2º. Isso é uma proteção correta para casos normais, mas não permite corrigir um registro histórico em que a venda foi de fato do 1º período.
 
-## O que será construído
+**2. Não há como desfazer "enviado ao contador"**
 
-### 1. Backend (uma migration em `db/migrations/`)
+Em `FeriasFerias.tsx` o diálogo já permite desmarcar Q1/Q2 na prática (o botão salva o novo estado), mas:
+- não pede justificativa,
+- não registra evento explícito de reversão,
+- os campos de datas oficiais no `FeriasDialog` ficam travados quando `enviado_contador_q1/q2 = true` (linhas 1659, 1688), sem caminho de reversão explícito e auditado.
 
-- Padronizar o vocabulário de `despesas_pessoas.papeis` (array de text) com um CHECK controlado:
-  - Valores aceitos: `proprietario`, `inquilino`, `loja`, `fornecedor`, `cliente`, `funcionario`, `motorista`, `corretor`, `outro`.
-- Índice GIN em `papeis` para busca rápida por papel.
-- Trigger `updated_at`.
-- Confirmar/ajustar policies existentes (view liberada às abas cadastros/calendario/repasses/imoveis; edit exige `cadastros` edit).
-- **Não** exigir CPF/CNPJ único (permitir nulo e evitar bloqueios); apenas normalizar (remover máscara) via trigger opcional.
+## O que fazer
 
-### 2. Hook novo — `src/hooks/useDespesasPessoas.ts`
+### A. Permitir corrigir "Período da venda" mesmo quando Q1 já passou
 
-- Types: `Pessoa`, `PessoaInput`, `PapelPessoa`.
-- `usePessoas({ papel?, busca?, apenasAtivas? })` — lista com filtro por papel via `.contains("papeis", [papel])` e busca ilike em nome/cpf_cnpj.
-- `useSavePessoa()` (insert/update).
-- `useDeletePessoa()` (soft-delete via `is_active=false`; bloqueia se estiver referenciada em imóveis/veículos/lançamentos → tratar erro FK com mensagem amigável).
+No `FeriasDialog.tsx`, no bloco padrão de venda (linhas 1836-1848) e no bloco de exceção (1706-1740):
 
-### 3. UI da aba Pessoas — `PessoasTab` em `DespesasCadastros.tsx`
+- Manter a lógica atual (esconder 1º Período quando `q1JaGozada`) como default.
+- Adicionar, logo abaixo do Select, um pequeno botão/link discreto: **"Corrigir período histórico"**.
+- Ao clicar, abre um pequeno diálogo de confirmação exigindo:
+  - motivo (textarea obrigatório, mín. 10 caracteres),
+  - checkbox "Confirmo que a venda foi realizada no 1º período aquisitivo".
+- Após confirmar, libera a opção "1º Período" no Select apenas para essa edição, e o `useEffect` da linha 348-355 (que força `quinzena_venda = 2`) passa a respeitar essa liberação.
+- No submit, além de gravar `quinzena_venda = 1`, registrar o motivo em `module_audit_logs` (ver seção C) — o registro normal em `ferias_ferias` já é auditado pelo trigger existente, então basta um insert manual complementar com `action = 'CORRECAO_QUINZENA_VENDA'` e o motivo em `new_data`.
 
-- Tabela com: Nome, Tipo (PF/PJ), CPF/CNPJ, Papéis (badges), Contato, Ações.
-- Barra superior: busca por nome/documento, filtro por papel (multi), botão "Nova pessoa".
-- `PessoaDialog` (novo componente `src/components/despesas/PessoaDialog.tsx`) com:
-  - Nome*, Tipo (Física/Jurídica), CPF/CNPJ (com máscara), OAB, CRECI, Email, Telefone.
-  - **Papéis** como grupo de checkboxes (multi-seleção) — obrigatório ao menos um.
-  - Observação.
-- AlertDialog para confirmar exclusão/desativação (padrão do projeto).
+### B. Reverter "enviado ao contador" com justificativa
 
-### 4. Diálogo de Imóvel — ajustes em `ImovelDialog.tsx`
+No diálogo "Gerenciar envio ao contador" (`FeriasFerias.tsx` linhas 1653-1702):
 
-- Filtrar `pessoas` do combobox de **Proprietário** por papel `proprietario` e **Inquilino** por papel `inquilino` (usar `usePessoas({ papel })`).
-- Ordenar por nome e mostrar CPF/CNPJ ao lado no label (`João Silva — 123.456.789-00`) para diferenciar homônimos.
-- Botão "+ Nova pessoa" ao lado de cada combobox, abrindo o `PessoaDialog` já com o papel pré-marcado; ao salvar, refetch e auto-selecionar a pessoa criada.
-- Se o registro editado tem `proprietario_id`/`inquilino_id` cujo papel não bate mais (ex.: papel removido), exibir alerta discreto e ainda permitir manter a seleção atual.
+- Detectar reversão: alguma checkbox passa de marcada → desmarcada.
+- Quando houver reversão, exibir bloco vermelho com:
+  - Alerta explicando que a reversão fica registrada.
+  - Textarea "Motivo da reversão" (obrigatório, mín. 10 caracteres) — só aparece se há reversão.
+- Botão "Salvar" desabilitado enquanto o motivo estiver vazio, quando houver reversão.
+- `toggleEnviadoContadorMutation` (linhas 433-450) recebe `motivo?: string` e, quando presente, grava um evento em `module_audit_logs` com `action = 'REVERSAO_ENVIO_CONTADOR'`, `new_data = { q1_antes, q2_antes, q1_depois, q2_depois, motivo, revertido_por, revertido_em }`.
+- Aviso visual permanente: quando `enviado_contador_em` for anterior e o status atual for "Pendente" ou "Parcial" após reversão, exibir badge extra "Revertido" no lugar/junto ao status.
 
-### 5. Aproveitar em outros pontos
+### C. Registro de auditoria
 
-- `LancamentoDialog` já usa `pessoas` via `useDespesasLookups`; adicionar botão "+ Nova pessoa" no combobox e continuar mostrando todas (qualquer papel).
-- `VeiculoDialog`: filtrar por papéis `motorista`, `proprietario`, `cliente` conforme o campo.
+Nenhuma migration nova é obrigatória — reaproveitar `module_audit_logs` (já existe e tem coluna `changed_by_email`, `new_data jsonb`, `action text`).
 
-### 6. Ajuda
+- Inserir manualmente pelo frontend via `supabase.from('module_audit_logs').insert({ module_name: 'ferias', table_name: 'ferias_ferias', record_id, action: 'REVERSAO_ENVIO_CONTADOR' | 'CORRECAO_QUINZENA_VENDA', new_data: { motivo, ... } })`.
+- Verificar RLS: se `module_audit_logs` bloquear inserts do usuário comum, criar uma RPC `SECURITY DEFINER` `registrar_evento_ferias(record_id uuid, action text, payload jsonb)` (uma migration nova pequena). Confirmar com uma consulta antes de decidir.
 
-- Atualizar `DespesasHelp.tsx`: seção "Pessoas" explicando papéis e como isso alimenta os demais cadastros.
+### D. Exibição na aba de auditoria
 
-## Detalhes técnicos
+Adicionar rótulos amigáveis em `AuditLogsPanel.tsx` para as duas novas ações:
+- `REVERSAO_ENVIO_CONTADOR` → "Reversão de envio ao contador"
+- `CORRECAO_QUINZENA_VENDA` → "Correção do período da venda"
 
-- Papéis vivem em coluna `text[]` (não criar tabela auxiliar) — simples e suficiente. Consulta: `.contains("papeis", ["proprietario"])`.
-- Nenhum breaking change em FKs — apenas passamos a preencher a tabela.
-- Sem alteração de RLS além do CHECK/índice.
-- Confirmações destrutivas via `AlertDialog` (memória do projeto).
-- Timers/debounce continuam com `ReturnType<typeof setTimeout>`.
+## Arquivos afetados
 
-## Fora do escopo (para depois)
+- `src/components/ferias/ferias/FeriasDialog.tsx` — botão "Corrigir período histórico" + diálogo de justificativa; libera o "1º Período" após confirmação.
+- `src/pages/ferias/FeriasFerias.tsx` — campo de motivo no diálogo de "Gerenciar envio ao contador"; mutação envia motivo e grava evento de auditoria; badge "Revertido".
+- `src/components/AuditLogsPanel.tsx` — rótulos das novas ações.
+- (Opcional) `db/migrations/<data>_ferias_registrar_evento.sql` — RPC `SECURITY DEFINER` caso RLS de `module_audit_logs` não permita inserts diretos.
 
-- Endereço completo por pessoa.
-- Histórico de troca de inquilino no imóvel (já existe `despesas_imovel_situacao_historico`; ligação com pessoa fica para próxima etapa).
-- Importação em lote de pessoas.
+## Fora de escopo
+
+- Alterar a lógica de `q1JaGozada` para o fluxo geral (permanece como proteção padrão).
+- Alterar o cálculo do relatório do contador — apenas o dado de origem (`quinzena_venda`) muda.

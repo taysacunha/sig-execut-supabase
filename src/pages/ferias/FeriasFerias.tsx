@@ -33,6 +33,8 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { format, parseISO, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -162,6 +164,7 @@ export default function FeriasFerias() {
   const [contadorConfirmId, setContadorConfirmId] = useState<string | null>(null);
   const [contadorQ1Checked, setContadorQ1Checked] = useState(false);
   const [contadorQ2Checked, setContadorQ2Checked] = useState(false);
+  const [contadorMotivo, setContadorMotivo] = useState("");
   const [contadorMesFilter, setContadorMesFilter] = useState<string>("all");
   const [contadorPeriodoFilter, setContadorPeriodoFilter] = useState<string>("all");
   const [contadorAnosAquisitivos, setContadorAnosAquisitivos] = useState<string[]>([]);
@@ -431,7 +434,7 @@ export default function FeriasFerias() {
   });
 
   const toggleEnviadoContadorMutation = useMutation({
-    mutationFn: async ({ id, q1, q2 }: { id: string; q1: boolean; q2: boolean }) => {
+    mutationFn: async ({ id, q1, q2, motivo, q1Antes, q2Antes }: { id: string; q1: boolean; q2: boolean; motivo?: string; q1Antes: boolean; q2Antes: boolean }) => {
       const enviado = q1 || q2;
       const { error } = await supabase.from("ferias_ferias").update({
         enviado_contador: enviado,
@@ -440,11 +443,30 @@ export default function FeriasFerias() {
         enviado_contador_q2: q2,
       } as any).eq("id", id);
       if (error) throw error;
+
+      // Se houve reversão (q1 ou q2 passou de true -> false), registra evento auditado.
+      const houveReversao = (q1Antes && !q1) || (q2Antes && !q2);
+      if (houveReversao) {
+        const { error: auditError } = await (supabase as any).rpc("registrar_evento_ferias", {
+          p_record_id: id,
+          p_action: "REVERSAO_ENVIO_CONTADOR",
+          p_payload: {
+            motivo: motivo || null,
+            q1_antes: q1Antes,
+            q2_antes: q2Antes,
+            q1_depois: q1,
+            q2_depois: q2,
+            revertido_em: new Date().toISOString(),
+          },
+        });
+        if (auditError) throw auditError;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ferias-ferias"] });
       toast.success("Status de envio ao contador atualizado");
       setContadorConfirmId(null);
+      setContadorMotivo("");
     },
     onError: () => toast.error("Erro ao atualizar status de envio"),
   });
@@ -1568,6 +1590,7 @@ export default function FeriasFerias() {
                                       setContadorConfirmId(f.id);
                                       setContadorQ1Checked(isQ1Sent);
                                       setContadorQ2Checked(isQ2Sent);
+                                      setContadorMotivo("");
                                     }}
                                   >
                                     {isFullySent ? <CheckCircle2 className="h-4 w-4" /> : isPartiallySent ? <Clock className="h-4 w-4" /> : <Send className="h-4 w-4" />}
@@ -1639,19 +1662,34 @@ export default function FeriasFerias() {
 
         const handleConfirm = () => {
           if (!contadorConfirmId) return;
+          if (!confirmFerias) return;
+          const q1Antes = !!confirmFerias.enviado_contador_q1;
+          const q2Antes = !!confirmFerias.enviado_contador_q2;
+          const houveReversao = (q1Antes && !contadorQ1Checked) || (q2Antes && !contadorQ2Checked);
+          if (houveReversao && contadorMotivo.trim().length < 10) {
+            toast.error("Informe o motivo da reversão (mínimo 10 caracteres)");
+            return;
+          }
           toggleEnviadoContadorMutation.mutate({
             id: contadorConfirmId,
             q1: contadorQ1Checked,
             q2: contadorQ2Checked,
+            motivo: houveReversao ? contadorMotivo.trim() : undefined,
+            q1Antes,
+            q2Antes,
           });
         };
 
         const hasChanges = confirmFerias
           ? contadorQ1Checked !== !!confirmFerias.enviado_contador_q1 || contadorQ2Checked !== !!confirmFerias.enviado_contador_q2
           : false;
+        const houveReversaoUI = confirmFerias
+          ? (!!confirmFerias.enviado_contador_q1 && !contadorQ1Checked) || (!!confirmFerias.enviado_contador_q2 && !contadorQ2Checked)
+          : false;
+        const motivoOK = !houveReversaoUI || contadorMotivo.trim().length >= 10;
 
         return (
-          <Dialog open={!!contadorConfirmId} onOpenChange={(open) => { if (!open) setContadorConfirmId(null); }}>
+          <Dialog open={!!contadorConfirmId} onOpenChange={(open) => { if (!open) { setContadorConfirmId(null); setContadorMotivo(""); } }}>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Gerenciar envio ao contador</DialogTitle>
@@ -1693,9 +1731,30 @@ export default function FeriasFerias() {
                   </div>
                 )}
               </div>
+              {houveReversaoUI && (
+                <Alert variant="destructive" className="mt-2">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="space-y-2">
+                    <p className="text-sm font-medium">
+                      Você está revertendo um envio já registrado ao contador.
+                    </p>
+                    <p className="text-xs">
+                      Informe o motivo — a reversão fica registrada na auditoria com seu usuário e data.
+                    </p>
+                    <Textarea
+                      placeholder="Motivo da reversão (mín. 10 caracteres). Ex.: envio incorreto, dados divergentes, cancelamento pelo contador…"
+                      value={contadorMotivo}
+                      onChange={(e) => setContadorMotivo(e.target.value)}
+                      rows={3}
+                      className="bg-background text-foreground"
+                    />
+                    <p className="text-[10px] text-muted-foreground">{contadorMotivo.trim().length}/10 caracteres mínimos</p>
+                  </AlertDescription>
+                </Alert>
+              )}
               <DialogFooter>
-                <Button variant="outline" onClick={() => setContadorConfirmId(null)}>Cancelar</Button>
-                <Button onClick={handleConfirm} disabled={toggleEnviadoContadorMutation.isPending || !hasChanges}>
+                <Button variant="outline" onClick={() => { setContadorConfirmId(null); setContadorMotivo(""); }}>Cancelar</Button>
+                <Button onClick={handleConfirm} disabled={toggleEnviadoContadorMutation.isPending || !hasChanges || !motivoOK}>
                   {toggleEnviadoContadorMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                   Salvar
                 </Button>

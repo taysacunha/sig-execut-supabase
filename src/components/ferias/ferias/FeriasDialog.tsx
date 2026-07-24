@@ -287,9 +287,28 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     return statusConsumido || fimQ1JaPassou;
   }, [isEditing, ferias, q1Inicio, q1Fim]);
 
+  // Correção histórica: quando marcada, permite ao gestor definir o 1º período
+  // como período da venda mesmo com q1JaGozada. Precisa de motivo (>=10 chars)
+  // e será registrada em module_audit_logs no submit.
+  const [permitirCorrecaoQV, setPermitirCorrecaoQV] = useState(false);
+  const [motivoCorrecaoQV, setMotivoCorrecaoQV] = useState("");
+  const [correcaoDialogOpen, setCorrecaoDialogOpen] = useState(false);
+  const [correcaoDialogMotivo, setCorrecaoDialogMotivo] = useState("");
+  const [correcaoDialogConfirmado, setCorrecaoDialogConfirmado] = useState(false);
+
+  // Reseta quando o dialog fecha
+  useEffect(() => {
+    if (!open) {
+      setPermitirCorrecaoQV(false);
+      setMotivoCorrecaoQV("");
+    }
+  }, [open]);
+
+  const q1BloqueadoParaVenda = q1JaGozada && !permitirCorrecaoQV;
+
   const isVenda = opcaoAdicional === "vender";
   const isGozoDiferente = opcaoAdicional === "gozo_diferente";
-  const quinzenaVendaEfetiva = q1JaGozada ? 2 : quinzenaVenda;
+  const quinzenaVendaEfetiva = q1BloqueadoParaVenda ? 2 : quinzenaVenda;
   const diasDisponiveisPadrao = q1JaGozada ? 15 : 30;
   const diasGozo = Math.max(0, diasDisponiveisPadrao - diasVendidos);
   const diasGozoNoPeriodoVenda = Math.max(0, 15 - diasVendidos);
@@ -346,13 +365,13 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   }, [forceSingleGozo]);
 
   useEffect(() => {
-    if (q1JaGozada && isVenda && quinzenaVenda !== 2) {
+    if (q1BloqueadoParaVenda && isVenda && quinzenaVenda !== 2) {
       form.setValue("quinzena_venda", 2);
       form.setValue("gozo_venda_inicio", "");
       form.setValue("gozo_venda_fim", "");
       setGozoDateError(null);
     }
-  }, [q1JaGozada, isVenda, quinzenaVenda]);
+  }, [q1BloqueadoParaVenda, isVenda, quinzenaVenda]);
 
   useEffect(() => {
     if (isResettingRef.current) return;
@@ -1156,7 +1175,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           quinzenaVendaVal =
             excDistribuicaoTipo === "1" ? 1
             : excDistribuicaoTipo === "2" ? 2
-            : (q1JaGozada ? 2 : (excQuinzenaVenda || 1));
+            : (q1BloqueadoParaVenda ? 2 : (excQuinzenaVenda || 1));
           if (excPeriodos.length > 0) {
             const p1 = excPeriodos.filter(p => p.referencia_periodo === 1);
             const p2 = excPeriodos.filter(p => p.referencia_periodo === 2);
@@ -1207,7 +1226,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         if (data.opcao_adicional === "vender" && (data.dias_vendidos || 0) > 0) {
           venderDias = true;
           diasVend = data.dias_vendidos || 0;
-          quinzenaVendaVal = q1JaGozada ? 2 : (data.quinzena_venda || 1);
+          quinzenaVendaVal = q1BloqueadoParaVenda ? 2 : (data.quinzena_venda || 1);
 
           if (diasVend <= 10) {
             if (quinzenaVendaVal === 1) {
@@ -1424,13 +1443,40 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         }
       }
     }
-    mutation.mutate(data);
+    // Se houve correção histórica de período da venda, registrar auditoria após salvar.
+    const finalQV = data.is_excecao
+      ? (excDistribuicaoTipo === "1" ? 1 : excDistribuicaoTipo === "2" ? 2 : (q1BloqueadoParaVenda ? 2 : (excQuinzenaVenda || 1)))
+      : (data.opcao_adicional === "vender" ? (q1BloqueadoParaVenda ? 2 : (data.quinzena_venda || 1)) : null);
+    const qvAntes = ferias?.quinzena_venda ?? null;
+    const deveAuditar = permitirCorrecaoQV && finalQV !== qvAntes;
+
+    mutation.mutate(data, {
+      onSuccess: async () => {
+        if (deveAuditar && ferias?.id) {
+          try {
+            await (supabase as any).rpc("registrar_evento_ferias", {
+              p_record_id: ferias.id,
+              p_action: "CORRECAO_QUINZENA_VENDA",
+              p_payload: {
+                motivo: motivoCorrecaoQV,
+                quinzena_venda_antes: qvAntes,
+                quinzena_venda_depois: finalQV,
+                corrigido_em: new Date().toISOString(),
+              },
+            });
+          } catch (e) {
+            console.error("Falha ao registrar auditoria de correção:", e);
+          }
+        }
+      },
+    });
   };
 
   const outroPeriodoLabel = quinzenaVendaEfetiva === 1 ? "2º" : "1º";
   const periodoVendaLabel = quinzenaVendaEfetiva === 1 ? "1º" : "2º";
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -1719,7 +1765,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                               ? 1
                               : excDistribuicaoTipo === "2"
                               ? 2
-                              : (q1JaGozada ? 2 : excQuinzenaVenda)
+                              : (q1BloqueadoParaVenda ? 2 : excQuinzenaVenda)
                           )}
                           onValueChange={(v) => setExcQuinzenaVenda(parseInt(v))}
                           disabled={excDistribuicaoTipo === "1" || excDistribuicaoTipo === "2"}
@@ -1728,10 +1774,33 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {!q1JaGozada && <SelectItem value="1">1º Período</SelectItem>}
+                            {(!q1JaGozada || permitirCorrecaoQV) && <SelectItem value="1">1º Período</SelectItem>}
                             <SelectItem value="2">2º Período</SelectItem>
                           </SelectContent>
                         </Select>
+                        {q1JaGozada && excDistribuicaoTipo !== "1" && excDistribuicaoTipo !== "2" && (
+                          <div className="flex items-center gap-2 pt-1">
+                            {!permitirCorrecaoQV ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs"
+                                onClick={() => { setCorrecaoDialogMotivo(""); setCorrecaoDialogConfirmado(false); setCorrecaoDialogOpen(true); }}
+                              >
+                                Corrigir período histórico
+                              </Button>
+                            ) : (
+                              <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
+                                <ShieldAlert className="h-3.5 w-3.5" />
+                                Correção histórica ativa — a mudança será auditada
+                                <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setPermitirCorrecaoQV(false); setMotivoCorrecaoQV(""); setExcQuinzenaVenda(2); }}>
+                                  Cancelar
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                         {(excDistribuicaoTipo === "1" || excDistribuicaoTipo === "2") && (
                           <p className="text-xs text-muted-foreground">
                             Travado em <strong>{excDistribuicaoTipo}º Período</strong> pela distribuição escolhida no gozo interno.
@@ -1839,13 +1908,37 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                         <Select onValueChange={(v) => { field.onChange(parseInt(v)); form.setValue("gozo_venda_inicio", ""); form.setValue("gozo_venda_fim", ""); setGozoDateError(null); }} value={String(field.value || 1)}>
                           <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                           <SelectContent>
-                            {!q1JaGozada && <SelectItem value="1">1º Período</SelectItem>}
+                            {(!q1JaGozada || permitirCorrecaoQV) && <SelectItem value="1">1º Período</SelectItem>}
                             <SelectItem value="2">2º Período</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
                       </FormItem>
                     )} />
+
+                    {q1JaGozada && (
+                      <div className="flex items-center gap-2">
+                        {!permitirCorrecaoQV ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => { setCorrecaoDialogMotivo(""); setCorrecaoDialogConfirmado(false); setCorrecaoDialogOpen(true); }}
+                          >
+                            Corrigir período histórico
+                          </Button>
+                        ) : (
+                          <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
+                            <ShieldAlert className="h-3.5 w-3.5" />
+                            Correção histórica ativa — a mudança será auditada
+                            <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setPermitirCorrecaoQV(false); setMotivoCorrecaoQV(""); form.setValue("quinzena_venda", 2); }}>
+                              Cancelar
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {q1JaGozada && (
                       <Alert className="border-amber-500/40 bg-amber-500/10">
@@ -1961,5 +2054,59 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         </Form>
       </DialogContent>
     </Dialog>
+
+    <Dialog open={correcaoDialogOpen} onOpenChange={setCorrecaoDialogOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ShieldAlert className="h-5 w-5 text-amber-600" />
+            Corrigir período histórico da venda
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <p>
+            O 1º período aquisitivo já foi gozado. Ative essa correção apenas quando o
+            <strong> período informado ao contador estiver incorreto</strong> e for necessário
+            realocar a venda para o 1º período. A alteração será registrada na auditoria com seu
+            usuário, motivo e horário.
+          </p>
+          <div>
+            <Label className="text-xs">Motivo (mínimo 10 caracteres)</Label>
+            <Textarea
+              rows={3}
+              value={correcaoDialogMotivo}
+              onChange={(e) => setCorrecaoDialogMotivo(e.target.value)}
+              placeholder="Ex.: envio ao contador anterior estava com o período errado; venda ocorreu no 1º período."
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              {correcaoDialogMotivo.trim().length}/10 caracteres mínimos
+            </p>
+          </div>
+          <label className="flex items-start gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={correcaoDialogConfirmado}
+              onChange={(e) => setCorrecaoDialogConfirmado(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>Confirmo que a correção reflete a realidade e será auditada.</span>
+          </label>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={() => setCorrecaoDialogOpen(false)}>Cancelar</Button>
+          <Button
+            disabled={correcaoDialogMotivo.trim().length < 10 || !correcaoDialogConfirmado}
+            onClick={() => {
+              setMotivoCorrecaoQV(correcaoDialogMotivo.trim());
+              setPermitirCorrecaoQV(true);
+              setCorrecaoDialogOpen(false);
+            }}
+          >
+            Ativar correção
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

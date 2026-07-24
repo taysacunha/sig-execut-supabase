@@ -75,6 +75,8 @@ const actionLabels: Record<string, string> = {
   DELETE: "Removeu",
   DELETE_CASCADE_NOTE: "Cascata",
   DELETE_NOTE: "Justificativa",
+  REVERSAO_ENVIO_CONTADOR: "Reversão de envio ao contador",
+  CORRECAO_QUINZENA_VENDA: "Correção do período da venda",
 };
 
 const actionColors: Record<string, string> = {
@@ -88,6 +90,8 @@ const actionColors: Record<string, string> = {
   DELETE: "bg-destructive text-destructive-foreground",
   DELETE_CASCADE_NOTE: "bg-orange-500 text-white",
   DELETE_NOTE: "bg-orange-500 text-white",
+  REVERSAO_ENVIO_CONTADOR: "bg-orange-500 text-white",
+  CORRECAO_QUINZENA_VENDA: "bg-amber-500 text-white",
 };
 
 const moduleLabels: Record<string, string> = {
