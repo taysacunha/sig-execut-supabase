@@ -1443,7 +1443,33 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         }
       }
     }
-    mutation.mutate(data);
+    // Se houve correção histórica de período da venda, registrar auditoria após salvar.
+    const finalQV = data.is_excecao
+      ? (excDistribuicaoTipo === "1" ? 1 : excDistribuicaoTipo === "2" ? 2 : (q1BloqueadoParaVenda ? 2 : (excQuinzenaVenda || 1)))
+      : (data.opcao_adicional === "vender" ? (q1BloqueadoParaVenda ? 2 : (data.quinzena_venda || 1)) : null);
+    const qvAntes = ferias?.quinzena_venda ?? null;
+    const deveAuditar = permitirCorrecaoQV && finalQV !== qvAntes;
+
+    mutation.mutate(data, {
+      onSuccess: async () => {
+        if (deveAuditar && ferias?.id) {
+          try {
+            await (supabase as any).rpc("registrar_evento_ferias", {
+              p_record_id: ferias.id,
+              p_action: "CORRECAO_QUINZENA_VENDA",
+              p_payload: {
+                motivo: motivoCorrecaoQV,
+                quinzena_venda_antes: qvAntes,
+                quinzena_venda_depois: finalQV,
+                corrigido_em: new Date().toISOString(),
+              },
+            });
+          } catch (e) {
+            console.error("Falha ao registrar auditoria de correção:", e);
+          }
+        }
+      },
+    });
   };
 
   const outroPeriodoLabel = quinzenaVendaEfetiva === 1 ? "2º" : "1º";
