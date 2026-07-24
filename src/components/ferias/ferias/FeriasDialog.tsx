@@ -287,9 +287,28 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     return statusConsumido || fimQ1JaPassou;
   }, [isEditing, ferias, q1Inicio, q1Fim]);
 
+  // Correção histórica: quando marcada, permite ao gestor definir o 1º período
+  // como período da venda mesmo com q1JaGozada. Precisa de motivo (>=10 chars)
+  // e será registrada em module_audit_logs no submit.
+  const [permitirCorrecaoQV, setPermitirCorrecaoQV] = useState(false);
+  const [motivoCorrecaoQV, setMotivoCorrecaoQV] = useState("");
+  const [correcaoDialogOpen, setCorrecaoDialogOpen] = useState(false);
+  const [correcaoDialogMotivo, setCorrecaoDialogMotivo] = useState("");
+  const [correcaoDialogConfirmado, setCorrecaoDialogConfirmado] = useState(false);
+
+  // Reseta quando o dialog fecha
+  useEffect(() => {
+    if (!open) {
+      setPermitirCorrecaoQV(false);
+      setMotivoCorrecaoQV("");
+    }
+  }, [open]);
+
+  const q1BloqueadoParaVenda = q1JaGozada && !permitirCorrecaoQV;
+
   const isVenda = opcaoAdicional === "vender";
   const isGozoDiferente = opcaoAdicional === "gozo_diferente";
-  const quinzenaVendaEfetiva = q1JaGozada ? 2 : quinzenaVenda;
+  const quinzenaVendaEfetiva = q1BloqueadoParaVenda ? 2 : quinzenaVenda;
   const diasDisponiveisPadrao = q1JaGozada ? 15 : 30;
   const diasGozo = Math.max(0, diasDisponiveisPadrao - diasVendidos);
   const diasGozoNoPeriodoVenda = Math.max(0, 15 - diasVendidos);
