@@ -1175,7 +1175,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           quinzenaVendaVal =
             excDistribuicaoTipo === "1" ? 1
             : excDistribuicaoTipo === "2" ? 2
-            : (q1JaGozada ? 2 : (excQuinzenaVenda || 1));
+            : (q1BloqueadoParaVenda ? 2 : (excQuinzenaVenda || 1));
           if (excPeriodos.length > 0) {
             const p1 = excPeriodos.filter(p => p.referencia_periodo === 1);
             const p2 = excPeriodos.filter(p => p.referencia_periodo === 2);
@@ -1226,7 +1226,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         if (data.opcao_adicional === "vender" && (data.dias_vendidos || 0) > 0) {
           venderDias = true;
           diasVend = data.dias_vendidos || 0;
-          quinzenaVendaVal = q1JaGozada ? 2 : (data.quinzena_venda || 1);
+          quinzenaVendaVal = q1BloqueadoParaVenda ? 2 : (data.quinzena_venda || 1);
 
           if (diasVend <= 10) {
             if (quinzenaVendaVal === 1) {
