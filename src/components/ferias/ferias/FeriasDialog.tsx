@@ -1738,7 +1738,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                               ? 1
                               : excDistribuicaoTipo === "2"
                               ? 2
-                              : (q1JaGozada ? 2 : excQuinzenaVenda)
+                              : (q1BloqueadoParaVenda ? 2 : excQuinzenaVenda)
                           )}
                           onValueChange={(v) => setExcQuinzenaVenda(parseInt(v))}
                           disabled={excDistribuicaoTipo === "1" || excDistribuicaoTipo === "2"}
@@ -1747,10 +1747,33 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {!q1JaGozada && <SelectItem value="1">1º Período</SelectItem>}
+                            {(!q1JaGozada || permitirCorrecaoQV) && <SelectItem value="1">1º Período</SelectItem>}
                             <SelectItem value="2">2º Período</SelectItem>
                           </SelectContent>
                         </Select>
+                        {q1JaGozada && excDistribuicaoTipo !== "1" && excDistribuicaoTipo !== "2" && (
+                          <div className="flex items-center gap-2 pt-1">
+                            {!permitirCorrecaoQV ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs"
+                                onClick={() => { setCorrecaoDialogMotivo(""); setCorrecaoDialogConfirmado(false); setCorrecaoDialogOpen(true); }}
+                              >
+                                Corrigir período histórico
+                              </Button>
+                            ) : (
+                              <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
+                                <ShieldAlert className="h-3.5 w-3.5" />
+                                Correção histórica ativa — a mudança será auditada
+                                <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setPermitirCorrecaoQV(false); setMotivoCorrecaoQV(""); setExcQuinzenaVenda(2); }}>
+                                  Cancelar
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                         {(excDistribuicaoTipo === "1" || excDistribuicaoTipo === "2") && (
                           <p className="text-xs text-muted-foreground">
                             Travado em <strong>{excDistribuicaoTipo}º Período</strong> pela distribuição escolhida no gozo interno.
