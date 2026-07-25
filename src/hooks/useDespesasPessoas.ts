@@ -4,23 +4,27 @@ import { supabase } from "@/integrations/supabase/client";
 export type PapelPessoa =
   | "proprietario"
   | "inquilino"
-  | "loja"
+  | "empresa"
   | "fornecedor"
   | "cliente"
   | "funcionario"
   | "motorista"
   | "corretor"
+  | "prestador_servico"
+  | "beneficiario"
   | "outro";
 
 export const PAPEIS_PESSOA: { v: PapelPessoa; l: string }[] = [
   { v: "proprietario", l: "Proprietário" },
   { v: "inquilino", l: "Inquilino" },
-  { v: "loja", l: "Loja" },
+  { v: "empresa", l: "Empresa" },
   { v: "fornecedor", l: "Fornecedor" },
   { v: "cliente", l: "Cliente" },
   { v: "funcionario", l: "Funcionário" },
   { v: "motorista", l: "Motorista" },
   { v: "corretor", l: "Corretor" },
+  { v: "prestador_servico", l: "Prestador de Serviço" },
+  { v: "beneficiario", l: "Beneficiário" },
   { v: "outro", l: "Outro" },
 ];
 
@@ -38,6 +42,7 @@ export interface Pessoa {
   email: string | null;
   telefone: string | null;
   observacao: string | null;
+  papel_outro_descricao: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -82,6 +87,9 @@ export function useSavePessoa() {
       const payload: any = {
         ...input,
         cpf_cnpj: input.cpf_cnpj?.replace(/\D/g, "") || null,
+        papel_outro_descricao: input.papeis.includes("outro")
+          ? (input.papel_outro_descricao?.trim() || null)
+          : null,
       };
       if (id) {
         const { error } = await supabase
