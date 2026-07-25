@@ -1308,6 +1308,54 @@ export type Database = {
           },
         ]
       }
+      despesas_repasse_beneficiarios: {
+        Row: {
+          created_at: string
+          id: string
+          observacao: string | null
+          ordem: number
+          pessoa_id: string
+          repasse_id: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          observacao?: string | null
+          ordem?: number
+          pessoa_id: string
+          repasse_id: string
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          observacao?: string | null
+          ordem?: number
+          pessoa_id?: string
+          repasse_id?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_repasse_beneficiarios_pessoa_id_fkey"
+            columns: ["pessoa_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_pessoas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_repasse_beneficiarios_repasse_id_fkey"
+            columns: ["repasse_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_repasses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       despesas_repasse_itens: {
         Row: {
           created_at: string
