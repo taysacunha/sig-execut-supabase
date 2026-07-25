@@ -21,6 +21,7 @@ import {
 } from "@/hooks/useDespesasVeiculos";
 import { useDespesasLookups } from "@/hooks/useDespesasLancamentos";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
+import { useDespesasValues } from "@/contexts/DespesasValuesContext";
 
 interface Props {
   open: boolean;
@@ -176,6 +177,7 @@ function DocumentosTab({ veiculoId }: { veiculoId: string }) {
   const { data: docs = [], isLoading } = useVeiculoDocumentos(veiculoId);
   const saveMut = useSaveVeiculoDocumento();
   const delMut = useDeleteVeiculoDocumento();
+  const { showValues, formatValue } = useDespesasValues();
   const [editing, setEditing] = useState<Partial<VeiculoDocumento> | null>(null);
 
   const start = () => setEditing({
@@ -211,7 +213,7 @@ function DocumentosTab({ veiculoId }: { veiculoId: string }) {
             {docs.map((d) => (
               <TableRow key={d.id}>
                 <TableCell className="uppercase">{d.tipo}</TableCell>
-                <TableCell>R$ {Number(d.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
+                <TableCell>{showValues ? formatValue(d.valor) : "R$ ******"}</TableCell>
                 <TableCell>{d.parcelas}</TableCell>
                 <TableCell>{new Date(d.vencimento_primeira_parcela + "T00:00:00").toLocaleDateString("pt-BR")}</TableCell>
                 <TableCell>{d.ativo ? "Sim" : "Não"}</TableCell>
