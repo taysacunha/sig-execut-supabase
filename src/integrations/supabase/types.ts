@@ -1096,6 +1096,7 @@ export type Database = {
           oab: string | null
           observacao: string | null
           papeis: string[]
+          papel_outro_descricao: string | null
           telefone: string | null
           tipo_pessoa: string
           updated_at: string
@@ -1111,6 +1112,7 @@ export type Database = {
           oab?: string | null
           observacao?: string | null
           papeis?: string[]
+          papel_outro_descricao?: string | null
           telefone?: string | null
           tipo_pessoa?: string
           updated_at?: string
@@ -1126,6 +1128,7 @@ export type Database = {
           oab?: string | null
           observacao?: string | null
           papeis?: string[]
+          papel_outro_descricao?: string | null
           telefone?: string | null
           tipo_pessoa?: string
           updated_at?: string
