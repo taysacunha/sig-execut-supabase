@@ -2,13 +2,19 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
-import { Loader2, Play, Power, Trash2, ListChecks } from "lucide-react";
+import { Loader2, Play, Power, Trash2, ListChecks, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   Card, CardContent, CardHeader, CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -34,6 +40,61 @@ export default function DespesasRecorrencias() {
   const gerarMut = useGerarOcorrencias();
   const delMut = useDeleteRecorrencia();
   const [toDelete, setToDelete] = useState<Recorrencia | null>(null);
+  const [toRenew, setToRenew] = useState<Recorrencia | null>(null);
+  const [renewDate, setRenewDate] = useState<string>("");
+  const [renewOpen, setRenewOpen] = useState<boolean>(false);
+  const [renewSemFim, setRenewSemFim] = useState<boolean>(false);
+
+  function abrirRenovar(r: Recorrencia) {
+    setToRenew(r);
+    const base = r.data_fim ? new Date(r.data_fim + "T00:00:00") : new Date();
+    const novo = new Date(base);
+    novo.setMonth(novo.getMonth() + 12);
+    setRenewDate(novo.toISOString().slice(0, 10));
+    setRenewSemFim(false);
+  }
+
+  async function confirmRenovar() {
+    if (!toRenew) return;
+    try {
+      const novaDataFim = renewSemFim ? null : renewDate || null;
+      await saveMut.mutateAsync({
+        id: toRenew.id,
+        input: {
+          ativo: true,
+          tipo: toRenew.tipo,
+          data_inicio: toRenew.data_inicio,
+          data_fim: novaDataFim,
+          dia_vencimento: toRenew.dia_vencimento,
+          meses_fixos: toRenew.meses_fixos,
+          janela_geracao_meses: toRenew.janela_geracao_meses,
+          lanc_tipo: toRenew.lanc_tipo,
+          descricao: toRenew.descricao,
+          valor_total: toRenew.valor_total,
+          centro_custo_id: toRenew.centro_custo_id,
+          categoria_id: toRenew.categoria_id,
+          plano_conta_id: toRenew.plano_conta_id,
+          subcategoria_id: toRenew.subcategoria_id,
+          conta_bancaria_id: toRenew.conta_bancaria_id,
+          pessoa_id: toRenew.pessoa_id,
+          imovel_id: toRenew.imovel_id,
+          referencia_tipo: toRenew.referencia_tipo,
+          referencia_numero: toRenew.referencia_numero,
+          referencia_numero_pasta: toRenew.referencia_numero_pasta,
+          referencia_numero_venda: toRenew.referencia_numero_venda,
+          observacao: toRenew.observacao,
+        },
+      });
+      const n = await gerarMut.mutateAsync({
+        id: toRenew.id,
+        ate: novaDataFim ?? undefined,
+      });
+      toast.success(`Série renovada — ${n} nova(s) ocorrência(s) geradas`);
+      setToRenew(null);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erro ao renovar série");
+    }
+  }
 
   async function toggleAtivo(r: Recorrencia) {
     try {
@@ -161,6 +222,15 @@ export default function DespesasRecorrencias() {
                         <Button size="sm" variant="outline" onClick={() => gerar(r)} disabled={gerarMut.isPending}>
                           <Play className="h-3 w-3 mr-1" /> Gerar
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => abrirRenovar(r)}
+                          disabled={saveMut.isPending || gerarMut.isPending}
+                          title="Renovar / prorrogar encerramento"
+                        >
+                          <RefreshCw className="h-3 w-3 mr-1" /> Renovar
+                        </Button>
                         <Button size="sm" variant="outline" onClick={() => toggleAtivo(r)} disabled={saveMut.isPending}>
                           <Power className="h-3 w-3 mr-1" /> {r.ativo ? "Pausar" : "Ativar"}
                         </Button>
@@ -176,6 +246,45 @@ export default function DespesasRecorrencias() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!toRenew} onOpenChange={(o) => !o && setToRenew(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Renovar recorrência</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Prorrogue o encerramento desta série. As novas ocorrências serão geradas
+              automaticamente até a nova data.
+            </p>
+            <div className="space-y-2">
+              <Label>Nova data de encerramento</Label>
+              <Input
+                type="date"
+                value={renewDate}
+                onChange={(e) => setRenewDate(e.target.value)}
+                disabled={renewSemFim}
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <Checkbox
+                checked={renewSemFim}
+                onCheckedChange={(v) => setRenewSemFim(!!v)}
+              />
+              Sem data de encerramento (série contínua)
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setToRenew(null)}>Cancelar</Button>
+            <Button
+              onClick={confirmRenovar}
+              disabled={saveMut.isPending || gerarMut.isPending || (!renewSemFim && !renewDate)}
+            >
+              Renovar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
         <AlertDialogContent>
