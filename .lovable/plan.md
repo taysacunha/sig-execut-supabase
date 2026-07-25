@@ -1,41 +1,50 @@
-# Correções no Calendário de Despesas
+# Corrigir a página de Ajuda de Despesas
 
-## Problemas identificados
+A Ajuda atual (`src/pages/despesas/DespesasHelp.tsx`) descreve funcionalidades que **não existem** no sistema. Vou reescrevê-la para refletir exatamente o que está implementado hoje, conferindo cada afirmação contra o código real antes de escrever.
 
-### 1. Duplicação ao ativar "Repetir automaticamente"
-Ao salvar um novo lançamento com recorrência ativa, o `LancamentoDialog` cria **dois registros**:
-- um lançamento manual (via `saveMut`) na data escolhida;
-- uma recorrência (via `saveRecMut`) cujo trigger `despesas_gerar_ocorrencias` **também** gera a primeira ocorrência no mesmo mês/dia.
+## Erros confirmados na Ajuda atual
 
-Resultado: duas linhas com o mesmo dia/mês/ano na tabela. Quando o índice único `uq_desp_lanc_serie_venc` bloqueia, o `ON CONFLICT DO NOTHING` faz o segundo ficar de fora, mas o manual (sem `serie_recorrencia_id`) permanece — dando a impressão de que a recorrência "não avançou os meses".
+Comparando `DespesasHelp.tsx` com o código real:
 
-### 2. Não há como reverter status "quitado", "gimob" ou "pago"
-Uma vez marcado como terminal, não existe caminho de volta. A função `despesas_recalcular_lancamento` protege explicitamente esses estados. Falta um botão de **estorno com justificativa auditada**.
+1. **"No Calendário, use Montar repasse"** — falso. O botão `Montar repasse` só existe em `/despesas/repasses` (`DespesasRepasses.tsx` linha 99). `DespesasCalendario.tsx` só tem os botões **Nova receita**, **Nova despesa**, **Exportar CSV**, além de ações por linha (Pagar, Editar, Cancelar, Excluir, Estornar).
+2. **"Marcar como pago cria o lançamento correspondente no Calendário"** — precisa validar contra o hook do repasse; a Ajuda afirma isso sem base clara.
+3. **Aba "Imóveis" no diálogo de repasse** — na verdade a aba se chama **"Imóveis & inquilinos"** (`RepasseDialog.tsx`).
+4. **Páginas que a Ajuda esquece** que existem no sidebar (`DespesasSidebar.tsx`): **Dashboard** (`/despesas`), **Notificações** (`/despesas/notificacoes`, com aba própria), **Relatórios** (`/despesas/relatorios`), **Perfil** (`/despesas/perfil`), **Usuários** admin (`/despesas/usuarios`).
+5. **"Notificações → Preferências"** — a página é a inteira `/despesas/notificacoes`; "Preferências" é só o card interno.
 
-## Correções propostas
+## O que vou fazer
 
-### Frontend — `src/components/despesas/LancamentoDialog.tsx`
-Quando **for um novo lançamento** e `rec.ativa === true`, **não** chamar `saveMut`. Criar somente a recorrência — o trigger cuida da primeira ocorrência. Credenciais também não são gravadas neste caminho (não há lançamento manual para associar; ficam disponíveis ao editar cada ocorrência gerada).
+**Arquivo único a alterar:** `src/pages/despesas/DespesasHelp.tsx`.
 
-Edição continua idêntica (nunca cria série).
+Antes de reescrever, vou reler os arquivos abaixo para garantir que cada frase da Ajuda corresponda ao que existe:
 
-### Frontend — `src/hooks/useDespesasLancamentos.ts`
-Novo hook `useEstornarLancamento`:
-1. Recebe `{ id, justificativa }` (mín. 10 caracteres).
-2. `UPDATE despesas_lancamentos SET status='a_vencer', valor_pago=0 WHERE id=?` (destrava o estado terminal antes de mexer nos pagamentos).
-3. `DELETE FROM despesas_lancamento_pagamentos WHERE lancamento_id=?` — o trigger `despesas_recalcular_lancamento` recalcula corretamente (agora em estado não-terminal).
-4. `INSERT INTO module_audit_logs` com `action='ESTORNO_LANCAMENTO'`, `old_data={status, valor_pago}`, `new_data={justificativa}`.
-5. Invalida `LANC_KEY`.
+- `DespesasSidebar.tsx` — lista canônica de páginas/rotas.
+- `DespesasDashboard.tsx`, `DespesasCalendario.tsx`, `DespesasRecorrencias.tsx`, `DespesasNotificacoes.tsx`, `DespesasImoveis.tsx`, `DespesasRepasses.tsx`, `DespesasCadastros.tsx`, `DespesasRelatorios.tsx`, `DespesasPermissoes.tsx`, `DespesasAuditLogs.tsx`.
+- `LancamentoDialog.tsx`, `RepasseDialog.tsx`, `ImovelDialog.tsx`, `PessoaDialog.tsx` — para descrever com precisão campos, abas e regras (referências obrigatórias, competência mês/ano, duplicidade, beneficiários, etc.).
 
-### Frontend — `src/pages/despesas/DespesasCalendario.tsx`
-Novo botão "Estornar" (ícone `RotateCcw`) visível quando `status ∈ {pago, quitado, gimob}` e `canEdit`. Abre `AlertDialog` com `Textarea` obrigatório (mín. 10 chars) e confirmação.
+## Nova estrutura da Ajuda (abas)
 
-## Fora do escopo
+Uma aba por página real do sidebar, na mesma ordem, mais uma "Visão geral" e um FAQ. Cada aba com "O que a página faz", "Passo a passo" e "Regras / atalhos".
 
-- Não alteramos a função SQL `despesas_gerar_ocorrencias` — o loop mensal já está correto; o bug estava só no dialog.
-- Não mexemos em pagamentos de outros módulos (repasses).
+1. **Visão geral** — fluxo do módulo, centro de custo, cascata de permissões.
+2. **Dashboard** — o que os KPIs mostram.
+3. **Calendário** — botões que realmente existem: Nova receita, Nova despesa, Registrar pagamento, Editar, Cancelar, Excluir, **Estornar** (com justificativa ≥10 caracteres para reverter `pago`/`quitado`/`gimob`). **Sem** menção a "Montar repasse".
+4. **Recorrências** — periodicidade, gerar com antecedência (meses), Renovar, encerrar por data-fim/desativar; scheduler 06:00 BRT.
+5. **Notificações** — dias de antecedência, alerta de vencidos, sino.
+6. **Imóveis** — RIP, inscrição municipal, situação (inclui "Em aquisição"), encargos, credenciais, duplicidade com justificativa.
+7. **Repasses** — único lugar onde se monta repasse. Passo a passo com exemplo de R$ 30.000: **Montar repasse** → escolher proprietário/mês/CC → aba **Itens** (Crédito Aluguel + Débitos) → aba **Beneficiários** (soma ≤ líquido, botão Restante) → aba **Imóveis & inquilinos** (informativa) → **Marcar como pago**. Exportação XLSX.
+8. **Cadastros** — Plano de contas, Categorias (sem subcategoria), Centros de custo, Contas bancárias, **Pessoas** (papéis: Proprietário, Inquilino, Empresa, Fornecedor, Prestador de Serviço, Beneficiário, Motorista, Outro com texto), Veículos.
+9. **Relatórios** — filtros, gráficos Recharts, exportação XLSX, respeita permissões.
+10. **Permissões & Usuários & Auditoria** — cascata de acesso, ações em lote por aba, restrições do perfil Admin, auditoria humanizada.
+11. **FAQ** — só perguntas cujas respostas realmente correspondem ao sistema atual.
+
+## Verificação após edição
+
+- `tsgo` para garantir tipos.
+- Abrir `/despesas/ajuda` no preview e conferir que cada botão/campo citado existe na página correspondente (checagem visual em pelo menos Calendário, Repasses e Recorrências).
 
 ## Detalhes técnicos
 
-- Nenhuma migration nova necessária (a tabela `module_audit_logs` já existe e o trigger de recálculo já reage a `DELETE` em `despesas_lancamento_pagamentos`).
-- Toast de sucesso do caminho "criando série" passa a explicar que a ocorrência do mês atual também é criada automaticamente.
+- Manter `Tabs` do shadcn e a estrutura de `Card`/`CardHeader`/`CardContent` já usada.
+- Sem novas dependências, sem mudanças em rotas ou banco de dados.
+- Container `max-w-5xl`, mesmo padrão visual atual.
