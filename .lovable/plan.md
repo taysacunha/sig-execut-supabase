@@ -1,27 +1,31 @@
 ## Objetivo
-Impedir cadastro duplicado de CPF/CNPJ na aba Pessoas do módulo Despesas, retornando mensagem clara ao usuário.
+CPF/CNPJ duplicado deixa de ser bloqueio. Ao salvar, se já existirem pessoas com o mesmo documento, mostrar aviso listando-as e pedir confirmação para prosseguir.
 
 ## Mudanças
 
-### 1. Banco — migration `db/migrations/20260804120000_despesas_pessoas_cpf_cnpj_unique.sql`
-- Detectar duplicatas existentes (informar via `RAISE NOTICE`, sem bloquear) — se houver, a criação do índice falhará; nesse caso o usuário limpa antes.
-- Criar índice único parcial:
+### 1. Banco — nova migration `db/migrations/20260804130000_despesas_pessoas_cpf_cnpj_index.sql`
+- **Não criar** índice único.
+- Remover o índice único (se já tiver sido criado em ambiente algum): `DROP INDEX IF EXISTS public.idx_desp_pessoas_cpf_cnpj_unique;`
+- Criar índice **não único** para acelerar a busca por duplicatas:
   ```sql
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_desp_pessoas_cpf_cnpj_unique
+  CREATE INDEX IF NOT EXISTS idx_desp_pessoas_cpf_cnpj
     ON public.despesas_pessoas (cpf_cnpj)
-    WHERE cpf_cnpj IS NOT NULL AND is_active = true;
+    WHERE cpf_cnpj IS NOT NULL;
   ```
-  Restrito a ativos para não travar quando uma pessoa for desativada e recadastrada.
 
 ### 2. Hook `src/hooks/useDespesasPessoas.ts`
-No `useSavePessoa`, antes do insert/update, checar se já existe outra pessoa ativa com o mesmo `cpf_cnpj` normalizado:
-- Query: `select id, nome from despesas_pessoas where cpf_cnpj = ? and is_active = true` (excluindo `id` atual em edição).
-- Se encontrar, lançar `Error("Já existe uma pessoa ativa cadastrada com este CPF/CNPJ: <nome>.")`.
-- Fallback: se o insert falhar com código Postgres `23505` (unique violation), traduzir a mensagem para PT-BR amigável.
+- Remover o `throw` de duplicidade e o `translate` para 23505.
+- Exportar helper `buscarPessoasPorCpfCnpj(cpfCnpj, excluirId?)` que retorna `Pick<Pessoa,"id"|"nome"|"papeis"|"is_active">[]` (inclui inativas, marcando quais).
 
-### 3. UI `src/components/despesas/PessoaDialog.tsx`
-O erro é exibido pelo `toast.error(e?.message)` já existente — nenhuma mudança estrutural, apenas garantir que a mensagem lançada seja clara.
+### 3. Diálogo `src/components/despesas/PessoaDialog.tsx`
+- Ao clicar em **Salvar** com CPF/CNPJ preenchido, chamar `buscarPessoasPorCpfCnpj`. Se retornar itens, abrir `AlertDialog` de confirmação com:
+  - Título: "CPF/CNPJ já cadastrado"
+  - Corpo: lista com nome, papéis e status (Ativa/Inativa) de cada pessoa encontrada.
+  - Botões: "Cancelar" e "Salvar mesmo assim".
+- Se o usuário confirmar, prosseguir com o `saveMut.mutateAsync`.
+- Se não houver duplicatas, salvar direto (comportamento atual).
 
 ## Notas
-- Não há alteração em outros diálogos (Imóvel/Veículo) porque eles apenas selecionam pessoas existentes.
-- Validação em duas camadas (app + índice único) garante integridade mesmo em concorrência.
+- Uma única confirmação por tentativa — se o usuário confirmar e o salvamento falhar por outro motivo, o toast de erro atual cobre.
+- Não altera diálogos de Imóvel/Veículo (não criam pessoas com documento).
+- O índice não único mantém a consulta rápida mesmo com o cadastro crescendo.
