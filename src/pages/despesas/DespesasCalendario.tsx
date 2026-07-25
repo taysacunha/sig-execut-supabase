@@ -563,6 +563,56 @@ export default function DespesasCalendario() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={!!estornando} onOpenChange={(o) => { if (!o) { setEstornando(null); setEstornoMotivo(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Estornar lançamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O lançamento <b>{estornando?.descricao}</b> (status atual:{" "}
+              <b>{estornando ? STATUS_META[estornando.status].label : ""}</b>) voltará para
+              <b> A vencer</b>. Todos os pagamentos registrados serão removidos. Informe uma
+              justificativa — a ação fica registrada nos logs de auditoria.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label>Justificativa (mín. 10 caracteres) *</Label>
+            <Textarea
+              value={estornoMotivo}
+              onChange={(e) => setEstornoMotivo(e.target.value)}
+              rows={3}
+              placeholder="Descreva o motivo do estorno…"
+              maxLength={500}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              {estornoMotivo.trim().length}/10 caracteres mínimos
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={estornoMotivo.trim().length < 10 || estornarMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!estornando) return;
+                estornarMut.mutate(
+                  { id: estornando.id, justificativa: estornoMotivo.trim() },
+                  {
+                    onSuccess: () => {
+                      toast.success("Lançamento estornado");
+                      setEstornando(null);
+                      setEstornoMotivo("");
+                    },
+                    onError: (err: any) => toast.error(err?.message ?? "Erro ao estornar"),
+                  }
+                );
+              }}
+            >
+              Confirmar estorno
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
