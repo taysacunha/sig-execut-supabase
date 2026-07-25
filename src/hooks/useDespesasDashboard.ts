@@ -101,7 +101,10 @@ export function useDespesasDashboard() {
         .gte("data_vencimento", inicioMesIso)
         .lte("data_vencimento", fimMesIso)
         .limit(1000);
-      const recMes = (recMesRaw ?? []) as { valor_total: number | null; valor_pago: number }[];
+      const recMes = (recMesRaw ?? []) as unknown as {
+        valor_total: number | null;
+        valor_pago: number;
+      }[];
 
       // ---- Pago no mês ----
       const { data: pagosRaw } = await supabase
@@ -110,7 +113,7 @@ export function useDespesasDashboard() {
         .gte("data_pagamento", inicioMesIso)
         .lte("data_pagamento", fimMesIso)
         .limit(1000);
-      const pagos = (pagosRaw ?? []) as {
+      const pagos = (pagosRaw ?? []) as unknown as {
         valor: number;
         data_pagamento: string;
         lancamento?: { centro_custo?: { nome: string } | null } | null;
