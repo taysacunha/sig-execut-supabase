@@ -97,6 +97,7 @@ function exportarCsv(rows: Lancamento[]) {
 
 export default function DespesasCalendario() {
   const { podeVer, podeEditar, podeExcluir } = useDespesasPermissions();
+  const fmtBRL = useFmtBRL();
   const canEdit = podeEditar("calendario");
   const canDelete = podeExcluir("calendario");
 
