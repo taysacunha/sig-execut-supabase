@@ -1,7 +1,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, CheckCircle2, Terminal, AlertTriangle, Info, Server, HardDrive, Cpu, MemoryStick, Shield } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Terminal, AlertTriangle, Info } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const CodeBlock = ({ children }: { children: string }) => (
@@ -170,8 +170,8 @@ sudo ufw enable
 sudo ufw status`}</CodeBlock>
       </Step>
 
-      {/* ============ STEP 2 — Instalar Docker Engine ============ */}
-      <Step n={2} title="Instalar Docker Engine + Ferramentas">
+      {/* ============ STEP 2 — Instalação base ============ */}
+      <Step n={2} title="Instalação base (Docker, Git, Node, Supabase CLI, psql)">
         <p><strong>2.1 — Docker Engine (direto no Ubuntu):</strong></p>
         <CodeBlock>{`# Atualizar pacotes:
 sudo apt-get update && sudo apt-get upgrade -y
@@ -217,7 +217,8 @@ source ~/.bashrc
 nvm install --lts
 node --version && npm --version
 
-# Supabase CLI:
+# Supabase CLI (opcional no self-hosted — usado só para gerar tipos
+# ou rodar tarefas locais; o deploy de funções aqui é via volume mount):
 npm install -g supabase
 supabase --version
 
@@ -278,94 +279,224 @@ docker compose ps
 # Login com DASHBOARD_USERNAME e DASHBOARD_PASSWORD`}</CodeBlock>
       </Step>
 
-      {/* ============ STEP 4 ============ */}
-      <Step n={4} title="Migração do Banco de Dados (Schema Public)">
-        <p><strong>4.1 — Exportar dados do Supabase Cloud:</strong></p>
-        <p>No dashboard do Supabase Cloud, vá em <strong>Settings → Database → Connection String → URI</strong>.</p>
-        <CodeBlock>{`# Exportar schema public + dados:
+      {/* ============ STEP 4 — Extensões ============ */}
+      <Step n={4} title="Habilitar extensões no PostgreSQL">
+        <p>O sistema depende de quatro extensões. Rode como superuser (dentro do container do banco) <strong>antes</strong> de aplicar migrations ou importar dumps.</p>
+
+        <CodeBlock>{`# Conectar via psql do container:
+docker compose exec db psql -U postgres -d postgres
+
+# Dentro do psql, executar:
+create extension if not exists pgcrypto;
+create extension if not exists "uuid-ossp";
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+# Conferir:
+\\dx`}</CodeBlock>
+
+        <InfoBox>
+          <p><strong>Para que servem:</strong> <code>pgcrypto</code> e <code>uuid-ossp</code> geram UUIDs/hashes usados pelas migrations. <code>pg_cron</code> agenda tarefas dentro do próprio banco. <code>pg_net</code> permite chamadas HTTP a partir do banco — necessário para o <code>despesas-scheduler</code> (Step 9).</p>
+        </InfoBox>
+
+        <WarningBox>
+          <p>Se <code>create extension pg_cron</code> falhar com "extension not available", pare os containers, edite <code>~/supabase/docker/volumes/db/postgresql.conf</code> (ou o override no compose) e garanta <code>shared_preload_libraries = 'pg_cron'</code> + <code>cron.database_name = 'postgres'</code>. Depois <code>docker compose up -d db</code> e tente de novo.</p>
+        </WarningBox>
+      </Step>
+
+      {/* ============ STEP 5 — Criar o schema ============ */}
+      <Step n={5} title="Criar o schema do sistema">
+        <p>Existem dois caminhos. Escolha um.</p>
+
+        <p className="mt-4"><strong>5.A — Banco novo (recomendado):</strong> aplicar as migrations do repositório.</p>
+        <p>A pasta <code>db/migrations/</code> do projeto SIG Execut contém todas as migrations em ordem cronológica (~150 arquivos, idempotentes). É a fonte única de verdade para self-hosted, documentada em <code>db/migrations/README.md</code>.</p>
+
+        <CodeBlock>{`# Clonar o projeto na VM:
+cd ~
+git clone https://github.com/seu-usuario/sig-execut.git
+cd sig-execut
+
+# Aplicar todas as migrations em ordem (falha na primeira que der erro):
+for f in db/migrations/*.sql; do
+  echo "→ $f"
+  psql "postgresql://postgres:SuaSenhaForteAqui123!@localhost:5432/postgres" \\
+    -v ON_ERROR_STOP=1 -f "$f" || break
+done`}</CodeBlock>
+
+        <InfoBox>
+          <p>As migrations são <strong>idempotentes</strong> — usam <code>IF NOT EXISTS</code>, <code>CREATE OR REPLACE</code>, <code>DROP POLICY IF EXISTS</code> antes de <code>CREATE POLICY</code>, etc. Rodar duas vezes não quebra nada.</p>
+        </InfoBox>
+
+        <p className="mt-6"><strong>5.B — Migração com dados vindos do Supabase Cloud:</strong> exportar via <code>pg_dump</code> e importar.</p>
+        <p>No dashboard do Supabase Cloud: <strong>Settings → Database → Connection String → URI</strong>.</p>
+
+        <CodeBlock>{`# 1) Exportar schema public (estrutura + dados):
 pg_dump "postgresql://postgres.[ref]:[password]@aws-0-sa-east-1.pooler.supabase.com:5432/postgres" \\
   --clean --if-exists --no-owner --no-privileges \\
   --schema=public \\
-  -f backup_public.sql`}</CodeBlock>
+  -f backup_public.sql
 
-        <p><strong>4.2 — Importar no Supabase Self-Hosted:</strong></p>
-        <CodeBlock>{`psql "postgresql://postgres:SuaSenhaForteAqui123!@localhost:5432/postgres" \\
-  -f backup_public.sql`}</CodeBlock>
-
-        <p><strong>4.3 — Verificar:</strong></p>
-        <p>Acesse o Supabase Studio local (<code>http://IP-DA-VM:8000</code>) e confira as tabelas e dados.</p>
-      </Step>
-
-      {/* ============ STEP 5 ============ */}
-      <Step n={5} title="Migração de Usuários (Schema Auth)">
-        <WarningBox>
-          <p>O <code>pg_dump --schema=public</code> <strong>NÃO exporta os usuários</strong>. Sem este passo, ninguém conseguirá fazer login no sistema self-hosted.</p>
-        </WarningBox>
-
-        <p><strong>5.1 — Exportar tabelas de autenticação:</strong></p>
-        <CodeBlock>{`pg_dump "postgresql://postgres.[ref]:[password]@aws-0-sa-east-1.pooler.supabase.com:5432/postgres" \\
+# 2) Exportar dados de autenticação (só data, o schema já existe no self-hosted):
+pg_dump "postgresql://postgres.[ref]:[password]@aws-0-sa-east-1.pooler.supabase.com:5432/postgres" \\
   --data-only --no-owner --no-privileges \\
   --table=auth.users \\
   --table=auth.identities \\
+  --table=auth.refresh_tokens \\
   -f backup_auth.sql`}</CodeBlock>
 
-        <p><strong>5.2 — Importar no Self-Hosted:</strong></p>
-        <CodeBlock>{`psql "postgresql://postgres:SuaSenhaForteAqui123!@localhost:5432/postgres" \\
-  -f backup_auth.sql`}</CodeBlock>
+        <p>Importar na ordem correta, com FKs desabilitadas na sessão para evitar problemas de dependência entre <code>auth.users</code> e as tabelas do <code>public</code> que referenciam usuários (<code>user_profiles</code>, <code>user_roles</code>, <code>system_access</code>):</p>
 
-        <InfoBox>
-          <p>As tabelas <code>user_roles</code>, <code>user_profiles</code> e <code>system_access</code> já são exportadas no Step 4 (schema public). Elas referenciam <code>auth.users(id)</code>, então importe os usuários <strong>antes</strong> dos dados do schema public, ou desabilite temporariamente as foreign keys.</p>
-        </InfoBox>
+        <CodeBlock>{`LOCAL="postgresql://postgres:SuaSenhaForteAqui123!@localhost:5432/postgres"
 
-        <p><strong>Ordem correta de importação:</strong></p>
-        <CodeBlock>{`# 1. Primeiro: usuários (auth)
-psql "postgresql://postgres:SENHA@localhost:5432/postgres" -f backup_auth.sql
+psql "$LOCAL" \\
+  -v ON_ERROR_STOP=1 \\
+  -c "SET session_replication_role = replica;" \\
+  -f backup_auth.sql \\
+  -f backup_public.sql \\
+  -c "SET session_replication_role = origin;"
 
-# 2. Depois: dados do sistema (public)
-psql "postgresql://postgres:SENHA@localhost:5432/postgres" -f backup_public.sql`}</CodeBlock>
+# Pós-import — reindexar, atualizar estatísticas e sequences:
+psql "$LOCAL" -c "REINDEX DATABASE postgres;"
+psql "$LOCAL" -c "ANALYZE;"`}</CodeBlock>
+
+        <WarningBox>
+          <p>Confira depois se todas as tabelas do <code>public</code> têm <code>GRANT</code> para <code>anon</code>/<code>authenticated</code>/<code>service_role</code>. Se alguma view/tabela responder com <code>permission denied</code>, rode o <code>GRANT</code> exato que o HINT do Postgres sugerir. As migrations do caminho A já fazem isso; no caminho B pode faltar em tabelas antigas.</p>
+        </WarningBox>
+
+        <p><strong>5.C — Verificar:</strong> acesse o Studio em <code>http://IP-DA-VM:8000</code> e confira as tabelas em <em>Table Editor</em>.</p>
       </Step>
 
-      {/* ============ STEP 6 ============ */}
-      <Step n={6} title="Deploy das Edge Functions">
-        <p>O sistema possui 5 Edge Functions que precisam ser deployadas:</p>
+      {/* ============ STEP 6 — Auth ============ */}
+      <Step n={6} title="Usuários e sessões após a migração">
+        <p>Se você seguiu o <strong>caminho 5.B</strong>, os usuários já estão no banco. Não é preciso reimportar aqui.</p>
+
+        <InfoBox>
+          <p><strong>Senhas continuam válidas.</strong> O hash bcrypt em <code>auth.users.encrypted_password</code> não depende do <code>JWT_SECRET</code>. O que muda é que o novo servidor assina JWTs com um <code>JWT_SECRET</code> diferente do Cloud — por isso as <strong>sessões ativas</strong> caem e cada usuário faz login uma vez após a virada, usando a mesma senha de sempre.</p>
+        </InfoBox>
+
+        <p><strong>Fazer o primeiro super_admin apontar para o novo ambiente</strong> (se você não migrou os dados do Cloud):</p>
+
+        <CodeBlock>{`# Crie o usuário pelo Studio (Authentication → Users → Add user)
+# ou pelo próprio /auth do sistema, depois execute:
+
+insert into public.user_roles (user_id, role)
+select id, 'super_admin'::app_role
+from auth.users
+where email = 'seu-email@empresa.com'
+on conflict (user_id, role) do nothing;
+
+insert into public.system_access (user_id, system_name, permission_type)
+select id, s, 'view_edit'
+from auth.users cross join unnest(
+  array['escalas','vendas','ferias','estoque','despesas']
+) as s
+where email = 'seu-email@empresa.com'
+on conflict do nothing;`}</CodeBlock>
+      </Step>
+
+      {/* ============ STEP 7 — Realtime publication ============ */}
+      <Step n={7} title="Habilitar Realtime nas tabelas assinadas">
+        <p>Vários módulos (notificações de despesas, estoque, etc.) usam <code>supabase.channel(...).on('postgres_changes', ...)</code>. Cada uma dessas tabelas precisa estar no publication <code>supabase_realtime</code>.</p>
+
+        <CodeBlock>{`-- Ajuste a lista conforme os módulos que sua instalação vai usar.
+alter publication supabase_realtime add table public.despesas_notificacoes;
+alter publication supabase_realtime add table public.estoque_notificacoes;
+alter publication supabase_realtime add table public.despesas_lancamentos;
+alter publication supabase_realtime add table public.estoque_solicitacoes;
+
+-- Conferir:
+select schemaname, tablename
+from pg_publication_tables
+where pubname = 'supabase_realtime'
+order by 1,2;`}</CodeBlock>
+
+        <InfoBox>
+          <p>Se ver o erro <em>"relation is already member of publication"</em>, ignore — significa que já está adicionada.</p>
+        </InfoBox>
+      </Step>
+
+      {/* ============ STEP 8 — Edge Functions ============ */}
+      <Step n={8} title="Deploy das Edge Functions">
+        <p>O sistema tem <strong>4 Edge Functions</strong>:</p>
         <ul className="list-disc pl-5 space-y-1">
-          <li><code>invite-user</code> — Convite de usuários por e-mail</li>
-          <li><code>list-users</code> — Listagem de usuários (admin)</li>
-          <li><code>manage-user</code> — Gerenciamento de usuários (ativar/desativar)</li>
-          <li><code>deactivate-expired-notice</code> — Desativação automática de avisos prévios</li>
-          <li><code>log-dev-work</code> — Registro automatizado de horas de desenvolvimento</li>
+          <li><code>invite-user</code> — convite de novos usuários por e-mail</li>
+          <li><code>list-users</code> — listagem de usuários (usado no Gerenciamento de Usuários)</li>
+          <li><code>manage-user</code> — ativar/desativar/excluir usuários</li>
+          <li><code>despesas-scheduler</code> — rotina diária do módulo Despesas (gera ocorrências de recorrências, marca vencidos, cria notificações)</li>
         </ul>
 
-        <p><strong>6.1 — Clonar o repositório do projeto:</strong></p>
-        <CodeBlock>{`cd ~
-git clone https://github.com/seu-usuario/sig-execut.git
-cd sig-execut`}</CodeBlock>
+        <p><strong>8.1 — Copiar as funções para o volume do container:</strong></p>
+        <CodeBlock>{`cd ~/sig-execut
 
-        <p><strong>6.2 — Fazer deploy das funções:</strong></p>
-        <CodeBlock>{`# Conectar ao Supabase Self-Hosted:
-supabase link --project-ref msbhhsrtfqfqcsofnsuy
+for fn in invite-user list-users manage-user despesas-scheduler; do
+  cp -r supabase/functions/$fn ~/supabase/docker/volumes/functions/
+done
 
-# Deploy de todas as funções:
-supabase functions deploy invite-user --no-verify-jwt
-supabase functions deploy list-users --no-verify-jwt
-supabase functions deploy manage-user --no-verify-jwt
-supabase functions deploy deactivate-expired-notice --no-verify-jwt
-supabase functions deploy log-dev-work --no-verify-jwt`}</CodeBlock>
+# Reiniciar o container que serve as funções:
+cd ~/supabase/docker
+docker compose restart functions
+
+# Conferir os logs:
+docker compose logs -f functions`}</CodeBlock>
 
         <InfoBox>
-          <p>No Supabase Self-Hosted, as Edge Functions rodam no container <code>supabase-edge-functions</code> via Deno. Verifique no <code>docker compose ps</code> se o container está rodando.</p>
+          <p>No Supabase Self-Hosted não se usa <code>supabase link --project-ref</code> (isso é do Cloud). O deploy é o <strong>volume mount</strong> acima: o container <code>functions</code> lê tudo que estiver em <code>volumes/functions/&lt;nome&gt;/index.ts</code>.</p>
         </InfoBox>
 
-        <p><strong>6.3 — Alternativa: montar diretamente via volume Docker:</strong></p>
-        <CodeBlock>{`cp -r ~/sig-execut/supabase/functions/* ~/supabase/docker/volumes/functions/
+        <p><strong>8.2 — Testar uma função:</strong></p>
+        <CodeBlock>{`curl -i https://seudominio.com.br/functions/v1/despesas-scheduler \\
+  -X POST \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer <SERVICE_ROLE_KEY>" \\
+  -d '{}'
 
-cd ~/supabase/docker
-docker compose restart functions`}</CodeBlock>
+# Resposta esperada:
+# {"ok":true,"resumo":{"series":0,"criadas":0,"vencidos_marcados":0,"notificacoes":0,"erros":[]}}`}</CodeBlock>
       </Step>
 
-      {/* ============ STEP 7 ============ */}
-      <Step n={7} title="Build do Frontend (SIG Execut)">
-        <p><strong>7.1 — Configurar variáveis de ambiente:</strong></p>
+      {/* ============ STEP 9 — pg_cron ============ */}
+      <Step n={9} title="Agendar o despesas-scheduler (pg_cron + pg_net)">
+        <p>O módulo Despesas depende de uma rodada diária do <code>despesas-scheduler</code> para materializar recorrências, marcar lançamentos vencidos e disparar notificações. O disparo é feito pelo próprio banco via <code>pg_cron</code>.</p>
+
+        <CodeBlock>{`-- Rodar como superuser dentro do banco (Studio → SQL Editor ou psql):
+select cron.schedule(
+  'despesas-scheduler-diario',
+  '0 6 * * *',   -- todo dia às 06:00 UTC
+  $$
+  select net.http_post(
+    url := 'https://seudominio.com.br/functions/v1/despesas-scheduler',
+    headers := jsonb_build_object(
+      'Content-Type','application/json',
+      'Authorization','Bearer <SERVICE_ROLE_KEY_REAL>'
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);`}</CodeBlock>
+
+        <p><strong>Conferir se está executando:</strong></p>
+        <CodeBlock>{`-- Últimas execuções (status_code, content, error_msg):
+select job_run_details.*, net_http_response.status_code, net_http_response.content
+from cron.job_run_details
+left join net._http_response net_http_response
+  on net_http_response.id::text = job_run_details.return_message
+order by start_time desc
+limit 10;
+
+-- Listar jobs cadastrados:
+select * from cron.job;
+
+-- Remover, se precisar recriar:
+-- select cron.unschedule('despesas-scheduler-diario');`}</CodeBlock>
+
+        <WarningBox>
+          <p>Substitua <code>&lt;SERVICE_ROLE_KEY_REAL&gt;</code> pelo valor real da <code>SERVICE_ROLE_KEY</code> gerada no Step 3. Sem essa chave, a chamada retorna 401 e o scheduler não roda.</p>
+        </WarningBox>
+      </Step>
+
+      {/* ============ STEP 10 — Frontend ============ */}
+      <Step n={10} title="Build do Frontend (SIG Execut)">
+        <p><strong>10.1 — Configurar variáveis de ambiente:</strong></p>
         <CodeBlock>{`cd ~/sig-execut
 
 cat > .env << 'EOF'
@@ -374,17 +505,17 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sua_anon_key_gerada_no_step3
 EOF`}</CodeBlock>
 
         <WarningBox>
-          <p>O <code>VITE_SUPABASE_URL</code> deve ser a URL pública onde o Supabase API será acessível. O Nginx fará proxy das rotas <code>/rest/</code>, <code>/auth/</code>, <code>/realtime/</code>, <code>/storage/</code>.</p>
+          <p>Apenas as duas variáveis <code>VITE_*</code> acima são lidas em tempo de build pelo cliente Supabase. A URL deve ser exatamente a URL pública onde o Nginx atende — o proxy encaminha <code>/rest/</code>, <code>/auth/</code>, <code>/realtime/v1/</code>, <code>/storage/</code> e <code>/functions/v1/</code> para o Kong do Supabase.</p>
         </WarningBox>
 
-        <p><strong>7.2 — Build de produção:</strong></p>
+        <p><strong>10.2 — Build de produção:</strong></p>
         <CodeBlock>{`npm install
 npm run build
 # A pasta dist/ será gerada com os arquivos estáticos`}</CodeBlock>
       </Step>
 
-      {/* ============ STEP 8 ============ */}
-      <Step n={8} title="Nginx como Reverse Proxy + HTTPS">
+      {/* ============ STEP 11 — Nginx ============ */}
+      <Step n={11} title="Nginx como Reverse Proxy + HTTPS">
         <p><strong>8.1 — Estrutura de arquivos:</strong></p>
         <CodeBlock>{`~/sig-deploy/
 ├── dist/                  ← Build do frontend (copiar de sig-execut/dist/)
@@ -395,7 +526,7 @@ npm run build
 │   └── www/               ← Desafio ACME
 └── docker-compose.yml     ← Nginx container`}</CodeBlock>
 
-        <p><strong>8.2 — Configuração do Nginx (<code>nginx/default.conf</code>):</strong></p>
+        <p><strong>11.2 — Configuração do Nginx (<code>nginx/default.conf</code>):</strong></p>
         <CodeBlock>{`# Redirecionar HTTP para HTTPS
 server {
     listen 80;
@@ -456,8 +587,8 @@ server {
     }
 
     # ====== Supabase Realtime (WebSocket) ======
-    location /realtime/ {
-        proxy_pass http://localhost:8000/realtime/;
+    location /realtime/v1/ {
+        proxy_pass http://localhost:8000/realtime/v1/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -476,8 +607,8 @@ server {
     }
 
     # ====== Supabase Edge Functions ======
-    location /functions/ {
-        proxy_pass http://localhost:8000/functions/;
+    location /functions/v1/ {
+        proxy_pass http://localhost:8000/functions/v1/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -489,7 +620,7 @@ server {
           <p>Na VM Linux, o Nginx acessa os containers Supabase via <code>localhost</code> (não <code>host.docker.internal</code>). Se o Nginx também rodar em Docker, use <code>--network host</code> ou crie uma rede Docker compartilhada.</p>
         </InfoBox>
 
-        <p><strong>8.3 — Docker Compose para o Nginx:</strong></p>
+        <p><strong>11.3 — Docker Compose para o Nginx:</strong></p>
         <CodeBlock>{`# ~/sig-deploy/docker-compose.yml
 version: "3.8"
 services:
@@ -508,15 +639,15 @@ services:
         </InfoBox>
       </Step>
 
-      {/* ============ STEP 9 ============ */}
-      <Step n={9} title="HTTPS com Let's Encrypt (Certbot)">
+      {/* ============ STEP 12 ============ */}
+      <Step n={12} title="HTTPS com Let's Encrypt (Certbot)">
         <p><strong>Pré-requisitos:</strong></p>
         <ul className="list-disc pl-5 space-y-1">
           <li>DNS A record do domínio apontando para o IP público do servidor</li>
           <li>Portas 80 e 443 abertas (VM + Windows Server + roteador)</li>
         </ul>
 
-        <p><strong>9.1 — Gerar certificado:</strong></p>
+        <p><strong>12.1 — Gerar certificado:</strong></p>
         <CodeBlock>{`# Suba o Nginx apenas com HTTP primeiro (comente o bloco 443):
 cd ~/sig-deploy
 docker compose up -d
@@ -534,7 +665,7 @@ docker run --rm --network host \\
 # Descomente o bloco 443 e reinicie:
 docker compose restart`}</CodeBlock>
 
-        <p><strong>9.2 — Renovação automática (cron):</strong></p>
+        <p><strong>12.2 — Renovação automática (cron):</strong></p>
         <CodeBlock>{`# ~/sig-deploy/renew-cert.sh
 #!/bin/bash
 docker run --rm --network host \\
@@ -551,8 +682,8 @@ crontab -e
 0 3 */60 * * /root/sig-deploy/renew-cert.sh >> /var/log/certbot-renew.log 2>&1`}</CodeBlock>
       </Step>
 
-      {/* ============ STEP 10 ============ */}
-      <Step n={10} title="Acesso Interno (Intranet) — Sem domínio">
+      {/* ============ STEP 13 ============ */}
+      <Step n={13} title="Acesso Interno (Intranet) — Sem domínio">
         <p>Se o sistema será acessado apenas pela rede interna:</p>
         <CodeBlock>{`# No default.conf do Nginx, use:
 server_name _;  # Aceita qualquer hostname
@@ -567,15 +698,16 @@ server_name _;  # Aceita qualquer hostname
 192.168.1.100  sig-execut.local`}</CodeBlock>
       </Step>
 
-      {/* ============ STEP 11 — Backup ============ */}
-      <Step n={11} title="Backup Automatizado">
+      {/* ============ STEP 14 — Backup ============ */}
+      <Step n={14} title="Backup Automatizado">
         <InfoBox>
-          <p><strong>Estratégia de backup:</strong> Backup diário automático via <code>pg_dump</code> comprimido, com retenção de 30 dias. Recomenda-se copiar os backups para um destino externo (NAS, storage em nuvem ou outro disco) para proteção contra falha do disco da VM.</p>
+          <p><strong>Estratégia de backup:</strong> dump diário do schema <code>public</code>, dump dos dados de autenticação (<code>auth.users</code>, <code>auth.identities</code>, <code>auth.refresh_tokens</code>) e cópia da pasta física de storage. Retenção de 30 dias e cópia externa para NAS/rsync.</p>
         </InfoBox>
 
-        <p><strong>11.1 — Script de backup:</strong></p>
+        <p><strong>14.1 — Script de backup:</strong></p>
         <CodeBlock>{`# ~/sig-deploy/backup.sh
 #!/bin/bash
+set -euo pipefail
 BACKUP_DIR=~/backups
 DATE=$(date +%Y-%m-%d_%H%M)
 mkdir -p $BACKUP_DIR
@@ -585,22 +717,27 @@ pg_dump "postgresql://postgres:SuaSenhaForteAqui123!@localhost:5432/postgres" \\
   --no-owner --no-privileges --schema=public \\
   -f "$BACKUP_DIR/public_$DATE.sql"
 
-# Backup dos usuários (auth)
+# Backup dos usuários e sessões (auth)
 pg_dump "postgresql://postgres:SuaSenhaForteAqui123!@localhost:5432/postgres" \\
   --data-only --no-owner --no-privileges \\
-  --table=auth.users --table=auth.identities \\
+  --table=auth.users --table=auth.identities --table=auth.refresh_tokens \\
   -f "$BACKUP_DIR/auth_$DATE.sql"
 
-# Comprimir
+# Backup da pasta de storage (arquivos enviados via Supabase Storage)
+STORAGE_DIR=~/supabase/docker/volumes/storage
+tar -czf "$BACKUP_DIR/storage_$DATE.tar.gz" -C "$STORAGE_DIR" . 2>/dev/null || true
+
+# Comprimir dumps SQL num único arquivo
 tar -czf "$BACKUP_DIR/backup_$DATE.tar.gz" \\
-  "$BACKUP_DIR/public_$DATE.sql" \\
-  "$BACKUP_DIR/auth_$DATE.sql"
+  -C "$BACKUP_DIR" \\
+  "public_$DATE.sql" "auth_$DATE.sql"
 
 # Limpar arquivos soltos
 rm "$BACKUP_DIR/public_$DATE.sql" "$BACKUP_DIR/auth_$DATE.sql"
 
 # Manter apenas últimos 30 backups
-ls -t $BACKUP_DIR/backup_*.tar.gz | tail -n +31 | xargs -r rm
+ls -t $BACKUP_DIR/backup_*.tar.gz  | tail -n +31 | xargs -r rm
+ls -t $BACKUP_DIR/storage_*.tar.gz | tail -n +31 | xargs -r rm
 
 echo "$(date): Backup completo - backup_$DATE.tar.gz" >> /var/log/backup.log`}</CodeBlock>
         <CodeBlock>{`chmod +x ~/sig-deploy/backup.sh
@@ -610,7 +747,7 @@ crontab -e
 # Adicione:
 0 2 * * * /root/sig-deploy/backup.sh >> /var/log/backup.log 2>&1`}</CodeBlock>
 
-        <p><strong>11.2 — Cópia externa (recomendado):</strong></p>
+        <p><strong>14.2 — Cópia externa (recomendado):</strong></p>
         <CodeBlock>{`# Opção A: Copiar para pasta compartilhada do Windows Server (SMB)
 # Monte o compartilhamento:
 sudo apt-get install -y cifs-utils
@@ -620,13 +757,14 @@ sudo mount -t cifs //WINDOWS-SERVER/Backups /mnt/backup-share \\
 
 # Adicione ao script de backup:
 cp "$BACKUP_DIR/backup_$DATE.tar.gz" /mnt/backup-share/
+cp "$BACKUP_DIR/storage_$DATE.tar.gz" /mnt/backup-share/
 
 # Opção B: rsync para outro servidor
 rsync -az ~/backups/ usuario@servidor-externo:/backups/sig-execut/`}</CodeBlock>
       </Step>
 
-      {/* ============ STEP 12 ============ */}
-      <Step n={12} title="Atualizações e Manutenção">
+      {/* ============ STEP 15 ============ */}
+      <Step n={15} title="Atualizações e Manutenção">
         <p><strong>Atualizar o frontend:</strong></p>
         <CodeBlock>{`cd ~/sig-execut
 git pull
@@ -634,6 +772,22 @@ npm install
 npm run build
 cp -r dist/* ~/sig-deploy/dist/
 cd ~/sig-deploy && docker compose restart`}</CodeBlock>
+
+        <p><strong>Aplicar novas migrations do repositório:</strong></p>
+        <CodeBlock>{`cd ~/sig-execut && git pull
+
+# As migrations são idempotentes — rodar tudo de novo é seguro:
+for f in db/migrations/*.sql; do
+  psql "postgresql://postgres:SENHA@localhost:5432/postgres" \\
+    -v ON_ERROR_STOP=1 -f "$f" || break
+done`}</CodeBlock>
+
+        <p><strong>Atualizar Edge Functions após um pull:</strong></p>
+        <CodeBlock>{`cd ~/sig-execut && git pull
+for fn in invite-user list-users manage-user despesas-scheduler; do
+  rsync -a --delete supabase/functions/$fn/ ~/supabase/docker/volumes/functions/$fn/
+done
+cd ~/supabase/docker && docker compose restart functions`}</CodeBlock>
 
         <p><strong>Atualizar o Supabase:</strong></p>
         <CodeBlock>{`cd ~/supabase/docker
@@ -660,7 +814,7 @@ free -h # Memória`}</CodeBlock>
       </Step>
 
       {/* ============ CHECKLIST ============ */}
-      <Step n={13} title="Checklist Final">
+      <Step n={16} title="Checklist Final">
         <div className="space-y-2">
           {[
             "VM Ubuntu LTS criada no Hyper-V com IP estático",
@@ -670,14 +824,17 @@ free -h # Memória`}</CodeBlock>
             "Supabase Self-Hosted rodando (docker compose ps — ~15 containers)",
             "JWT_SECRET, ANON_KEY e SERVICE_ROLE_KEY configurados no .env",
             "SMTP configurado (testar enviando convite de usuário)",
-            "Banco de dados público migrado e verificado no Studio",
-            "Usuários (auth.users) migrados — testar login com conta existente",
-            "Edge Functions deployadas (testar invite-user, list-users, log-dev-work)",
+            "Extensões pgcrypto, uuid-ossp, pg_cron e pg_net habilitadas",
+            "Schema criado (db/migrations aplicadas OU dump do Cloud importado com session_replication_role)",
+            "Tabelas assinadas em tempo real adicionadas ao publication supabase_realtime",
+            "Usuários migrados ou super_admin inicial criado — login testado",
+            "Edge Functions no volume (invite-user, list-users, manage-user, despesas-scheduler) e container reiniciado",
+            "cron.schedule do despesas-scheduler ativo — cron.job_run_details mostra status 200",
             "Frontend buildado com VITE_SUPABASE_URL correto",
-            "Nginx servindo frontend + proxy para Supabase API",
+            "Nginx com rotas /rest/, /auth/, /realtime/v1/, /storage/, /functions/v1/",
             "HTTPS configurado (se acesso externo) com Let's Encrypt",
             "DNS A record apontando para o IP público do servidor",
-            "Backup diário automatizado via cron e testado",
+            "Backup diário (public + auth + storage/) automatizado via cron e testado",
             "Cópia externa dos backups configurada (NAS/SMB/rsync)",
             "Renovação automática do certificado SSL agendada",
           ].map((item, i) => (
@@ -693,10 +850,14 @@ free -h # Memória`}</CodeBlock>
         <CardContent className="py-4 text-sm">
           <p className="font-semibold text-destructive mb-2">⚠️ Troubleshooting Comum</p>
           <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-            <li><strong>Login não funciona após migração:</strong> Verifique se importou <code>auth.users</code> e <code>auth.identities</code>. O <code>JWT_SECRET</code> do self-hosted é diferente do Cloud, então tokens antigos são inválidos — usuários precisam fazer login novamente.</li>
+            <li><strong>Login não funciona após migração:</strong> as <em>senhas</em> continuam válidas (hash bcrypt independe do JWT_SECRET); só as <em>sessões</em> caem — o usuário refaz login uma vez. Se ninguém consegue entrar, confira se <code>auth.users</code> e <code>auth.identities</code> foram importados.</li>
             <li><strong>E-mail de convite não chega:</strong> Confira as variáveis SMTP no <code>.env</code> do Supabase. Teste com <code>docker compose logs auth</code> para ver erros de envio.</li>
-            <li><strong>Edge Functions retornam 500:</strong> Verifique <code>docker compose logs functions</code>. Confirme que o container <code>supabase-edge-functions</code> está rodando.</li>
-            <li><strong>WebSocket (realtime) não conecta:</strong> Verifique se o Nginx tem <code>proxy_http_version 1.1</code> e headers <code>Upgrade/Connection</code> na rota <code>/realtime/</code>.</li>
+            <li><strong>Edge Function 404:</strong> confira se a pasta existe em <code>~/supabase/docker/volumes/functions/&lt;nome&gt;/index.ts</code> e se você reiniciou o container <code>functions</code>. A rota no Nginx precisa ser <code>/functions/v1/</code>, não <code>/functions/</code>.</li>
+            <li><strong>Edge Function 500:</strong> <code>docker compose logs -f functions</code> e verifique <code>SUPABASE_URL</code>/<code>SUPABASE_SERVICE_ROLE_KEY</code> presentes no container.</li>
+            <li><strong>despesas-scheduler não roda:</strong> <code>select * from cron.job_run_details order by start_time desc limit 5;</code> — se estiver vazio, o job não está agendado. Se aparecer com <code>status_code 401</code>, a <code>SERVICE_ROLE_KEY</code> no <code>cron.schedule</code> está errada; recrie o job com <code>select cron.unschedule('despesas-scheduler-diario');</code> e re-agende com a chave correta.</li>
+            <li><strong>Realtime silencioso:</strong> a UI não recebe eventos mesmo com o WebSocket conectado. Rode <code>select * from pg_publication_tables where pubname='supabase_realtime';</code> e adicione as tabelas que estão faltando com <code>alter publication supabase_realtime add table public.&lt;tabela&gt;;</code>.</li>
+            <li><strong>WebSocket não conecta:</strong> confirme o bloco <code>/realtime/v1/</code> no Nginx com <code>proxy_http_version 1.1</code> + headers <code>Upgrade</code>/<code>Connection</code>.</li>
+            <li><strong>"permission denied for table X" no frontend:</strong> falta <code>GRANT</code> após import do dump. Rode o <code>GRANT</code> exato que o HINT do Postgres sugerir (ou re-aplique a migration correspondente do repositório, que já contém os GRANTs).</li>
             <li><strong>CORS errors no frontend:</strong> Confirme que <code>VITE_SUPABASE_URL</code> corresponde exatamente à URL configurada no Nginx e no <code>API_EXTERNAL_URL</code> do Supabase.</li>
             <li><strong>VM não acessível pela rede:</strong> Verifique o Virtual Switch do Hyper-V (deve ser External/Bridge), o IP estático da VM, e as regras de firewall nas três camadas (VM, Windows Server, roteador).</li>
           </ul>
