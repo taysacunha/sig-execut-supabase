@@ -4811,6 +4811,10 @@ export type Database = {
         Args: { _local_id: string; _material_id: string }
         Returns: undefined
       }
+      registrar_evento_ferias: {
+        Args: { p_action: string; p_payload: Json; p_record_id: string }
+        Returns: undefined
+      }
       save_broker_weekly_stats: {
         Args: {
           p_broker_id: string
