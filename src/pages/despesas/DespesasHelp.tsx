@@ -31,6 +31,20 @@ export default function DespesasHelp() {
         <TabsContent value="visao" className="space-y-4">
           <Card>
             <CardHeader>
+              <CardTitle>Ocultar valores</CardTitle>
+              <CardDescription>
+                No cabeçalho do módulo há um botão com ícone de <b>olho</b> ao lado do sino de
+                notificações. Ele oculta ou mostra todos os valores em R$ das telas de Despesas
+                (dashboard, calendário, recorrências, repasses, imóveis, relatórios e diálogos de
+                pagamento). Por padrão os valores ficam <b>ocultos</b>; a preferência vale enquanto
+                a aba do navegador estiver aberta. Campos de digitação (ex.: valor de um novo
+                lançamento) continuam sempre visíveis.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle>Como o módulo funciona</CardTitle>
               <CardDescription>
                 O fluxo é sempre o mesmo: você monta os <b>cadastros</b> (planos, categorias,

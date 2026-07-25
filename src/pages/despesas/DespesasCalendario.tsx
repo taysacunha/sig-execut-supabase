@@ -33,6 +33,7 @@ import {
 import { LancamentoDialog } from "@/components/despesas/LancamentoDialog";
 import { PagamentoDialog } from "@/components/despesas/PagamentoDialog";
 import { Textarea } from "@/components/ui/textarea";
+import { useDespesasValues } from "@/contexts/DespesasValuesContext";
 
 const STATUS_META: Record<LancamentoStatus, { label: string; variant: any; icon: any }> = {
   a_vencer: { label: "A vencer", variant: "secondary", icon: DollarSign },
@@ -44,11 +45,20 @@ const STATUS_META: Record<LancamentoStatus, { label: string; variant: any; icon:
   gimob: { label: "GIMOB", variant: "secondary", icon: CheckCircle2 },
 };
 
-function fmtBRL(v: number | string | null | undefined) {
+function fmtBRLRaw(v: number | string | null | undefined) {
   if (v === null || v === undefined || v === "") return "—";
   const n = typeof v === "string" ? Number(v) : v;
   if (!Number.isFinite(n)) return "—";
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+function useFmtBRL() {
+  const { showValues } = useDespesasValues();
+  return (v: number | string | null | undefined) => {
+    if (v === null || v === undefined || v === "") return "—";
+    const n = typeof v === "string" ? Number(v) : v;
+    if (!Number.isFinite(n)) return "—";
+    return showValues ? fmtBRLRaw(v) : "R$ ******";
+  };
 }
 function fmtDate(iso: string) {
   const [y, m, d] = iso.split("-");
@@ -87,6 +97,7 @@ function exportarCsv(rows: Lancamento[]) {
 
 export default function DespesasCalendario() {
   const { podeVer, podeEditar, podeExcluir } = useDespesasPermissions();
+  const fmtBRL = useFmtBRL();
   const canEdit = podeEditar("calendario");
   const canDelete = podeExcluir("calendario");
 

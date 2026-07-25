@@ -1,44 +1,51 @@
-# Dashboard operacional de Despesas
+## Objetivo
 
-Transformar `src/pages/despesas/DespesasDashboard.tsx` (hoje só atalhos) em um **painel operacional** com o que realmente pede atenção agora. Tudo respeitando `useDespesasPermissions` (só mostra o bloco se o usuário tem `podeVer` na aba de origem).
+Permitir ocultar/exibir todos os valores monetários do módulo Despesas com um botão único (ícone de olho), padrão **oculto**. A preferência do usuário persiste durante a sessão em todas as páginas.
 
-## KPIs no topo (4 cards)
+## Abordagem
 
-Baseados em `despesas_lancamentos`:
+Criar um estado global de visibilidade no `DespesasLayout` (via Context) e um helper de formatação que respeita esse estado. Todas as páginas e componentes que exibem valores passam a usar o helper em vez de `formatCurrency` diretamente.
 
-1. **Vencendo em 7 dias** — status ≠ pago/quitado/gimob/cancelado, `vencimento` entre hoje e hoje+7. Mostra contagem + soma R$.
-2. **Vencidos** — status `atrasado` ou `a vencer` com `vencimento < hoje`. Contagem + soma R$ (destaque vermelho).
-3. **A receber em aberto (mês)** — tipo `a_receber`, status em aberto, competência do mês atual.
-4. **Pago no mês** — soma dos pagamentos deste mês.
+## Passos
 
-## Blocos abaixo dos KPIs
+### 1. Contexto global — `src/contexts/DespesasValuesContext.tsx` (novo)
+- `useState` com `showValues` (default `false`), persistido em `sessionStorage` (chave `despesas:showValues`).
+- Expõe: `showValues`, `toggleValues`, `formatValue(n)` que retorna `formatCurrency(n)` quando visível ou `"R$ ******"` quando oculto.
+- Hook `useDespesasValues()`.
 
-- **Próximos vencimentos (10 linhas)** — lista os 10 lançamentos a vencer/atrasados mais próximos, com descrição, centro de custo, valor e badge de status. Cada linha clica e vai para `/despesas/calendario`.
-- **Coisas para atualizar** — checklist do que está incompleto:
-  - Imóveis **alugados sem inquilino** vinculado.
-  - Imóveis sem **RIP** ou sem **inscrição municipal**.
-  - Recorrências **ativas sem data-fim** e com `data_inicio` > 12 meses (sugere renovar/encerrar).
-  - Lançamentos pagos parcialmente há mais de 30 dias sem novo pagamento.
-  - Cada item é um link para a página correspondente com o filtro aplicável.
-- **Gráfico: Fluxo dos próximos 30 dias** — Recharts `AreaChart` empilhado: valores a receber vs a pagar por dia. Mesmo tema já usado em Relatórios.
-- **Gráfico: Top 5 centros de custo — pago no mês** — `BarChart` horizontal.
-- **Notificações não lidas** — reaproveita `useNotificacoes()`, mostra as 5 últimas com link para `/despesas/notificacoes`.
+### 2. Botão no cabeçalho — `src/layouts/DespesasLayout.tsx`
+- Envolver o `<Outlet />` no `DespesasValuesProvider`.
+- No header, ao lado do sino de notificações, adicionar botão com ícones `Eye`/`EyeOff` (lucide) e `title` "Mostrar/Ocultar valores". Único ponto de controle do módulo.
 
-## Rodapé
+### 3. Páginas/componentes a adaptar
+Substituir exibições de valor por `formatValue(...)` do contexto:
 
-Manter os **atalhos** atuais (Calendário / Imóveis / Repasses / Cadastros) em versão compacta, para o usuário que só quer navegar.
+- `src/pages/despesas/DespesasDashboard.tsx` — KPIs, fluxo de caixa, top 5 CC, próximos vencimentos.
+- `src/hooks/useDespesasDashboard.ts` — apenas retorna números; a máscara é aplicada na renderização.
+- `src/pages/despesas/DespesasCalendario.tsx` — valores nos cards/dias e listagens.
+- `src/pages/despesas/DespesasRecorrencias.tsx` — valor por parcela e total.
+- `src/pages/despesas/DespesasRepasses.tsx` — totais de repasse, itens, limites de beneficiário.
+- `src/pages/despesas/DespesasImoveis.tsx` — valor de aluguel / IPTU quando exibido em card/tabela.
+- `src/pages/despesas/DespesasRelatorios.tsx` — KPIs, séries, tabelas, tooltips do Recharts (função `formatter` sensível ao toggle).
+- `src/components/despesas/LancamentoDialog.tsx`, `PagamentoDialog.tsx`, `RepasseDialog.tsx` — mostram valores somente em resumos/labels informativos; **inputs de valor permanecem sempre visíveis** (o usuário precisa digitar/conferir).
+
+### 4. Regras de aplicação
+- Aplicar máscara apenas em **exibição** (cards, tabelas, badges, tooltips, gráficos).
+- **Não aplicar** em campos de formulário (`Input type="number"`, valor sendo editado), pois quebraria a operação.
+- Gráficos Recharts: usar `tickFormatter` e `Tooltip formatter` que consultam `showValues` — quando oculto, retorna `"***"` no eixo Y e `"R$ ******"` no tooltip.
+- Contagens (ex: "3 lançamentos") permanecem visíveis; apenas o valor em R$ é mascarado.
+
+### 5. Página de Ajuda
+- Adicionar nota curta em `DespesasHelp.tsx` (aba "Visão geral") explicando o botão do olho no cabeçalho.
 
 ## Detalhes técnicos
 
-- **Arquivo alterado:** apenas `src/pages/despesas/DespesasDashboard.tsx`.
-- Novo hook consolidador `src/hooks/useDespesasDashboard.ts` com um único `useQuery` que faz as agregações em Postgres via `select(..., { count: 'exact' })` e ranges, evitando o limite de 1000 linhas por query. Consome as tabelas já existentes: `despesas_lancamentos`, `despesas_lancamento_pagamentos`, `despesas_imoveis`, `despesas_recorrencias`, `despesas_centros_custo`.
-- Sem migrações: tudo lido via RLS já existente (`can_view` das políticas atuais das tabelas de despesas).
-- Gráficos com `recharts` (já usado em Relatórios) e tokens semânticos (`hsl(var(--primary))`, `--destructive`, etc.). Sem cores hardcoded.
-- Loading com `Skeleton`, empty states com mensagem clara.
-- Sem novas dependências.
-- Sem alteração em edge functions.
+- Nenhuma migration de banco necessária.
+- Persistência via `sessionStorage` para não vazar entre usuários no mesmo navegador após logout.
+- Reaproveita `formatCurrency` já existente em `src/lib/utils` (ou onde estiver definido no módulo).
+- Ícones `Eye`/`EyeOff` de `lucide-react`, mesmo padrão já usado em Vendas.
 
-## Verificação
+## Fora de escopo
 
-- `tsgo` para tipos.
-- Abrir `/despesas` no preview e conferir: KPIs somando, listas renderizando, gráficos com dados, cliques indo para as páginas certas.
+- Ocultar valores em outros módulos (Vendas já tem toggle próprio; Escala/Estoque/Férias não pedidos).
+- Persistência entre sessões/usuário logado (sessionStorage é suficiente).

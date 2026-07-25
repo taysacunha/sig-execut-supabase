@@ -28,6 +28,7 @@ import {
 import { useDespesasLookups } from "@/hooks/useDespesasLancamentos";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
 import { usePessoas, PapelPessoa } from "@/hooks/useDespesasPessoas";
+import { useDespesasValues } from "@/contexts/DespesasValuesContext";
 import { PessoaDialog } from "@/components/despesas/PessoaDialog";
 
 interface Props {
@@ -369,6 +370,7 @@ const encargoTipos: { v: EncargoTipo; l: string }[] = [
 ];
 
 function EncargosTab({ imovelId }: { imovelId: string }) {
+  const { showValues, formatValue } = useDespesasValues();
   const { data: encargos = [], isLoading } = useImovelEncargos(imovelId);
   const saveMut = useSaveEncargo();
   const delMut = useDeleteEncargo();
@@ -407,7 +409,7 @@ function EncargosTab({ imovelId }: { imovelId: string }) {
             {encargos.map((e) => (
               <TableRow key={e.id}>
                 <TableCell className="uppercase">{e.tipo}</TableCell>
-                <TableCell>R$ {Number(e.valor_anual).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
+                <TableCell>{showValues ? formatValue(e.valor_anual) : "R$ ******"}</TableCell>
                 <TableCell>{e.parcelas}</TableCell>
                 <TableCell>{new Date(e.vencimento_primeira_parcela + "T00:00:00").toLocaleDateString("pt-BR")}</TableCell>
                 <TableCell>{e.ativo ? "Sim" : "Não"}</TableCell>

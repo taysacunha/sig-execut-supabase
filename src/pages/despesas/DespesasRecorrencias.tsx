@@ -26,6 +26,7 @@ import {
   Recorrencia, useDeleteRecorrencia, useGerarOcorrencias, useRecorrencias,
   useSaveRecorrencia,
 } from "@/hooks/useDespesasRecorrencias";
+import { useDespesasValues } from "@/contexts/DespesasValuesContext";
 
 const TIPO_LABEL: Record<string, string> = {
   mensal: "Mensal",
@@ -36,6 +37,7 @@ const TIPO_LABEL: Record<string, string> = {
 
 export default function DespesasRecorrencias() {
   const { data = [], isLoading } = useRecorrencias();
+  const { showValues, formatValue } = useDespesasValues();
   const saveMut = useSaveRecorrencia();
   const gerarMut = useGerarOcorrencias();
   const delMut = useDeleteRecorrencia();
@@ -197,7 +199,11 @@ export default function DespesasRecorrencias() {
                       <TableCell className="font-medium">{r.descricao}</TableCell>
                       <TableCell>{TIPO_LABEL[r.tipo] ?? r.tipo}</TableCell>
                       <TableCell>
-                        {r.valor_total == null ? "—" : `R$ ${Number(r.valor_total).toFixed(2)}`}
+                        {r.valor_total == null
+                          ? "—"
+                          : showValues
+                          ? formatValue(r.valor_total)
+                          : "R$ ******"}
                       </TableCell>
                       <TableCell>{r.centro_custo?.nome ?? "—"}</TableCell>
                       <TableCell>

@@ -26,10 +26,8 @@ import {
 } from "@/hooks/useDespesasRepasses";
 import { useDespesasLookups } from "@/hooks/useDespesasLancamentos";
 import { RepasseDialog } from "@/components/despesas/RepasseDialog";
+import { useDespesasValues } from "@/contexts/DespesasValuesContext";
 
-function money(n: number | null | undefined) {
-  return `R$ ${Number(n ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-}
 function firstDayOfMonth(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
@@ -40,6 +38,9 @@ const statusLabel: Record<RepasseStatus, string> = {
 
 export default function DespesasRepasses() {
   const { podeVer, podeEditar, podeExcluir } = useDespesasPermissions();
+  const { showValues, formatValue } = useDespesasValues();
+  const money = (n: number | null | undefined) =>
+    showValues ? formatValue(n) : "R$ ******";
   const { centros, pessoas } = useDespesasLookups();
 
   const [filtros, setFiltros] = useState<RepasseFiltros>({ competencia: firstDayOfMonth() });
