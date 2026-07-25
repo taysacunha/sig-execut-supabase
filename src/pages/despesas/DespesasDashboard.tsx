@@ -15,12 +15,7 @@ import {
 import { useDespesasPermissions } from "@/hooks/useDespesasPermissions";
 import { useDespesasDashboard } from "@/hooks/useDespesasDashboard";
 import { useNotificacoes } from "@/hooks/useDespesasNotificacoes";
-
-const brl = (n: number) =>
-  n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
-
-const brlFull = (n: number) =>
-  n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+import { useDespesasValues } from "@/contexts/DespesasValuesContext";
 
 const dm = (iso: string) => {
   const d = new Date(iso + "T00:00:00");
@@ -44,6 +39,12 @@ export default function DespesasDashboard() {
   const { podeVer } = useDespesasPermissions();
   const { data, isLoading } = useDespesasDashboard();
   const { data: notifs = [] } = useNotificacoes();
+  const { showValues, formatValue } = useDespesasValues();
+  const brl = (n: number) =>
+    showValues
+      ? n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })
+      : "R$ ***";
+  const brlFull = (n: number) => formatValue(n);
   const naoLidas = notifs.filter((n) => !n.lida).slice(0, 5);
 
   const kpis = data?.kpis;
@@ -71,6 +72,7 @@ export default function DespesasDashboard() {
           total={kpis?.vencendo7.total}
           loading={isLoading}
           onClick={() => navigate("/despesas/calendario")}
+          formatTotal={brl}
         />
         <KpiCard
           title="Vencidos"
@@ -80,6 +82,7 @@ export default function DespesasDashboard() {
           loading={isLoading}
           tone="destructive"
           onClick={() => navigate("/despesas/calendario")}
+          formatTotal={brl}
         />
         <KpiCard
           title="A receber no mês"
@@ -88,6 +91,7 @@ export default function DespesasDashboard() {
           total={kpis?.aReceberMes.total}
           loading={isLoading}
           onClick={() => navigate("/despesas/calendario")}
+          formatTotal={brl}
         />
         <KpiCard
           title="Pago no mês"
@@ -95,6 +99,7 @@ export default function DespesasDashboard() {
           total={kpis?.pagoNoMes}
           loading={isLoading}
           onClick={() => navigate("/despesas/relatorios")}
+          formatTotal={brl}
         />
       </div>
 
@@ -321,7 +326,7 @@ export default function DespesasDashboard() {
 }
 
 function KpiCard({
-  title, icon, count, total, loading, tone, onClick,
+  title, icon, count, total, loading, tone, onClick, formatTotal,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -330,6 +335,7 @@ function KpiCard({
   loading?: boolean;
   tone?: "destructive";
   onClick?: () => void;
+  formatTotal: (n: number) => string;
 }) {
   return (
     <Card
@@ -349,7 +355,7 @@ function KpiCard({
         ) : (
           <>
             <div className={`text-2xl font-bold ${tone === "destructive" ? "text-destructive" : ""}`}>
-              {brl(total ?? 0)}
+              {formatTotal(total ?? 0)}
             </div>
             {typeof count === "number" && (
               <div className="text-xs text-muted-foreground mt-1">{count} lançamento(s)</div>
