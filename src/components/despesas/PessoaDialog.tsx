@@ -195,11 +195,51 @@ export function PessoaDialog({ open, onOpenChange, editing, papelPreSelecionado,
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={salvar} disabled={!podeSalvar || saveMut.isPending}>
-            {saveMut.isPending ? "Salvando…" : "Salvar"}
+          <Button onClick={salvar} disabled={!podeSalvar || saveMut.isPending || checando}>
+            {saveMut.isPending || checando ? "Salvando…" : "Salvar"}
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>CPF/CNPJ já cadastrado</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <div>
+                  {duplicatas.length === 1
+                    ? "Já existe 1 pessoa com este CPF/CNPJ:"
+                    : `Já existem ${duplicatas.length} pessoas com este CPF/CNPJ:`}
+                </div>
+                <ul className="list-disc pl-5 text-sm space-y-1 max-h-60 overflow-auto">
+                  {duplicatas.map((d) => (
+                    <li key={d.id}>
+                      <span className="font-medium">{d.nome}</span>
+                      {d.papeis?.length ? (
+                        <span className="text-muted-foreground"> — {d.papeis.map(labelPapel).join(", ")}</span>
+                      ) : null}
+                      {!d.is_active && <span className="text-muted-foreground"> (inativa)</span>}
+                    </li>
+                  ))}
+                </ul>
+                <div>Deseja cadastrar mesmo assim?</div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                setConfirmOpen(false);
+                await persistir();
+              }}
+            >
+              Salvar mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
