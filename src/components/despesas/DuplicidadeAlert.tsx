@@ -2,9 +2,11 @@ import { AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useDuplicidades, DuplicidadeArgs } from "@/hooks/useDespesasDuplicidades";
+import { useDespesasValues } from "@/contexts/DespesasValuesContext";
 
 export function DuplicidadeAlert(props: DuplicidadeArgs) {
   const { data, isLoading } = useDuplicidades(props);
+  const { showValues, formatValue } = useDespesasValues();
   if (isLoading || !data || data.length === 0) return null;
 
   return (
@@ -19,7 +21,7 @@ export function DuplicidadeAlert(props: DuplicidadeArgs) {
           <ul className="list-disc pl-4 space-y-0.5">
             {data.slice(0, 5).map((d) => (
               <li key={d.id} className="break-words">
-                {d.descricao} — R$ {Number(d.valor_total).toFixed(2)} em{" "}
+                {d.descricao} — {showValues ? formatValue(d.valor_total) : "R$ ******"} em{" "}
                 {format(new Date(d.data_vencimento + "T00:00:00"), "dd/MM/yyyy", {
                   locale: ptBR,
                 })}
