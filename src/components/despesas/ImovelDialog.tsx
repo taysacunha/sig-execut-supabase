@@ -28,6 +28,7 @@ import {
 import { useDespesasLookups } from "@/hooks/useDespesasLancamentos";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
 import { usePessoas, PapelPessoa } from "@/hooks/useDespesasPessoas";
+import { useDespesasValues } from "@/contexts/DespesasValuesContext";
 import { PessoaDialog } from "@/components/despesas/PessoaDialog";
 
 interface Props {
@@ -369,6 +370,7 @@ const encargoTipos: { v: EncargoTipo; l: string }[] = [
 ];
 
 function EncargosTab({ imovelId }: { imovelId: string }) {
+  const { showValues, formatValue } = useDespesasValues();
   const { data: encargos = [], isLoading } = useImovelEncargos(imovelId);
   const saveMut = useSaveEncargo();
   const delMut = useDeleteEncargo();
