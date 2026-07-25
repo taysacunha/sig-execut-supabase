@@ -16,16 +16,16 @@ import { useLancamentos } from "@/hooks/useDespesasLancamentos";
 import * as XLSX from "xlsx";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useDespesasValues } from "@/contexts/DespesasValuesContext";
 
-function fmtBRL(v: number) {
-  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
 function ymKey(iso: string) {
   return iso.slice(0, 7);
 }
 
 export default function DespesasRelatorios() {
   const { podeVer } = useDespesasPermissions();
+  const { showValues, formatValue } = useDespesasValues();
+  const fmtBRL = (v: number) => (showValues ? formatValue(v) : "R$ ******");
 
   const hoje = new Date();
   const doceMesesAtras = new Date(hoje.getFullYear(), hoje.getMonth() - 11, 1);
@@ -191,7 +191,7 @@ export default function DespesasRelatorios() {
               <BarChart data={curvaMensal}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="mes" />
-                <YAxis tickFormatter={(v) => `R$ ${Math.round(v / 1000)}k`} />
+                <YAxis tickFormatter={(v) => (showValues ? `R$ ${Math.round(v / 1000)}k` : "***")} />
                 <RTooltip formatter={(v: number) => fmtBRL(v)} />
                 <Legend />
                 <Bar dataKey="previsto" name="Previsto" fill="hsl(var(--muted-foreground))" />
