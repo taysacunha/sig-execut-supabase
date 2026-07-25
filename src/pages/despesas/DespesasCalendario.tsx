@@ -476,6 +476,16 @@ export default function DespesasCalendario() {
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           )}
+                          {canEdit && ["pago","quitado","gimob"].includes(r.status) && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              title="Estornar (voltar status anterior)"
+                              onClick={() => { setEstornoMotivo(""); setEstornando(r); }}
+                            >
+                              <RotateCcw className="h-4 w-4 text-amber-600" />
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
