@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Plus, Pencil, Trash2, ShieldAlert, DollarSign, AlertTriangle,
-  CheckCircle2, XCircle, Download, Ban, Repeat,
+  CheckCircle2, XCircle, Download, Ban, Repeat, RotateCcw,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -28,10 +28,11 @@ import { useDespesasPermissions } from "@/hooks/useDespesasPermissions";
 import {
   Lancamento, LancamentoFiltros, LancamentoStatus, LancamentoTipo,
   useCancelLancamento, useDeleteLancamento, useDespesasLookups, useLancamentos,
-  useSetLancamentoStatus,
+  useSetLancamentoStatus, useEstornarLancamento,
 } from "@/hooks/useDespesasLancamentos";
 import { LancamentoDialog } from "@/components/despesas/LancamentoDialog";
 import { PagamentoDialog } from "@/components/despesas/PagamentoDialog";
+import { Textarea } from "@/components/ui/textarea";
 
 const STATUS_META: Record<LancamentoStatus, { label: string; variant: any; icon: any }> = {
   a_vencer: { label: "A vencer", variant: "secondary", icon: DollarSign },
@@ -124,11 +125,14 @@ export default function DespesasCalendario() {
   const [pagando, setPagando] = useState<Lancamento | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Lancamento | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<Lancamento | null>(null);
+  const [estornando, setEstornando] = useState<Lancamento | null>(null);
+  const [estornoMotivo, setEstornoMotivo] = useState("");
   const [tipoDefault, setTipoDefault] = useState<LancamentoTipo>("a_pagar");
 
   const deleteMut = useDeleteLancamento();
   const cancelMut = useCancelLancamento();
   const setStatusMut = useSetLancamentoStatus();
+  const estornarMut = useEstornarLancamento();
 
   const kpis = useMemo(() => {
     let aPagar = 0, aReceber = 0, pago = 0, vencido = 0;
@@ -472,6 +476,16 @@ export default function DespesasCalendario() {
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           )}
+                          {canEdit && ["pago","quitado","gimob"].includes(r.status) && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              title="Estornar (voltar status anterior)"
+                              onClick={() => { setEstornoMotivo(""); setEstornando(r); }}
+                            >
+                              <RotateCcw className="h-4 w-4 text-amber-600" />
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
@@ -545,6 +559,56 @@ export default function DespesasCalendario() {
               }}
             >
               Cancelar lançamento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!estornando} onOpenChange={(o) => { if (!o) { setEstornando(null); setEstornoMotivo(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Estornar lançamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O lançamento <b>{estornando?.descricao}</b> (status atual:{" "}
+              <b>{estornando ? STATUS_META[estornando.status].label : ""}</b>) voltará para
+              <b> A vencer</b>. Todos os pagamentos registrados serão removidos. Informe uma
+              justificativa — a ação fica registrada nos logs de auditoria.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label>Justificativa (mín. 10 caracteres) *</Label>
+            <Textarea
+              value={estornoMotivo}
+              onChange={(e) => setEstornoMotivo(e.target.value)}
+              rows={3}
+              placeholder="Descreva o motivo do estorno…"
+              maxLength={500}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              {estornoMotivo.trim().length}/10 caracteres mínimos
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={estornoMotivo.trim().length < 10 || estornarMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!estornando) return;
+                estornarMut.mutate(
+                  { id: estornando.id, justificativa: estornoMotivo.trim() },
+                  {
+                    onSuccess: () => {
+                      toast.success("Lançamento estornado");
+                      setEstornando(null);
+                      setEstornoMotivo("");
+                    },
+                    onError: (err: any) => toast.error(err?.message ?? "Erro ao estornar"),
+                  }
+                );
+              }}
+            >
+              Confirmar estorno
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

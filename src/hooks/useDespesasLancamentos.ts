@@ -202,6 +202,62 @@ export function useSetLancamentoStatus() {
   });
 }
 
+export function useEstornarLancamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, justificativa }: { id: string; justificativa: string }) => {
+      const motivo = (justificativa || "").trim();
+      if (motivo.length < 10) {
+        throw new Error("Informe uma justificativa com pelo menos 10 caracteres.");
+      }
+
+      // 1) Snapshot para auditoria
+      const { data: atual, error: selErr } = await supabase
+        .from("despesas_lancamentos" as any)
+        .select("id, status, valor_pago, valor_total, descricao")
+        .eq("id", id)
+        .single();
+      if (selErr) throw selErr;
+      const snapshot = atual as any;
+
+      // 2) Destrava estado terminal antes de mexer nos pagamentos
+      const { error: upErr } = await supabase
+        .from("despesas_lancamentos" as any)
+        .update({ status: "a_vencer", valor_pago: 0 })
+        .eq("id", id);
+      if (upErr) throw upErr;
+
+      // 3) Remove pagamentos (o trigger recalcula corretamente em estado não-terminal)
+      const { error: delErr } = await supabase
+        .from("despesas_lancamento_pagamentos" as any)
+        .delete()
+        .eq("lancamento_id", id);
+      if (delErr) throw delErr;
+
+      // 4) Auditoria
+      const { data: userData } = await supabase.auth.getUser();
+      await supabase.from("module_audit_logs").insert({
+        module_name: "despesas",
+        table_name: "despesas_lancamentos",
+        record_id: id,
+        action: "ESTORNO_LANCAMENTO",
+        old_data: {
+          status: snapshot?.status,
+          valor_pago: snapshot?.valor_pago,
+          valor_total: snapshot?.valor_total,
+          descricao: snapshot?.descricao,
+        },
+        new_data: { justificativa: motivo },
+        changed_by: userData.user?.id ?? null,
+        changed_by_email: userData.user?.email ?? "sistema@interno",
+      } as any);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [LANC_KEY] });
+    },
+  });
+}
+
 export interface PagamentoInput {
   lancamento_id: string;
   data_pagamento: string;

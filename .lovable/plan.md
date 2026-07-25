@@ -1,28 +1,41 @@
-## Objetivo
+# Correções no Calendário de Despesas
 
-Reorganizar `src/pages/despesas/DespesasHelp.tsx` em abas, preservando todo o conteúdo atual (Parte 1 conceitos, Parte 2 passo a passo, Parte 3 FAQ), mas dividindo por página/módulo do sistema para facilitar a navegação.
+## Problemas identificados
 
-## Estrutura de abas proposta
+### 1. Duplicação ao ativar "Repetir automaticamente"
+Ao salvar um novo lançamento com recorrência ativa, o `LancamentoDialog` cria **dois registros**:
+- um lançamento manual (via `saveMut`) na data escolhida;
+- uma recorrência (via `saveRecMut`) cujo trigger `despesas_gerar_ocorrencias` **também** gera a primeira ocorrência no mesmo mês/dia.
 
-Usar o componente `Tabs` do shadcn com uma `TabsList` no topo e o cabeçalho da página mantido acima.
+Resultado: duas linhas com o mesmo dia/mês/ano na tabela. Quando o índice único `uq_desp_lanc_serie_venc` bloqueia, o `ON CONFLICT DO NOTHING` faz o segundo ficar de fora, mas o manual (sem `serie_recorrencia_id`) permanece — dando a impressão de que a recorrência "não avançou os meses".
 
-1. **Visão geral** — introdução + "Como o módulo funciona" + centros de custo + papéis de pessoas + status/RIP de imóveis + restrições de Admin.
-2. **Cadastros** — planos, categorias, centros de custo, contas, pessoas, imóveis, veículos (conceito + passo a passo de cadastro + alerta de duplicidade).
-3. **Calendário / Lançamentos** — conceito de lançamento, competência mês/ano, valor opcional, referências obrigatórias (Pasta, Venda, Imóvel, Pessoa), passo a passo de novo lançamento e baixa de pagamento.
-4. **Recorrências** — como criar, campo "Gerar com antecedência", renovação de séries encerradas, execução diária às 06:00.
-5. **Repasses** — fluxo do aluguel de R$ 30.000, abas Beneficiários / Itens / Imóveis & inquilinos, regra de baixa exigindo beneficiário.
-6. **Relatórios** — filtros, exportação Excel, gráficos.
-7. **Permissões & Auditoria** — permissões por aba/CC, ações em lote, log humanizado.
-8. **FAQ** — Parte 3 atual mantida integralmente.
+### 2. Não há como reverter status "quitado", "gimob" ou "pago"
+Uma vez marcado como terminal, não existe caminho de volta. A função `despesas_recalcular_lancamento` protege explicitamente esses estados. Falta um botão de **estorno com justificativa auditada**.
 
-## Regras de implementação
+## Correções propostas
 
-- Somente ajuste estrutural/visual na página `DespesasHelp.tsx`; nenhum outro arquivo é tocado.
-- Reaproveitar os `Card`s existentes; apenas movê-los para dentro do `TabsContent` correspondente.
-- `TabsList` responsiva com `flex-wrap` para caber em telas menores.
-- Aumentar o container para `max-w-5xl` para acomodar as abas com folga.
-- Manter textos em PT-BR e sem emojis.
+### Frontend — `src/components/despesas/LancamentoDialog.tsx`
+Quando **for um novo lançamento** e `rec.ativa === true`, **não** chamar `saveMut`. Criar somente a recorrência — o trigger cuida da primeira ocorrência. Credenciais também não são gravadas neste caminho (não há lançamento manual para associar; ficam disponíveis ao editar cada ocorrência gerada).
 
-## Validação
+Edição continua idêntica (nunca cria série).
 
-Abrir `/despesas/ajuda` e alternar entre as abas para conferir que todo o conteúdo antigo continua acessível e agrupado pelo módulo correspondente.
+### Frontend — `src/hooks/useDespesasLancamentos.ts`
+Novo hook `useEstornarLancamento`:
+1. Recebe `{ id, justificativa }` (mín. 10 caracteres).
+2. `UPDATE despesas_lancamentos SET status='a_vencer', valor_pago=0 WHERE id=?` (destrava o estado terminal antes de mexer nos pagamentos).
+3. `DELETE FROM despesas_lancamento_pagamentos WHERE lancamento_id=?` — o trigger `despesas_recalcular_lancamento` recalcula corretamente (agora em estado não-terminal).
+4. `INSERT INTO module_audit_logs` com `action='ESTORNO_LANCAMENTO'`, `old_data={status, valor_pago}`, `new_data={justificativa}`.
+5. Invalida `LANC_KEY`.
+
+### Frontend — `src/pages/despesas/DespesasCalendario.tsx`
+Novo botão "Estornar" (ícone `RotateCcw`) visível quando `status ∈ {pago, quitado, gimob}` e `canEdit`. Abre `AlertDialog` com `Textarea` obrigatório (mín. 10 chars) e confirmação.
+
+## Fora do escopo
+
+- Não alteramos a função SQL `despesas_gerar_ocorrencias` — o loop mensal já está correto; o bug estava só no dialog.
+- Não mexemos em pagamentos de outros módulos (repasses).
+
+## Detalhes técnicos
+
+- Nenhuma migration nova necessária (a tabela `module_audit_logs` já existe e o trigger de recálculo já reage a `DELETE` em `despesas_lancamento_pagamentos`).
+- Toast de sucesso do caminho "criando série" passa a explicar que a ocorrência do mês atual também é criada automaticamente.
