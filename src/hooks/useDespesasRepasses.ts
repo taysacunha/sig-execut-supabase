@@ -22,6 +22,16 @@ export interface RepasseItem {
   valor: number;
 }
 
+export interface RepasseBeneficiario {
+  id: string;
+  repasse_id: string;
+  pessoa_id: string;
+  valor: number;
+  ordem: number;
+  observacao: string | null;
+  pessoa?: { nome: string; tipo_pessoa: "fisica" | "juridica"; cpf_cnpj: string | null } | null;
+}
+
 export interface Repasse {
   id: string;
   proprietario_id: string;
@@ -40,6 +50,7 @@ export interface Repasse {
   proprietario?: { nome: string; cpf_cnpj: string | null } | null;
   centro_custo?: { nome: string } | null;
   itens?: RepasseItem[];
+  beneficiarios?: RepasseBeneficiario[];
 }
 
 export const REPASSES_KEY = "despesas-repasses";
@@ -61,7 +72,10 @@ export function useRepasses(filtros: RepasseFiltros = {}) {
           `*,
            proprietario:despesas_pessoas(nome, cpf_cnpj),
            centro_custo:despesas_centros_custo(nome),
-           itens:despesas_repasse_itens(*)`
+           itens:despesas_repasse_itens(*),
+           beneficiarios:despesas_repasse_beneficiarios(
+             *, pessoa:despesas_pessoas(nome, tipo_pessoa, cpf_cnpj)
+           )`
         )
         .order("competencia", { ascending: false });
 
@@ -193,5 +207,78 @@ export function useDeleteRepasseItem() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [REPASSES_KEY] }),
+  });
+}
+
+export function useSaveRepasseBeneficiario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      input: Partial<RepasseBeneficiario> & { repasse_id: string; pessoa_id: string; valor: number },
+    ) => {
+      if (input.id) {
+        const { error } = await supabase
+          .from("despesas_repasse_beneficiarios" as any)
+          .update(input as any)
+          .eq("id", input.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("despesas_repasse_beneficiarios" as any)
+          .insert(input as any);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [REPASSES_KEY] }),
+  });
+}
+
+export function useDeleteRepasseBeneficiario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("despesas_repasse_beneficiarios" as any)
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [REPASSES_KEY] }),
+  });
+}
+
+export interface RepasseInquilinoRow {
+  imovel_id: string;
+  imovel_codigo: string | null;
+  imovel_descricao: string;
+  endereco: string | null;
+  inquilino: { id: string; nome: string; tipo_pessoa: "fisica" | "juridica"; cpf_cnpj: string | null } | null;
+}
+
+export function useRepasseInquilinos(repasse: Repasse | null) {
+  return useQuery({
+    queryKey: [REPASSES_KEY, "inquilinos", repasse?.proprietario_id, repasse?.centro_custo_id],
+    enabled: !!repasse?.proprietario_id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("despesas_imoveis" as any)
+        .select(
+          `id, codigo, descricao, endereco,
+           inquilino:despesas_pessoas!despesas_imoveis_inquilino_id_fkey(
+             id, nome, tipo_pessoa, cpf_cnpj
+           )`,
+        )
+        .eq("proprietario_id", repasse!.proprietario_id)
+        .eq("is_active", true)
+        .order("descricao");
+      if (error) throw error;
+      return (data ?? []).map((r: any) => ({
+        imovel_id: r.id,
+        imovel_codigo: r.codigo,
+        imovel_descricao: r.descricao,
+        endereco: r.endereco,
+        inquilino: r.inquilino ?? null,
+      })) as RepasseInquilinoRow[];
+    },
   });
 }

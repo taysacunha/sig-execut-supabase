@@ -16,8 +16,11 @@ import { Plus, Trash2, CheckCircle2, XCircle } from "lucide-react";
 import {
   Repasse, RepasseItemOrigem, RepasseItemTipo,
   useSaveRepasseItem, useDeleteRepasseItem, useUpdateRepasseStatus,
-  useUpdateRepasseCampos,
+  useSaveRepasseBeneficiario, useDeleteRepasseBeneficiario,
+  useRepasseInquilinos,
 } from "@/hooks/useDespesasRepasses";
+import { ComboboxSelect } from "@/components/ui/combobox-select";
+import { usePessoas } from "@/hooks/useDespesasPessoas";
 
 interface Props {
   open: boolean;
@@ -42,18 +45,28 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
   const saveItem = useSaveRepasseItem();
   const delItem = useDeleteRepasseItem();
   const updStatus = useUpdateRepasseStatus();
-  const updCampos = useUpdateRepasseCampos();
-  const [limite, setLimite] = useState<string>("");
+  const saveBenef = useSaveRepasseBeneficiario();
+  const delBenef = useDeleteRepasseBeneficiario();
+  const pessoas = usePessoas({});
+  const inquilinos = useRepasseInquilinos(repasse);
+
+  const [novoBenef, setNovoBenef] = useState<{ pessoa_id: string | null; valor: number; observacao: string }>(
+    { pessoa_id: null, valor: 0, observacao: "" },
+  );
 
   useEffect(() => {
-    setLimite(repasse?.valor_limite_primeiro != null ? String(repasse.valor_limite_primeiro) : "");
-  }, [repasse?.id, repasse?.valor_limite_primeiro]);
+    setNovoBenef({ pessoa_id: null, valor: 0, observacao: "" });
+  }, [repasse?.id]);
 
   const [novo, setNovo] = useState<{
     tipo: RepasseItemTipo; origem: RepasseItemOrigem; descricao: string; valor: number;
   }>({ tipo: "credito", origem: "aluguel", descricao: "", valor: 0 });
 
   if (!repasse) return null;
+
+  const beneficiarios = repasse.beneficiarios ?? [];
+  const distribuido = beneficiarios.reduce((s, b) => s + Number(b.valor || 0), 0);
+  const restante = Number(repasse.valor_liquido || 0) - distribuido;
 
   async function adicionar() {
     if (!repasse) return;
@@ -67,7 +80,34 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
     } catch (e: any) { toast.error(e?.message ?? "Erro"); }
   }
 
+  async function adicionarBenef() {
+    if (!repasse) return;
+    if (!novoBenef.pessoa_id || novoBenef.valor <= 0) {
+      toast.error("Selecione a pessoa e informe um valor");
+      return;
+    }
+    try {
+      await saveBenef.mutateAsync({
+        repasse_id: repasse.id,
+        pessoa_id: novoBenef.pessoa_id,
+        valor: novoBenef.valor,
+        observacao: novoBenef.observacao || null as any,
+        ordem: (repasse.beneficiarios?.length ?? 0) + 1,
+      });
+      setNovoBenef({ pessoa_id: null, valor: 0, observacao: "" });
+    } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+  }
+
   async function marcarPago() {
+    if (!repasse) return;
+    if (distribuido <= 0) {
+      toast.error("Defina ao menos um beneficiário antes de baixar o repasse.");
+      return;
+    }
+    if (distribuido > Number(repasse.valor_liquido || 0) + 0.009) {
+      toast.error("Soma dos beneficiários excede o valor líquido.");
+      return;
+    }
     try {
       await updStatus.mutateAsync({
         id: repasse.id, status: "pago",
@@ -78,6 +118,7 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
   }
 
   const podeEditarItens = repasse.status === "aberto";
+  const podeEditarBenef = repasse.status !== "pago" && repasse.status !== "cancelado";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -107,37 +148,138 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
           </div>
         </div>
 
-        <div className="border rounded-md p-3 mb-4 grid gap-3 md:grid-cols-[1fr_auto] items-end">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">
-              Valor limite ao 1º beneficiário (R$)
-            </Label>
-            <Input
-              type="number"
-              min={0}
-              step="0.01"
-              placeholder="Sem limite"
-              value={limite}
-              disabled={!podeEditarItens}
-              onChange={(e) => setLimite(e.target.value)}
-            />
+        {/* Beneficiários */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold">Beneficiários</h3>
+            <div className="text-sm">
+              Distribuído: <span className="font-medium">{money(distribuido)}</span>
+              {" · "}Restante:{" "}
+              <span className={restante < 0 ? "text-destructive font-medium" : "text-emerald-600 font-medium"}>
+                {money(restante)}
+              </span>
+            </div>
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!podeEditarItens || updCampos.isPending}
-            onClick={async () => {
-              try {
-                await updCampos.mutateAsync({
-                  id: repasse.id,
-                  campos: { valor_limite_primeiro: limite === "" ? null : Number(limite) },
-                });
-                toast.success("Limite atualizado");
-              } catch (e: any) { toast.error(e?.message ?? "Erro"); }
-            }}
-          >
-            Salvar limite
-          </Button>
+          <Table>
+            <TableHeader><TableRow>
+              <TableHead className="w-12">#</TableHead>
+              <TableHead>Pessoa</TableHead>
+              <TableHead>Observação</TableHead>
+              <TableHead className="text-right">Valor</TableHead>
+              <TableHead className="w-12" />
+            </TableRow></TableHeader>
+            <TableBody>
+              {beneficiarios
+                .slice()
+                .sort((a, b) => a.ordem - b.ordem)
+                .map((b, i) => (
+                  <TableRow key={b.id}>
+                    <TableCell>{i + 1}</TableCell>
+                    <TableCell>
+                      <div className="font-medium">{b.pessoa?.nome ?? "—"}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {b.pessoa?.tipo_pessoa === "juridica" ? "PJ" : "PF"}
+                        {b.pessoa?.cpf_cnpj ? ` · ${b.pessoa.cpf_cnpj}` : ""}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{b.observacao ?? ""}</TableCell>
+                    <TableCell className="text-right">{money(b.valor)}</TableCell>
+                    <TableCell>
+                      {podeEditarBenef && (
+                        <Button size="icon" variant="ghost" onClick={() => delBenef.mutate(b.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              {beneficiarios.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    Nenhum beneficiário definido. Adicione ao menos um antes de baixar o repasse.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+
+          {podeEditarBenef && (
+            <div className="border rounded-md p-3 mt-3 grid gap-3 md:grid-cols-[2fr_1fr_1fr_auto] items-end">
+              <div className="space-y-1">
+                <Label>Pessoa</Label>
+                <ComboboxSelect
+                  value={novoBenef.pessoa_id}
+                  onChange={(v) => setNovoBenef({ ...novoBenef, pessoa_id: v })}
+                  options={(pessoas.data ?? []).map((p) => ({
+                    value: p.id,
+                    label: `${p.nome} (${p.tipo_pessoa === "juridica" ? "PJ" : "PF"})`,
+                    keywords: [p.cpf_cnpj ?? "", ...(p.papeis ?? [])],
+                  }))}
+                  placeholder="Selecione uma pessoa"
+                  searchPlaceholder="Buscar por nome, documento ou papel…"
+                  emptyText="Nenhuma pessoa encontrada."
+                  allowClear
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Valor</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    value={novoBenef.valor}
+                    onChange={(e) => setNovoBenef({ ...novoBenef, valor: Number(e.target.value) })}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setNovoBenef({ ...novoBenef, valor: Math.max(0, Number(restante.toFixed(2))) })
+                    }
+                    title="Usar valor restante"
+                  >
+                    Restante
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>Observação</Label>
+                <Input
+                  value={novoBenef.observacao}
+                  onChange={(e) => setNovoBenef({ ...novoBenef, observacao: e.target.value })}
+                />
+              </div>
+              <Button size="icon" onClick={adicionarBenef}><Plus className="h-4 w-4" /></Button>
+            </div>
+          )}
+        </div>
+
+        {/* Inquilinos vinculados */}
+        <div className="mb-4 border rounded-md p-3">
+          <div className="font-semibold mb-2">Inquilinos vinculados</div>
+          {inquilinos.isLoading ? (
+            <div className="text-sm text-muted-foreground">Carregando…</div>
+          ) : (inquilinos.data ?? []).length === 0 ? (
+            <div className="text-sm text-muted-foreground">Nenhum imóvel vinculado a este proprietário.</div>
+          ) : (
+            <ul className="space-y-1 text-sm">
+              {(inquilinos.data ?? []).map((r) => (
+                <li key={r.imovel_id} className="flex flex-wrap gap-x-2">
+                  <span className="font-medium">
+                    {r.imovel_codigo ? `${r.imovel_codigo} — ` : ""}{r.imovel_descricao}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {r.inquilino
+                      ? `→ ${r.inquilino.nome} (${r.inquilino.tipo_pessoa === "juridica" ? "PJ" : "PF"}${r.inquilino.cpf_cnpj ? ` · ${r.inquilino.cpf_cnpj}` : ""})`
+                      : "→ Sem inquilino"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="text-xs text-muted-foreground mt-2">Para alterar, edite o cadastro do imóvel.</div>
         </div>
 
         <Table>
