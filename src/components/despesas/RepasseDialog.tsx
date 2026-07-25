@@ -38,11 +38,9 @@ const origens: { v: RepasseItemOrigem; l: string }[] = [
   { v: "outro", l: "Outro" },
 ];
 
-function money(n: number) {
-  return `R$ ${Number(n).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-}
-
 export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
+  const { showValues, formatValue } = useDespesasValues();
+  const money = (n: number) => (showValues ? formatValue(n) : "R$ ******");
   const saveItem = useSaveRepasseItem();
   const delItem = useDeleteRepasseItem();
   const updStatus = useUpdateRepasseStatus();
