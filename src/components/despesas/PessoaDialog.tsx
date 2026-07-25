@@ -45,6 +45,9 @@ export function PessoaDialog({ open, onOpenChange, editing, papelPreSelecionado,
   });
 
   const [form, setForm] = useState<PessoaInput>(empty());
+  const [duplicatas, setDuplicatas] = useState<Awaited<ReturnType<typeof buscarPessoasPorCpfCnpj>>>([]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [checando, setChecando] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -70,7 +73,7 @@ export function PessoaDialog({ open, onOpenChange, editing, papelPreSelecionado,
   const podeSalvar =
     form.nome.trim().length > 0 && form.papeis.length > 0 && outroDescricaoOk;
 
-  async function salvar() {
+  async function persistir() {
     try {
       const id = await saveMut.mutateAsync({ id: editing?.id, input: form });
       toast.success(editing ? "Pessoa atualizada" : "Pessoa criada");
@@ -78,6 +81,25 @@ export function PessoaDialog({ open, onOpenChange, editing, papelPreSelecionado,
       onOpenChange(false);
     } catch (e: any) {
       toast.error(e?.message ?? "Erro ao salvar");
+    }
+  }
+
+  async function salvar() {
+    const norm = form.cpf_cnpj?.replace(/\D/g, "") || "";
+    if (!norm) return persistir();
+    setChecando(true);
+    try {
+      const dups = await buscarPessoasPorCpfCnpj(norm, editing?.id);
+      if (dups.length > 0) {
+        setDuplicatas(dups);
+        setConfirmOpen(true);
+        return;
+      }
+      await persistir();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erro ao verificar duplicidade");
+    } finally {
+      setChecando(false);
     }
   }
 
