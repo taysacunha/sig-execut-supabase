@@ -3,6 +3,10 @@ import { toast } from "sonner";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +23,7 @@ import {
   Imovel, ImovelInput, ImovelSituacao, ImovelTipo,
   useSaveImovel, useImovelEncargos, useSaveEncargo, useDeleteEncargo,
   useImovelHistorico, ImovelEncargo, EncargoTipo,
+  buscarImoveisDuplicados, DuplicadoImovel,
 } from "@/hooks/useDespesasImoveis";
 import { useDespesasLookups } from "@/hooks/useDespesasLancamentos";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
@@ -71,6 +76,9 @@ export function ImovelDialog({ open, onOpenChange, editing }: Props) {
 
   const [form, setForm] = useState<ImovelInput>(empty());
 
+  const [dupModal, setDupModal] = useState<DuplicadoImovel[] | null>(null);
+  const [dupMotivo, setDupMotivo] = useState("");
+
   useEffect(() => {
     if (!open) return;
     if (editing) {
@@ -79,6 +87,8 @@ export function ImovelDialog({ open, onOpenChange, editing }: Props) {
         ...rest } = editing as any;
       setForm(rest);
     } else setForm(empty());
+    setDupModal(null);
+    setDupMotivo("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editing]);
 
@@ -87,15 +97,53 @@ export function ImovelDialog({ open, onOpenChange, editing }: Props) {
   const pessoaLabel = (p: { nome: string; cpf_cnpj?: string | null }) =>
     p.cpf_cnpj ? `${p.nome} — ${p.cpf_cnpj}` : p.nome;
 
-  async function salvar() {
+  async function persistir(justificativa?: { motivo: string; duplicados: DuplicadoImovel[] }) {
     try {
-      await saveMut.mutateAsync({ id: editing?.id, input: form });
+      await saveMut.mutateAsync({
+        id: editing?.id,
+        input: form,
+        justificativaDuplicidade: justificativa,
+      });
       toast.success(editing ? "Imóvel atualizado" : "Imóvel criado");
+      setDupModal(null);
+      setDupMotivo("");
       if (!editing) onOpenChange(false);
     } catch (e: any) {
       toast.error(e?.message ?? "Erro ao salvar");
     }
   }
+
+  async function salvar() {
+    // Imóveis em construção podem não ter código nem inscrição — nesse caso
+    // não há como validar duplicidade e o salvamento segue direto.
+    const temCodigo = !!form.codigo?.trim();
+    const temInsc = !!form.inscricao_municipal?.trim();
+    if (!temCodigo && !temInsc) {
+      await persistir();
+      return;
+    }
+    try {
+      const dup = await buscarImoveisDuplicados({
+        codigo: form.codigo,
+        inscricaoMunicipal: form.inscricao_municipal,
+        excluirId: editing?.id,
+      });
+      if (dup.length === 0) {
+        await persistir();
+        return;
+      }
+      setDupMotivo("");
+      setDupModal(dup);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erro ao verificar duplicidade");
+    }
+  }
+
+  const situacaoLbl: Record<string, string> = {
+    alugado: "Alugado", vago: "Desocupado", vendido: "Vendido",
+    proprio_uso: "Uso próprio", em_aquisicao: "Em aquisição",
+  };
+  const motivoValido = dupMotivo.trim().length >= 10;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -253,6 +301,60 @@ export function ImovelDialog({ open, onOpenChange, editing }: Props) {
           if (pessoaAlvo === "inquilino") setForm((f) => ({ ...f, inquilino_id: id }));
         }}
       />
+
+      <AlertDialog open={!!dupModal} onOpenChange={(o) => { if (!o) setDupModal(null); }}>
+        <AlertDialogContent className="max-w-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Imóvel duplicado detectado</AlertDialogTitle>
+          </AlertDialogHeader>
+          <div className="space-y-3 text-sm">
+            <p className="text-muted-foreground">
+              Já existe(m) {dupModal?.length ?? 0} imóvel(is) com o mesmo código ou inscrição municipal.
+              Se prosseguir, informe abaixo o motivo — a decisão será registrada em auditoria.
+            </p>
+            <div className="border rounded-md divide-y max-h-64 overflow-y-auto">
+              {(dupModal ?? []).map((d, i) => (
+                <div key={`${d.id}-${d.campo}-${i}`} className="p-2">
+                  <div className="font-medium">
+                    {d.descricao}{" "}
+                    <span className="text-xs text-muted-foreground">
+                      ({d.is_active ? "Ativo" : "Inativo"} · {situacaoLbl[d.situacao] ?? d.situacao})
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Código: {d.codigo ?? "—"} · Inscrição municipal: {d.inscricao_municipal ?? "—"}
+                  </div>
+                  <div className="text-xs">
+                    Coincide em: <b>{d.campo === "codigo" ? "Código" : "Inscrição municipal"}</b>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-1">
+              <Label>Justificativa (mín. 10 caracteres) *</Label>
+              <Textarea
+                rows={3}
+                value={dupMotivo}
+                onChange={(e) => setDupMotivo(e.target.value)}
+                placeholder="Explique o motivo de manter o mesmo código/inscrição…"
+              />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!motivoValido || saveMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!motivoValido || !dupModal) return;
+                persistir({ motivo: dupMotivo.trim(), duplicados: dupModal });
+              }}
+            >
+              Salvar mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
