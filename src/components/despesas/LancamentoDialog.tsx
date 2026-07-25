@@ -161,16 +161,23 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
       // Novos lançamentos gravam sempre nos campos novos; referencia_tipo/número
       // legado permanece apenas para histórico.
       const payload: LancamentoInput = { ...form, referencia_tipo: null, referencia_numero: null };
-      const savedId = await saveMut.mutateAsync({ id: editing?.id, input: payload });
-      if (canEditCredenciais) {
-        try {
-          await saveCredMut.mutateAsync({ lancamentoId: savedId, credenciais });
-        } catch (credErr: any) {
-          // Se não tiver permissão, apenas ignora silenciosamente as credenciais.
-          if (credErr?.code !== "42501" && credErr?.code !== "PGRST301") throw credErr;
+
+      // Se recorrência ativa em NOVO lançamento: apenas cria a série. O trigger
+      // gera a ocorrência do mês corrente + futuras. Criar o manual aqui gerava
+      // duplicidade na mesma data.
+      const criandoSerie = !editing && rec.ativa;
+
+      if (!criandoSerie) {
+        const savedId = await saveMut.mutateAsync({ id: editing?.id, input: payload });
+        if (canEditCredenciais) {
+          try {
+            await saveCredMut.mutateAsync({ lancamentoId: savedId, credenciais });
+          } catch (credErr: any) {
+            if (credErr?.code !== "42501" && credErr?.code !== "PGRST301") throw credErr;
+          }
         }
       }
-      if (!editing && rec.ativa) {
+      if (criandoSerie) {
         await saveRecMut.mutateAsync({
           input: {
             ativo: true,
@@ -197,7 +204,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
             observacao: form.observacao ?? null,
           },
         });
-        toast.success("Recorrência criada e ocorrências futuras geradas");
+        toast.success("Recorrência criada — ocorrência do mês atual e futuras geradas automaticamente");
       } else {
         toast.success(editing ? "Lançamento atualizado" : "Lançamento criado");
       }
