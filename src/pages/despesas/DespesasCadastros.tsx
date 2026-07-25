@@ -427,7 +427,7 @@ function PessoasTab({ canEdit, canDelete }: { canEdit: boolean; canDelete: boole
         <div>
           <CardTitle>Pessoas</CardTitle>
           <CardDescription>
-            Proprietários, inquilinos, lojas, fornecedores, motoristas e demais contatos usados no módulo.
+            Proprietários, inquilinos, empresas, fornecedores, motoristas e demais contatos usados no módulo.
           </CardDescription>
         </div>
         {canEdit && (
