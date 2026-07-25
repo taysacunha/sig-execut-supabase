@@ -160,7 +160,7 @@ export default function DespesasDashboard() {
         {/* Checklist */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Coisas para atualizar</CardTitle>
+            <CardTitle className="text-base">Pendências cadastrais</CardTitle>
             <CardDescription>Cadastros incompletos e pendências</CardDescription>
           </CardHeader>
           <CardContent>
