@@ -22,6 +22,7 @@ import {
 } from "@/hooks/useDespesasRepasses";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
 import { usePessoas } from "@/hooks/useDespesasPessoas";
+import { useDespesasValues } from "@/contexts/DespesasValuesContext";
 
 interface Props {
   open: boolean;
