@@ -92,36 +92,12 @@ export function useSavePessoa() {
           ? (input.papel_outro_descricao?.trim() || null)
           : null,
       };
-
-      if (cpfCnpjNorm) {
-        let dupQ = supabase
-          .from("despesas_pessoas" as any)
-          .select("id,nome")
-          .eq("cpf_cnpj", cpfCnpjNorm)
-          .eq("is_active", true)
-          .limit(1);
-        if (id) dupQ = dupQ.neq("id", id);
-        const { data: dup, error: dupErr } = await dupQ;
-        if (dupErr) throw dupErr;
-        if (dup && dup.length > 0) {
-          const nome = (dup[0] as any).nome as string;
-          throw new Error(`Já existe uma pessoa ativa cadastrada com este CPF/CNPJ: ${nome}.`);
-        }
-      }
-
-      const translate = (err: any) => {
-        if (err?.code === "23505") {
-          return new Error("Já existe uma pessoa ativa cadastrada com este CPF/CNPJ.");
-        }
-        return err;
-      };
-
       if (id) {
         const { error } = await supabase
           .from("despesas_pessoas" as any)
           .update(payload)
           .eq("id", id);
-        if (error) throw translate(error);
+        if (error) throw error;
         return id;
       }
       const { data, error } = await supabase
@@ -129,7 +105,7 @@ export function useSavePessoa() {
         .insert(payload)
         .select("id")
         .single();
-      if (error) throw translate(error);
+      if (error) throw error;
       return (data as any).id as string;
     },
     onSuccess: () => {
@@ -137,6 +113,24 @@ export function useSavePessoa() {
       qc.invalidateQueries({ queryKey: ["desp-lookup", "pessoas"] });
     },
   });
+}
+
+export async function buscarPessoasPorCpfCnpj(
+  cpfCnpj: string,
+  excluirId?: string,
+): Promise<Pick<Pessoa, "id" | "nome" | "papeis" | "is_active">[]> {
+  const norm = cpfCnpj.replace(/\D/g, "");
+  if (!norm) return [];
+  let q = supabase
+    .from("despesas_pessoas" as any)
+    .select("id,nome,papeis,is_active")
+    .eq("cpf_cnpj", norm)
+    .order("is_active", { ascending: false })
+    .order("nome");
+  if (excluirId) q = q.neq("id", excluirId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []) as unknown as Pick<Pessoa, "id" | "nome" | "papeis" | "is_active">[];
 }
 
 export function useDeletePessoa() {
