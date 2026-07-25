@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Plus, Pencil, Trash2, ShieldAlert, DollarSign, AlertTriangle,
-  CheckCircle2, XCircle, Download, Ban, Repeat,
+  CheckCircle2, XCircle, Download, Ban, Repeat, RotateCcw,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -28,10 +28,11 @@ import { useDespesasPermissions } from "@/hooks/useDespesasPermissions";
 import {
   Lancamento, LancamentoFiltros, LancamentoStatus, LancamentoTipo,
   useCancelLancamento, useDeleteLancamento, useDespesasLookups, useLancamentos,
-  useSetLancamentoStatus,
+  useSetLancamentoStatus, useEstornarLancamento,
 } from "@/hooks/useDespesasLancamentos";
 import { LancamentoDialog } from "@/components/despesas/LancamentoDialog";
 import { PagamentoDialog } from "@/components/despesas/PagamentoDialog";
+import { Textarea } from "@/components/ui/textarea";
 
 const STATUS_META: Record<LancamentoStatus, { label: string; variant: any; icon: any }> = {
   a_vencer: { label: "A vencer", variant: "secondary", icon: DollarSign },
@@ -124,11 +125,14 @@ export default function DespesasCalendario() {
   const [pagando, setPagando] = useState<Lancamento | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Lancamento | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<Lancamento | null>(null);
+  const [estornando, setEstornando] = useState<Lancamento | null>(null);
+  const [estornoMotivo, setEstornoMotivo] = useState("");
   const [tipoDefault, setTipoDefault] = useState<LancamentoTipo>("a_pagar");
 
   const deleteMut = useDeleteLancamento();
   const cancelMut = useCancelLancamento();
   const setStatusMut = useSetLancamentoStatus();
+  const estornarMut = useEstornarLancamento();
 
   const kpis = useMemo(() => {
     let aPagar = 0, aReceber = 0, pago = 0, vencido = 0;
