@@ -15,6 +15,7 @@ import {
   FormaPagamento, Lancamento,
   useAddPagamento, useDespesasLookups,
 } from "@/hooks/useDespesasLancamentos";
+import { useDespesasValues } from "@/contexts/DespesasValuesContext";
 
 interface Props {
   open: boolean;
@@ -35,6 +36,8 @@ const FORMAS: { value: FormaPagamento; label: string }[] = [
 export function PagamentoDialog({ open, onOpenChange, lancamento }: Props) {
   const { contas } = useDespesasLookups();
   const addMut = useAddPagamento();
+  const { showValues, formatValue } = useDespesasValues();
+  const money = (n: number) => (showValues ? formatValue(n) : "R$ ******");
 
   const [data, setData] = useState(() => new Date().toISOString().slice(0, 10));
   const [valor, setValor] = useState(0);
@@ -85,11 +88,11 @@ export function PagamentoDialog({ open, onOpenChange, lancamento }: Props) {
           <div className="rounded border bg-muted/40 p-3 text-sm">
             <div className="font-medium">{lancamento.descricao}</div>
             <div className="text-muted-foreground">
-              Total: R$ {Number(lancamento.valor_total).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              Total: {money(Number(lancamento.valor_total))}
               {" · "}
-              Pago: R$ {Number(lancamento.valor_pago).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              Pago: {money(Number(lancamento.valor_pago))}
               {" · "}
-              Restante: R$ {restante.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              Restante: {money(restante)}
             </div>
           </div>
 
