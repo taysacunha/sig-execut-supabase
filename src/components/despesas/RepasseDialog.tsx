@@ -12,6 +12,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Trash2, CheckCircle2, XCircle } from "lucide-react";
 import {
   Repasse, RepasseItemOrigem, RepasseItemTipo,
@@ -122,14 +123,14 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>
             Repasse — {repasse.proprietario?.nome} — {new Date(repasse.competencia + "T00:00:00").toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
           <div className="border rounded-md p-3">
             <div className="text-xs text-muted-foreground">Bruto</div>
             <div className="text-lg font-semibold">{money(repasse.valor_bruto)}</div>
@@ -148,10 +149,16 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
           </div>
         </div>
 
-        {/* Beneficiários */}
-        <div className="mb-4">
+        <Tabs defaultValue="beneficiarios" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="beneficiarios">Beneficiários · {beneficiarios.length}</TabsTrigger>
+            <TabsTrigger value="itens">Itens · {(repasse.itens ?? []).length}</TabsTrigger>
+            <TabsTrigger value="imoveis">Imóveis · {(inquilinos.data ?? []).length}</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="beneficiarios" className="mt-3">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold">Beneficiários</h3>
+            <h3 className="font-semibold text-sm">Distribuição</h3>
             <div className="text-sm">
               Distribuído: <span className="font-medium">{money(distribuido)}</span>
               {" · "}Restante:{" "}
@@ -254,35 +261,10 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
               <Button size="icon" onClick={adicionarBenef}><Plus className="h-4 w-4" /></Button>
             </div>
           )}
-        </div>
+          </TabsContent>
 
-        {/* Inquilinos vinculados */}
-        <div className="mb-4 border rounded-md p-3">
-          <div className="font-semibold mb-2">Inquilinos vinculados</div>
-          {inquilinos.isLoading ? (
-            <div className="text-sm text-muted-foreground">Carregando…</div>
-          ) : (inquilinos.data ?? []).length === 0 ? (
-            <div className="text-sm text-muted-foreground">Nenhum imóvel vinculado a este proprietário.</div>
-          ) : (
-            <ul className="space-y-1 text-sm">
-              {(inquilinos.data ?? []).map((r) => (
-                <li key={r.imovel_id} className="flex flex-wrap gap-x-2">
-                  <span className="font-medium">
-                    {r.imovel_codigo ? `${r.imovel_codigo} — ` : ""}{r.imovel_descricao}
-                  </span>
-                  <span className="text-muted-foreground">
-                    {r.inquilino
-                      ? `→ ${r.inquilino.nome} (${r.inquilino.tipo_pessoa === "juridica" ? "PJ" : "PF"}${r.inquilino.cpf_cnpj ? ` · ${r.inquilino.cpf_cnpj}` : ""})`
-                      : "→ Sem inquilino"}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="text-xs text-muted-foreground mt-2">Para alterar, edite o cadastro do imóvel.</div>
-        </div>
-
-        <Table>
+          <TabsContent value="itens" className="mt-3">
+          <Table>
           <TableHeader><TableRow>
             <TableHead>Tipo</TableHead><TableHead>Origem</TableHead>
             <TableHead>Descrição</TableHead><TableHead className="text-right">Valor</TableHead>
@@ -317,7 +299,7 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
         </Table>
 
         {podeEditarItens && (
-          <div className="border rounded-md p-3 mt-4 grid gap-3 md:grid-cols-5">
+          <div className="border rounded-md p-3 mt-3 grid gap-3 md:grid-cols-5">
             <div className="space-y-1"><Label>Tipo</Label>
               <Select value={novo.tipo} onValueChange={(v: RepasseItemTipo) => setNovo({ ...novo, tipo: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -344,6 +326,34 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
             </div>
           </div>
         )}
+          </TabsContent>
+
+          <TabsContent value="imoveis" className="mt-3">
+            <div className="border rounded-md p-3">
+              {inquilinos.isLoading ? (
+                <div className="text-sm text-muted-foreground">Carregando…</div>
+              ) : (inquilinos.data ?? []).length === 0 ? (
+                <div className="text-sm text-muted-foreground">Nenhum imóvel vinculado a este proprietário.</div>
+              ) : (
+                <ul className="space-y-1 text-sm">
+                  {(inquilinos.data ?? []).map((r) => (
+                    <li key={r.imovel_id} className="flex flex-wrap gap-x-2">
+                      <span className="font-medium">
+                        {r.imovel_codigo ? `${r.imovel_codigo} — ` : ""}{r.imovel_descricao}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {r.inquilino
+                          ? `→ ${r.inquilino.nome} (${r.inquilino.tipo_pessoa === "juridica" ? "PJ" : "PF"}${r.inquilino.cpf_cnpj ? ` · ${r.inquilino.cpf_cnpj}` : ""})`
+                          : "→ Sem inquilino"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="text-xs text-muted-foreground mt-2">Para alterar, edite o cadastro do imóvel.</div>
+            </div>
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter className="mt-4 gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
