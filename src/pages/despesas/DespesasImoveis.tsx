@@ -22,17 +22,17 @@ import {
 } from "@/hooks/useDespesasImoveis";
 import { useDespesasLookups } from "@/hooks/useDespesasLancamentos";
 import { ImovelDialog } from "@/components/despesas/ImovelDialog";
+import { useDespesasValues } from "@/contexts/DespesasValuesContext";
 
 const situacaoLabel: Record<string, string> = {
   alugado: "Alugado", vago: "Desocupado", vendido: "Vendido", proprio_uso: "Uso próprio", em_aquisicao: "Em aquisição",
 };
 
-function money(n: number | null | undefined) {
-  return `R$ ${Number(n ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-}
-
 export default function DespesasImoveis() {
   const { podeVer, podeEditar, podeExcluir } = useDespesasPermissions();
+  const { showValues, formatValue } = useDespesasValues();
+  const money = (n: number | null | undefined) =>
+    showValues ? formatValue(n) : "R$ ******";
   const { centros, pessoas } = useDespesasLookups();
   const [filtros, setFiltros] = useState<ImovelFiltros>({});
   const { data: imoveis = [], isLoading } = useImoveis(filtros);
