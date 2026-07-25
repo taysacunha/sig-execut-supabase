@@ -58,14 +58,19 @@ export function ComboboxSelect({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+      <PopoverContent
+        className="p-0 w-[--radix-popover-trigger-width]"
+        align="start"
+        onWheel={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+      >
         <Command
           filter={(val, search) => {
             return val.toLowerCase().includes(search.toLowerCase()) ? 1 : 0;
           }}
         >
           <CommandInput placeholder={searchPlaceholder} />
-          <CommandList>
+          <CommandList className="max-h-64 overflow-y-auto overscroll-contain">
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
               {allowClear && (
