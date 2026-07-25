@@ -1,37 +1,27 @@
 ## Objetivo
-Ajustar os papéis de Pessoas no módulo Despesas:
-- Renomear "Loja" → "Empresa"
-- Adicionar "Prestador de Serviço" e "Beneficiário"
-- Ao marcar "Outro", exibir campo de texto para descrever o papel
+Impedir cadastro duplicado de CPF/CNPJ na aba Pessoas do módulo Despesas, retornando mensagem clara ao usuário.
 
 ## Mudanças
 
-### 1. Banco (migration `db/migrations/20260803120000_despesas_pessoas_papeis_v2.sql`)
-- Migrar dados: `UPDATE despesas_pessoas SET papeis = array_replace(papeis, 'loja', 'empresa')`.
-- Recriar `despesas_pessoas_papeis_ck` com nova lista:
-  `proprietario, inquilino, empresa, fornecedor, cliente, funcionario, motorista, corretor, prestador_servico, beneficiario, outro`.
-- Adicionar coluna `papel_outro_descricao text` (nullable, max 120) para o texto livre quando "Outro" for marcado.
+### 1. Banco — migration `db/migrations/20260804120000_despesas_pessoas_cpf_cnpj_unique.sql`
+- Detectar duplicatas existentes (informar via `RAISE NOTICE`, sem bloquear) — se houver, a criação do índice falhará; nesse caso o usuário limpa antes.
+- Criar índice único parcial:
+  ```sql
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_desp_pessoas_cpf_cnpj_unique
+    ON public.despesas_pessoas (cpf_cnpj)
+    WHERE cpf_cnpj IS NOT NULL AND is_active = true;
+  ```
+  Restrito a ativos para não travar quando uma pessoa for desativada e recadastrada.
 
-### 2. `src/hooks/useDespesasPessoas.ts`
-- Atualizar `PapelPessoa`: trocar `"loja"` por `"empresa"`; adicionar `"prestador_servico"` e `"beneficiario"`.
-- Atualizar `PAPEIS_PESSOA` com rótulos PT-BR: Empresa, Prestador de Serviço, Beneficiário.
-- Incluir `papel_outro_descricao: string | null` em `Pessoa` e `PessoaInput`.
-- `useSavePessoa`: se `papeis` não contém `"outro"`, salvar `papel_outro_descricao = null`.
+### 2. Hook `src/hooks/useDespesasPessoas.ts`
+No `useSavePessoa`, antes do insert/update, checar se já existe outra pessoa ativa com o mesmo `cpf_cnpj` normalizado:
+- Query: `select id, nome from despesas_pessoas where cpf_cnpj = ? and is_active = true` (excluindo `id` atual em edição).
+- Se encontrar, lançar `Error("Já existe uma pessoa ativa cadastrada com este CPF/CNPJ: <nome>.")`.
+- Fallback: se o insert falhar com código Postgres `23505` (unique violation), traduzir a mensagem para PT-BR amigável.
 
-### 3. `src/components/despesas/PessoaDialog.tsx`
-- Ao marcar "Outro", exibir `Input` obrigatório (min 2 chars) logo abaixo do grid de checkboxes.
-- Bloquear `podeSalvar` quando `papeis` inclui `"outro"` e descrição vazia.
-- Preencher/limpar campo ao alternar o papel "Outro".
+### 3. UI `src/components/despesas/PessoaDialog.tsx`
+O erro é exibido pelo `toast.error(e?.message)` já existente — nenhuma mudança estrutural, apenas garantir que a mensagem lançada seja clara.
 
-### 4. `src/pages/despesas/DespesasCadastros.tsx`
-- Atualizar texto descritivo da aba (trocar "lojas" por "empresas") e badges já usam `labelPapel` — sem outra alteração.
-
-### 5. Impacto verificado (sem outras mudanças necessárias)
-- `ImovelDialog` usa apenas `"proprietario"` / `"inquilino"` — não afetado.
-- `VeiculoDialog` usa `motorista`/`proprietario`/`comprador` — não afetado.
-- Nenhuma referência a `"loja"` em edge functions, relatórios ou lançamentos.
-- Tipos gerados (`supabase/types.ts`) são regenerados automaticamente após a migration.
-
-## Ordem de execução
-1. Rodar a migration no Supabase.
-2. Aplicar as edições de código acima em paralelo.
+## Notas
+- Não há alteração em outros diálogos (Imóvel/Veículo) porque eles apenas selecionam pessoas existentes.
+- Validação em duas camadas (app + índice único) garante integridade mesmo em concorrência.

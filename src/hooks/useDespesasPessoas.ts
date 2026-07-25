@@ -84,19 +84,44 @@ export function useSavePessoa() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, input }: { id?: string; input: PessoaInput }) => {
+      const cpfCnpjNorm = input.cpf_cnpj?.replace(/\D/g, "") || null;
       const payload: any = {
         ...input,
-        cpf_cnpj: input.cpf_cnpj?.replace(/\D/g, "") || null,
+        cpf_cnpj: cpfCnpjNorm,
         papel_outro_descricao: input.papeis.includes("outro")
           ? (input.papel_outro_descricao?.trim() || null)
           : null,
       };
+
+      if (cpfCnpjNorm) {
+        let dupQ = supabase
+          .from("despesas_pessoas" as any)
+          .select("id,nome")
+          .eq("cpf_cnpj", cpfCnpjNorm)
+          .eq("is_active", true)
+          .limit(1);
+        if (id) dupQ = dupQ.neq("id", id);
+        const { data: dup, error: dupErr } = await dupQ;
+        if (dupErr) throw dupErr;
+        if (dup && dup.length > 0) {
+          const nome = (dup[0] as any).nome as string;
+          throw new Error(`Já existe uma pessoa ativa cadastrada com este CPF/CNPJ: ${nome}.`);
+        }
+      }
+
+      const translate = (err: any) => {
+        if (err?.code === "23505") {
+          return new Error("Já existe uma pessoa ativa cadastrada com este CPF/CNPJ.");
+        }
+        return err;
+      };
+
       if (id) {
         const { error } = await supabase
           .from("despesas_pessoas" as any)
           .update(payload)
           .eq("id", id);
-        if (error) throw error;
+        if (error) throw translate(error);
         return id;
       }
       const { data, error } = await supabase
@@ -104,7 +129,7 @@ export function useSavePessoa() {
         .insert(payload)
         .select("id")
         .single();
-      if (error) throw error;
+      if (error) throw translate(error);
       return (data as any).id as string;
     },
     onSuccess: () => {
