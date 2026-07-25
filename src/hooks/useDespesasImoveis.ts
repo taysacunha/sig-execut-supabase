@@ -107,26 +107,124 @@ export type ImovelInput = Omit<
 export function useSaveImovel() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, input }: { id?: string; input: ImovelInput }) => {
+    mutationFn: async ({
+      id,
+      input,
+      justificativaDuplicidade,
+    }: {
+      id?: string;
+      input: ImovelInput;
+      justificativaDuplicidade?: { motivo: string; duplicados: DuplicadoImovel[] };
+    }) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData.user?.id ?? null;
+      const email = userData.user?.email ?? "sistema@interno";
       if (id) {
         const { error } = await supabase
           .from("despesas_imoveis" as any)
           .update(input as any)
           .eq("id", id);
         if (error) throw error;
+        if (justificativaDuplicidade) {
+          await supabase.from("module_audit_logs").insert({
+            module_name: "despesas",
+            table_name: "despesas_imoveis",
+            record_id: id,
+            action: "DUPLICIDADE_IMOVEL_CONFIRMADA",
+            old_data: null,
+            new_data: {
+              codigo: input.codigo,
+              inscricao_municipal: input.inscricao_municipal,
+              duplicados: justificativaDuplicidade.duplicados,
+              justificativa: justificativaDuplicidade.motivo,
+            },
+            changed_by: uid,
+            changed_by_email: email,
+          } as any);
+        }
         return id;
       }
-      const { data: u } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from("despesas_imoveis" as any)
-        .insert({ ...input, created_by: u.user?.id } as any)
+        .insert({ ...input, created_by: uid } as any)
         .select("id")
         .single();
       if (error) throw error;
-      return (data as any).id as string;
+      const newId = (data as any).id as string;
+      if (justificativaDuplicidade) {
+        await supabase.from("module_audit_logs").insert({
+          module_name: "despesas",
+          table_name: "despesas_imoveis",
+          record_id: newId,
+          action: "DUPLICIDADE_IMOVEL_CONFIRMADA",
+          old_data: null,
+          new_data: {
+            codigo: input.codigo,
+            inscricao_municipal: input.inscricao_municipal,
+            duplicados: justificativaDuplicidade.duplicados,
+            justificativa: justificativaDuplicidade.motivo,
+          },
+          changed_by: uid,
+          changed_by_email: email,
+        } as any);
+      }
+      return newId;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [IMOVEIS_KEY] }),
   });
+}
+
+export interface DuplicadoImovel {
+  id: string;
+  codigo: string | null;
+  descricao: string;
+  inscricao_municipal: string | null;
+  situacao: string;
+  is_active: boolean;
+  campo: "codigo" | "inscricao_municipal";
+}
+
+export async function buscarImoveisDuplicados(params: {
+  codigo?: string | null;
+  inscricaoMunicipal?: string | null;
+  excluirId?: string;
+}): Promise<DuplicadoImovel[]> {
+  const codigo = params.codigo?.trim() || null;
+  const insc = params.inscricaoMunicipal?.trim() || null;
+  if (!codigo && !insc) return [];
+
+  const ors: string[] = [];
+  if (codigo) ors.push(`codigo.ilike.${codigo}`);
+  if (insc) ors.push(`inscricao_municipal.ilike.${insc}`);
+
+  let q = supabase
+    .from("despesas_imoveis" as any)
+    .select("id,codigo,descricao,inscricao_municipal,situacao,is_active")
+    .or(ors.join(","))
+    .order("is_active", { ascending: false })
+    .order("descricao");
+  if (params.excluirId) q = q.neq("id", params.excluirId);
+
+  const { data, error } = await q.limit(50);
+  if (error) throw error;
+
+  const rows = (data ?? []) as any[];
+  const result: DuplicadoImovel[] = [];
+  for (const r of rows) {
+    const matchCodigo =
+      codigo && r.codigo && String(r.codigo).toLowerCase() === codigo.toLowerCase();
+    const matchInsc =
+      insc &&
+      r.inscricao_municipal &&
+      String(r.inscricao_municipal).toLowerCase() === insc.toLowerCase();
+    if (matchCodigo) {
+      result.push({ ...r, campo: "codigo" });
+    }
+    if (matchInsc) {
+      result.push({ ...r, campo: "inscricao_municipal" });
+    }
+  }
+  return result;
 }
 
 export function useDeleteImovel() {
