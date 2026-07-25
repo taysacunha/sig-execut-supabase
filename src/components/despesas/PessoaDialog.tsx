@@ -36,6 +36,7 @@ export function PessoaDialog({ open, onOpenChange, editing, papelPreSelecionado,
     email: null,
     telefone: null,
     observacao: null,
+    papel_outro_descricao: null,
   });
 
   const [form, setForm] = useState<PessoaInput>(empty());
@@ -58,7 +59,11 @@ export function PessoaDialog({ open, onOpenChange, editing, papelPreSelecionado,
     }));
   };
 
-  const podeSalvar = form.nome.trim().length > 0 && form.papeis.length > 0;
+  const outroSelecionado = form.papeis.includes("outro");
+  const outroDescricaoOk = !outroSelecionado
+    || (form.papel_outro_descricao?.trim().length ?? 0) >= 2;
+  const podeSalvar =
+    form.nome.trim().length > 0 && form.papeis.length > 0 && outroDescricaoOk;
 
   async function salvar() {
     try {
@@ -134,6 +139,24 @@ export function PessoaDialog({ open, onOpenChange, editing, papelPreSelecionado,
             </div>
             {form.papeis.length === 0 && (
               <p className="text-xs text-muted-foreground">Selecione ao menos um papel.</p>
+            )}
+            {outroSelecionado && (
+              <div className="space-y-1 pt-1">
+                <Label>Descrição do papel "Outro" *</Label>
+                <Input
+                  value={form.papel_outro_descricao ?? ""}
+                  onChange={(e) =>
+                    setForm({ ...form, papel_outro_descricao: e.target.value || null })
+                  }
+                  maxLength={120}
+                  placeholder="Descreva o papel desta pessoa"
+                />
+                {!outroDescricaoOk && (
+                  <p className="text-xs text-muted-foreground">
+                    Informe uma descrição com pelo menos 2 caracteres.
+                  </p>
+                )}
+              </div>
             )}
           </div>
 
