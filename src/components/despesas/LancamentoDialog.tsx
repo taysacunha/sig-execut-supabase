@@ -17,6 +17,7 @@ import {
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
+import { getYearOptions } from "@/lib/dateUtils";
 import {
   Lancamento, LancamentoInput, LancamentoTipo, useDespesasLookups,
   useSaveLancamento, useLancamentoCredenciais, useSaveLancamentoCredenciais,
@@ -67,6 +68,17 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
   const [credenciais, setCredenciais] = useState<LancamentoCredenciais>({});
   const [imovelPopoverOpen, setImovelPopoverOpen] = useState(false);
   const canEditCredenciais = !credQuery.isError; // sem permissão → RLS bloqueia leitura
+  const MESES_LABELS = [
+    "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+    "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro",
+  ];
+  const yearOptions = getYearOptions(3, 3);
+  const compYear = Number((form.data_competencia || "").slice(0, 4)) || new Date().getFullYear();
+  const compMonth = Number((form.data_competencia || "").slice(5, 7)) || new Date().getMonth() + 1;
+  function setCompetencia(year: number, month: number) {
+    const mm = String(month).padStart(2, "0");
+    setForm({ ...form, data_competencia: `${year}-${mm}-01` });
+  }
   const [rec, setRec] = useState<RecorrenciaFormState>({
     ativa: false,
     tipo: "mensal",
@@ -406,12 +418,31 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
           </div>
 
           <div className="space-y-2">
-            <Label>Data de competência *</Label>
-            <Input
-              type="date"
-              value={form.data_competencia}
-              onChange={(e) => setForm({ ...form, data_competencia: e.target.value })}
-            />
+            <Label>Competência (mês/ano) *</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <Select
+                value={String(compMonth)}
+                onValueChange={(v) => setCompetencia(compYear, Number(v))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MESES_LABELS.map((label, i) => (
+                    <SelectItem key={i + 1} value={String(i + 1)}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={String(compYear)}
+                onValueChange={(v) => setCompetencia(Number(v), compMonth)}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {yearOptions.map((y) => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Data de vencimento *</Label>
