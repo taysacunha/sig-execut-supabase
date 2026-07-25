@@ -17,6 +17,7 @@ import {
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
+import { getYearOptions } from "@/lib/dateUtils";
 import {
   Lancamento, LancamentoInput, LancamentoTipo, useDespesasLookups,
   useSaveLancamento, useLancamentoCredenciais, useSaveLancamentoCredenciais,
@@ -67,6 +68,17 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
   const [credenciais, setCredenciais] = useState<LancamentoCredenciais>({});
   const [imovelPopoverOpen, setImovelPopoverOpen] = useState(false);
   const canEditCredenciais = !credQuery.isError; // sem permissão → RLS bloqueia leitura
+  const MESES_LABELS = [
+    "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+    "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro",
+  ];
+  const yearOptions = getYearOptions(3, 3);
+  const compYear = Number((form.data_competencia || "").slice(0, 4)) || new Date().getFullYear();
+  const compMonth = Number((form.data_competencia || "").slice(5, 7)) || new Date().getMonth() + 1;
+  function setCompetencia(year: number, month: number) {
+    const mm = String(month).padStart(2, "0");
+    setForm({ ...form, data_competencia: `${year}-${mm}-01` });
+  }
   const [rec, setRec] = useState<RecorrenciaFormState>({
     ativa: false,
     tipo: "mensal",
