@@ -418,12 +418,31 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
           </div>
 
           <div className="space-y-2">
-            <Label>Data de competência *</Label>
-            <Input
-              type="date"
-              value={form.data_competencia}
-              onChange={(e) => setForm({ ...form, data_competencia: e.target.value })}
-            />
+            <Label>Competência (mês/ano) *</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <Select
+                value={String(compMonth)}
+                onValueChange={(v) => setCompetencia(compYear, Number(v))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MESES_LABELS.map((label, i) => (
+                    <SelectItem key={i + 1} value={String(i + 1)}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={String(compYear)}
+                onValueChange={(v) => setCompetencia(Number(v), compMonth)}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {yearOptions.map((y) => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Data de vencimento *</Label>
