@@ -22,6 +22,16 @@ export interface RepasseItem {
   valor: number;
 }
 
+export interface RepasseBeneficiario {
+  id: string;
+  repasse_id: string;
+  pessoa_id: string;
+  valor: number;
+  ordem: number;
+  observacao: string | null;
+  pessoa?: { nome: string; tipo_pessoa: "fisica" | "juridica"; cpf_cnpj: string | null } | null;
+}
+
 export interface Repasse {
   id: string;
   proprietario_id: string;
@@ -40,6 +50,7 @@ export interface Repasse {
   proprietario?: { nome: string; cpf_cnpj: string | null } | null;
   centro_custo?: { nome: string } | null;
   itens?: RepasseItem[];
+  beneficiarios?: RepasseBeneficiario[];
 }
 
 export const REPASSES_KEY = "despesas-repasses";
@@ -61,7 +72,10 @@ export function useRepasses(filtros: RepasseFiltros = {}) {
           `*,
            proprietario:despesas_pessoas(nome, cpf_cnpj),
            centro_custo:despesas_centros_custo(nome),
-           itens:despesas_repasse_itens(*)`
+           itens:despesas_repasse_itens(*),
+           beneficiarios:despesas_repasse_beneficiarios(
+             *, pessoa:despesas_pessoas(nome, tipo_pessoa, cpf_cnpj)
+           )`
         )
         .order("competencia", { ascending: false });
 
