@@ -102,7 +102,7 @@ export function RecorrenciaBlock({ value, onChange, disabled }: Props) {
           </div>
 
           <div className="space-y-2">
-            <Label>Antecipar (meses)</Label>
+            <Label>Gerar com antecedência (meses)</Label>
             <Input
               type="number" min={1} max={36}
               value={value.janela_geracao_meses}
@@ -111,6 +111,11 @@ export function RecorrenciaBlock({ value, onChange, disabled }: Props) {
               }
               disabled={disabled}
             />
+            <p className="text-[11px] text-muted-foreground">
+              Quantos meses à frente as próximas ocorrências desta série ficam
+              criadas automaticamente. Não afeta os avisos de vencimento — esses
+              são configurados em Notificações.
+            </p>
           </div>
 
           {showMeses && (
