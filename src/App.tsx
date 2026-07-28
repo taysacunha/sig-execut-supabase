@@ -242,7 +242,7 @@ const App = () => {
 
             {/* Dev (protegido por autenticação + role) */}
             <Route path="/dev" element={<ProtectedRoute><Suspense fallback={<DashboardSkeleton />}><DevTracker /></Suspense></ProtectedRoute>} />
-            <Route path="/dev/deploy-guide" element={<ProtectedRoute><Suspense fallback={<DashboardSkeleton />}><DeployGuide /></Suspense></ProtectedRoute>} />
+            <Route path="/dev/deploy-guide" element={<Suspense fallback={<DashboardSkeleton />}><DeployGuide /></Suspense>} />
 
             {/* 404 */}
             <Route
