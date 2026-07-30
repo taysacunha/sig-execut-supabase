@@ -13,7 +13,11 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2, CheckCircle2, XCircle } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, Trash2, CheckCircle2, XCircle, Pencil, Check, X } from "lucide-react";
 import {
   Repasse, RepasseItemOrigem, RepasseItemTipo,
   useSaveRepasseItem, useDeleteRepasseItem, useUpdateRepasseStatus,
@@ -61,6 +65,16 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
   const [novo, setNovo] = useState<{
     tipo: RepasseItemTipo; origem: RepasseItemOrigem; descricao: string; valor: number;
   }>({ tipo: "credito", origem: "aluguel", descricao: "", valor: 0 });
+
+  const [confirmDelete, setConfirmDelete] = useState<
+    { tipo: "item" | "benef"; id: string; label: string } | null
+  >(null);
+  const [editItem, setEditItem] = useState<
+    { id: string; tipo: RepasseItemTipo; origem: RepasseItemOrigem; descricao: string; valor: number } | null
+  >(null);
+  const [editBenef, setEditBenef] = useState<
+    { id: string; pessoa_id: string | null; valor: number; observacao: string } | null
+  >(null);
 
   if (!repasse) return null;
 
@@ -119,6 +133,48 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
 
   const podeEditarItens = repasse.status === "aberto";
   const podeEditarBenef = repasse.status !== "pago" && repasse.status !== "cancelado";
+
+  async function confirmarExclusao() {
+    if (!confirmDelete) return;
+    try {
+      if (confirmDelete.tipo === "item") await delItem.mutateAsync(confirmDelete.id);
+      else await delBenef.mutateAsync(confirmDelete.id);
+      toast.success("Excluído com sucesso");
+      setConfirmDelete(null);
+    } catch (e: any) { toast.error(e?.message ?? "Erro ao excluir"); }
+  }
+
+  async function salvarItemEdit() {
+    if (!repasse || !editItem) return;
+    if (!editItem.descricao.trim() || editItem.valor <= 0) {
+      toast.error("Preencha descrição e valor");
+      return;
+    }
+    try {
+      await saveItem.mutateAsync({
+        id: editItem.id, repasse_id: repasse.id, tipo: editItem.tipo,
+        origem: editItem.origem, descricao: editItem.descricao, valor: editItem.valor,
+      });
+      toast.success("Item atualizado");
+      setEditItem(null);
+    } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+  }
+
+  async function salvarBenefEdit() {
+    if (!repasse || !editBenef) return;
+    if (!editBenef.pessoa_id || editBenef.valor <= 0) {
+      toast.error("Selecione a pessoa e informe um valor");
+      return;
+    }
+    try {
+      await saveBenef.mutateAsync({
+        id: editBenef.id, repasse_id: repasse.id, pessoa_id: editBenef.pessoa_id,
+        valor: editBenef.valor, observacao: (editBenef.observacao || null) as any,
+      });
+      toast.success("Beneficiário atualizado");
+      setEditBenef(null);
+    } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
