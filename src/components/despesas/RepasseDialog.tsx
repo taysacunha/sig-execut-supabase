@@ -228,13 +228,51 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
               <TableHead>Pessoa</TableHead>
               <TableHead>Observação</TableHead>
               <TableHead className="text-right">Valor</TableHead>
-              <TableHead className="w-12" />
+              <TableHead className="w-24" />
             </TableRow></TableHeader>
             <TableBody>
               {beneficiarios
                 .slice()
                 .sort((a, b) => a.ordem - b.ordem)
-                .map((b, i) => (
+                .map((b, i) => editBenef?.id === b.id ? (
+                  <TableRow key={b.id}>
+                    <TableCell>{i + 1}</TableCell>
+                    <TableCell>
+                      <ComboboxSelect
+                        value={editBenef.pessoa_id}
+                        onChange={(v) => setEditBenef({ ...editBenef, pessoa_id: v })}
+                        options={(pessoas.data ?? []).map((p) => ({
+                          value: p.id,
+                          label: `${p.nome} (${p.tipo_pessoa === "juridica" ? "PJ" : "PF"})`,
+                          keywords: [p.cpf_cnpj ?? "", ...(p.papeis ?? [])],
+                        }))}
+                        placeholder="Selecione uma pessoa"
+                        searchPlaceholder="Buscar…"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        value={editBenef.observacao}
+                        onChange={(e) => setEditBenef({ ...editBenef, observacao: e.target.value })}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number" step="0.01" min={0} className="text-right"
+                        value={editBenef.valor}
+                        onChange={(e) => setEditBenef({ ...editBenef, valor: Number(e.target.value) })}
+                      />
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <Button size="icon" variant="ghost" onClick={salvarBenefEdit} disabled={saveBenef.isPending} title="Salvar">
+                        <Check className="h-4 w-4 text-emerald-600" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => setEditBenef(null)} title="Cancelar">
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ) : (
                   <TableRow key={b.id}>
                     <TableCell>{i + 1}</TableCell>
                     <TableCell>
@@ -246,11 +284,28 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{b.observacao ?? ""}</TableCell>
                     <TableCell className="text-right">{money(b.valor)}</TableCell>
-                    <TableCell>
+                    <TableCell className="whitespace-nowrap">
                       {podeEditarBenef && (
-                        <Button size="icon" variant="ghost" onClick={() => delBenef.mutate(b.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <>
+                          <Button
+                            size="icon" variant="ghost" title="Editar"
+                            onClick={() => setEditBenef({
+                              id: b.id, pessoa_id: b.pessoa_id, valor: Number(b.valor),
+                              observacao: b.observacao ?? "",
+                            })}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon" variant="ghost" title="Excluir"
+                            onClick={() => setConfirmDelete({
+                              tipo: "benef", id: b.id,
+                              label: `${b.pessoa?.nome ?? "Beneficiário"} — ${money(b.valor)}`,
+                            })}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </>
                       )}
                     </TableCell>
                   </TableRow>
