@@ -116,6 +116,9 @@ export default function DespesasCalendario() {
     dataInicio: serieParam ? undefined : primeiroDia,
     dataFim: serieParam ? undefined : ultimoDia,
     serieId: serieParam,
+    imovelId: undefined,
+    referenciaNumeroPasta: undefined,
+    referenciaNumeroVenda: undefined,
   });
 
   useEffect(() => {
@@ -318,6 +321,50 @@ export default function DespesasCalendario() {
               placeholder="Todas"
               searchPlaceholder="Buscar pessoa…"
               allowClear
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>Imóvel</Label>
+            <ComboboxSelect
+              value={filtros.imovelId ?? null}
+              onChange={(v) => setFiltros({ ...filtros, imovelId: v ?? undefined })}
+              options={(lookups.imoveis.data ?? []).map((i) => ({
+                value: i.id,
+                label: i.codigo ? `${i.codigo} — ${i.descricao}` : i.descricao,
+              }))}
+              placeholder="Todos"
+              searchPlaceholder="Buscar por código ou descrição…"
+              allowClear
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>Nº da pasta</Label>
+            <Input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              placeholder="Somente números"
+              value={filtros.referenciaNumeroPasta ?? ""}
+              onChange={(e) => {
+                const only = e.target.value.replace(/\D+/g, "");
+                setFiltros({ ...filtros, referenciaNumeroPasta: only || undefined });
+              }}
+              maxLength={20}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>Cód. venda</Label>
+            <Input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              placeholder="Somente números"
+              value={filtros.referenciaNumeroVenda ?? ""}
+              onChange={(e) => {
+                const only = e.target.value.replace(/\D+/g, "");
+                setFiltros({ ...filtros, referenciaNumeroVenda: only || undefined });
+              }}
+              maxLength={20}
             />
           </div>
           <div className="space-y-1">
