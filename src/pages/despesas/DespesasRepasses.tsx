@@ -48,7 +48,8 @@ export default function DespesasRepasses() {
   const montarMut = useMontarRepasse();
   const delMut = useDeleteRepasse();
 
-  const [detalhe, setDetalhe] = useState<Repasse | null>(null);
+  const [detalheId, setDetalheId] = useState<string | null>(null);
+  const detalhe = detalheId ? repasses.find((r) => r.id === detalheId) ?? null : null;
   const [dialogNovo, setDialogNovo] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Repasse | null>(null);
   const [novo, setNovo] = useState({ proprietarioId: "", centroCustoId: "", competencia: firstDayOfMonth() });
@@ -201,7 +202,7 @@ export default function DespesasRepasses() {
                     <TableCell className="text-right text-destructive">−{money(r.taxa_administracao_valor)}</TableCell>
                     <TableCell className="text-right font-semibold text-primary">{money(r.valor_liquido)}</TableCell>
                     <TableCell className="text-right space-x-1">
-                      <Button size="icon" variant="ghost" onClick={() => setDetalhe(r)}><Eye className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="ghost" onClick={() => setDetalheId(r.id)}><Eye className="h-4 w-4" /></Button>
                       {podeExcluir("repasses") && r.status !== "pago" && (
                         <Button size="icon" variant="ghost" onClick={() => setConfirmDelete(r)}>
                           <Trash2 className="h-4 w-4 text-destructive" />
@@ -216,7 +217,7 @@ export default function DespesasRepasses() {
         </CardContent>
       </Card>
 
-      <RepasseDialog open={!!detalhe} onOpenChange={(o) => !o && setDetalhe(null)} repasse={detalhe} />
+      <RepasseDialog open={!!detalhe} onOpenChange={(o) => !o && setDetalheId(null)} repasse={detalhe} />
 
       <Dialog open={dialogNovo} onOpenChange={setDialogNovo}>
         <DialogContent>

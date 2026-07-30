@@ -13,7 +13,11 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2, CheckCircle2, XCircle } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, Trash2, CheckCircle2, XCircle, Pencil, Check, X } from "lucide-react";
 import {
   Repasse, RepasseItemOrigem, RepasseItemTipo,
   useSaveRepasseItem, useDeleteRepasseItem, useUpdateRepasseStatus,
@@ -61,6 +65,16 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
   const [novo, setNovo] = useState<{
     tipo: RepasseItemTipo; origem: RepasseItemOrigem; descricao: string; valor: number;
   }>({ tipo: "credito", origem: "aluguel", descricao: "", valor: 0 });
+
+  const [confirmDelete, setConfirmDelete] = useState<
+    { tipo: "item" | "benef"; id: string; label: string } | null
+  >(null);
+  const [editItem, setEditItem] = useState<
+    { id: string; tipo: RepasseItemTipo; origem: RepasseItemOrigem; descricao: string; valor: number } | null
+  >(null);
+  const [editBenef, setEditBenef] = useState<
+    { id: string; pessoa_id: string | null; valor: number; observacao: string } | null
+  >(null);
 
   if (!repasse) return null;
 
@@ -120,6 +134,48 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
   const podeEditarItens = repasse.status === "aberto";
   const podeEditarBenef = repasse.status !== "pago" && repasse.status !== "cancelado";
 
+  async function confirmarExclusao() {
+    if (!confirmDelete) return;
+    try {
+      if (confirmDelete.tipo === "item") await delItem.mutateAsync(confirmDelete.id);
+      else await delBenef.mutateAsync(confirmDelete.id);
+      toast.success("Excluído com sucesso");
+      setConfirmDelete(null);
+    } catch (e: any) { toast.error(e?.message ?? "Erro ao excluir"); }
+  }
+
+  async function salvarItemEdit() {
+    if (!repasse || !editItem) return;
+    if (!editItem.descricao.trim() || editItem.valor <= 0) {
+      toast.error("Preencha descrição e valor");
+      return;
+    }
+    try {
+      await saveItem.mutateAsync({
+        id: editItem.id, repasse_id: repasse.id, tipo: editItem.tipo,
+        origem: editItem.origem, descricao: editItem.descricao, valor: editItem.valor,
+      });
+      toast.success("Item atualizado");
+      setEditItem(null);
+    } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+  }
+
+  async function salvarBenefEdit() {
+    if (!repasse || !editBenef) return;
+    if (!editBenef.pessoa_id || editBenef.valor <= 0) {
+      toast.error("Selecione a pessoa e informe um valor");
+      return;
+    }
+    try {
+      await saveBenef.mutateAsync({
+        id: editBenef.id, repasse_id: repasse.id, pessoa_id: editBenef.pessoa_id,
+        valor: editBenef.valor, observacao: (editBenef.observacao || null) as any,
+      });
+      toast.success("Beneficiário atualizado");
+      setEditBenef(null);
+    } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
@@ -172,13 +228,51 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
               <TableHead>Pessoa</TableHead>
               <TableHead>Observação</TableHead>
               <TableHead className="text-right">Valor</TableHead>
-              <TableHead className="w-12" />
+              <TableHead className="w-24" />
             </TableRow></TableHeader>
             <TableBody>
               {beneficiarios
                 .slice()
                 .sort((a, b) => a.ordem - b.ordem)
-                .map((b, i) => (
+                .map((b, i) => editBenef?.id === b.id ? (
+                  <TableRow key={b.id}>
+                    <TableCell>{i + 1}</TableCell>
+                    <TableCell>
+                      <ComboboxSelect
+                        value={editBenef.pessoa_id}
+                        onChange={(v) => setEditBenef({ ...editBenef, pessoa_id: v })}
+                        options={(pessoas.data ?? []).map((p) => ({
+                          value: p.id,
+                          label: `${p.nome} (${p.tipo_pessoa === "juridica" ? "PJ" : "PF"})`,
+                          keywords: [p.cpf_cnpj ?? "", ...(p.papeis ?? [])],
+                        }))}
+                        placeholder="Selecione uma pessoa"
+                        searchPlaceholder="Buscar…"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        value={editBenef.observacao}
+                        onChange={(e) => setEditBenef({ ...editBenef, observacao: e.target.value })}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number" step="0.01" min={0} className="text-right"
+                        value={editBenef.valor}
+                        onChange={(e) => setEditBenef({ ...editBenef, valor: Number(e.target.value) })}
+                      />
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <Button size="icon" variant="ghost" onClick={salvarBenefEdit} disabled={saveBenef.isPending} title="Salvar">
+                        <Check className="h-4 w-4 text-emerald-600" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => setEditBenef(null)} title="Cancelar">
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ) : (
                   <TableRow key={b.id}>
                     <TableCell>{i + 1}</TableCell>
                     <TableCell>
@@ -190,11 +284,28 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{b.observacao ?? ""}</TableCell>
                     <TableCell className="text-right">{money(b.valor)}</TableCell>
-                    <TableCell>
+                    <TableCell className="whitespace-nowrap">
                       {podeEditarBenef && (
-                        <Button size="icon" variant="ghost" onClick={() => delBenef.mutate(b.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <>
+                          <Button
+                            size="icon" variant="ghost" title="Editar"
+                            onClick={() => setEditBenef({
+                              id: b.id, pessoa_id: b.pessoa_id, valor: Number(b.valor),
+                              observacao: b.observacao ?? "",
+                            })}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon" variant="ghost" title="Excluir"
+                            onClick={() => setConfirmDelete({
+                              tipo: "benef", id: b.id,
+                              label: `${b.pessoa?.nome ?? "Beneficiário"} — ${money(b.valor)}`,
+                            })}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </>
                       )}
                     </TableCell>
                   </TableRow>
@@ -267,10 +378,46 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
           <TableHeader><TableRow>
             <TableHead>Tipo</TableHead><TableHead>Origem</TableHead>
             <TableHead>Descrição</TableHead><TableHead className="text-right">Valor</TableHead>
-            <TableHead className="w-12" />
+            <TableHead className="w-24" />
           </TableRow></TableHeader>
           <TableBody>
-            {(repasse.itens ?? []).map((it) => (
+            {(repasse.itens ?? []).map((it) => editItem?.id === it.id ? (
+              <TableRow key={it.id}>
+                <TableCell>
+                  <Select value={editItem.tipo} onValueChange={(v: RepasseItemTipo) => setEditItem({ ...editItem, tipo: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="credito">Crédito</SelectItem>
+                      <SelectItem value="debito">Débito</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </TableCell>
+                <TableCell>
+                  <Select value={editItem.origem} onValueChange={(v: RepasseItemOrigem) => setEditItem({ ...editItem, origem: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{origens.map(o => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
+                  </Select>
+                </TableCell>
+                <TableCell>
+                  <Input value={editItem.descricao} onChange={(e) => setEditItem({ ...editItem, descricao: e.target.value })} />
+                </TableCell>
+                <TableCell>
+                  <Input
+                    type="number" step="0.01" min={0} className="text-right"
+                    value={editItem.valor}
+                    onChange={(e) => setEditItem({ ...editItem, valor: Number(e.target.value) })}
+                  />
+                </TableCell>
+                <TableCell className="whitespace-nowrap">
+                  <Button size="icon" variant="ghost" onClick={salvarItemEdit} disabled={saveItem.isPending} title="Salvar">
+                    <Check className="h-4 w-4 text-emerald-600" />
+                  </Button>
+                  <Button size="icon" variant="ghost" onClick={() => setEditItem(null)} title="Cancelar">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ) : (
               <TableRow key={it.id}>
                 <TableCell>
                   {it.tipo === "credito" ? (
@@ -282,11 +429,28 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                 <TableCell className="capitalize">{it.origem.replace("_", " ")}</TableCell>
                 <TableCell>{it.descricao}</TableCell>
                 <TableCell className="text-right">{money(it.valor)}</TableCell>
-                <TableCell>
+                <TableCell className="whitespace-nowrap">
                   {podeEditarItens && (
-                    <Button size="icon" variant="ghost" onClick={() => delItem.mutate(it.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    <>
+                      <Button
+                        size="icon" variant="ghost" title="Editar"
+                        onClick={() => setEditItem({
+                          id: it.id, tipo: it.tipo, origem: it.origem,
+                          descricao: it.descricao, valor: Number(it.valor),
+                        })}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon" variant="ghost" title="Excluir"
+                        onClick={() => setConfirmDelete({
+                          tipo: "item", id: it.id,
+                          label: `${it.descricao} — ${money(it.valor)}`,
+                        })}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </>
                   )}
                 </TableCell>
               </TableRow>
@@ -366,6 +530,28 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
           )}
         </DialogFooter>
       </DialogContent>
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmDelete?.tipo === "item" ? "Excluir item?" : "Excluir beneficiário?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDelete?.label} — esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); confirmarExclusao(); }}
+              disabled={delItem.isPending || delBenef.isPending}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
