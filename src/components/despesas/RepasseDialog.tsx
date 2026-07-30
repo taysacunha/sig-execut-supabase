@@ -530,6 +530,28 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
           )}
         </DialogFooter>
       </DialogContent>
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmDelete?.tipo === "item" ? "Excluir item?" : "Excluir beneficiário?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDelete?.label} — esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); confirmarExclusao(); }}
+              disabled={delItem.isPending || delBenef.isPending}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
