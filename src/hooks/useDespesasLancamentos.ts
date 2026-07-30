@@ -73,6 +73,9 @@ export interface LancamentoFiltros {
   centroCustoId?: string;
   pessoaId?: string;
   categoriaId?: string;
+  imovelId?: string;
+  referenciaNumeroPasta?: string;
+  referenciaNumeroVenda?: string;
   dataInicio?: string;
   dataFim?: string;
   busca?: string;
@@ -102,6 +105,13 @@ export function useLancamentos(filtros: LancamentoFiltros) {
       if (filtros.centroCustoId) query = query.eq("centro_custo_id", filtros.centroCustoId);
       if (filtros.pessoaId) query = query.eq("pessoa_id", filtros.pessoaId);
       if (filtros.categoriaId) query = query.eq("categoria_id", filtros.categoriaId);
+      if (filtros.imovelId) query = query.eq("imovel_id", filtros.imovelId);
+      if (filtros.referenciaNumeroPasta?.trim()) {
+        query = query.ilike("referencia_numero_pasta", `%${filtros.referenciaNumeroPasta.trim()}%`);
+      }
+      if (filtros.referenciaNumeroVenda?.trim()) {
+        query = query.ilike("referencia_numero_venda", `%${filtros.referenciaNumeroVenda.trim()}%`);
+      }
       if (filtros.dataInicio) query = query.gte("data_vencimento", filtros.dataInicio);
       if (filtros.dataFim) query = query.lte("data_vencimento", filtros.dataFim);
       if (filtros.serieId) query = query.eq("serie_recorrencia_id", filtros.serieId);
