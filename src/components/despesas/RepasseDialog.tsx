@@ -227,7 +227,7 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
               <TableHead className="w-12">#</TableHead>
               <TableHead>Pessoa</TableHead>
               <TableHead>Observação</TableHead>
-              <TableHead className="text-right">Valor</TableHead>
+              <TableHead className="text-right w-40 min-w-[10rem]">Valor</TableHead>
               <TableHead className="w-24" />
             </TableRow></TableHeader>
             <TableBody>
@@ -256,9 +256,9 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                         onChange={(e) => setEditBenef({ ...editBenef, observacao: e.target.value })}
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="w-40 min-w-[10rem]">
                       <Input
-                        type="number" step="0.01" min={0} className="text-right"
+                        type="number" step="0.01" min={0} className="text-right w-full"
                         value={editBenef.valor}
                         onChange={(e) => setEditBenef({ ...editBenef, valor: Number(e.target.value) })}
                       />
@@ -321,7 +321,7 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
           </Table>
 
           {podeEditarBenef && (
-            <div className="border rounded-md p-3 mt-3 grid gap-3 md:grid-cols-[2fr_1fr_1fr_auto] items-end">
+            <div className="border rounded-md p-3 mt-3 grid gap-3 md:grid-cols-[2fr_minmax(140px,1fr)_1fr_auto] items-end">
               <div className="space-y-1">
                 <Label>Pessoa</Label>
                 <ComboboxSelect
@@ -345,6 +345,7 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                     type="number"
                     step="0.01"
                     min={0}
+                    className="text-right w-full min-w-[80px]"
                     value={novoBenef.valor}
                     onChange={(e) => setNovoBenef({ ...novoBenef, valor: Number(e.target.value) })}
                   />
