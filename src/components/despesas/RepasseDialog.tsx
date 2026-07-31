@@ -69,6 +69,8 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const saveBenef = useSaveRepasseBeneficiario();
   const delBenef = useDeleteRepasseBeneficiario();
   const addComp = useAddCompetencia();
+  const delRepasse = useDeleteRepasse();
+  const updCampos = useUpdateRepasseCampos();
   const saveLimiteAnual = useSaveLimiteAnual();
   const pessoas = usePessoas({});
   const inquilinos = useRepasseInquilinos(conta?.proprietario_id ?? null);
@@ -78,10 +80,33 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     [conta],
   );
 
+  const anos = useMemo(
+    () =>
+      Array.from(new Set(competencias.map((c) => c.competencia.slice(0, 4)))).sort(),
+    [competencias],
+  );
+
   const [selecionada, setSelecionada] = useState<string>("todas");
+  const [anoAba, setAnoAba] = useState<string>("");
   useEffect(() => {
-    setSelecionada(competencias.length ? competencias[0].competencia : "todas");
+    const ultimoAno = anos.length ? anos[anos.length - 1] : "";
+    setAnoAba(ultimoAno);
+    const doAno = competencias
+      .filter((c) => c.competencia.slice(0, 4) === ultimoAno)
+      .map((c) => c.competencia)
+      .sort();
+    setSelecionada(doAno.length ? doAno[doAno.length - 1] : "todas");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conta?.id, competencias.length]);
+
+  const mesesDoAno = useMemo(
+    () =>
+      competencias
+        .filter((c) => c.competencia.slice(0, 4) === anoAba)
+        .slice()
+        .sort((a, b) => (a.competencia < b.competencia ? -1 : 1)),
+    [competencias, anoAba],
+  );
 
   const repasse: Repasse | null =
     selecionada === "todas" ? null : competencias.find((c) => c.competencia === selecionada) ?? null;
