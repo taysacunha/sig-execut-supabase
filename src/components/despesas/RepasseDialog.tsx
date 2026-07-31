@@ -187,11 +187,50 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
     try {
       await saveBenef.mutateAsync({
         id: editBenef.id, repasse_id: repasse.id, pessoa_id: editBenef.pessoa_id,
-        valor: editBenef.valor, observacao: (editBenef.observacao || null) as any,
-      });
+        valor: editBenef.valor,
+        valor_limite: editBenef.valor_limite === "" ? null : Number(editBenef.valor_limite),
+        data_recebimento: editBenef.data_recebimento || null,
+        is_residual: editBenef.is_residual,
+        observacao: (editBenef.observacao || null) as any,
+      } as any);
       toast.success("Beneficiário atualizado");
       setEditBenef(null);
     } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+  }
+
+  async function distribuir() {
+    if (!repasse) return;
+    const lista = beneficiarios.slice().sort((a, b) => a.ordem - b.ordem);
+    if (lista.length === 0) {
+      toast.error("Cadastre os beneficiários antes de distribuir.");
+      return;
+    }
+    const residual = lista.find((b) => b.is_residual);
+    if (!residual) {
+      toast.error("Marque um beneficiário como residual (normalmente a proprietária).");
+      return;
+    }
+    let saldo = Number(repasse.valor_liquido || 0);
+    const updates: { id: string; pessoa_id: string; valor: number }[] = [];
+    for (const b of lista) {
+      if (b.id === residual.id) continue;
+      const limite = b.valor_limite === null || b.valor_limite === undefined
+        ? saldo : Number(b.valor_limite);
+      const v = Math.max(0, Math.min(limite, saldo));
+      saldo = Number((saldo - v).toFixed(2));
+      updates.push({ id: b.id, pessoa_id: b.pessoa_id, valor: v });
+    }
+    updates.push({ id: residual.id, pessoa_id: residual.pessoa_id, valor: Number(saldo.toFixed(2)) });
+    try {
+      // zera antes para não estourar a validação de soma no banco
+      for (const u of updates) {
+        await saveBenef.mutateAsync({ id: u.id, repasse_id: repasse.id, pessoa_id: u.pessoa_id, valor: 0 } as any);
+      }
+      for (const u of updates) {
+        await saveBenef.mutateAsync({ id: u.id, repasse_id: repasse.id, pessoa_id: u.pessoa_id, valor: u.valor } as any);
+      }
+      toast.success("Valores distribuídos conforme os limites");
+    } catch (e: any) { toast.error(e?.message ?? "Erro ao distribuir"); }
   }
 
   return (
