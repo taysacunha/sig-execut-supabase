@@ -441,6 +441,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
       return;
     }
     const limAnoEdit = editBenef.limite_anual === "" ? null : Number(editBenef.limite_anual);
+    const limAnoAtual = limiteAnualDe(editBenef.pessoa_id);
     if (limAnoEdit !== null) {
       const outros = recebidoNoAno(editBenef.pessoa_id) -
         (beneficiarios.find((b) => b.id === editBenef.id)?.valor ?? 0);
@@ -451,6 +452,23 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
         return;
       }
     }
+    if (limAnoAtual !== null && limAnoEdit !== null && limAnoEdit !== Number(limAnoAtual)) {
+      const snapshot = editBenef;
+      setConfirmLimite({
+        atual: Number(limAnoAtual),
+        novo: limAnoEdit,
+        onConfirm: () => { setConfirmLimite(null); void executarBenefEdit(snapshot); },
+      });
+      return;
+    }
+    await executarBenefEdit(editBenef);
+  }
+
+  async function executarBenefEdit(editBenef: {
+    id: string; pessoa_id: string | null; valor: number; valor_limite: string;
+    limite_anual: string; data_recebimento: string; is_residual: boolean; observacao: string;
+  }) {
+    if (!repasse || !conta || !editBenef.pessoa_id) return;
     try {
       await saveBenef.mutateAsync({
         id: editBenef.id, repasse_id: repasse.id, pessoa_id: editBenef.pessoa_id,
@@ -465,22 +483,30 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
         pessoa_id: editBenef.pessoa_id,
         ano: anoSelecionado,
         valor_limite: editBenef.limite_anual === "" ? null : Number(editBenef.limite_anual),
+        competencia_origem: repasse.competencia,
       });
+      limitesAnuais.refetch();
       toast.success("Beneficiário atualizado");
       setEditBenef(null);
     } catch (e: any) { toast.error(e?.message ?? "Erro"); }
   }
 
-  async function distribuir() {
+  async function distribuir(residualIdForcado?: string) {
     if (!repasse) return;
     const lista = beneficiarios.slice().sort((a, b) => a.ordem - b.ordem);
     if (lista.length === 0) {
       toast.error("Cadastre os beneficiários antes de distribuir.");
       return;
     }
-    const residual = lista.find((b) => b.is_residual);
+    if (Number(repasse.valor_liquido || 0) <= 0) {
+      toast.error("Esta competência não tem valor líquido para distribuir — lance os itens antes.");
+      return;
+    }
+    const residual = residualIdForcado
+      ? lista.find((b) => b.id === residualIdForcado)
+      : lista.find((b) => b.is_residual);
     if (!residual) {
-      toast.error("Marque um beneficiário como residual (normalmente a proprietária).");
+      setEscolherResidual(true);
       return;
     }
     let saldo = Number(repasse.valor_liquido || 0);
