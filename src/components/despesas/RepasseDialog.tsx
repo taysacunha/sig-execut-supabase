@@ -808,16 +808,41 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                                   min={0}
                                   className="text-right"
                                   placeholder="definir limite"
+                                  title={limiteInfoDe(p.id)}
                                   defaultValue={lim === null ? "" : String(lim)}
                                   onBlur={(e) => {
                                     const v = e.target.value;
                                     const novoLim = v === "" ? null : Number(v);
                                     if (novoLim === (lim === null ? null : Number(lim))) return;
+                                    if (lim !== null && novoLim !== null) {
+                                      setConfirmLimite({
+                                        atual: Number(lim),
+                                        novo: novoLim,
+                                        onConfirm: () => {
+                                          setConfirmLimite(null);
+                                          saveLimiteAnual.mutate({
+                                            conta_id: conta.id,
+                                            pessoa_id: p.id,
+                                            ano: anoSelecionado,
+                                            valor_limite: novoLim,
+                                            competencia_origem: repasse?.competencia ?? null,
+                                          }, {
+                                            onSuccess: () => {
+                                              limitesAnuais.refetch();
+                                              toast.success("Limite anual atualizado");
+                                            },
+                                            onError: (err: any) => toast.error(err?.message ?? "Erro"),
+                                          });
+                                        },
+                                      });
+                                      return;
+                                    }
                                     saveLimiteAnual.mutate({
                                       conta_id: conta.id,
                                       pessoa_id: p.id,
                                       ano: anoSelecionado,
                                       valor_limite: novoLim,
+                                      competencia_origem: repasse?.competencia ?? null,
                                     }, {
                                       onSuccess: () => {
                                         limitesAnuais.refetch();
