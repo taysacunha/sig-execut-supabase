@@ -144,6 +144,10 @@ export default function DespesasCalendario() {
   const [tipoDefault, setTipoDefault] = useState<LancamentoTipo>("a_pagar");
   const [aba, setAba] = useState<"ativos" | "cancelados">("ativos");
 
+  const rowsAtivos = useMemo(() => rows.filter((r) => r.status !== "cancelado"), [rows]);
+  const rowsCancelados = useMemo(() => rows.filter((r) => r.status === "cancelado"), [rows]);
+  const rowsVisiveis = aba === "cancelados" ? rowsCancelados : rowsAtivos;
+
   const deleteMut = useDeleteLancamento();
   const cancelMut = useCancelLancamento();
   const setStatusMut = useSetLancamentoStatus();
