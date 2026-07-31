@@ -371,13 +371,18 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               <CalendarPlus className="h-4 w-4 mr-1" />Competência
             </Button>
             {addOpen && (
-              <div className="flex items-center gap-4 shrink-0">
+              <div className="flex items-center shrink-0">
                 <Input
                   type="month" className="h-9 w-40 shrink-0"
                   value={novaComp}
                   onChange={(e) => setNovaComp(e.target.value)}
                 />
-                <Button size="sm" onClick={adicionarCompetencia} disabled={addComp.isPending}>
+                <Button
+                  size="sm"
+                  className="ml-6 shrink-0"
+                  onClick={adicionarCompetencia}
+                  disabled={addComp.isPending}
+                >
                   Adicionar
                 </Button>
               </div>
