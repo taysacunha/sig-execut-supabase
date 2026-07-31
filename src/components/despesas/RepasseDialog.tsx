@@ -54,7 +54,7 @@ function mesLabel(competencia: string) {
     .replace(".", "");
 }
 
-export function RepasseDialog({ open, onOpenChange, conta }: Props) {
+function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const { showValues, formatValue } = useDespesasValues();
   const money = (n: number) => (showValues ? formatValue(n) : "R$ ******");
   const saveItem = useSaveRepasseItem();
@@ -330,10 +330,13 @@ export function RepasseDialog({ open, onOpenChange, conta }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl w-[95vw]">
         <DialogHeader>
-          <DialogTitle>
-            Repasse — {conta.proprietario?.nome}
-            <span className="text-muted-foreground font-normal"> · {conta.centro_custo?.nome}</span>
-          </DialogTitle>
+          <div className="flex items-center justify-between gap-2 pr-8">
+            <DialogTitle>
+              Repasse — {conta.proprietario?.nome}
+              <span className="text-muted-foreground font-normal"> · {conta.centro_custo?.nome}</span>
+            </DialogTitle>
+            <ToggleValuesButton />
+          </div>
         </DialogHeader>
 
         {/* Barra de competências */}
