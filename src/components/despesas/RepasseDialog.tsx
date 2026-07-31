@@ -366,21 +366,23 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               </Badge>
             </Button>
           ))}
-          <Button size="sm" variant="ghost" onClick={() => setAddOpen((v) => !v)}>
-            <CalendarPlus className="h-4 w-4 mr-1" />Competência
-          </Button>
-          {addOpen && (
-            <div className="flex items-center gap-2">
-              <Input
-                type="month" className="h-9 w-40"
-                value={novaComp}
-                onChange={(e) => setNovaComp(e.target.value)}
-              />
-              <Button size="sm" onClick={adicionarCompetencia} disabled={addComp.isPending}>
-                Adicionar
-              </Button>
-            </div>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            <Button size="sm" variant="ghost" onClick={() => setAddOpen((v) => !v)}>
+              <CalendarPlus className="h-4 w-4 mr-1" />Competência
+            </Button>
+            {addOpen && (
+              <div className="flex items-center gap-2 shrink-0">
+                <Input
+                  type="month" className="h-9 w-40 shrink-0"
+                  value={novaComp}
+                  onChange={(e) => setNovaComp(e.target.value)}
+                />
+                <Button size="sm" onClick={adicionarCompetencia} disabled={addComp.isPending}>
+                  Adicionar
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border px-4 py-2 text-sm">
