@@ -612,14 +612,22 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               </div>
             </div>
 
+            <p className="mb-2 text-xs text-muted-foreground">
+              <strong>Valor</strong> é o que a pessoa recebe neste mês. <strong>Limite mês</strong> é o teto
+              dela na competência e <strong>Limite ano</strong> o teto no ano {anoSelecionado} (soma de todas
+              as competências). Quem estiver marcado em <strong>Sobra</strong> recebe todo o restante do
+              líquido ao usar “Distribuir por limite” — normalmente a proprietária.
+            </p>
+
             <Table className="table-fixed">
               <TableHeader><TableRow>
                 <TableHead className="w-10">#</TableHead>
-                <TableHead className="w-[22%]">Pessoa</TableHead>
-                <TableHead className="text-right w-[13%]">Valor</TableHead>
-                <TableHead className="text-right w-[13%]">Limite mês</TableHead>
-                <TableHead className="text-right w-[16%]">Limite ano {anoSelecionado}</TableHead>
-                <TableHead className="w-[13%]">Recebido em</TableHead>
+                <TableHead className="w-[20%]">Pessoa</TableHead>
+                <TableHead className="text-right w-[12%]">Valor</TableHead>
+                <TableHead className="text-right w-[12%]">Limite mês</TableHead>
+                <TableHead className="text-right w-[15%]">Limite ano {anoSelecionado}</TableHead>
+                <TableHead className="w-[12%]">Recebido em</TableHead>
+                <TableHead className="text-center w-16" title="Recebe o valor restante do mês">Sobra</TableHead>
                 <TableHead>Observação</TableHead>
                 <TableHead className="w-24" />
               </TableRow></TableHeader>
