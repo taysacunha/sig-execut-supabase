@@ -818,8 +818,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               </div>
             )}
             <p className="mt-2 text-xs text-muted-foreground">
-              O limite anual é opcional e vale para o ano da competência ({anoSelecionado}); edite a linha
-              do beneficiário para defini-lo.
+              O limite anual é opcional, vale para o ano da competência ({anoSelecionado}) e pode ser
+              informado ao adicionar ou ao editar a linha do beneficiário. Apenas um beneficiário pode
+              ficar com a sobra.
             </p>
             </>
             )}
