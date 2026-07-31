@@ -284,14 +284,13 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
               </span>
             </div>
           </div>
-          <div className="overflow-x-auto">
-          <Table>
+          <Table className="table-fixed">
             <TableHeader><TableRow>
-              <TableHead className="w-12">#</TableHead>
-              <TableHead>Pessoa</TableHead>
-              <TableHead className="text-right w-40 min-w-[10rem]">Valor</TableHead>
-              <TableHead className="text-right w-36 min-w-[9rem]">Limite</TableHead>
-              <TableHead className="w-40 min-w-[9.5rem]">Recebido em</TableHead>
+              <TableHead className="w-10">#</TableHead>
+              <TableHead className="w-[26%]">Pessoa</TableHead>
+              <TableHead className="text-right w-[14%]">Valor</TableHead>
+              <TableHead className="text-right w-[13%]">Limite</TableHead>
+              <TableHead className="w-[13%]">Recebido em</TableHead>
               <TableHead>Observação</TableHead>
               <TableHead className="w-24" />
             </TableRow></TableHeader>
@@ -315,14 +314,14 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                         searchPlaceholder="Buscar…"
                       />
                     </TableCell>
-                    <TableCell className="w-40 min-w-[10rem]">
+                    <TableCell>
                       <Input
                         type="number" step="0.01" min={0} className="text-right w-full"
                         value={editBenef.valor}
                         onChange={(e) => setEditBenef({ ...editBenef, valor: Number(e.target.value) })}
                       />
                     </TableCell>
-                    <TableCell className="w-36 min-w-[9rem]">
+                    <TableCell>
                       <Input
                         type="number" step="0.01" min={0} className="text-right w-full"
                         placeholder="sem limite"
@@ -330,7 +329,7 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                         onChange={(e) => setEditBenef({ ...editBenef, valor_limite: e.target.value })}
                       />
                     </TableCell>
-                    <TableCell className="w-40 min-w-[9.5rem]">
+                    <TableCell>
                       <Input
                         type="date" className="w-full"
                         value={editBenef.data_recebimento}
@@ -360,9 +359,9 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                 ) : (
                   <TableRow key={b.id}>
                     <TableCell>{i + 1}</TableCell>
-                    <TableCell>
+                    <TableCell className="align-top">
                       <div className="font-medium">{b.pessoa?.nome ?? "—"}</div>
-                      <div className="text-xs text-muted-foreground">
+                      <div className="text-xs text-muted-foreground break-words">
                         {b.pessoa?.tipo_pessoa === "juridica" ? "PJ" : "PF"}
                         {b.pessoa?.cpf_cnpj ? ` · ${b.pessoa.cpf_cnpj}` : ""}
                         {b.is_residual ? " · recebe a sobra" : ""}
@@ -377,7 +376,7 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                         ? new Date(b.data_recebimento + "T00:00:00").toLocaleDateString("pt-BR")
                         : "—"}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{b.observacao ?? ""}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground break-words">{b.observacao ?? ""}</TableCell>
                     <TableCell className="whitespace-nowrap">
                       {podeEditarBenef && (
                         <>
@@ -417,7 +416,6 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
               )}
             </TableBody>
           </Table>
-          </div>
 
           {podeEditarBenef && (
             <div className="border rounded-md p-3 mt-3 space-y-3">
