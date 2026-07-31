@@ -4,32 +4,12 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DespesasSidebar } from "@/components/DespesasSidebar";
 import { DashboardSkeleton } from "@/components/DashboardSkeleton";
 import { SystemGuard } from "@/components/SystemGuard";
-import { Menu, Eye, EyeOff } from "lucide-react";
+import { Menu } from "lucide-react";
 import { DespesasNotificacoesBell } from "@/components/despesas/DespesasNotificacoesBell";
-import { Button } from "@/components/ui/button";
 import {
   DespesasValuesProvider,
-  useDespesasValues,
+  ToggleValuesButton,
 } from "@/contexts/DespesasValuesContext";
-
-function ToggleValuesButton() {
-  const { showValues, toggleValues } = useDespesasValues();
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={toggleValues}
-      title={showValues ? "Ocultar valores" : "Mostrar valores"}
-      aria-label={showValues ? "Ocultar valores" : "Mostrar valores"}
-    >
-      {showValues ? (
-        <EyeOff className="h-4 w-4 text-muted-foreground" />
-      ) : (
-        <Eye className="h-4 w-4 text-muted-foreground" />
-      )}
-    </Button>
-  );
-}
 
 export function DespesasLayout() {
   return (
