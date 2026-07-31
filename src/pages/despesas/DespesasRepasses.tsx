@@ -53,6 +53,30 @@ export default function DespesasRepasses() {
   const [confirmDelete, setConfirmDelete] = useState<RepasseConta | null>(null);
   const [novo, setNovo] = useState({ proprietarioId: "", centroCustoId: "" });
 
+  const resumoPorAno = (c: RepasseConta) => {
+    const mapa = new Map<string, { total: number; pagas: number; meses: string[] }>();
+    for (const r of (c.competencias ?? []).slice().sort((a, b) =>
+      a.competencia < b.competencia ? -1 : 1,
+    )) {
+      const ano = r.competencia.slice(0, 4);
+      const item = mapa.get(ano) ?? { total: 0, pagas: 0, meses: [] };
+      item.total += 1;
+      if (r.status === "pago") item.pagas += 1;
+      item.meses.push(
+        `${mesLabel(r.competencia).split(" ")[0]}${r.status === "pago" ? " (pago)" : ""}`,
+      );
+      mapa.set(ano, item);
+    }
+    return Array.from(mapa.entries())
+      .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+      .map(([ano, v]) => ({
+        ano,
+        total: v.total,
+        pagas: v.pagas,
+        meses: `${ano}: ${v.meses.join(", ")}`,
+      }));
+  };
+
   const totais = (c: RepasseConta) => {
     const comps = c.competencias ?? [];
     return {
