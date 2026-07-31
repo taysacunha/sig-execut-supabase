@@ -18,12 +18,14 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, Pencil, Check, X, CalendarPlus } from "lucide-react";
+import { Plus, Trash2, Pencil, Check, X, CalendarPlus, RotateCcw } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Repasse, RepasseConta, RepasseItemOrigem, RepasseItemTipo,
   useSaveRepasseItem, useDeleteRepasseItem, useUpdateRepasseStatus,
   useSaveRepasseBeneficiario, useDeleteRepasseBeneficiario,
   useRepasseInquilinos, useAddCompetencia, useLimitesAnuais, useSaveLimiteAnual,
+  useDeleteRepasse, useUpdateRepasseCampos,
 } from "@/hooks/useDespesasRepasses";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
 import { usePessoas } from "@/hooks/useDespesasPessoas";
@@ -67,6 +69,8 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const saveBenef = useSaveRepasseBeneficiario();
   const delBenef = useDeleteRepasseBeneficiario();
   const addComp = useAddCompetencia();
+  const delRepasse = useDeleteRepasse();
+  const updCampos = useUpdateRepasseCampos();
   const saveLimiteAnual = useSaveLimiteAnual();
   const pessoas = usePessoas({});
   const inquilinos = useRepasseInquilinos(conta?.proprietario_id ?? null);
@@ -76,10 +80,33 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     [conta],
   );
 
+  const anos = useMemo(
+    () =>
+      Array.from(new Set(competencias.map((c) => c.competencia.slice(0, 4)))).sort(),
+    [competencias],
+  );
+
   const [selecionada, setSelecionada] = useState<string>("todas");
+  const [anoAba, setAnoAba] = useState<string>("");
   useEffect(() => {
-    setSelecionada(competencias.length ? competencias[0].competencia : "todas");
+    const ultimoAno = anos.length ? anos[anos.length - 1] : "";
+    setAnoAba(ultimoAno);
+    const doAno = competencias
+      .filter((c) => c.competencia.slice(0, 4) === ultimoAno)
+      .map((c) => c.competencia)
+      .sort();
+    setSelecionada(doAno.length ? doAno[doAno.length - 1] : "todas");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conta?.id, competencias.length]);
+
+  const mesesDoAno = useMemo(
+    () =>
+      competencias
+        .filter((c) => c.competencia.slice(0, 4) === anoAba)
+        .slice()
+        .sort((a, b) => (a.competencia < b.competencia ? -1 : 1)),
+    [competencias, anoAba],
+  );
 
   const repasse: Repasse | null =
     selecionada === "todas" ? null : competencias.find((c) => c.competencia === selecionada) ?? null;
@@ -115,6 +142,8 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const [confirmDelete, setConfirmDelete] = useState<
     { tipo: "item" | "benef"; id: string; label: string } | null
   >(null);
+  const [confirmDelComp, setConfirmDelComp] = useState<Repasse | null>(null);
+  const [reabrir, setReabrir] = useState<{ repasse: Repasse; justificativa: string } | null>(null);
   const [editItem, setEditItem] = useState<
     {
       id: string; tipo: RepasseItemTipo; origem: RepasseItemOrigem;
@@ -170,10 +199,49 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     try {
       await addComp.mutateAsync({ contaId: conta.id, competencia: `${novaComp}-01` });
       toast.success("Competência adicionada");
+      setAnoAba(novaComp.slice(0, 4));
       setSelecionada(`${novaComp}-01`);
       setAddOpen(false);
       setNovaComp("");
     } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+  }
+
+  async function excluirCompetencia() {
+    if (!confirmDelComp) return;
+    try {
+      await delRepasse.mutateAsync(confirmDelComp.id);
+      const restantes = competencias
+        .filter((c) => c.id !== confirmDelComp.id)
+        .map((c) => c.competencia)
+        .sort();
+      setSelecionada(restantes.length ? restantes[restantes.length - 1] : "todas");
+      if (restantes.length) setAnoAba(restantes[restantes.length - 1].slice(0, 4));
+      setConfirmDelComp(null);
+      toast.success("Competência excluída");
+    } catch (e: any) { toast.error(e?.message ?? "Erro ao excluir competência"); }
+  }
+
+  async function confirmarReabertura() {
+    if (!reabrir) return;
+    const just = reabrir.justificativa.trim();
+    if (just.length < 10) {
+      toast.error("Informe uma justificativa com pelo menos 10 caracteres");
+      return;
+    }
+    try {
+      await updStatus.mutateAsync({ id: reabrir.repasse.id, status: "fechado" });
+      const carimbo = `[Reabertura ${new Date().toLocaleDateString("pt-BR")}] ${just}`;
+      await updCampos.mutateAsync({
+        id: reabrir.repasse.id,
+        campos: {
+          observacao: reabrir.repasse.observacao
+            ? `${reabrir.repasse.observacao}\n${carimbo}`
+            : carimbo,
+        },
+      });
+      toast.success("Competência reaberta (status: fechado)");
+      setReabrir(null);
+    } catch (e: any) { toast.error(e?.message ?? "Erro ao reabrir"); }
   }
 
   async function adicionar() {
@@ -343,30 +411,34 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
           </div>
         </DialogHeader>
 
-        {/* Barra de competências */}
-        <div className="flex flex-wrap items-center gap-2 rounded-md border p-2">
-          <Button
-            size="sm"
-            variant={selecionada === "todas" ? "default" : "outline"}
-            onClick={() => setSelecionada("todas")}
-          >
-            Todas
-          </Button>
-          {competencias.map((c) => (
+        {/* Barra de competências: anos + meses */}
+        <div className="space-y-2 rounded-md border p-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
-              key={c.id}
               size="sm"
-              variant={selecionada === c.competencia ? "default" : "outline"}
-              onClick={() => setSelecionada(c.competencia)}
-              className="gap-2"
+              variant={selecionada === "todas" ? "default" : "outline"}
+              onClick={() => setSelecionada("todas")}
             >
-              {mesLabel(c.competencia)}
-              <Badge variant="secondary" className="px-1 text-[10px]">
-                {statusLabel[c.status]}
-              </Badge>
+              Todas
             </Button>
-          ))}
-          <div className="flex items-center gap-2 shrink-0">
+            {anos.map((a) => (
+              <Button
+                key={a}
+                size="sm"
+                variant={anoAba === a && selecionada !== "todas" ? "default" : "outline"}
+                onClick={() => {
+                  setAnoAba(a);
+                  const doAno = competencias
+                    .filter((c) => c.competencia.slice(0, 4) === a)
+                    .map((c) => c.competencia)
+                    .sort();
+                  setSelecionada(doAno[0] ?? "todas");
+                }}
+              >
+                {a}
+              </Button>
+            ))}
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
             <Button size="sm" variant="ghost" onClick={() => setAddOpen((v) => !v)}>
               <CalendarPlus className="h-4 w-4 mr-1" />Competência
             </Button>
@@ -387,7 +459,32 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                 </Button>
               </div>
             )}
+            </div>
           </div>
+          {selecionada !== "todas" && (
+            <div className="flex flex-wrap items-center gap-2 border-t pt-2">
+              {mesesDoAno.length === 0 ? (
+                <span className="text-xs text-muted-foreground">
+                  Nenhuma competência neste ano.
+                </span>
+              ) : (
+                mesesDoAno.map((c) => (
+                  <Button
+                    key={c.id}
+                    size="sm"
+                    variant={selecionada === c.competencia ? "default" : "outline"}
+                    onClick={() => setSelecionada(c.competencia)}
+                    className="gap-2"
+                  >
+                    {mesLabel(c.competencia)}
+                    <Badge variant="secondary" className="px-1 text-[10px]">
+                      {statusLabel[c.status]}
+                    </Badge>
+                  </Button>
+                ))
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border px-4 py-2 text-sm">
@@ -878,6 +975,19 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
         <DialogFooter className="mt-4 gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
+          {repasse && (
+            repasse.status === "pago" ? (
+              <Button variant="outline" onClick={() => setReabrir({ repasse, justificativa: "" })}>
+                <RotateCcw className="h-4 w-4 mr-1" />
+                Reabrir {mesLabel(repasse.competencia)}
+              </Button>
+            ) : (
+              <Button variant="destructive" onClick={() => setConfirmDelComp(repasse)}>
+                <Trash2 className="h-4 w-4 mr-1" />
+                Excluir {mesLabel(repasse.competencia)}
+              </Button>
+            )
+          )}
           {repasse?.status === "aberto" && (
             <Button variant="outline" onClick={() => updStatus.mutate({ id: repasse.id, status: "fechado" })}>
               Fechar {mesLabel(repasse.competencia)}
@@ -906,6 +1016,56 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               disabled={delItem.isPending || delBenef.isPending}
             >
               Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!confirmDelComp} onOpenChange={(o) => !o && setConfirmDelComp(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir competência?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDelComp ? mesLabel(confirmDelComp.competencia) : ""} — todos os itens e
+              beneficiários deste mês serão removidos. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); excluirCompetencia(); }}
+              disabled={delRepasse.isPending}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!reabrir} onOpenChange={(o) => !o && setReabrir(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reabrir competência paga?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {reabrir ? mesLabel(reabrir.repasse.competencia) : ""} voltará ao status “Fechado”,
+              permitindo ajustes ou exclusão. Justifique a reabertura (mínimo 10 caracteres).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            rows={3}
+            placeholder="Motivo da reabertura"
+            value={reabrir?.justificativa ?? ""}
+            onChange={(e) =>
+              setReabrir((r) => (r ? { ...r, justificativa: e.target.value } : r))
+            }
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); confirmarReabertura(); }}
+              disabled={updStatus.isPending || updCampos.isPending}
+            >
+              Reabrir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
