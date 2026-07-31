@@ -269,8 +269,16 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
           </TabsList>
 
           <TabsContent value="beneficiarios" className="mt-3">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold text-sm">Distribuição</h3>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-sm">Distribuição</h3>
+              {podeEditarBenef && (
+                <Button type="button" variant="outline" size="sm" onClick={distribuir}
+                  disabled={saveBenef.isPending} title="Distribuir respeitando os limites">
+                  Distribuir por limite
+                </Button>
+              )}
+            </div>
             <div className="text-sm">
               Distribuído: <span className="font-medium">{money(distribuido)}</span>
               {" · "}Restante:{" "}
@@ -279,12 +287,15 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
               </span>
             </div>
           </div>
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader><TableRow>
               <TableHead className="w-12">#</TableHead>
               <TableHead>Pessoa</TableHead>
-              <TableHead>Observação</TableHead>
               <TableHead className="text-right w-40 min-w-[10rem]">Valor</TableHead>
+              <TableHead className="text-right w-36 min-w-[9rem]">Limite</TableHead>
+              <TableHead className="w-40 min-w-[9.5rem]">Recebido em</TableHead>
+              <TableHead>Observação</TableHead>
               <TableHead className="w-24" />
             </TableRow></TableHeader>
             <TableBody>
@@ -307,18 +318,38 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                         searchPlaceholder="Buscar…"
                       />
                     </TableCell>
-                    <TableCell>
-                      <Input
-                        value={editBenef.observacao}
-                        onChange={(e) => setEditBenef({ ...editBenef, observacao: e.target.value })}
-                      />
-                    </TableCell>
                     <TableCell className="w-40 min-w-[10rem]">
                       <Input
                         type="number" step="0.01" min={0} className="text-right w-full"
                         value={editBenef.valor}
                         onChange={(e) => setEditBenef({ ...editBenef, valor: Number(e.target.value) })}
                       />
+                    </TableCell>
+                    <TableCell className="w-36 min-w-[9rem]">
+                      <Input
+                        type="number" step="0.01" min={0} className="text-right w-full"
+                        placeholder="sem limite"
+                        value={editBenef.valor_limite}
+                        onChange={(e) => setEditBenef({ ...editBenef, valor_limite: e.target.value })}
+                      />
+                    </TableCell>
+                    <TableCell className="w-40 min-w-[9.5rem]">
+                      <Input
+                        type="date" className="w-full"
+                        value={editBenef.data_recebimento}
+                        onChange={(e) => setEditBenef({ ...editBenef, data_recebimento: e.target.value })}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        value={editBenef.observacao}
+                        onChange={(e) => setEditBenef({ ...editBenef, observacao: e.target.value })}
+                      />
+                      <label className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                        <input type="checkbox" checked={editBenef.is_residual}
+                          onChange={(e) => setEditBenef({ ...editBenef, is_residual: e.target.checked })} />
+                        Recebe a sobra
+                      </label>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       <Button size="icon" variant="ghost" onClick={salvarBenefEdit} disabled={saveBenef.isPending} title="Salvar">
@@ -337,10 +368,19 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                       <div className="text-xs text-muted-foreground">
                         {b.pessoa?.tipo_pessoa === "juridica" ? "PJ" : "PF"}
                         {b.pessoa?.cpf_cnpj ? ` · ${b.pessoa.cpf_cnpj}` : ""}
+                        {b.is_residual ? " · recebe a sobra" : ""}
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{b.observacao ?? ""}</TableCell>
                     <TableCell className="text-right">{money(b.valor)}</TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {b.valor_limite === null || b.valor_limite === undefined ? "—" : money(Number(b.valor_limite))}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {b.data_recebimento
+                        ? new Date(b.data_recebimento + "T00:00:00").toLocaleDateString("pt-BR")
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{b.observacao ?? ""}</TableCell>
                     <TableCell className="whitespace-nowrap">
                       {podeEditarBenef && (
                         <>
@@ -348,6 +388,10 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                             size="icon" variant="ghost" title="Editar"
                             onClick={() => setEditBenef({
                               id: b.id, pessoa_id: b.pessoa_id, valor: Number(b.valor),
+                              valor_limite: b.valor_limite === null || b.valor_limite === undefined
+                                ? "" : String(b.valor_limite),
+                              data_recebimento: b.data_recebimento ?? "",
+                              is_residual: !!b.is_residual,
                               observacao: b.observacao ?? "",
                             })}
                           >
@@ -369,16 +413,18 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                 ))}
               {beneficiarios.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground">
                     Nenhum beneficiário definido. Adicione ao menos um antes de baixar o repasse.
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
+          </div>
 
           {podeEditarBenef && (
-            <div className="border rounded-md p-3 mt-3 grid gap-3 md:grid-cols-[2fr_minmax(140px,1fr)_1fr_auto] items-end">
+            <div className="border rounded-md p-3 mt-3 space-y-3">
+              <div className="grid gap-3 md:grid-cols-[2fr_minmax(170px,1fr)_minmax(150px,1fr)] items-end">
               <div className="space-y-1">
                 <Label>Pessoa</Label>
                 <ComboboxSelect
@@ -402,7 +448,7 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                     type="number"
                     step="0.01"
                     min={0}
-                    className="text-right w-full min-w-[80px]"
+                    className="text-right w-full min-w-[90px]"
                     value={novoBenef.valor}
                     onChange={(e) => setNovoBenef({ ...novoBenef, valor: Number(e.target.value) })}
                   />
@@ -410,6 +456,7 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                     type="button"
                     variant="outline"
                     size="sm"
+                    className="shrink-0"
                     onClick={() =>
                       setNovoBenef({ ...novoBenef, valor: Math.max(0, Number(restante.toFixed(2))) })
                     }
@@ -420,13 +467,40 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                 </div>
               </div>
               <div className="space-y-1">
-                <Label>Observação</Label>
+                <Label>Limite (opcional)</Label>
                 <Input
-                  value={novoBenef.observacao}
-                  onChange={(e) => setNovoBenef({ ...novoBenef, observacao: e.target.value })}
+                  type="number" step="0.01" min={0} className="text-right w-full"
+                  placeholder="sem limite"
+                  value={novoBenef.valor_limite}
+                  onChange={(e) => setNovoBenef({ ...novoBenef, valor_limite: e.target.value })}
                 />
               </div>
-              <Button size="icon" onClick={adicionarBenef}><Plus className="h-4 w-4" /></Button>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[minmax(160px,1fr)_2fr_auto] items-end">
+                <div className="space-y-1">
+                  <Label>Recebido em</Label>
+                  <Input
+                    type="date" className="w-full"
+                    value={novoBenef.data_recebimento}
+                    onChange={(e) => setNovoBenef({ ...novoBenef, data_recebimento: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Observação</Label>
+                  <Input
+                    value={novoBenef.observacao}
+                    onChange={(e) => setNovoBenef({ ...novoBenef, observacao: e.target.value })}
+                  />
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
+                    <input type="checkbox" checked={novoBenef.is_residual}
+                      onChange={(e) => setNovoBenef({ ...novoBenef, is_residual: e.target.checked })} />
+                    Recebe a sobra (proprietária)
+                  </label>
+                </div>
+                <Button onClick={adicionarBenef} className="shrink-0">
+                  <Plus className="h-4 w-4 mr-1" /> Adicionar
+                </Button>
+              </div>
             </div>
           )}
           </TabsContent>
