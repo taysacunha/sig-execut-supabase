@@ -337,6 +337,23 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
       );
       return;
     }
+    if (
+      limAno !== null &&
+      novoBenef.limite_anual !== "" &&
+      Number(novoBenef.limite_anual) !== Number(limAno)
+    ) {
+      setConfirmLimite({
+        atual: Number(limAno),
+        novo: Number(novoBenef.limite_anual),
+        onConfirm: () => { setConfirmLimite(null); void executarAdicionarBenef(); },
+      });
+      return;
+    }
+    await executarAdicionarBenef();
+  }
+
+  async function executarAdicionarBenef() {
+    if (!repasse || !conta || !novoBenef.pessoa_id) return;
     try {
       await saveBenef.mutateAsync({
         repasse_id: repasse.id,
