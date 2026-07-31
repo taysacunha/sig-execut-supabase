@@ -54,12 +54,21 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
   const pessoas = usePessoas({});
   const inquilinos = useRepasseInquilinos(repasse);
 
-  const [novoBenef, setNovoBenef] = useState<{ pessoa_id: string | null; valor: number; observacao: string }>(
-    { pessoa_id: null, valor: 0, observacao: "" },
-  );
+  const benefVazio = {
+    pessoa_id: null as string | null,
+    valor: 0,
+    valor_limite: "" as string,
+    data_recebimento: "",
+    is_residual: false,
+    observacao: "",
+  };
+  const [novoBenef, setNovoBenef] = useState(benefVazio);
 
   useEffect(() => {
-    setNovoBenef({ pessoa_id: null, valor: 0, observacao: "" });
+    setNovoBenef({
+      pessoa_id: null, valor: 0, valor_limite: "", data_recebimento: "",
+      is_residual: false, observacao: "",
+    });
   }, [repasse?.id]);
 
   const [novo, setNovo] = useState<{
@@ -73,7 +82,10 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
     { id: string; tipo: RepasseItemTipo; origem: RepasseItemOrigem; descricao: string; valor: number } | null
   >(null);
   const [editBenef, setEditBenef] = useState<
-    { id: string; pessoa_id: string | null; valor: number; observacao: string } | null
+    {
+      id: string; pessoa_id: string | null; valor: number; valor_limite: string;
+      data_recebimento: string; is_residual: boolean; observacao: string;
+    } | null
   >(null);
 
   if (!repasse) return null;
@@ -105,10 +117,16 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
         repasse_id: repasse.id,
         pessoa_id: novoBenef.pessoa_id,
         valor: novoBenef.valor,
-        observacao: novoBenef.observacao || null as any,
+        valor_limite: novoBenef.valor_limite === "" ? null : Number(novoBenef.valor_limite),
+        data_recebimento: novoBenef.data_recebimento || null,
+        is_residual: novoBenef.is_residual,
+        observacao: novoBenef.observacao || null,
         ordem: (repasse.beneficiarios?.length ?? 0) + 1,
+      } as any);
+      setNovoBenef({
+        pessoa_id: null, valor: 0, valor_limite: "", data_recebimento: "",
+        is_residual: false, observacao: "",
       });
-      setNovoBenef({ pessoa_id: null, valor: 0, observacao: "" });
     } catch (e: any) { toast.error(e?.message ?? "Erro"); }
   }
 
