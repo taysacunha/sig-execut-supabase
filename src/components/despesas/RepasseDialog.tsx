@@ -27,7 +27,11 @@ import {
 } from "@/hooks/useDespesasRepasses";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
 import { usePessoas } from "@/hooks/useDespesasPessoas";
-import { useDespesasValues } from "@/contexts/DespesasValuesContext";
+import {
+  useDespesasValues,
+  DespesasValuesScope,
+  ToggleValuesButton,
+} from "@/contexts/DespesasValuesContext";
 
 interface Props {
   open: boolean;
@@ -900,5 +904,13 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
         </AlertDialogContent>
       </AlertDialog>
     </Dialog>
+  );
+}
+
+export function RepasseDialog(props: Props) {
+  return (
+    <DespesasValuesScope active={props.open}>
+      <RepasseDialogInner {...props} />
+    </DespesasValuesScope>
   );
 }
