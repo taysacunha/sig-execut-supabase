@@ -432,10 +432,10 @@ export interface RepasseInquilinoRow {
   inquilino: { id: string; nome: string; tipo_pessoa: "fisica" | "juridica"; cpf_cnpj: string | null } | null;
 }
 
-export function useRepasseInquilinos(repasse: Repasse | null) {
+export function useRepasseInquilinos(proprietarioId: string | null) {
   return useQuery({
-    queryKey: [REPASSES_KEY, "inquilinos", repasse?.proprietario_id, repasse?.centro_custo_id],
-    enabled: !!repasse?.proprietario_id,
+    queryKey: [REPASSES_KEY, "inquilinos", proprietarioId],
+    enabled: !!proprietarioId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("despesas_imoveis" as any)
@@ -445,7 +445,7 @@ export function useRepasseInquilinos(repasse: Repasse | null) {
              id, nome, tipo_pessoa, cpf_cnpj
            )`,
         )
-        .eq("proprietario_id", repasse!.proprietario_id)
+        .eq("proprietario_id", proprietarioId!)
         .eq("is_active", true)
         .order("descricao");
       if (error) throw error;
