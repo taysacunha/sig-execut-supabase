@@ -373,7 +373,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
             {addOpen && (
               <div className="flex items-center shrink-0">
                 <Input
-                  type="month" className="h-9 w-40 shrink-0"
+                  type="month" className="h-9 w-52 shrink-0 px-3"
                   value={novaComp}
                   onChange={(e) => setNovaComp(e.target.value)}
                 />
