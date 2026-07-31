@@ -15,7 +15,11 @@ import {
   FormaPagamento, Lancamento,
   useAddPagamento, useDespesasLookups,
 } from "@/hooks/useDespesasLancamentos";
-import { useDespesasValues } from "@/contexts/DespesasValuesContext";
+import {
+  useDespesasValues,
+  DespesasValuesScope,
+  ToggleValuesButton,
+} from "@/contexts/DespesasValuesContext";
 
 interface Props {
   open: boolean;
@@ -33,7 +37,7 @@ const FORMAS: { value: FormaPagamento; label: string }[] = [
   { value: "outro", label: "Outro" },
 ];
 
-export function PagamentoDialog({ open, onOpenChange, lancamento }: Props) {
+function PagamentoDialogInner({ open, onOpenChange, lancamento }: Props) {
   const { contas } = useDespesasLookups();
   const addMut = useAddPagamento();
   const { showValues, formatValue } = useDespesasValues();
@@ -82,7 +86,10 @@ export function PagamentoDialog({ open, onOpenChange, lancamento }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Registrar pagamento</DialogTitle>
+          <div className="flex items-center justify-between gap-2 pr-8">
+            <DialogTitle>Registrar pagamento</DialogTitle>
+            <ToggleValuesButton />
+          </div>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="rounded border bg-muted/40 p-3 text-sm">
@@ -146,5 +153,13 @@ export function PagamentoDialog({ open, onOpenChange, lancamento }: Props) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+export function PagamentoDialog(props: Props) {
+  return (
+    <DespesasValuesScope active={props.open}>
+      <PagamentoDialogInner {...props} />
+    </DespesasValuesScope>
   );
 }

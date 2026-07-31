@@ -21,7 +21,11 @@ import {
 } from "@/hooks/useDespesasVeiculos";
 import { useDespesasLookups } from "@/hooks/useDespesasLancamentos";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
-import { useDespesasValues } from "@/contexts/DespesasValuesContext";
+import {
+  useDespesasValues,
+  DespesasValuesScope,
+  ToggleValuesButton,
+} from "@/contexts/DespesasValuesContext";
 
 interface Props {
   open: boolean;
@@ -38,7 +42,7 @@ const docTipos: { v: VeiculoDocTipo; l: string }[] = [
   { v: "outro", l: "Outro" },
 ];
 
-export function VeiculoDialog({ open, onOpenChange, editing }: Props) {
+function VeiculoDialogInner({ open, onOpenChange, editing }: Props) {
   const { centros, pessoas } = useDespesasLookups();
   const saveMut = useSaveVeiculo();
 
@@ -74,7 +78,10 @@ export function VeiculoDialog({ open, onOpenChange, editing }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editing ? "Editar veículo" : "Novo veículo"}</DialogTitle>
+          <div className="flex items-center justify-between gap-2 pr-8">
+            <DialogTitle>{editing ? "Editar veículo" : "Novo veículo"}</DialogTitle>
+            <ToggleValuesButton />
+          </div>
         </DialogHeader>
 
         <Tabs defaultValue="dados">
@@ -256,5 +263,13 @@ function DocumentosTab({ veiculoId }: { veiculoId: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+export function VeiculoDialog(props: Props) {
+  return (
+    <DespesasValuesScope active={props.open}>
+      <VeiculoDialogInner {...props} />
+    </DespesasValuesScope>
   );
 }
