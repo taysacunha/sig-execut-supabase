@@ -874,7 +874,10 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                           <>
                             {money(Number(limiteAnualDe(b.pessoa_id)))}
                             <div className="text-[11px]">
-                              recebido {money(recebidoNoAno(b.pessoa_id))}
+                              consumido {money(recebidoNoAno(b.pessoa_id))}
+                            </div>
+                            <div className="text-[11px]">
+                              saldo {money(Number(limiteAnualDe(b.pessoa_id)) - recebidoNoAno(b.pessoa_id))}
                             </div>
                           </>
                         )}
@@ -980,9 +983,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               </div>
             )}
             <p className="mt-2 text-xs text-muted-foreground">
-              O limite anual é opcional, vale para o ano da competência ({anoSelecionado}) e pode ser
-              informado ao adicionar ou ao editar a linha do beneficiário. Apenas um beneficiário pode
-              ficar com a sobra.
+              O limite anual é opcional e único por beneficiário no ano {anoSelecionado} — informe uma vez
+              (aqui, na edição da linha ou no painel “Limites anuais”) e ele vale para todas as
+              competências desta conta. Apenas um beneficiário pode ficar com a sobra.
             </p>
             </>
             )}
