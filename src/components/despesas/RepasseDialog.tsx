@@ -1296,6 +1296,37 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={!!itemDuplicado} onOpenChange={(o) => !o && setItemDuplicado(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Item já existe nesta competência</AlertDialogTitle>
+            <AlertDialogDescription>
+              Já existe um item de {itemDuplicado?.label} nesta competência. Não é permitido lançar o
+              mesmo tipo, origem e imóvel duas vezes — edite o item existente e ajuste o valor.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                const it = (repasse?.itens ?? []).find((x) => x.id === itemDuplicado?.id);
+                if (it) {
+                  setEditItem({
+                    id: it.id, tipo: it.tipo, origem: it.origem,
+                    descricao: it.descricao, valor: Number(it.valor),
+                    imovel_id: it.imovel_id ?? null,
+                  });
+                }
+                setItemDuplicado(null);
+              }}
+            >
+              Editar o item existente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
