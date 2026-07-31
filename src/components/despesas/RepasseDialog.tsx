@@ -235,30 +235,27 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-6xl w-[95vw]">
         <DialogHeader>
           <DialogTitle>
             Repasse — {repasse.proprietario?.nome} — {new Date(repasse.competencia + "T00:00:00").toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
-          <div className="border rounded-md p-3">
-            <div className="text-xs text-muted-foreground">Bruto</div>
-            <div className="text-lg font-semibold">{money(repasse.valor_bruto)}</div>
-          </div>
-          <div className="border rounded-md p-3">
-            <div className="text-xs text-muted-foreground">Taxa admin.</div>
-            <div className="text-lg font-semibold text-destructive">−{money(repasse.taxa_administracao_valor)}</div>
-          </div>
-          <div className="border rounded-md p-3">
-            <div className="text-xs text-muted-foreground">Líquido</div>
-            <div className="text-lg font-semibold text-primary">{money(repasse.valor_liquido)}</div>
-          </div>
-          <div className="border rounded-md p-3">
-            <div className="text-xs text-muted-foreground">Status</div>
-            <div className="text-lg font-semibold capitalize">{repasse.status.replace("_", " ")}</div>
-          </div>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border px-4 py-2 text-sm">
+          <span className="text-muted-foreground">
+            Bruto <span className="font-semibold text-foreground">{money(repasse.valor_bruto)}</span>
+          </span>
+          <span className="text-muted-foreground">
+            Taxa admin.{" "}
+            <span className="font-semibold text-destructive">−{money(repasse.taxa_administracao_valor)}</span>
+          </span>
+          <span className="text-muted-foreground">
+            Líquido <span className="font-semibold text-primary">{money(repasse.valor_liquido)}</span>
+          </span>
+          <span className="text-muted-foreground">
+            Status <span className="font-semibold capitalize text-foreground">{repasse.status.replace("_", " ")}</span>
+          </span>
         </div>
 
         <Tabs defaultValue="beneficiarios" className="w-full">
