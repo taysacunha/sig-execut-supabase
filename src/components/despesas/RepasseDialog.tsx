@@ -145,6 +145,8 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   >(null);
   const [confirmDelComp, setConfirmDelComp] = useState<Repasse | null>(null);
   const [reabrir, setReabrir] = useState<{ repasse: Repasse; justificativa: string } | null>(null);
+  const [itemDuplicado, setItemDuplicado] = useState<{ id: string; label: string } | null>(null);
+  const [limitesAbertos, setLimitesAbertos] = useState(false);
   const [editItem, setEditItem] = useState<
     {
       id: string; tipo: RepasseItemTipo; origem: RepasseItemOrigem;
@@ -194,6 +196,41 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
   const podeEditarItens = repasse?.status === "aberto";
   const podeEditarBenef = !!repasse && repasse.status !== "pago" && repasse.status !== "cancelado";
+
+  const origemLabel = (o: RepasseItemOrigem) => origens.find((x) => x.v === o)?.l ?? o;
+
+  // Duplicidade: mesmo tipo + origem + imóvel dentro da competência (itens manuais)
+  const itemDuplicadoDe = (
+    dados: { tipo: RepasseItemTipo; origem: RepasseItemOrigem; imovel_id: string | null },
+    ignorarId?: string,
+  ) =>
+    (repasse?.itens ?? []).find(
+      (it) =>
+        it.id !== ignorarId &&
+        !it.lancamento_id &&
+        it.tipo === dados.tipo &&
+        it.origem === dados.origem &&
+        (it.imovel_id ?? null) === (dados.imovel_id ?? null),
+    ) ?? null;
+
+  // Pessoas distintas com movimento ou limite no ano selecionado
+  const pessoasDoAno = (() => {
+    const map = new Map<string, string>();
+    competencias
+      .filter((c) => c.competencia.slice(0, 4) === String(anoSelecionado))
+      .forEach((c) =>
+        (c.beneficiarios ?? []).forEach((b) =>
+          map.set(b.pessoa_id, b.pessoa?.nome ?? "—"),
+        ),
+      );
+    (limitesAnuais.data ?? []).forEach((l) => {
+      if (!map.has(l.pessoa_id)) {
+        const p = (pessoas.data ?? []).find((x) => x.id === l.pessoa_id);
+        map.set(l.pessoa_id, p?.nome ?? "—");
+      }
+    });
+    return Array.from(map.entries()).map(([id, nome]) => ({ id, nome }));
+  })();
 
   async function adicionarCompetencia() {
     if (!conta || !novaComp) { toast.error("Informe o mês/ano da competência"); return; }
@@ -251,6 +288,16 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
       toast.error("Preencha descrição e valor");
       return;
     }
+    const dup = itemDuplicadoDe(novo);
+    if (dup) {
+      setItemDuplicado({
+        id: dup.id,
+        label: `${novo.tipo === "credito" ? "Crédito" : "Débito"} / ${origemLabel(novo.origem)}${
+          novo.imovel_id ? ` — ${imovelLabel(novo.imovel_id)}` : " — sem imóvel"
+        }`,
+      });
+      return;
+    }
     try {
       await saveItem.mutateAsync({ repasse_id: repasse.id, ...novo } as any);
       setNovo({ tipo: "credito", origem: "aluguel", descricao: "", valor: 0, imovel_id: null });
@@ -264,8 +311,15 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
       return;
     }
     const limAno = limiteAnualDe(novoBenef.pessoa_id);
-    if (limAno !== null && recebidoNoAno(novoBenef.pessoa_id) + novoBenef.valor > Number(limAno) + 0.009) {
-      toast.warning("Atenção: este valor ultrapassa o limite anual cadastrado para o beneficiário.");
+    const limAnoNovo = novoBenef.limite_anual !== "" ? Number(novoBenef.limite_anual) : limAno;
+    if (
+      limAnoNovo !== null &&
+      recebidoNoAno(novoBenef.pessoa_id) + novoBenef.valor > Number(limAnoNovo) + 0.009
+    ) {
+      toast.error(
+        `Limite do ano ${anoSelecionado} atingido para este beneficiário. Aumente o "Limite ano" para liberar mais.`,
+      );
+      return;
     }
     try {
       await saveBenef.mutateAsync({
@@ -325,6 +379,15 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
       toast.error("Preencha descrição e valor");
       return;
     }
+    const dup = itemDuplicadoDe(editItem, editItem.id);
+    if (dup) {
+      toast.error(
+        `Já existe um item de ${editItem.tipo === "credito" ? "Crédito" : "Débito"} / ${origemLabel(
+          editItem.origem,
+        )} para este imóvel nesta competência.`,
+      );
+      return;
+    }
     try {
       await saveItem.mutateAsync({
         id: editItem.id, repasse_id: repasse.id, tipo: editItem.tipo,
@@ -341,6 +404,17 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     if (!editBenef.pessoa_id || editBenef.valor <= 0) {
       toast.error("Selecione a pessoa e informe um valor");
       return;
+    }
+    const limAnoEdit = editBenef.limite_anual === "" ? null : Number(editBenef.limite_anual);
+    if (limAnoEdit !== null) {
+      const outros = recebidoNoAno(editBenef.pessoa_id) -
+        (beneficiarios.find((b) => b.id === editBenef.id)?.valor ?? 0);
+      if (outros + editBenef.valor > limAnoEdit + 0.009) {
+        toast.error(
+          `Limite do ano ${anoSelecionado} atingido para este beneficiário. Aumente o "Limite ano" para liberar mais.`,
+        );
+        return;
+      }
     }
     try {
       await saveBenef.mutateAsync({
@@ -614,10 +688,98 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
             <p className="mb-2 text-xs text-muted-foreground">
               <strong>Valor</strong> é o que a pessoa recebe neste mês. <strong>Limite mês</strong> é o teto
-              dela na competência e <strong>Limite ano</strong> o teto no ano {anoSelecionado} (soma de todas
-              as competências). Quem estiver marcado em <strong>Sobra</strong> recebe todo o restante do
+              dela na competência e <strong>Limite ano</strong> o teto no ano {anoSelecionado}: é um
+              <strong> valor único para o ano todo</strong>, vale para todas as competências desta conta —
+              informar em um mês já vale para os demais (reinformar apenas substitui o valor).
+              Quem estiver marcado em <strong>Sobra</strong> recebe todo o restante do
               líquido ao usar “Distribuir por limite” — normalmente a proprietária.
             </p>
+
+            <div className="mb-3 rounded-md border">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium"
+                onClick={() => setLimitesAbertos((v) => !v)}
+              >
+                <span>Limites anuais de {anoSelecionado} · {pessoasDoAno.length} beneficiário(s)</span>
+                <span className="text-xs text-muted-foreground">
+                  {limitesAbertos ? "ocultar" : "mostrar"}
+                </span>
+              </button>
+              {limitesAbertos && (
+                <div className="border-t p-3">
+                  {pessoasDoAno.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">
+                      Nenhum beneficiário com movimento ou limite neste ano.
+                    </div>
+                  ) : (
+                    <Table className="table-fixed">
+                      <TableHeader><TableRow>
+                        <TableHead>Pessoa</TableHead>
+                        <TableHead className="text-right w-40">Limite do ano</TableHead>
+                        <TableHead className="text-right w-40">Consumido</TableHead>
+                        <TableHead className="text-right w-40">Saldo</TableHead>
+                        <TableHead className="w-40" />
+                      </TableRow></TableHeader>
+                      <TableBody>
+                        {pessoasDoAno.map((p) => {
+                          const lim = limiteAnualDe(p.id);
+                          const usado = recebidoNoAno(p.id);
+                          const saldo = lim === null ? null : Number(lim) - usado;
+                          return (
+                            <TableRow key={p.id}>
+                              <TableCell className="break-words">{p.nome}</TableCell>
+                              <TableCell className="text-right">
+                                {lim === null ? "sem limite" : money(Number(lim))}
+                              </TableCell>
+                              <TableCell className="text-right">{money(usado)}</TableCell>
+                              <TableCell
+                                className={`text-right ${
+                                  saldo !== null && saldo < 0 ? "text-destructive" : ""
+                                }`}
+                              >
+                                {saldo === null ? "—" : money(saldo)}
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min={0}
+                                  className="text-right"
+                                  placeholder="definir limite"
+                                  defaultValue={lim === null ? "" : String(lim)}
+                                  onBlur={(e) => {
+                                    const v = e.target.value;
+                                    const novoLim = v === "" ? null : Number(v);
+                                    if (novoLim === (lim === null ? null : Number(lim))) return;
+                                    saveLimiteAnual.mutate({
+                                      conta_id: conta.id,
+                                      pessoa_id: p.id,
+                                      ano: anoSelecionado,
+                                      valor_limite: novoLim,
+                                    }, {
+                                      onSuccess: () => {
+                                        limitesAnuais.refetch();
+                                        toast.success("Limite anual atualizado");
+                                      },
+                                      onError: (err: any) => toast.error(err?.message ?? "Erro"),
+                                    });
+                                  }}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  )}
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Um limite por beneficiário por ano. Ao atingir o limite, novos valores são bloqueados
+                    até que o limite seja aumentado aqui.
+                  </p>
+                </div>
+              )}
+            </div>
 
             <Table className="table-fixed">
               <TableHeader><TableRow>
@@ -712,7 +874,10 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                           <>
                             {money(Number(limiteAnualDe(b.pessoa_id)))}
                             <div className="text-[11px]">
-                              recebido {money(recebidoNoAno(b.pessoa_id))}
+                              consumido {money(recebidoNoAno(b.pessoa_id))}
+                            </div>
+                            <div className="text-[11px]">
+                              saldo {money(Number(limiteAnualDe(b.pessoa_id)) - recebidoNoAno(b.pessoa_id))}
                             </div>
                           </>
                         )}
@@ -818,9 +983,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               </div>
             )}
             <p className="mt-2 text-xs text-muted-foreground">
-              O limite anual é opcional, vale para o ano da competência ({anoSelecionado}) e pode ser
-              informado ao adicionar ou ao editar a linha do beneficiário. Apenas um beneficiário pode
-              ficar com a sobra.
+              O limite anual é opcional e único por beneficiário no ano {anoSelecionado} — informe uma vez
+              (aqui, na edição da linha ou no painel “Limites anuais”) e ele vale para todas as
+              competências desta conta. Apenas um beneficiário pode ficar com a sobra.
             </p>
             </>
             )}
@@ -1131,9 +1296,41 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={!!itemDuplicado} onOpenChange={(o) => !o && setItemDuplicado(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Item já existe nesta competência</AlertDialogTitle>
+            <AlertDialogDescription>
+              Já existe um item de {itemDuplicado?.label} nesta competência. Não é permitido lançar o
+              mesmo tipo, origem e imóvel duas vezes — edite o item existente e ajuste o valor.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                const it = (repasse?.itens ?? []).find((x) => x.id === itemDuplicado?.id);
+                if (it) {
+                  setEditItem({
+                    id: it.id, tipo: it.tipo, origem: it.origem,
+                    descricao: it.descricao, valor: Number(it.valor),
+                    imovel_id: it.imovel_id ?? null,
+                  });
+                }
+                setItemDuplicado(null);
+              }}
+            >
+              Editar o item existente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
+
 
 export function RepasseDialog(props: Props) {
   return (
