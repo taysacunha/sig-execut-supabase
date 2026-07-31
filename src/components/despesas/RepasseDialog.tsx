@@ -761,7 +761,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
             </Table>
 
             {podeEditarBenef && (
-              <div className="mt-3 grid gap-2 md:grid-cols-[2fr_minmax(130px,1fr)_minmax(130px,1fr)_minmax(140px,1fr)_1.4fr_auto] items-end">
+              <div className="mt-3 grid gap-2 md:grid-cols-[1.8fr_minmax(110px,1fr)_minmax(110px,1fr)_minmax(110px,1fr)_minmax(130px,1fr)_1.2fr_auto_auto] items-end">
                 <div className="space-y-1">
                   <Label>Pessoa</Label>
                   <ComboboxSelect
@@ -777,16 +777,22 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label>Valor</Label>
+                  <Label>Valor (do mês)</Label>
                   <Input type="number" step="0.01" min={0} className="text-right"
                     value={novoBenef.valor}
                     onChange={(e) => setNovoBenef({ ...novoBenef, valor: Number(e.target.value) })} />
                 </div>
                 <div className="space-y-1">
-                  <Label>Limite mês</Label>
+                  <Label>Limite mês (teto)</Label>
                   <Input type="number" step="0.01" min={0} className="text-right" placeholder="opcional"
                     value={novoBenef.valor_limite}
                     onChange={(e) => setNovoBenef({ ...novoBenef, valor_limite: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Limite ano {anoSelecionado}</Label>
+                  <Input type="number" step="0.01" min={0} className="text-right" placeholder="opcional"
+                    value={novoBenef.limite_anual}
+                    onChange={(e) => setNovoBenef({ ...novoBenef, limite_anual: e.target.value })} />
                 </div>
                 <div className="space-y-1">
                   <Label>Recebido em</Label>
@@ -797,11 +803,14 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                   <Label>Observação</Label>
                   <Input value={novoBenef.observacao}
                     onChange={(e) => setNovoBenef({ ...novoBenef, observacao: e.target.value })} />
-                  <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                </div>
+                <div className="space-y-1">
+                  <Label className="whitespace-nowrap">Sobra</Label>
+                  <div className="flex h-10 items-center justify-center">
                     <input type="checkbox" checked={novoBenef.is_residual}
+                      title="Recebe o valor restante do mês"
                       onChange={(e) => setNovoBenef({ ...novoBenef, is_residual: e.target.checked })} />
-                    Recebe a sobra
-                  </label>
+                  </div>
                 </div>
                 <Button onClick={adicionarBenef} disabled={saveBenef.isPending} title="Adicionar beneficiário">
                   <Plus className="h-4 w-4" />
