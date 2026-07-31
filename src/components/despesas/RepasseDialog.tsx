@@ -499,10 +499,10 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
           </TabsContent>
 
           <TabsContent value="itens" className="mt-3">
-          <Table>
+          <Table className="table-fixed">
           <TableHeader><TableRow>
-            <TableHead>Tipo</TableHead><TableHead>Origem</TableHead>
-            <TableHead>Descrição</TableHead><TableHead className="text-right">Valor</TableHead>
+            <TableHead className="w-[14%]">Tipo</TableHead><TableHead className="w-[18%]">Origem</TableHead>
+            <TableHead>Descrição</TableHead><TableHead className="text-right w-[16%]">Valor</TableHead>
             <TableHead className="w-24" />
           </TableRow></TableHeader>
           <TableBody>
