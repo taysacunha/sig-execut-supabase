@@ -203,12 +203,17 @@ export default function DespesasRepasses() {
                         <div className="flex flex-wrap gap-1">
                           {t.count === 0 ? (
                             <span className="text-sm text-muted-foreground">Nenhuma</span>
-                          ) : (c.competencias ?? []).slice(0, 6).map((r) => (
-                            <Badge key={r.id} variant={r.status === "pago" ? "default" : "secondary"}>
-                              {mesLabel(r.competencia)}
+                          ) : resumoPorAno(c).map((a) => (
+                            <Badge
+                              key={a.ano}
+                              variant={a.pagas === a.total ? "default" : "secondary"}
+                              className="cursor-pointer"
+                              title={a.meses}
+                              onClick={() => setDetalheId(c.id)}
+                            >
+                              {a.ano} · {a.total} comp. · {a.pagas} pagas
                             </Badge>
                           ))}
-                          {t.count > 6 && <Badge variant="outline">+{t.count - 6}</Badge>}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">{money(t.bruto)}</TableCell>
