@@ -1251,9 +1251,6 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir competência?</AlertDialogTitle>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir competência?</AlertDialogTitle>
             <AlertDialogDescription>
               {confirmDelComp ? mesLabel(confirmDelComp.competencia) : ""} — todos os itens e
               beneficiários deste mês serão removidos. Esta ação não pode ser desfeita.
