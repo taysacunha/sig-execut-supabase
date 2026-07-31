@@ -188,6 +188,7 @@ export default function DespesasImoveis() {
                 <TableHead>Situação</TableHead>
                 <TableHead>Centro</TableHead>
                 <TableHead>Proprietário</TableHead>
+                <TableHead>Locatário / Inquilino</TableHead>
                 <TableHead className="text-right">Aluguel</TableHead>
                 <TableHead className="text-right w-40">Ações</TableHead>
               </TableRow></TableHeader>
@@ -199,6 +200,16 @@ export default function DespesasImoveis() {
                     <TableCell>{situacaoLabel[i.situacao] ?? i.situacao}</TableCell>
                     <TableCell>{i.centro_custo?.nome ?? "—"}</TableCell>
                     <TableCell>{i.proprietario?.nome ?? "—"}</TableCell>
+                    <TableCell>
+                      {i.inquilino ? (
+                        <div>
+                          <div className="font-medium">{i.inquilino.nome}</div>
+                          {i.inquilino.cpf_cnpj && (
+                            <div className="text-xs text-muted-foreground">{i.inquilino.cpf_cnpj}</div>
+                          )}
+                        </div>
+                      ) : "—"}
+                    </TableCell>
                     <TableCell className="text-right">{money(i.valor_aluguel)}</TableCell>
                     <TableCell className="text-right space-x-1">
                       {podeEditar("imoveis") && (
