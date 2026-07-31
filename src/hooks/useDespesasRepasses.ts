@@ -342,6 +342,15 @@ export function useUpdateRepasseCampos() {
 
 export function useSaveRepasseItem() {
   const qc = useQueryClient();
+  const traduz = (error: any) => {
+    const msg = String(error?.message ?? "");
+    if (error?.code === "23505" || /duplicate key|unique/i.test(msg)) {
+      return new Error(
+        "Já existe um item com o mesmo tipo, origem e imóvel nesta competência. Edite o item existente.",
+      );
+    }
+    return error;
+  };
   return useMutation({
     mutationFn: async (input: Partial<RepasseItem> & { repasse_id: string }) => {
       if (input.id) {
@@ -349,12 +358,12 @@ export function useSaveRepasseItem() {
           .from("despesas_repasse_itens" as any)
           .update(input as any)
           .eq("id", input.id);
-        if (error) throw error;
+        if (error) throw traduz(error);
       } else {
         const { error } = await supabase
           .from("despesas_repasse_itens" as any)
           .insert(input as any);
-        if (error) throw error;
+        if (error) throw traduz(error);
       }
     },
     onSuccess: () => {
