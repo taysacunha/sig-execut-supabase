@@ -411,30 +411,34 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
           </div>
         </DialogHeader>
 
-        {/* Barra de competências */}
-        <div className="flex flex-wrap items-center gap-2 rounded-md border p-2">
-          <Button
-            size="sm"
-            variant={selecionada === "todas" ? "default" : "outline"}
-            onClick={() => setSelecionada("todas")}
-          >
-            Todas
-          </Button>
-          {competencias.map((c) => (
+        {/* Barra de competências: anos + meses */}
+        <div className="space-y-2 rounded-md border p-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
-              key={c.id}
               size="sm"
-              variant={selecionada === c.competencia ? "default" : "outline"}
-              onClick={() => setSelecionada(c.competencia)}
-              className="gap-2"
+              variant={selecionada === "todas" ? "default" : "outline"}
+              onClick={() => setSelecionada("todas")}
             >
-              {mesLabel(c.competencia)}
-              <Badge variant="secondary" className="px-1 text-[10px]">
-                {statusLabel[c.status]}
-              </Badge>
+              Todas
             </Button>
-          ))}
-          <div className="flex items-center gap-2 shrink-0">
+            {anos.map((a) => (
+              <Button
+                key={a}
+                size="sm"
+                variant={anoAba === a && selecionada !== "todas" ? "default" : "outline"}
+                onClick={() => {
+                  setAnoAba(a);
+                  const doAno = competencias
+                    .filter((c) => c.competencia.slice(0, 4) === a)
+                    .map((c) => c.competencia)
+                    .sort();
+                  setSelecionada(doAno[0] ?? "todas");
+                }}
+              >
+                {a}
+              </Button>
+            ))}
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
             <Button size="sm" variant="ghost" onClick={() => setAddOpen((v) => !v)}>
               <CalendarPlus className="h-4 w-4 mr-1" />Competência
             </Button>
@@ -455,7 +459,32 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                 </Button>
               </div>
             )}
+            </div>
           </div>
+          {selecionada !== "todas" && (
+            <div className="flex flex-wrap items-center gap-2 border-t pt-2">
+              {mesesDoAno.length === 0 ? (
+                <span className="text-xs text-muted-foreground">
+                  Nenhuma competência neste ano.
+                </span>
+              ) : (
+                mesesDoAno.map((c) => (
+                  <Button
+                    key={c.id}
+                    size="sm"
+                    variant={selecionada === c.competencia ? "default" : "outline"}
+                    onClick={() => setSelecionada(c.competencia)}
+                    className="gap-2"
+                  >
+                    {mesLabel(c.competencia)}
+                    <Badge variant="secondary" className="px-1 text-[10px]">
+                      {statusLabel[c.status]}
+                    </Badge>
+                  </Button>
+                ))
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border px-4 py-2 text-sm">
