@@ -668,14 +668,14 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                         <Input type="date" className="w-full" value={editBenef.data_recebimento}
                           onChange={(e) => setEditBenef({ ...editBenef, data_recebimento: e.target.value })} />
                       </TableCell>
+                      <TableCell className="text-center">
+                        <input type="checkbox" checked={editBenef.is_residual}
+                          title="Recebe o valor restante do mês"
+                          onChange={(e) => setEditBenef({ ...editBenef, is_residual: e.target.checked })} />
+                      </TableCell>
                       <TableCell>
                         <Input value={editBenef.observacao}
                           onChange={(e) => setEditBenef({ ...editBenef, observacao: e.target.value })} />
-                        <label className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                          <input type="checkbox" checked={editBenef.is_residual}
-                            onChange={(e) => setEditBenef({ ...editBenef, is_residual: e.target.checked })} />
-                          Recebe a sobra
-                        </label>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         <Button size="icon" variant="ghost" onClick={salvarBenefEdit} disabled={saveBenef.isPending} title="Salvar">
