@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
@@ -6,6 +6,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -17,12 +18,12 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, CheckCircle2, XCircle, Pencil, Check, X } from "lucide-react";
+import { Plus, Trash2, Pencil, Check, X, CalendarPlus } from "lucide-react";
 import {
-  Repasse, RepasseItemOrigem, RepasseItemTipo,
+  Repasse, RepasseConta, RepasseItemOrigem, RepasseItemTipo,
   useSaveRepasseItem, useDeleteRepasseItem, useUpdateRepasseStatus,
   useSaveRepasseBeneficiario, useDeleteRepasseBeneficiario,
-  useRepasseInquilinos,
+  useRepasseInquilinos, useAddCompetencia, useLimitesAnuais, useSaveLimiteAnual,
 } from "@/hooks/useDespesasRepasses";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
 import { usePessoas } from "@/hooks/useDespesasPessoas";
@@ -31,7 +32,7 @@ import { useDespesasValues } from "@/contexts/DespesasValuesContext";
 interface Props {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  repasse: Repasse | null;
+  conta: RepasseConta | null;
 }
 
 const origens: { v: RepasseItemOrigem; l: string }[] = [
@@ -43,7 +44,17 @@ const origens: { v: RepasseItemOrigem; l: string }[] = [
   { v: "outro", l: "Outro" },
 ];
 
-export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
+const statusLabel: Record<string, string> = {
+  aberto: "Aberto", fechado: "Fechado", pago: "Pago", cancelado: "Cancelado",
+};
+
+function mesLabel(competencia: string) {
+  return new Date(competencia + "T00:00:00")
+    .toLocaleDateString("pt-BR", { month: "short", year: "numeric" })
+    .replace(".", "");
+}
+
+export function RepasseDialog({ open, onOpenChange, conta }: Props) {
   const { showValues, formatValue } = useDespesasValues();
   const money = (n: number) => (showValues ? formatValue(n) : "R$ ******");
   const saveItem = useSaveRepasseItem();
@@ -51,8 +62,31 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
   const updStatus = useUpdateRepasseStatus();
   const saveBenef = useSaveRepasseBeneficiario();
   const delBenef = useDeleteRepasseBeneficiario();
+  const addComp = useAddCompetencia();
+  const saveLimiteAnual = useSaveLimiteAnual();
   const pessoas = usePessoas({});
-  const inquilinos = useRepasseInquilinos(repasse);
+  const inquilinos = useRepasseInquilinos(conta?.proprietario_id ?? null);
+
+  const competencias = useMemo(
+    () => (conta?.competencias ?? []).slice().sort((a, b) => (a.competencia < b.competencia ? 1 : -1)),
+    [conta],
+  );
+
+  const [selecionada, setSelecionada] = useState<string>("todas");
+  useEffect(() => {
+    setSelecionada(competencias.length ? competencias[0].competencia : "todas");
+  }, [conta?.id, competencias.length]);
+
+  const repasse: Repasse | null =
+    selecionada === "todas" ? null : competencias.find((c) => c.competencia === selecionada) ?? null;
+
+  const anoSelecionado = repasse
+    ? Number(repasse.competencia.slice(0, 4))
+    : new Date().getFullYear();
+  const limitesAnuais = useLimitesAnuais(conta?.id ?? null, anoSelecionado);
+
+  const [novaComp, setNovaComp] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
 
   const benefVazio = {
     pessoa_id: null as string | null,
@@ -63,36 +97,80 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
     observacao: "",
   };
   const [novoBenef, setNovoBenef] = useState(benefVazio);
+  const [novo, setNovo] = useState<{
+    tipo: RepasseItemTipo; origem: RepasseItemOrigem; descricao: string;
+    valor: number; imovel_id: string | null;
+  }>({ tipo: "credito", origem: "aluguel", descricao: "", valor: 0, imovel_id: null });
 
   useEffect(() => {
-    setNovoBenef({
-      pessoa_id: null, valor: 0, valor_limite: "", data_recebimento: "",
-      is_residual: false, observacao: "",
-    });
+    setNovoBenef(benefVazio);
+    setNovo({ tipo: "credito", origem: "aluguel", descricao: "", valor: 0, imovel_id: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repasse?.id]);
-
-  const [novo, setNovo] = useState<{
-    tipo: RepasseItemTipo; origem: RepasseItemOrigem; descricao: string; valor: number;
-  }>({ tipo: "credito", origem: "aluguel", descricao: "", valor: 0 });
 
   const [confirmDelete, setConfirmDelete] = useState<
     { tipo: "item" | "benef"; id: string; label: string } | null
   >(null);
   const [editItem, setEditItem] = useState<
-    { id: string; tipo: RepasseItemTipo; origem: RepasseItemOrigem; descricao: string; valor: number } | null
+    {
+      id: string; tipo: RepasseItemTipo; origem: RepasseItemOrigem;
+      descricao: string; valor: number; imovel_id: string | null;
+    } | null
   >(null);
   const [editBenef, setEditBenef] = useState<
     {
       id: string; pessoa_id: string | null; valor: number; valor_limite: string;
-      data_recebimento: string; is_residual: boolean; observacao: string;
+      limite_anual: string; data_recebimento: string; is_residual: boolean; observacao: string;
     } | null
   >(null);
 
-  if (!repasse) return null;
+  if (!conta) return null;
 
-  const beneficiarios = repasse.beneficiarios ?? [];
+  const imovelOptions = (inquilinos.data ?? []).map((i) => ({
+    value: i.imovel_id,
+    label: `${i.imovel_codigo ? `${i.imovel_codigo} — ` : ""}${i.imovel_descricao}`,
+    keywords: [i.endereco ?? "", i.inquilino?.nome ?? ""],
+  }));
+  const imovelLabel = (id: string | null | undefined) =>
+    id ? imovelOptions.find((o) => o.value === id)?.label ?? "—" : "—";
+
+  // Totais: competência selecionada ou consolidado de todas
+  const base = repasse ? [repasse] : competencias;
+  const totalBruto = base.reduce((s, r) => s + Number(r.valor_bruto || 0), 0);
+  const totalTaxa = base.reduce((s, r) => s + Number(r.taxa_administracao_valor || 0), 0);
+  const totalLiquido = base.reduce((s, r) => s + Number(r.valor_liquido || 0), 0);
+
+  const beneficiarios = repasse?.beneficiarios ?? [];
   const distribuido = beneficiarios.reduce((s, b) => s + Number(b.valor || 0), 0);
-  const restante = Number(repasse.valor_liquido || 0) - distribuido;
+  const restante = Number(repasse?.valor_liquido || 0) - distribuido;
+
+  const limiteAnualDe = (pessoaId: string) =>
+    limitesAnuais.data?.find((l) => l.pessoa_id === pessoaId)?.valor_limite ?? null;
+
+  const recebidoNoAno = (pessoaId: string) =>
+    competencias
+      .filter((c) => c.competencia.slice(0, 4) === String(anoSelecionado))
+      .reduce(
+        (s, c) =>
+          s + (c.beneficiarios ?? [])
+            .filter((b) => b.pessoa_id === pessoaId)
+            .reduce((t, b) => t + Number(b.valor || 0), 0),
+        0,
+      );
+
+  const podeEditarItens = repasse?.status === "aberto";
+  const podeEditarBenef = !!repasse && repasse.status !== "pago" && repasse.status !== "cancelado";
+
+  async function adicionarCompetencia() {
+    if (!conta || !novaComp) { toast.error("Informe o mês/ano da competência"); return; }
+    try {
+      await addComp.mutateAsync({ contaId: conta.id, competencia: `${novaComp}-01` });
+      toast.success("Competência adicionada");
+      setSelecionada(`${novaComp}-01`);
+      setAddOpen(false);
+      setNovaComp("");
+    } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+  }
 
   async function adicionar() {
     if (!repasse) return;
@@ -101,16 +179,20 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
       return;
     }
     try {
-      await saveItem.mutateAsync({ repasse_id: repasse.id, ...novo });
-      setNovo({ tipo: "credito", origem: "aluguel", descricao: "", valor: 0 });
+      await saveItem.mutateAsync({ repasse_id: repasse.id, ...novo } as any);
+      setNovo({ tipo: "credito", origem: "aluguel", descricao: "", valor: 0, imovel_id: null });
     } catch (e: any) { toast.error(e?.message ?? "Erro"); }
   }
 
   async function adicionarBenef() {
-    if (!repasse) return;
+    if (!repasse || !conta) return;
     if (!novoBenef.pessoa_id || novoBenef.valor <= 0) {
       toast.error("Selecione a pessoa e informe um valor");
       return;
+    }
+    const limAno = limiteAnualDe(novoBenef.pessoa_id);
+    if (limAno !== null && recebidoNoAno(novoBenef.pessoa_id) + novoBenef.valor > Number(limAno) + 0.009) {
+      toast.warning("Atenção: este valor ultrapassa o limite anual cadastrado para o beneficiário.");
     }
     try {
       await saveBenef.mutateAsync({
@@ -121,12 +203,9 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
         data_recebimento: novoBenef.data_recebimento || null,
         is_residual: novoBenef.is_residual,
         observacao: novoBenef.observacao || null,
-        ordem: (repasse.beneficiarios?.length ?? 0) + 1,
+        ordem: beneficiarios.length + 1,
       } as any);
-      setNovoBenef({
-        pessoa_id: null, valor: 0, valor_limite: "", data_recebimento: "",
-        is_residual: false, observacao: "",
-      });
+      setNovoBenef(benefVazio);
     } catch (e: any) { toast.error(e?.message ?? "Erro"); }
   }
 
@@ -145,12 +224,9 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
         id: repasse.id, status: "pago",
         data_pagamento: new Date().toISOString().slice(0, 10),
       });
-      toast.success("Repasse marcado como pago — lançamento criado no calendário");
+      toast.success("Competência marcada como paga — lançamento criado no calendário");
     } catch (e: any) { toast.error(e?.message ?? "Erro"); }
   }
-
-  const podeEditarItens = repasse.status === "aberto";
-  const podeEditarBenef = repasse.status !== "pago" && repasse.status !== "cancelado";
 
   async function confirmarExclusao() {
     if (!confirmDelete) return;
@@ -171,15 +247,16 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
     try {
       await saveItem.mutateAsync({
         id: editItem.id, repasse_id: repasse.id, tipo: editItem.tipo,
-        origem: editItem.origem, descricao: editItem.descricao, valor: editItem.valor,
-      });
+        origem: editItem.origem, descricao: editItem.descricao,
+        valor: editItem.valor, imovel_id: editItem.imovel_id,
+      } as any);
       toast.success("Item atualizado");
       setEditItem(null);
     } catch (e: any) { toast.error(e?.message ?? "Erro"); }
   }
 
   async function salvarBenefEdit() {
-    if (!repasse || !editBenef) return;
+    if (!repasse || !conta || !editBenef) return;
     if (!editBenef.pessoa_id || editBenef.valor <= 0) {
       toast.error("Selecione a pessoa e informe um valor");
       return;
@@ -193,6 +270,12 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
         is_residual: editBenef.is_residual,
         observacao: (editBenef.observacao || null) as any,
       } as any);
+      await saveLimiteAnual.mutateAsync({
+        conta_id: conta.id,
+        pessoa_id: editBenef.pessoa_id,
+        ano: anoSelecionado,
+        valor_limite: editBenef.limite_anual === "" ? null : Number(editBenef.limite_anual),
+      });
       toast.success("Beneficiário atualizado");
       setEditBenef(null);
     } catch (e: any) { toast.error(e?.message ?? "Erro"); }
@@ -214,15 +297,18 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
     const updates: { id: string; pessoa_id: string; valor: number }[] = [];
     for (const b of lista) {
       if (b.id === residual.id) continue;
-      const limite = b.valor_limite === null || b.valor_limite === undefined
+      const limiteMes = b.valor_limite === null || b.valor_limite === undefined
         ? saldo : Number(b.valor_limite);
-      const v = Math.max(0, Math.min(limite, saldo));
+      const limAno = limiteAnualDe(b.pessoa_id);
+      const saldoAnual = limAno === null
+        ? Infinity
+        : Math.max(0, Number(limAno) - (recebidoNoAno(b.pessoa_id) - Number(b.valor || 0)));
+      const v = Math.max(0, Math.min(limiteMes, saldo, saldoAnual));
       saldo = Number((saldo - v).toFixed(2));
       updates.push({ id: b.id, pessoa_id: b.pessoa_id, valor: v });
     }
     updates.push({ id: residual.id, pessoa_id: residual.pessoa_id, valor: Number(saldo.toFixed(2)) });
     try {
-      // zera antes para não estourar a validação de soma no banco
       for (const u of updates) {
         await saveBenef.mutateAsync({ id: u.id, repasse_id: repasse.id, pessoa_id: u.pessoa_id, valor: 0 } as any);
       }
@@ -233,173 +319,467 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
     } catch (e: any) { toast.error(e?.message ?? "Erro ao distribuir"); }
   }
 
+  const totalItens = repasse
+    ? (repasse.itens ?? []).length
+    : competencias.reduce((s, c) => s + (c.itens ?? []).length, 0);
+  const totalBenef = repasse
+    ? beneficiarios.length
+    : competencias.reduce((s, c) => s + (c.beneficiarios ?? []).length, 0);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl w-[95vw]">
         <DialogHeader>
           <DialogTitle>
-            Repasse — {repasse.proprietario?.nome} — {new Date(repasse.competencia + "T00:00:00").toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
+            Repasse — {conta.proprietario?.nome}
+            <span className="text-muted-foreground font-normal"> · {conta.centro_custo?.nome}</span>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border px-4 py-2 text-sm">
-          <span className="text-muted-foreground">
-            Bruto <span className="font-semibold text-foreground">{money(repasse.valor_bruto)}</span>
-          </span>
-          <span className="text-muted-foreground">
-            Taxa admin.{" "}
-            <span className="font-semibold text-destructive">−{money(repasse.taxa_administracao_valor)}</span>
-          </span>
-          <span className="text-muted-foreground">
-            Líquido <span className="font-semibold text-primary">{money(repasse.valor_liquido)}</span>
-          </span>
-          <span className="text-muted-foreground">
-            Status <span className="font-semibold capitalize text-foreground">{repasse.status.replace("_", " ")}</span>
-          </span>
+        {/* Barra de competências */}
+        <div className="flex flex-wrap items-center gap-2 rounded-md border p-2">
+          <Button
+            size="sm"
+            variant={selecionada === "todas" ? "default" : "outline"}
+            onClick={() => setSelecionada("todas")}
+          >
+            Todas
+          </Button>
+          {competencias.map((c) => (
+            <Button
+              key={c.id}
+              size="sm"
+              variant={selecionada === c.competencia ? "default" : "outline"}
+              onClick={() => setSelecionada(c.competencia)}
+              className="gap-2"
+            >
+              {mesLabel(c.competencia)}
+              <Badge variant="secondary" className="px-1 text-[10px]">
+                {statusLabel[c.status]}
+              </Badge>
+            </Button>
+          ))}
+          <Button size="sm" variant="ghost" onClick={() => setAddOpen((v) => !v)}>
+            <CalendarPlus className="h-4 w-4 mr-1" />Competência
+          </Button>
+          {addOpen && (
+            <div className="flex items-center gap-2">
+              <Input
+                type="month" className="h-9 w-40"
+                value={novaComp}
+                onChange={(e) => setNovaComp(e.target.value)}
+              />
+              <Button size="sm" onClick={adicionarCompetencia} disabled={addComp.isPending}>
+                Adicionar
+              </Button>
+            </div>
+          )}
         </div>
 
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border px-4 py-2 text-sm">
+          <span className="text-muted-foreground">
+            {repasse ? mesLabel(repasse.competencia) : `Consolidado · ${competencias.length} competência(s)`}
+          </span>
+          <span className="text-muted-foreground">
+            Bruto <span className="font-semibold text-foreground">{money(totalBruto)}</span>
+          </span>
+          <span className="text-muted-foreground">
+            Taxa admin. <span className="font-semibold text-destructive">−{money(totalTaxa)}</span>
+          </span>
+          <span className="text-muted-foreground">
+            Líquido <span className="font-semibold text-primary">{money(totalLiquido)}</span>
+          </span>
+          {repasse && (
+            <span className="text-muted-foreground">
+              Status <span className="font-semibold text-foreground">{statusLabel[repasse.status]}</span>
+            </span>
+          )}
+        </div>
+
+        {competencias.length === 0 ? (
+          <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">
+            Nenhuma competência cadastrada. Use o botão “Competência” acima para adicionar o primeiro mês.
+          </div>
+        ) : (
         <Tabs defaultValue="beneficiarios" className="w-full">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="beneficiarios">Beneficiários · {beneficiarios.length}</TabsTrigger>
-            <TabsTrigger value="itens">Itens · {(repasse.itens ?? []).length}</TabsTrigger>
+            <TabsTrigger value="beneficiarios">Beneficiários · {totalBenef}</TabsTrigger>
+            <TabsTrigger value="itens">Itens · {totalItens}</TabsTrigger>
             <TabsTrigger value="imoveis">Imóveis · {(inquilinos.data ?? []).length}</TabsTrigger>
           </TabsList>
 
+          {/* ------------------------------ BENEFICIÁRIOS */}
           <TabsContent value="beneficiarios" className="mt-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-sm">Distribuição</h3>
-              {podeEditarBenef && (
-                <Button type="button" variant="outline" size="sm" onClick={distribuir}
-                  disabled={saveBenef.isPending} title="Distribuir respeitando os limites">
-                  Distribuir por limite
+            {!repasse ? (
+              <div className="space-y-4">
+                {competencias.map((c) => (
+                  <div key={c.id}>
+                    <div className="mb-1 text-sm font-semibold">
+                      {mesLabel(c.competencia)}{" "}
+                      <span className="text-muted-foreground font-normal">
+                        · líquido {money(Number(c.valor_liquido))} · {statusLabel[c.status]}
+                      </span>
+                    </div>
+                    <Table className="table-fixed">
+                      <TableHeader><TableRow>
+                        <TableHead>Pessoa</TableHead>
+                        <TableHead className="text-right w-40">Valor</TableHead>
+                        <TableHead className="text-right w-40">Limite mensal</TableHead>
+                        <TableHead className="w-36">Recebido em</TableHead>
+                      </TableRow></TableHeader>
+                      <TableBody>
+                        {(c.beneficiarios ?? []).length === 0 ? (
+                          <TableRow><TableCell colSpan={4} className="text-sm text-muted-foreground">
+                            Sem beneficiários nesta competência.
+                          </TableCell></TableRow>
+                        ) : (c.beneficiarios ?? []).slice().sort((a, b) => a.ordem - b.ordem).map((b) => (
+                          <TableRow key={b.id}>
+                            <TableCell>{b.pessoa?.nome ?? "—"}{b.is_residual ? " · sobra" : ""}</TableCell>
+                            <TableCell className="text-right">{money(Number(b.valor))}</TableCell>
+                            <TableCell className="text-right text-muted-foreground">
+                              {b.valor_limite == null ? "—" : money(Number(b.valor_limite))}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {b.data_recebimento
+                                ? new Date(b.data_recebimento + "T00:00:00").toLocaleDateString("pt-BR")
+                                : "—"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ))}
+              </div>
+            ) : (
+            <>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-sm">Distribuição de {mesLabel(repasse.competencia)}</h3>
+                {podeEditarBenef && (
+                  <Button type="button" variant="outline" size="sm" onClick={distribuir}
+                    disabled={saveBenef.isPending} title="Distribuir respeitando os limites mensal e anual">
+                    Distribuir por limite
+                  </Button>
+                )}
+              </div>
+              <div className="text-sm">
+                Distribuído: <span className="font-medium">{money(distribuido)}</span>
+                {" · "}Restante:{" "}
+                <span className={restante < 0 ? "text-destructive font-medium" : "text-emerald-600 font-medium"}>
+                  {money(restante)}
+                </span>
+              </div>
+            </div>
+
+            <Table className="table-fixed">
+              <TableHeader><TableRow>
+                <TableHead className="w-10">#</TableHead>
+                <TableHead className="w-[22%]">Pessoa</TableHead>
+                <TableHead className="text-right w-[13%]">Valor</TableHead>
+                <TableHead className="text-right w-[13%]">Limite mês</TableHead>
+                <TableHead className="text-right w-[16%]">Limite ano {anoSelecionado}</TableHead>
+                <TableHead className="w-[13%]">Recebido em</TableHead>
+                <TableHead>Observação</TableHead>
+                <TableHead className="w-24" />
+              </TableRow></TableHeader>
+              <TableBody>
+                {beneficiarios.slice().sort((a, b) => a.ordem - b.ordem).map((b, i) =>
+                  editBenef?.id === b.id ? (
+                    <TableRow key={b.id}>
+                      <TableCell>{i + 1}</TableCell>
+                      <TableCell>
+                        <ComboboxSelect
+                          value={editBenef.pessoa_id}
+                          onChange={(v) => setEditBenef({ ...editBenef, pessoa_id: v })}
+                          options={(pessoas.data ?? []).map((p) => ({
+                            value: p.id,
+                            label: `${p.nome} (${p.tipo_pessoa === "juridica" ? "PJ" : "PF"})`,
+                            keywords: [p.cpf_cnpj ?? "", ...(p.papeis ?? [])],
+                          }))}
+                          placeholder="Selecione uma pessoa"
+                          searchPlaceholder="Buscar…"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input type="number" step="0.01" min={0} className="text-right w-full"
+                          value={editBenef.valor}
+                          onChange={(e) => setEditBenef({ ...editBenef, valor: Number(e.target.value) })} />
+                      </TableCell>
+                      <TableCell>
+                        <Input type="number" step="0.01" min={0} className="text-right w-full"
+                          placeholder="sem limite" value={editBenef.valor_limite}
+                          onChange={(e) => setEditBenef({ ...editBenef, valor_limite: e.target.value })} />
+                      </TableCell>
+                      <TableCell>
+                        <Input type="number" step="0.01" min={0} className="text-right w-full"
+                          placeholder="opcional" value={editBenef.limite_anual}
+                          onChange={(e) => setEditBenef({ ...editBenef, limite_anual: e.target.value })} />
+                      </TableCell>
+                      <TableCell>
+                        <Input type="date" className="w-full" value={editBenef.data_recebimento}
+                          onChange={(e) => setEditBenef({ ...editBenef, data_recebimento: e.target.value })} />
+                      </TableCell>
+                      <TableCell>
+                        <Input value={editBenef.observacao}
+                          onChange={(e) => setEditBenef({ ...editBenef, observacao: e.target.value })} />
+                        <label className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                          <input type="checkbox" checked={editBenef.is_residual}
+                            onChange={(e) => setEditBenef({ ...editBenef, is_residual: e.target.checked })} />
+                          Recebe a sobra
+                        </label>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <Button size="icon" variant="ghost" onClick={salvarBenefEdit} disabled={saveBenef.isPending} title="Salvar">
+                          <Check className="h-4 w-4 text-emerald-600" />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => setEditBenef(null)} title="Cancelar">
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    <TableRow key={b.id}>
+                      <TableCell>{i + 1}</TableCell>
+                      <TableCell className="align-top">
+                        <div className="font-medium">{b.pessoa?.nome ?? "—"}</div>
+                        <div className="text-xs text-muted-foreground break-words">
+                          {b.pessoa?.tipo_pessoa === "juridica" ? "PJ" : "PF"}
+                          {b.pessoa?.cpf_cnpj ? ` · ${b.pessoa.cpf_cnpj}` : ""}
+                          {b.is_residual ? " · recebe a sobra" : ""}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">{money(Number(b.valor))}</TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {b.valor_limite == null ? "—" : money(Number(b.valor_limite))}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {limiteAnualDe(b.pessoa_id) === null ? "—" : (
+                          <>
+                            {money(Number(limiteAnualDe(b.pessoa_id)))}
+                            <div className="text-[11px]">
+                              recebido {money(recebidoNoAno(b.pessoa_id))}
+                            </div>
+                          </>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {b.data_recebimento
+                          ? new Date(b.data_recebimento + "T00:00:00").toLocaleDateString("pt-BR")
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground break-words">{b.observacao ?? ""}</TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {podeEditarBenef && (
+                          <>
+                            <Button size="icon" variant="ghost" title="Editar"
+                              onClick={() => setEditBenef({
+                                id: b.id, pessoa_id: b.pessoa_id, valor: Number(b.valor),
+                                valor_limite: b.valor_limite == null ? "" : String(b.valor_limite),
+                                limite_anual: limiteAnualDe(b.pessoa_id) === null
+                                  ? "" : String(limiteAnualDe(b.pessoa_id)),
+                                data_recebimento: b.data_recebimento ?? "",
+                                is_residual: b.is_residual,
+                                observacao: b.observacao ?? "",
+                              })}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" title="Excluir"
+                              onClick={() => setConfirmDelete({
+                                tipo: "benef", id: b.id, label: b.pessoa?.nome ?? "Beneficiário",
+                              })}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ),
+                )}
+              </TableBody>
+            </Table>
+
+            {podeEditarBenef && (
+              <div className="mt-3 grid gap-2 md:grid-cols-[2fr_minmax(130px,1fr)_minmax(130px,1fr)_minmax(140px,1fr)_1.4fr_auto] items-end">
+                <div className="space-y-1">
+                  <Label>Pessoa</Label>
+                  <ComboboxSelect
+                    value={novoBenef.pessoa_id}
+                    onChange={(v) => setNovoBenef({ ...novoBenef, pessoa_id: v })}
+                    options={(pessoas.data ?? []).map((p) => ({
+                      value: p.id,
+                      label: `${p.nome} (${p.tipo_pessoa === "juridica" ? "PJ" : "PF"})`,
+                      keywords: [p.cpf_cnpj ?? "", ...(p.papeis ?? [])],
+                    }))}
+                    placeholder="Selecione uma pessoa"
+                    searchPlaceholder="Buscar…"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Valor</Label>
+                  <Input type="number" step="0.01" min={0} className="text-right"
+                    value={novoBenef.valor}
+                    onChange={(e) => setNovoBenef({ ...novoBenef, valor: Number(e.target.value) })} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Limite mês</Label>
+                  <Input type="number" step="0.01" min={0} className="text-right" placeholder="opcional"
+                    value={novoBenef.valor_limite}
+                    onChange={(e) => setNovoBenef({ ...novoBenef, valor_limite: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Recebido em</Label>
+                  <Input type="date" value={novoBenef.data_recebimento}
+                    onChange={(e) => setNovoBenef({ ...novoBenef, data_recebimento: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Observação</Label>
+                  <Input value={novoBenef.observacao}
+                    onChange={(e) => setNovoBenef({ ...novoBenef, observacao: e.target.value })} />
+                  <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <input type="checkbox" checked={novoBenef.is_residual}
+                      onChange={(e) => setNovoBenef({ ...novoBenef, is_residual: e.target.checked })} />
+                    Recebe a sobra
+                  </label>
+                </div>
+                <Button onClick={adicionarBenef} disabled={saveBenef.isPending} title="Adicionar beneficiário">
+                  <Plus className="h-4 w-4" />
                 </Button>
-              )}
-            </div>
-            <div className="text-sm">
-              Distribuído: <span className="font-medium">{money(distribuido)}</span>
-              {" · "}Restante:{" "}
-              <span className={restante < 0 ? "text-destructive font-medium" : "text-emerald-600 font-medium"}>
-                {money(restante)}
-              </span>
-            </div>
-          </div>
-          <Table className="table-fixed">
-            <TableHeader><TableRow>
-              <TableHead className="w-10">#</TableHead>
-              <TableHead className="w-[26%]">Pessoa</TableHead>
-              <TableHead className="text-right w-[14%]">Valor</TableHead>
-              <TableHead className="text-right w-[13%]">Limite</TableHead>
-              <TableHead className="w-[13%]">Recebido em</TableHead>
-              <TableHead>Observação</TableHead>
-              <TableHead className="w-24" />
-            </TableRow></TableHeader>
-            <TableBody>
-              {beneficiarios
-                .slice()
-                .sort((a, b) => a.ordem - b.ordem)
-                .map((b, i) => editBenef?.id === b.id ? (
-                  <TableRow key={b.id}>
-                    <TableCell>{i + 1}</TableCell>
+              </div>
+            )}
+            <p className="mt-2 text-xs text-muted-foreground">
+              O limite anual é opcional e vale para o ano da competência ({anoSelecionado}); edite a linha
+              do beneficiário para defini-lo.
+            </p>
+            </>
+            )}
+          </TabsContent>
+
+          {/* ------------------------------ ITENS */}
+          <TabsContent value="itens" className="mt-3">
+            {!repasse ? (
+              <div className="space-y-4">
+                {competencias.map((c) => (
+                  <div key={c.id}>
+                    <div className="mb-1 text-sm font-semibold">
+                      {mesLabel(c.competencia)}{" "}
+                      <span className="text-muted-foreground font-normal">
+                        · bruto {money(Number(c.valor_bruto))} · taxa {money(Number(c.taxa_administracao_valor))}
+                        {" "}· líquido {money(Number(c.valor_liquido))}
+                      </span>
+                    </div>
+                    <Table className="table-fixed">
+                      <TableHeader><TableRow>
+                        <TableHead className="w-28">Tipo</TableHead>
+                        <TableHead className="w-32">Origem</TableHead>
+                        <TableHead>Descrição</TableHead>
+                        <TableHead className="w-[24%]">Imóvel</TableHead>
+                        <TableHead className="text-right w-36">Valor</TableHead>
+                      </TableRow></TableHeader>
+                      <TableBody>
+                        {(c.itens ?? []).length === 0 ? (
+                          <TableRow><TableCell colSpan={5} className="text-sm text-muted-foreground">
+                            Sem itens nesta competência.
+                          </TableCell></TableRow>
+                        ) : (c.itens ?? []).map((it) => (
+                          <TableRow key={it.id}>
+                            <TableCell>{it.tipo === "credito" ? "Crédito" : "Débito"}</TableCell>
+                            <TableCell>{origens.find((o) => o.v === it.origem)?.l ?? it.origem}</TableCell>
+                            <TableCell className="break-words">{it.descricao}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground break-words">
+                              {imovelLabel(it.imovel_id)}
+                            </TableCell>
+                            <TableCell className={`text-right ${it.tipo === "debito" ? "text-destructive" : ""}`}>
+                              {it.tipo === "debito" ? "−" : ""}{money(Number(it.valor))}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ))}
+              </div>
+            ) : (
+            <>
+            <Table className="table-fixed">
+              <TableHeader><TableRow>
+                <TableHead className="w-28">Tipo</TableHead>
+                <TableHead className="w-36">Origem</TableHead>
+                <TableHead>Descrição</TableHead>
+                <TableHead className="w-[22%]">Imóvel</TableHead>
+                <TableHead className="text-right w-36">Valor</TableHead>
+                <TableHead className="w-24" />
+              </TableRow></TableHeader>
+              <TableBody>
+                {(repasse.itens ?? []).map((it) => editItem?.id === it.id ? (
+                  <TableRow key={it.id}>
+                    <TableCell>
+                      <Select value={editItem.tipo} onValueChange={(v: RepasseItemTipo) => setEditItem({ ...editItem, tipo: v })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="credito">Crédito</SelectItem>
+                          <SelectItem value="debito">Débito</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <Select value={editItem.origem} onValueChange={(v: RepasseItemOrigem) => setEditItem({ ...editItem, origem: v })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>{origens.map(o => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <Input value={editItem.descricao}
+                        onChange={(e) => setEditItem({ ...editItem, descricao: e.target.value })} />
+                    </TableCell>
                     <TableCell>
                       <ComboboxSelect
-                        value={editBenef.pessoa_id}
-                        onChange={(v) => setEditBenef({ ...editBenef, pessoa_id: v })}
-                        options={(pessoas.data ?? []).map((p) => ({
-                          value: p.id,
-                          label: `${p.nome} (${p.tipo_pessoa === "juridica" ? "PJ" : "PF"})`,
-                          keywords: [p.cpf_cnpj ?? "", ...(p.papeis ?? [])],
-                        }))}
-                        placeholder="Selecione uma pessoa"
-                        searchPlaceholder="Buscar…"
+                        value={editItem.imovel_id}
+                        onChange={(v) => setEditItem({ ...editItem, imovel_id: v })}
+                        options={imovelOptions}
+                        placeholder="Sem imóvel"
+                        searchPlaceholder="Buscar imóvel…"
+                        allowClear
                       />
                     </TableCell>
                     <TableCell>
-                      <Input
-                        type="number" step="0.01" min={0} className="text-right w-full"
-                        value={editBenef.valor}
-                        onChange={(e) => setEditBenef({ ...editBenef, valor: Number(e.target.value) })}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number" step="0.01" min={0} className="text-right w-full"
-                        placeholder="sem limite"
-                        value={editBenef.valor_limite}
-                        onChange={(e) => setEditBenef({ ...editBenef, valor_limite: e.target.value })}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="date" className="w-full"
-                        value={editBenef.data_recebimento}
-                        onChange={(e) => setEditBenef({ ...editBenef, data_recebimento: e.target.value })}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        value={editBenef.observacao}
-                        onChange={(e) => setEditBenef({ ...editBenef, observacao: e.target.value })}
-                      />
-                      <label className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                        <input type="checkbox" checked={editBenef.is_residual}
-                          onChange={(e) => setEditBenef({ ...editBenef, is_residual: e.target.checked })} />
-                        Recebe a sobra
-                      </label>
+                      <Input type="number" step="0.01" className="text-right"
+                        value={editItem.valor}
+                        onChange={(e) => setEditItem({ ...editItem, valor: Number(e.target.value) })} />
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <Button size="icon" variant="ghost" onClick={salvarBenefEdit} disabled={saveBenef.isPending} title="Salvar">
+                      <Button size="icon" variant="ghost" onClick={salvarItemEdit} disabled={saveItem.isPending} title="Salvar">
                         <Check className="h-4 w-4 text-emerald-600" />
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => setEditBenef(null)} title="Cancelar">
+                      <Button size="icon" variant="ghost" onClick={() => setEditItem(null)} title="Cancelar">
                         <X className="h-4 w-4" />
                       </Button>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  <TableRow key={b.id}>
-                    <TableCell>{i + 1}</TableCell>
-                    <TableCell className="align-top">
-                      <div className="font-medium">{b.pessoa?.nome ?? "—"}</div>
-                      <div className="text-xs text-muted-foreground break-words">
-                        {b.pessoa?.tipo_pessoa === "juridica" ? "PJ" : "PF"}
-                        {b.pessoa?.cpf_cnpj ? ` · ${b.pessoa.cpf_cnpj}` : ""}
-                        {b.is_residual ? " · recebe a sobra" : ""}
-                      </div>
+                  <TableRow key={it.id}>
+                    <TableCell>{it.tipo === "credito" ? "Crédito" : "Débito"}</TableCell>
+                    <TableCell>{origens.find((o) => o.v === it.origem)?.l ?? it.origem}</TableCell>
+                    <TableCell className="break-words">{it.descricao}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground break-words">
+                      {imovelLabel(it.imovel_id)}
                     </TableCell>
-                    <TableCell className="text-right">{money(b.valor)}</TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {b.valor_limite === null || b.valor_limite === undefined ? "—" : money(Number(b.valor_limite))}
+                    <TableCell className={`text-right ${it.tipo === "debito" ? "text-destructive" : ""}`}>
+                      {it.tipo === "debito" ? "−" : ""}{money(Number(it.valor))}
                     </TableCell>
-                    <TableCell className="text-sm">
-                      {b.data_recebimento
-                        ? new Date(b.data_recebimento + "T00:00:00").toLocaleDateString("pt-BR")
-                        : "—"}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground break-words">{b.observacao ?? ""}</TableCell>
                     <TableCell className="whitespace-nowrap">
-                      {podeEditarBenef && (
+                      {podeEditarItens && (
                         <>
-                          <Button
-                            size="icon" variant="ghost" title="Editar"
-                            onClick={() => setEditBenef({
-                              id: b.id, pessoa_id: b.pessoa_id, valor: Number(b.valor),
-                              valor_limite: b.valor_limite === null || b.valor_limite === undefined
-                                ? "" : String(b.valor_limite),
-                              data_recebimento: b.data_recebimento ?? "",
-                              is_residual: !!b.is_residual,
-                              observacao: b.observacao ?? "",
-                            })}
-                          >
+                          <Button size="icon" variant="ghost" title="Editar"
+                            onClick={() => setEditItem({
+                              id: it.id, tipo: it.tipo, origem: it.origem,
+                              descricao: it.descricao, valor: Number(it.valor),
+                              imovel_id: it.imovel_id ?? null,
+                            })}>
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button
-                            size="icon" variant="ghost" title="Excluir"
-                            onClick={() => setConfirmDelete({
-                              tipo: "benef", id: b.id,
-                              label: `${b.pessoa?.nome ?? "Beneficiário"} — ${money(b.valor)}`,
-                            })}
-                          >
+                          <Button size="icon" variant="ghost" title="Excluir"
+                            onClick={() => setConfirmDelete({ tipo: "item", id: it.id, label: it.descricao })}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </>
@@ -407,215 +787,53 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                     </TableCell>
                   </TableRow>
                 ))}
-              {beneficiarios.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
-                    Nenhum beneficiário definido. Adicione ao menos um antes de baixar o repasse.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableBody>
+            </Table>
 
-          {podeEditarBenef && (
-            <div className="border rounded-md p-3 mt-3">
-              <div className="grid gap-3 items-end xl:grid-cols-[minmax(200px,2fr)_minmax(170px,1.2fr)_minmax(120px,1fr)_minmax(140px,1fr)_minmax(160px,1.5fr)_auto] md:grid-cols-2">
-              <div className="space-y-1 min-w-0">
-                <Label>Pessoa</Label>
-                <ComboboxSelect
-                  value={novoBenef.pessoa_id}
-                  onChange={(v) => setNovoBenef({ ...novoBenef, pessoa_id: v })}
-                  options={(pessoas.data ?? []).map((p) => ({
-                    value: p.id,
-                    label: `${p.nome} (${p.tipo_pessoa === "juridica" ? "PJ" : "PF"})`,
-                    keywords: [p.cpf_cnpj ?? "", ...(p.papeis ?? [])],
-                  }))}
-                  placeholder="Selecione uma pessoa"
-                  searchPlaceholder="Buscar por nome, documento ou papel…"
-                  emptyText="Nenhuma pessoa encontrada."
-                  allowClear
-                />
-              </div>
-              <div className="space-y-1 min-w-0">
-                <Label>Valor</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min={0}
-                    className="text-right w-full min-w-0"
-                    value={novoBenef.valor}
-                    onChange={(e) => setNovoBenef({ ...novoBenef, valor: Number(e.target.value) })}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() =>
-                      setNovoBenef({ ...novoBenef, valor: Math.max(0, Number(restante.toFixed(2))) })
-                    }
-                    title="Usar valor restante"
-                  >
-                    Restante
-                  </Button>
-                </div>
-              </div>
-              <div className="space-y-1 min-w-0">
-                <Label>Limite</Label>
-                <Input
-                  type="number" step="0.01" min={0} className="text-right w-full"
-                  placeholder="sem limite"
-                  value={novoBenef.valor_limite}
-                  onChange={(e) => setNovoBenef({ ...novoBenef, valor_limite: e.target.value })}
-                />
-              </div>
-                <div className="space-y-1 min-w-0">
-                  <Label>Recebido em</Label>
-                  <Input
-                    type="date" className="w-full"
-                    value={novoBenef.data_recebimento}
-                    onChange={(e) => setNovoBenef({ ...novoBenef, data_recebimento: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1 min-w-0">
-                  <Label>Observação</Label>
-                  <Input
-                    value={novoBenef.observacao}
-                    onChange={(e) => setNovoBenef({ ...novoBenef, observacao: e.target.value })}
-                  />
-                </div>
-                <Button onClick={adicionarBenef} className="shrink-0 w-full xl:w-auto">
-                  <Plus className="h-4 w-4 mr-1" /> Adicionar
-                </Button>
-              </div>
-              <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                <input type="checkbox" checked={novoBenef.is_residual}
-                  onChange={(e) => setNovoBenef({ ...novoBenef, is_residual: e.target.checked })} />
-                Recebe a sobra (proprietária)
-              </label>
-            </div>
-          )}
-          </TabsContent>
-
-          <TabsContent value="itens" className="mt-3">
-          <Table className="table-fixed">
-          <TableHeader><TableRow>
-            <TableHead className="w-[14%]">Tipo</TableHead><TableHead className="w-[18%]">Origem</TableHead>
-            <TableHead>Descrição</TableHead><TableHead className="text-right w-[16%]">Valor</TableHead>
-            <TableHead className="w-24" />
-          </TableRow></TableHeader>
-          <TableBody>
-            {(repasse.itens ?? []).map((it) => editItem?.id === it.id ? (
-              <TableRow key={it.id}>
-                <TableCell>
-                  <Select value={editItem.tipo} onValueChange={(v: RepasseItemTipo) => setEditItem({ ...editItem, tipo: v })}>
+            {podeEditarItens && (
+              <div className="mt-3 grid gap-2 md:grid-cols-[130px_150px_1.4fr_1.4fr_170px] items-end">
+                <div className="space-y-1"><Label>Tipo</Label>
+                  <Select value={novo.tipo} onValueChange={(v: RepasseItemTipo) => setNovo({ ...novo, tipo: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="credito">Crédito</SelectItem>
                       <SelectItem value="debito">Débito</SelectItem>
                     </SelectContent>
                   </Select>
-                </TableCell>
-                <TableCell>
-                  <Select value={editItem.origem} onValueChange={(v: RepasseItemOrigem) => setEditItem({ ...editItem, origem: v })}>
+                </div>
+                <div className="space-y-1"><Label>Origem</Label>
+                  <Select value={novo.origem} onValueChange={(v: RepasseItemOrigem) => setNovo({ ...novo, origem: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>{origens.map(o => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
                   </Select>
-                </TableCell>
-                <TableCell>
-                  <Input value={editItem.descricao} onChange={(e) => setEditItem({ ...editItem, descricao: e.target.value })} />
-                </TableCell>
-                <TableCell>
-                  <Input
-                    type="number" step="0.01" min={0} className="text-right"
-                    value={editItem.valor}
-                    onChange={(e) => setEditItem({ ...editItem, valor: Number(e.target.value) })}
+                </div>
+                <div className="space-y-1"><Label>Descrição</Label>
+                  <Input value={novo.descricao} onChange={(e) => setNovo({ ...novo, descricao: e.target.value })} />
+                </div>
+                <div className="space-y-1"><Label>Imóvel</Label>
+                  <ComboboxSelect
+                    value={novo.imovel_id}
+                    onChange={(v) => setNovo({ ...novo, imovel_id: v })}
+                    options={imovelOptions}
+                    placeholder="Sem imóvel"
+                    searchPlaceholder="Buscar imóvel…"
+                    allowClear
                   />
-                </TableCell>
-                <TableCell className="whitespace-nowrap">
-                  <Button size="icon" variant="ghost" onClick={salvarItemEdit} disabled={saveItem.isPending} title="Salvar">
-                    <Check className="h-4 w-4 text-emerald-600" />
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={() => setEditItem(null)} title="Cancelar">
-                    <X className="h-4 w-4" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ) : (
-              <TableRow key={it.id}>
-                <TableCell>
-                  {it.tipo === "credito" ? (
-                    <span className="inline-flex items-center gap-1 text-emerald-600"><CheckCircle2 className="h-4 w-4" />Crédito</span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-destructive"><XCircle className="h-4 w-4" />Débito</span>
-                  )}
-                </TableCell>
-                <TableCell className="capitalize">{it.origem.replace("_", " ")}</TableCell>
-                <TableCell>{it.descricao}</TableCell>
-                <TableCell className="text-right">{money(it.valor)}</TableCell>
-                <TableCell className="whitespace-nowrap">
-                  {podeEditarItens && (
-                    <>
-                      <Button
-                        size="icon" variant="ghost" title="Editar"
-                        onClick={() => setEditItem({
-                          id: it.id, tipo: it.tipo, origem: it.origem,
-                          descricao: it.descricao, valor: Number(it.valor),
-                        })}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon" variant="ghost" title="Excluir"
-                        onClick={() => setConfirmDelete({
-                          tipo: "item", id: it.id,
-                          label: `${it.descricao} — ${money(it.valor)}`,
-                        })}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-            {(repasse.itens ?? []).length === 0 && (
-              <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Nenhum item.</TableCell></TableRow>
-            )}
-          </TableBody>
-        </Table>
-
-        {podeEditarItens && (
-          <div className="border rounded-md p-3 mt-3 grid gap-3 md:grid-cols-5">
-            <div className="space-y-1"><Label>Tipo</Label>
-              <Select value={novo.tipo} onValueChange={(v: RepasseItemTipo) => setNovo({ ...novo, tipo: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="credito">Crédito</SelectItem>
-                  <SelectItem value="debito">Débito</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1"><Label>Origem</Label>
-              <Select value={novo.origem} onValueChange={(v: RepasseItemOrigem) => setNovo({ ...novo, origem: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{origens.map(o => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1 md:col-span-2"><Label>Descrição</Label>
-              <Input value={novo.descricao} onChange={(e) => setNovo({ ...novo, descricao: e.target.value })} />
-            </div>
-            <div className="space-y-1"><Label>Valor</Label>
-              <div className="flex gap-2">
-                <Input type="number" step="0.01" value={novo.valor} onChange={(e) => setNovo({ ...novo, valor: Number(e.target.value) })} />
-                <Button size="icon" onClick={adicionar}><Plus className="h-4 w-4" /></Button>
+                </div>
+                <div className="space-y-1"><Label>Valor</Label>
+                  <div className="flex gap-2">
+                    <Input type="number" step="0.01" value={novo.valor}
+                      onChange={(e) => setNovo({ ...novo, valor: Number(e.target.value) })} />
+                    <Button size="icon" onClick={adicionar}><Plus className="h-4 w-4" /></Button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            )}
+            </>
+            )}
           </TabsContent>
 
+          {/* ------------------------------ IMÓVEIS */}
           <TabsContent value="imoveis" className="mt-3">
             <div className="border rounded-md p-3">
               {inquilinos.isLoading ? (
@@ -642,16 +860,17 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
             </div>
           </TabsContent>
         </Tabs>
+        )}
 
         <DialogFooter className="mt-4 gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
-          {repasse.status === "aberto" && (
+          {repasse?.status === "aberto" && (
             <Button variant="outline" onClick={() => updStatus.mutate({ id: repasse.id, status: "fechado" })}>
-              Fechar repasse
+              Fechar {mesLabel(repasse.competencia)}
             </Button>
           )}
-          {repasse.status !== "pago" && repasse.status !== "cancelado" && (
-            <Button onClick={marcarPago}>Marcar como pago</Button>
+          {repasse && repasse.status !== "pago" && repasse.status !== "cancelado" && (
+            <Button onClick={marcarPago}>Marcar {mesLabel(repasse.competencia)} como pago</Button>
           )}
         </DialogFooter>
       </DialogContent>
