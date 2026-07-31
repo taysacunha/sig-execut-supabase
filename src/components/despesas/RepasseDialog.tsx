@@ -145,6 +145,8 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   >(null);
   const [confirmDelComp, setConfirmDelComp] = useState<Repasse | null>(null);
   const [reabrir, setReabrir] = useState<{ repasse: Repasse; justificativa: string } | null>(null);
+  const [itemDuplicado, setItemDuplicado] = useState<{ id: string; label: string } | null>(null);
+  const [limitesAbertos, setLimitesAbertos] = useState(false);
   const [editItem, setEditItem] = useState<
     {
       id: string; tipo: RepasseItemTipo; origem: RepasseItemOrigem;
@@ -194,6 +196,41 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
   const podeEditarItens = repasse?.status === "aberto";
   const podeEditarBenef = !!repasse && repasse.status !== "pago" && repasse.status !== "cancelado";
+
+  const origemLabel = (o: RepasseItemOrigem) => origens.find((x) => x.v === o)?.l ?? o;
+
+  // Duplicidade: mesmo tipo + origem + imóvel dentro da competência (itens manuais)
+  const itemDuplicadoDe = (
+    dados: { tipo: RepasseItemTipo; origem: RepasseItemOrigem; imovel_id: string | null },
+    ignorarId?: string,
+  ) =>
+    (repasse?.itens ?? []).find(
+      (it) =>
+        it.id !== ignorarId &&
+        !it.lancamento_id &&
+        it.tipo === dados.tipo &&
+        it.origem === dados.origem &&
+        (it.imovel_id ?? null) === (dados.imovel_id ?? null),
+    ) ?? null;
+
+  // Pessoas distintas com movimento ou limite no ano selecionado
+  const pessoasDoAno = (() => {
+    const map = new Map<string, string>();
+    competencias
+      .filter((c) => c.competencia.slice(0, 4) === String(anoSelecionado))
+      .forEach((c) =>
+        (c.beneficiarios ?? []).forEach((b) =>
+          map.set(b.pessoa_id, b.pessoa?.nome ?? "—"),
+        ),
+      );
+    (limitesAnuais.data ?? []).forEach((l) => {
+      if (!map.has(l.pessoa_id)) {
+        const p = (pessoas.data ?? []).find((x) => x.id === l.pessoa_id);
+        map.set(l.pessoa_id, p?.nome ?? "—");
+      }
+    });
+    return Array.from(map.entries()).map(([id, nome]) => ({ id, nome }));
+  })();
 
   async function adicionarCompetencia() {
     if (!conta || !novaComp) { toast.error("Informe o mês/ano da competência"); return; }
@@ -251,6 +288,16 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
       toast.error("Preencha descrição e valor");
       return;
     }
+    const dup = itemDuplicadoDe(novo);
+    if (dup) {
+      setItemDuplicado({
+        id: dup.id,
+        label: `${novo.tipo === "credito" ? "Crédito" : "Débito"} / ${origemLabel(novo.origem)}${
+          novo.imovel_id ? ` — ${imovelLabel(novo.imovel_id)}` : " — sem imóvel"
+        }`,
+      });
+      return;
+    }
     try {
       await saveItem.mutateAsync({ repasse_id: repasse.id, ...novo } as any);
       setNovo({ tipo: "credito", origem: "aluguel", descricao: "", valor: 0, imovel_id: null });
@@ -264,8 +311,15 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
       return;
     }
     const limAno = limiteAnualDe(novoBenef.pessoa_id);
-    if (limAno !== null && recebidoNoAno(novoBenef.pessoa_id) + novoBenef.valor > Number(limAno) + 0.009) {
-      toast.warning("Atenção: este valor ultrapassa o limite anual cadastrado para o beneficiário.");
+    const limAnoNovo = novoBenef.limite_anual !== "" ? Number(novoBenef.limite_anual) : limAno;
+    if (
+      limAnoNovo !== null &&
+      recebidoNoAno(novoBenef.pessoa_id) + novoBenef.valor > Number(limAnoNovo) + 0.009
+    ) {
+      toast.error(
+        `Limite do ano ${anoSelecionado} atingido para este beneficiário. Aumente o "Limite ano" para liberar mais.`,
+      );
+      return;
     }
     try {
       await saveBenef.mutateAsync({
