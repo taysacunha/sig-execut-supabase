@@ -399,7 +399,7 @@ export default function DespesasCalendario() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">
-            Lançamentos {isLoading ? "" : `(${rows.length})`}
+            Lançamentos {isLoading ? "" : `(${rowsVisiveis.length})`}
           </CardTitle>
           {duplicados.size > 0 && (
             <Badge variant="destructive" className="gap-1">
@@ -409,10 +409,30 @@ export default function DespesasCalendario() {
           )}
         </CardHeader>
         <CardContent>
+          <div className="flex gap-2 mb-3">
+            <Button
+              size="sm"
+              variant={aba === "ativos" ? "default" : "outline"}
+              onClick={() => setAba("ativos")}
+            >
+              Ativos ({rowsAtivos.length})
+            </Button>
+            <Button
+              size="sm"
+              variant={aba === "cancelados" ? "default" : "outline"}
+              onClick={() => setAba("cancelados")}
+            >
+              Cancelados ({rowsCancelados.length})
+            </Button>
+          </div>
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Carregando…</p>
-          ) : rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhum lançamento no filtro atual.</p>
+          ) : rowsVisiveis.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {aba === "cancelados"
+                ? "Nenhum lançamento cancelado no filtro atual."
+                : "Nenhum lançamento no filtro atual."}
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -430,7 +450,7 @@ export default function DespesasCalendario() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((r) => {
+                  {rowsVisiveis.map((r) => {
                     const meta = STATUS_META[r.status];
                     const Icon = meta.icon;
                     const dup = duplicados.has(r.id);
