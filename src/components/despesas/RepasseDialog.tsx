@@ -1432,6 +1432,74 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Escolher quem recebe a sobra antes de distribuir */}
+      <AlertDialog open={escolherResidual} onOpenChange={setEscolherResidual}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Quem recebe a sobra?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A distribuição respeita os limites mensal e anual de cada beneficiário; o que restar do
+              valor líquido vai para o beneficiário escolhido abaixo (normalmente a proprietária).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            {beneficiarios.slice().sort((a, b) => a.ordem - b.ordem).map((b) => (
+              <Button
+                key={b.id}
+                type="button"
+                variant="outline"
+                className="w-full justify-start"
+                disabled={saveBenef.isPending || setResidualMut.isPending}
+                onClick={async () => {
+                  if (!repasse) return;
+                  setEscolherResidual(false);
+                  try {
+                    await setResidualMut.mutateAsync({ repasseId: repasse.id, beneficiarioId: b.id });
+                    await distribuir(b.id);
+                  } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+                }}
+              >
+                {b.pessoa?.nome ?? "Beneficiário"}
+              </Button>
+            ))}
+            {beneficiarios.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Cadastre os beneficiários desta competência antes de distribuir.
+              </p>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmar alteração do limite anual */}
+      <AlertDialog open={!!confirmLimite} onOpenChange={(o) => !o && setConfirmLimite(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Alterar o limite do ano?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmLimite && (
+                <>
+                  Alterar o limite anual de {money(confirmLimite.atual)} para{" "}
+                  {money(confirmLimite.novo)}. Vale para todas as competências de {anoSelecionado}
+                  {" "}desta conta.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); confirmLimite?.onConfirm(); }}
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
