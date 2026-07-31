@@ -694,10 +694,16 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                         <div className="text-xs text-muted-foreground break-words">
                           {b.pessoa?.tipo_pessoa === "juridica" ? "PJ" : "PF"}
                           {b.pessoa?.cpf_cnpj ? ` · ${b.pessoa.cpf_cnpj}` : ""}
-                          {b.is_residual ? " · recebe a sobra" : ""}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right">{money(Number(b.valor))}</TableCell>
+                      <TableCell className="text-right">
+                        {money(Number(b.valor))}
+                        {b.is_residual && (
+                          <div className="text-[11px] text-muted-foreground">
+                            sobra do mês {money(restante + Number(b.valor))}
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right text-muted-foreground">
                         {b.valor_limite == null ? "—" : money(Number(b.valor_limite))}
                       </TableCell>
@@ -715,6 +721,13 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                         {b.data_recebimento
                           ? new Date(b.data_recebimento + "T00:00:00").toLocaleDateString("pt-BR")
                           : "—"}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {b.is_residual ? (
+                          <Check className="mx-auto h-4 w-4 text-emerald-600" />
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground break-words">{b.observacao ?? ""}</TableCell>
                       <TableCell className="whitespace-nowrap">
