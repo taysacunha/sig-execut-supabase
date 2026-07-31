@@ -269,7 +269,10 @@ export function useMontarRepasse() {
       if (error) throw error;
       return data as string;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [REPASSES_KEY] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [REPASSES_KEY] });
+      qc.invalidateQueries({ queryKey: [CONTAS_KEY] });
+    },
   });
 }
 
@@ -295,6 +298,7 @@ export function useUpdateRepasseStatus() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [REPASSES_KEY] });
+      qc.invalidateQueries({ queryKey: [CONTAS_KEY] });
       qc.invalidateQueries({ queryKey: ["despesas-lancamentos"] });
     },
   });
@@ -310,7 +314,10 @@ export function useDeleteRepasse() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [REPASSES_KEY] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [REPASSES_KEY] });
+      qc.invalidateQueries({ queryKey: [CONTAS_KEY] });
+    },
   });
 }
 
@@ -326,7 +333,10 @@ export function useUpdateRepasseCampos() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [REPASSES_KEY] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [REPASSES_KEY] });
+      qc.invalidateQueries({ queryKey: [CONTAS_KEY] });
+    },
   });
 }
 
@@ -347,7 +357,10 @@ export function useSaveRepasseItem() {
         if (error) throw error;
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [REPASSES_KEY] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [REPASSES_KEY] });
+      qc.invalidateQueries({ queryKey: [CONTAS_KEY] });
+    },
   });
 }
 
@@ -361,7 +374,10 @@ export function useDeleteRepasseItem() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [REPASSES_KEY] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [REPASSES_KEY] });
+      qc.invalidateQueries({ queryKey: [CONTAS_KEY] });
+    },
   });
 }
 
@@ -384,7 +400,10 @@ export function useSaveRepasseBeneficiario() {
         if (error) throw error;
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [REPASSES_KEY] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [REPASSES_KEY] });
+      qc.invalidateQueries({ queryKey: [CONTAS_KEY] });
+    },
   });
 }
 
@@ -398,7 +417,10 @@ export function useDeleteRepasseBeneficiario() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [REPASSES_KEY] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [REPASSES_KEY] });
+      qc.invalidateQueries({ queryKey: [CONTAS_KEY] });
+    },
   });
 }
 
