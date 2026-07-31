@@ -235,30 +235,27 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-6xl w-[95vw]">
         <DialogHeader>
           <DialogTitle>
             Repasse — {repasse.proprietario?.nome} — {new Date(repasse.competencia + "T00:00:00").toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
-          <div className="border rounded-md p-3">
-            <div className="text-xs text-muted-foreground">Bruto</div>
-            <div className="text-lg font-semibold">{money(repasse.valor_bruto)}</div>
-          </div>
-          <div className="border rounded-md p-3">
-            <div className="text-xs text-muted-foreground">Taxa admin.</div>
-            <div className="text-lg font-semibold text-destructive">−{money(repasse.taxa_administracao_valor)}</div>
-          </div>
-          <div className="border rounded-md p-3">
-            <div className="text-xs text-muted-foreground">Líquido</div>
-            <div className="text-lg font-semibold text-primary">{money(repasse.valor_liquido)}</div>
-          </div>
-          <div className="border rounded-md p-3">
-            <div className="text-xs text-muted-foreground">Status</div>
-            <div className="text-lg font-semibold capitalize">{repasse.status.replace("_", " ")}</div>
-          </div>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border px-4 py-2 text-sm">
+          <span className="text-muted-foreground">
+            Bruto <span className="font-semibold text-foreground">{money(repasse.valor_bruto)}</span>
+          </span>
+          <span className="text-muted-foreground">
+            Taxa admin.{" "}
+            <span className="font-semibold text-destructive">−{money(repasse.taxa_administracao_valor)}</span>
+          </span>
+          <span className="text-muted-foreground">
+            Líquido <span className="font-semibold text-primary">{money(repasse.valor_liquido)}</span>
+          </span>
+          <span className="text-muted-foreground">
+            Status <span className="font-semibold capitalize text-foreground">{repasse.status.replace("_", " ")}</span>
+          </span>
         </div>
 
         <Tabs defaultValue="beneficiarios" className="w-full">
@@ -287,14 +284,13 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
               </span>
             </div>
           </div>
-          <div className="overflow-x-auto">
-          <Table>
+          <Table className="table-fixed">
             <TableHeader><TableRow>
-              <TableHead className="w-12">#</TableHead>
-              <TableHead>Pessoa</TableHead>
-              <TableHead className="text-right w-40 min-w-[10rem]">Valor</TableHead>
-              <TableHead className="text-right w-36 min-w-[9rem]">Limite</TableHead>
-              <TableHead className="w-40 min-w-[9.5rem]">Recebido em</TableHead>
+              <TableHead className="w-10">#</TableHead>
+              <TableHead className="w-[26%]">Pessoa</TableHead>
+              <TableHead className="text-right w-[14%]">Valor</TableHead>
+              <TableHead className="text-right w-[13%]">Limite</TableHead>
+              <TableHead className="w-[13%]">Recebido em</TableHead>
               <TableHead>Observação</TableHead>
               <TableHead className="w-24" />
             </TableRow></TableHeader>
@@ -318,14 +314,14 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                         searchPlaceholder="Buscar…"
                       />
                     </TableCell>
-                    <TableCell className="w-40 min-w-[10rem]">
+                    <TableCell>
                       <Input
                         type="number" step="0.01" min={0} className="text-right w-full"
                         value={editBenef.valor}
                         onChange={(e) => setEditBenef({ ...editBenef, valor: Number(e.target.value) })}
                       />
                     </TableCell>
-                    <TableCell className="w-36 min-w-[9rem]">
+                    <TableCell>
                       <Input
                         type="number" step="0.01" min={0} className="text-right w-full"
                         placeholder="sem limite"
@@ -333,7 +329,7 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                         onChange={(e) => setEditBenef({ ...editBenef, valor_limite: e.target.value })}
                       />
                     </TableCell>
-                    <TableCell className="w-40 min-w-[9.5rem]">
+                    <TableCell>
                       <Input
                         type="date" className="w-full"
                         value={editBenef.data_recebimento}
@@ -363,9 +359,9 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                 ) : (
                   <TableRow key={b.id}>
                     <TableCell>{i + 1}</TableCell>
-                    <TableCell>
+                    <TableCell className="align-top">
                       <div className="font-medium">{b.pessoa?.nome ?? "—"}</div>
-                      <div className="text-xs text-muted-foreground">
+                      <div className="text-xs text-muted-foreground break-words">
                         {b.pessoa?.tipo_pessoa === "juridica" ? "PJ" : "PF"}
                         {b.pessoa?.cpf_cnpj ? ` · ${b.pessoa.cpf_cnpj}` : ""}
                         {b.is_residual ? " · recebe a sobra" : ""}
@@ -380,7 +376,7 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                         ? new Date(b.data_recebimento + "T00:00:00").toLocaleDateString("pt-BR")
                         : "—"}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{b.observacao ?? ""}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground break-words">{b.observacao ?? ""}</TableCell>
                     <TableCell className="whitespace-nowrap">
                       {podeEditarBenef && (
                         <>
@@ -420,12 +416,11 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
               )}
             </TableBody>
           </Table>
-          </div>
 
           {podeEditarBenef && (
-            <div className="border rounded-md p-3 mt-3 space-y-3">
-              <div className="grid gap-3 md:grid-cols-[2fr_minmax(170px,1fr)_minmax(150px,1fr)] items-end">
-              <div className="space-y-1">
+            <div className="border rounded-md p-3 mt-3">
+              <div className="grid gap-3 items-end xl:grid-cols-[minmax(200px,2fr)_minmax(170px,1.2fr)_minmax(120px,1fr)_minmax(140px,1fr)_minmax(160px,1.5fr)_auto] md:grid-cols-2">
+              <div className="space-y-1 min-w-0">
                 <Label>Pessoa</Label>
                 <ComboboxSelect
                   value={novoBenef.pessoa_id}
@@ -441,14 +436,14 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                   allowClear
                 />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 min-w-0">
                 <Label>Valor</Label>
                 <div className="flex gap-2">
                   <Input
                     type="number"
                     step="0.01"
                     min={0}
-                    className="text-right w-full min-w-[90px]"
+                    className="text-right w-full min-w-0"
                     value={novoBenef.valor}
                     onChange={(e) => setNovoBenef({ ...novoBenef, valor: Number(e.target.value) })}
                   />
@@ -466,8 +461,8 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                   </Button>
                 </div>
               </div>
-              <div className="space-y-1">
-                <Label>Limite (opcional)</Label>
+              <div className="space-y-1 min-w-0">
+                <Label>Limite</Label>
                 <Input
                   type="number" step="0.01" min={0} className="text-right w-full"
                   placeholder="sem limite"
@@ -475,9 +470,7 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                   onChange={(e) => setNovoBenef({ ...novoBenef, valor_limite: e.target.value })}
                 />
               </div>
-              </div>
-              <div className="grid gap-3 md:grid-cols-[minmax(160px,1fr)_2fr_auto] items-end">
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <Label>Recebido em</Label>
                   <Input
                     type="date" className="w-full"
@@ -485,31 +478,31 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                     onChange={(e) => setNovoBenef({ ...novoBenef, data_recebimento: e.target.value })}
                   />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <Label>Observação</Label>
                   <Input
                     value={novoBenef.observacao}
                     onChange={(e) => setNovoBenef({ ...novoBenef, observacao: e.target.value })}
                   />
-                  <label className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
-                    <input type="checkbox" checked={novoBenef.is_residual}
-                      onChange={(e) => setNovoBenef({ ...novoBenef, is_residual: e.target.checked })} />
-                    Recebe a sobra (proprietária)
-                  </label>
                 </div>
-                <Button onClick={adicionarBenef} className="shrink-0">
+                <Button onClick={adicionarBenef} className="shrink-0 w-full xl:w-auto">
                   <Plus className="h-4 w-4 mr-1" /> Adicionar
                 </Button>
               </div>
+              <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                <input type="checkbox" checked={novoBenef.is_residual}
+                  onChange={(e) => setNovoBenef({ ...novoBenef, is_residual: e.target.checked })} />
+                Recebe a sobra (proprietária)
+              </label>
             </div>
           )}
           </TabsContent>
 
           <TabsContent value="itens" className="mt-3">
-          <Table>
+          <Table className="table-fixed">
           <TableHeader><TableRow>
-            <TableHead>Tipo</TableHead><TableHead>Origem</TableHead>
-            <TableHead>Descrição</TableHead><TableHead className="text-right">Valor</TableHead>
+            <TableHead className="w-[14%]">Tipo</TableHead><TableHead className="w-[18%]">Origem</TableHead>
+            <TableHead>Descrição</TableHead><TableHead className="text-right w-[16%]">Valor</TableHead>
             <TableHead className="w-24" />
           </TableRow></TableHeader>
           <TableBody>
