@@ -25,7 +25,7 @@ import {
   useSaveRepasseItem, useDeleteRepasseItem, useUpdateRepasseStatus,
   useSaveRepasseBeneficiario, useDeleteRepasseBeneficiario,
   useRepasseInquilinos, useAddCompetencia, useLimitesAnuais, useSaveLimiteAnual,
-  useDeleteRepasse, useUpdateRepasseCampos,
+  useDeleteRepasse, useUpdateRepasseCampos, useSetBeneficiarioResidual,
 } from "@/hooks/useDespesasRepasses";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
 import { usePessoas } from "@/hooks/useDespesasPessoas";
@@ -72,6 +72,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const delRepasse = useDeleteRepasse();
   const updCampos = useUpdateRepasseCampos();
   const saveLimiteAnual = useSaveLimiteAnual();
+  const setResidualMut = useSetBeneficiarioResidual();
   const pessoas = usePessoas({});
   const inquilinos = useRepasseInquilinos(conta?.proprietario_id ?? null);
 
@@ -147,6 +148,10 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const [reabrir, setReabrir] = useState<{ repasse: Repasse; justificativa: string } | null>(null);
   const [itemDuplicado, setItemDuplicado] = useState<{ id: string; label: string } | null>(null);
   const [limitesAbertos, setLimitesAbertos] = useState(false);
+  const [escolherResidual, setEscolherResidual] = useState(false);
+  const [confirmLimite, setConfirmLimite] = useState<
+    { atual: number; novo: number; onConfirm: () => void } | null
+  >(null);
   const [editItem, setEditItem] = useState<
     {
       id: string; tipo: RepasseItemTipo; origem: RepasseItemOrigem;
