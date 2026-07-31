@@ -379,6 +379,15 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
       toast.error("Preencha descrição e valor");
       return;
     }
+    const dup = itemDuplicadoDe(editItem, editItem.id);
+    if (dup) {
+      toast.error(
+        `Já existe um item de ${editItem.tipo === "credito" ? "Crédito" : "Débito"} / ${origemLabel(
+          editItem.origem,
+        )} para este imóvel nesta competência.`,
+      );
+      return;
+    }
     try {
       await saveItem.mutateAsync({
         id: editItem.id, repasse_id: repasse.id, tipo: editItem.tipo,
@@ -395,6 +404,17 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     if (!editBenef.pessoa_id || editBenef.valor <= 0) {
       toast.error("Selecione a pessoa e informe um valor");
       return;
+    }
+    const limAnoEdit = editBenef.limite_anual === "" ? null : Number(editBenef.limite_anual);
+    if (limAnoEdit !== null) {
+      const outros = recebidoNoAno(editBenef.pessoa_id) -
+        (beneficiarios.find((b) => b.id === editBenef.id)?.valor ?? 0);
+      if (outros + editBenef.valor > limAnoEdit + 0.009) {
+        toast.error(
+          `Limite do ano ${anoSelecionado} atingido para este beneficiário. Aumente o "Limite ano" para liberar mais.`,
+        );
+        return;
+      }
     }
     try {
       await saveBenef.mutateAsync({
