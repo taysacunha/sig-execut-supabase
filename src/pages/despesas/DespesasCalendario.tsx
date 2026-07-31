@@ -142,6 +142,7 @@ export default function DespesasCalendario() {
   const [estornando, setEstornando] = useState<Lancamento | null>(null);
   const [estornoMotivo, setEstornoMotivo] = useState("");
   const [tipoDefault, setTipoDefault] = useState<LancamentoTipo>("a_pagar");
+  const [aba, setAba] = useState<"ativos" | "cancelados">("ativos");
 
   const deleteMut = useDeleteLancamento();
   const cancelMut = useCancelLancamento();
