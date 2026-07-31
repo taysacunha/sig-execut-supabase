@@ -1020,6 +1020,56 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={!!confirmDelComp} onOpenChange={(o) => !o && setConfirmDelComp(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir competência?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDelComp ? mesLabel(confirmDelComp.competencia) : ""} — todos os itens e
+              beneficiários deste mês serão removidos. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); excluirCompetencia(); }}
+              disabled={delRepasse.isPending}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!reabrir} onOpenChange={(o) => !o && setReabrir(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reabrir competência paga?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {reabrir ? mesLabel(reabrir.repasse.competencia) : ""} voltará ao status “Fechado”,
+              permitindo ajustes ou exclusão. Justifique a reabertura (mínimo 10 caracteres).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            rows={3}
+            placeholder="Motivo da reabertura"
+            value={reabrir?.justificativa ?? ""}
+            onChange={(e) =>
+              setReabrir((r) => (r ? { ...r, justificativa: e.target.value } : r))
+            }
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); confirmarReabertura(); }}
+              disabled={updStatus.isPending || updCampos.isPending}
+            >
+              Reabrir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
