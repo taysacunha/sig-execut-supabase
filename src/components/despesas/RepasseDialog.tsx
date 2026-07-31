@@ -975,6 +975,19 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
         <DialogFooter className="mt-4 gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
+          {repasse && (
+            repasse.status === "pago" ? (
+              <Button variant="outline" onClick={() => setReabrir({ repasse, justificativa: "" })}>
+                <RotateCcw className="h-4 w-4 mr-1" />
+                Reabrir {mesLabel(repasse.competencia)}
+              </Button>
+            ) : (
+              <Button variant="destructive" onClick={() => setConfirmDelComp(repasse)}>
+                <Trash2 className="h-4 w-4 mr-1" />
+                Excluir {mesLabel(repasse.competencia)}
+              </Button>
+            )
+          )}
           {repasse?.status === "aberto" && (
             <Button variant="outline" onClick={() => updStatus.mutate({ id: repasse.id, status: "fechado" })}>
               Fechar {mesLabel(repasse.competencia)}
