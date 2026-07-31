@@ -732,7 +732,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-sm">Distribuição de {mesLabel(repasse.competencia)}</h3>
                 {podeEditarBenef && (
-                  <Button type="button" variant="outline" size="sm" onClick={distribuir}
+                  <Button type="button" variant="outline" size="sm" onClick={() => distribuir()}
                     disabled={saveBenef.isPending} title="Distribuir respeitando os limites mensal e anual">
                     Distribuir por limite
                   </Button>
