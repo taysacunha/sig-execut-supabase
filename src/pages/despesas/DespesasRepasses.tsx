@@ -53,6 +53,30 @@ export default function DespesasRepasses() {
   const [confirmDelete, setConfirmDelete] = useState<RepasseConta | null>(null);
   const [novo, setNovo] = useState({ proprietarioId: "", centroCustoId: "" });
 
+  const resumoPorAno = (c: RepasseConta) => {
+    const mapa = new Map<string, { total: number; pagas: number; meses: string[] }>();
+    for (const r of (c.competencias ?? []).slice().sort((a, b) =>
+      a.competencia < b.competencia ? -1 : 1,
+    )) {
+      const ano = r.competencia.slice(0, 4);
+      const item = mapa.get(ano) ?? { total: 0, pagas: 0, meses: [] };
+      item.total += 1;
+      if (r.status === "pago") item.pagas += 1;
+      item.meses.push(
+        `${mesLabel(r.competencia).split(" ")[0]}${r.status === "pago" ? " (pago)" : ""}`,
+      );
+      mapa.set(ano, item);
+    }
+    return Array.from(mapa.entries())
+      .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+      .map(([ano, v]) => ({
+        ano,
+        total: v.total,
+        pagas: v.pagas,
+        meses: `${ano}: ${v.meses.join(", ")}`,
+      }));
+  };
+
   const totais = (c: RepasseConta) => {
     const comps = c.competencias ?? [];
     return {
@@ -203,12 +227,17 @@ export default function DespesasRepasses() {
                         <div className="flex flex-wrap gap-1">
                           {t.count === 0 ? (
                             <span className="text-sm text-muted-foreground">Nenhuma</span>
-                          ) : (c.competencias ?? []).slice(0, 6).map((r) => (
-                            <Badge key={r.id} variant={r.status === "pago" ? "default" : "secondary"}>
-                              {mesLabel(r.competencia)}
+                          ) : resumoPorAno(c).map((a) => (
+                            <Badge
+                              key={a.ano}
+                              variant={a.pagas === a.total ? "default" : "secondary"}
+                              className="cursor-pointer"
+                              title={a.meses}
+                              onClick={() => setDetalheId(c.id)}
+                            >
+                              {a.ano} · {a.total} comp. · {a.pagas} pagas
                             </Badge>
                           ))}
-                          {t.count > 6 && <Badge variant="outline">+{t.count - 6}</Badge>}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">{money(t.bruto)}</TableCell>

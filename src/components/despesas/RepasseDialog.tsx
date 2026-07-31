@@ -25,7 +25,7 @@ import {
   useSaveRepasseItem, useDeleteRepasseItem, useUpdateRepasseStatus,
   useSaveRepasseBeneficiario, useDeleteRepasseBeneficiario,
   useRepasseInquilinos, useAddCompetencia, useLimitesAnuais, useSaveLimiteAnual,
-  useDeleteRepasse, useUpdateRepasseCampos,
+  useDeleteRepasse, useUpdateRepasseCampos, useSetBeneficiarioResidual,
 } from "@/hooks/useDespesasRepasses";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
 import { usePessoas } from "@/hooks/useDespesasPessoas";
@@ -72,6 +72,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const delRepasse = useDeleteRepasse();
   const updCampos = useUpdateRepasseCampos();
   const saveLimiteAnual = useSaveLimiteAnual();
+  const setResidualMut = useSetBeneficiarioResidual();
   const pessoas = usePessoas({});
   const inquilinos = useRepasseInquilinos(conta?.proprietario_id ?? null);
 
@@ -147,6 +148,10 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const [reabrir, setReabrir] = useState<{ repasse: Repasse; justificativa: string } | null>(null);
   const [itemDuplicado, setItemDuplicado] = useState<{ id: string; label: string } | null>(null);
   const [limitesAbertos, setLimitesAbertos] = useState(false);
+  const [escolherResidual, setEscolherResidual] = useState(false);
+  const [confirmLimite, setConfirmLimite] = useState<
+    { atual: number; novo: number; onConfirm: () => void } | null
+  >(null);
   const [editItem, setEditItem] = useState<
     {
       id: string; tipo: RepasseItemTipo; origem: RepasseItemOrigem;
@@ -182,6 +187,17 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
   const limiteAnualDe = (pessoaId: string) =>
     limitesAnuais.data?.find((l) => l.pessoa_id === pessoaId)?.valor_limite ?? null;
+
+  const limiteInfoDe = (pessoaId: string) => {
+    const l = limitesAnuais.data?.find((x) => x.pessoa_id === pessoaId);
+    if (!l) return "";
+    const origem = l.competencia_origem ? mesLabel(l.competencia_origem) : "competência não registrada";
+    const quem = l.definido_por_nome ? ` por ${l.definido_por_nome}` : "";
+    const quando = l.definido_em
+      ? ` em ${new Date(l.definido_em).toLocaleDateString("pt-BR")}`
+      : "";
+    return `Definido em ${origem}${quem}${quando} — vale para todas as competências de ${anoSelecionado}`;
+  };
 
   const recebidoNoAno = (pessoaId: string) =>
     competencias
@@ -321,6 +337,23 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
       );
       return;
     }
+    if (
+      limAno !== null &&
+      novoBenef.limite_anual !== "" &&
+      Number(novoBenef.limite_anual) !== Number(limAno)
+    ) {
+      setConfirmLimite({
+        atual: Number(limAno),
+        novo: Number(novoBenef.limite_anual),
+        onConfirm: () => { setConfirmLimite(null); void executarAdicionarBenef(); },
+      });
+      return;
+    }
+    await executarAdicionarBenef();
+  }
+
+  async function executarAdicionarBenef() {
+    if (!repasse || !conta || !novoBenef.pessoa_id) return;
     try {
       await saveBenef.mutateAsync({
         repasse_id: repasse.id,
@@ -338,7 +371,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
           pessoa_id: novoBenef.pessoa_id,
           ano: anoSelecionado,
           valor_limite: Number(novoBenef.limite_anual),
+          competencia_origem: repasse.competencia,
         });
+        limitesAnuais.refetch();
       }
       setNovoBenef(benefVazio);
     } catch (e: any) { toast.error(e?.message ?? "Erro"); }
@@ -406,6 +441,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
       return;
     }
     const limAnoEdit = editBenef.limite_anual === "" ? null : Number(editBenef.limite_anual);
+    const limAnoAtual = limiteAnualDe(editBenef.pessoa_id);
     if (limAnoEdit !== null) {
       const outros = recebidoNoAno(editBenef.pessoa_id) -
         (beneficiarios.find((b) => b.id === editBenef.id)?.valor ?? 0);
@@ -416,6 +452,23 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
         return;
       }
     }
+    if (limAnoAtual !== null && limAnoEdit !== null && limAnoEdit !== Number(limAnoAtual)) {
+      const snapshot = editBenef;
+      setConfirmLimite({
+        atual: Number(limAnoAtual),
+        novo: limAnoEdit,
+        onConfirm: () => { setConfirmLimite(null); void executarBenefEdit(snapshot); },
+      });
+      return;
+    }
+    await executarBenefEdit(editBenef);
+  }
+
+  async function executarBenefEdit(editBenef: {
+    id: string; pessoa_id: string | null; valor: number; valor_limite: string;
+    limite_anual: string; data_recebimento: string; is_residual: boolean; observacao: string;
+  }) {
+    if (!repasse || !conta || !editBenef.pessoa_id) return;
     try {
       await saveBenef.mutateAsync({
         id: editBenef.id, repasse_id: repasse.id, pessoa_id: editBenef.pessoa_id,
@@ -430,22 +483,30 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
         pessoa_id: editBenef.pessoa_id,
         ano: anoSelecionado,
         valor_limite: editBenef.limite_anual === "" ? null : Number(editBenef.limite_anual),
+        competencia_origem: repasse.competencia,
       });
+      limitesAnuais.refetch();
       toast.success("Beneficiário atualizado");
       setEditBenef(null);
     } catch (e: any) { toast.error(e?.message ?? "Erro"); }
   }
 
-  async function distribuir() {
+  async function distribuir(residualIdForcado?: string) {
     if (!repasse) return;
     const lista = beneficiarios.slice().sort((a, b) => a.ordem - b.ordem);
     if (lista.length === 0) {
       toast.error("Cadastre os beneficiários antes de distribuir.");
       return;
     }
-    const residual = lista.find((b) => b.is_residual);
+    if (Number(repasse.valor_liquido || 0) <= 0) {
+      toast.error("Esta competência não tem valor líquido para distribuir — lance os itens antes.");
+      return;
+    }
+    const residual = residualIdForcado
+      ? lista.find((b) => b.id === residualIdForcado)
+      : lista.find((b) => b.is_residual);
     if (!residual) {
-      toast.error("Marque um beneficiário como residual (normalmente a proprietária).");
+      setEscolherResidual(true);
       return;
     }
     let saldo = Number(repasse.valor_liquido || 0);
@@ -671,7 +732,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-sm">Distribuição de {mesLabel(repasse.competencia)}</h3>
                 {podeEditarBenef && (
-                  <Button type="button" variant="outline" size="sm" onClick={distribuir}
+                  <Button type="button" variant="outline" size="sm" onClick={() => distribuir()}
                     disabled={saveBenef.isPending} title="Distribuir respeitando os limites mensal e anual">
                     Distribuir por limite
                   </Button>
@@ -747,16 +808,41 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                                   min={0}
                                   className="text-right"
                                   placeholder="definir limite"
+                                  title={limiteInfoDe(p.id)}
                                   defaultValue={lim === null ? "" : String(lim)}
                                   onBlur={(e) => {
                                     const v = e.target.value;
                                     const novoLim = v === "" ? null : Number(v);
                                     if (novoLim === (lim === null ? null : Number(lim))) return;
+                                    if (lim !== null && novoLim !== null) {
+                                      setConfirmLimite({
+                                        atual: Number(lim),
+                                        novo: novoLim,
+                                        onConfirm: () => {
+                                          setConfirmLimite(null);
+                                          saveLimiteAnual.mutate({
+                                            conta_id: conta.id,
+                                            pessoa_id: p.id,
+                                            ano: anoSelecionado,
+                                            valor_limite: novoLim,
+                                            competencia_origem: repasse?.competencia ?? null,
+                                          }, {
+                                            onSuccess: () => {
+                                              limitesAnuais.refetch();
+                                              toast.success("Limite anual atualizado");
+                                            },
+                                            onError: (err: any) => toast.error(err?.message ?? "Erro"),
+                                          });
+                                        },
+                                      });
+                                      return;
+                                    }
                                     saveLimiteAnual.mutate({
                                       conta_id: conta.id,
                                       pessoa_id: p.id,
                                       ano: anoSelecionado,
                                       valor_limite: novoLim,
+                                      competencia_origem: repasse?.competencia ?? null,
                                     }, {
                                       onSuccess: () => {
                                         limitesAnuais.refetch();
@@ -869,7 +955,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                       <TableCell className="text-right text-muted-foreground">
                         {b.valor_limite == null ? "—" : money(Number(b.valor_limite))}
                       </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
+                      <TableCell className="text-right text-muted-foreground" title={limiteInfoDe(b.pessoa_id)}>
                         {limiteAnualDe(b.pessoa_id) === null ? "—" : (
                           <>
                             {money(Number(limiteAnualDe(b.pessoa_id)))}
@@ -888,11 +974,22 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                           : "—"}
                       </TableCell>
                       <TableCell className="text-center">
-                        {b.is_residual ? (
-                          <Check className="mx-auto h-4 w-4 text-emerald-600" />
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
+                        <input
+                          type="radio"
+                          name={`residual-${repasse.id}`}
+                          checked={b.is_residual}
+                          disabled={!podeEditarBenef || setResidualMut.isPending}
+                          title="Recebe o valor restante do mês"
+                          onChange={() => setResidualMut.mutate(
+                            { repasseId: repasse.id, beneficiarioId: b.id },
+                            {
+                              onSuccess: () => toast.success(
+                                `${b.pessoa?.nome ?? "Beneficiário"} passa a receber a sobra do mês`,
+                              ),
+                              onError: (err: any) => toast.error(err?.message ?? "Erro"),
+                            },
+                          )}
+                        />
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground break-words">{b.observacao ?? ""}</TableCell>
                       <TableCell className="whitespace-nowrap">
@@ -931,7 +1028,14 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                   <Label>Pessoa</Label>
                   <ComboboxSelect
                     value={novoBenef.pessoa_id}
-                    onChange={(v) => setNovoBenef({ ...novoBenef, pessoa_id: v })}
+                    onChange={(v) => {
+                      const lim = v ? limiteAnualDe(v) : null;
+                      setNovoBenef({
+                        ...novoBenef,
+                        pessoa_id: v,
+                        limite_anual: lim === null ? "" : String(lim),
+                      });
+                    }}
                     options={(pessoas.data ?? []).map((p) => ({
                       value: p.id,
                       label: `${p.nome} (${p.tipo_pessoa === "juridica" ? "PJ" : "PF"})`,
@@ -956,6 +1060,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                 <div className="space-y-1">
                   <Label>Limite ano {anoSelecionado}</Label>
                   <Input type="number" step="0.01" min={0} className="text-right" placeholder="opcional"
+                    title={novoBenef.pessoa_id ? limiteInfoDe(novoBenef.pessoa_id) : ""}
                     value={novoBenef.limite_anual}
                     onChange={(e) => setNovoBenef({ ...novoBenef, limite_anual: e.target.value })} />
                 </div>
@@ -1323,6 +1428,74 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               }}
             >
               Editar o item existente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Escolher quem recebe a sobra antes de distribuir */}
+      <AlertDialog open={escolherResidual} onOpenChange={setEscolherResidual}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Quem recebe a sobra?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A distribuição respeita os limites mensal e anual de cada beneficiário; o que restar do
+              valor líquido vai para o beneficiário escolhido abaixo (normalmente a proprietária).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            {beneficiarios.slice().sort((a, b) => a.ordem - b.ordem).map((b) => (
+              <Button
+                key={b.id}
+                type="button"
+                variant="outline"
+                className="w-full justify-start"
+                disabled={saveBenef.isPending || setResidualMut.isPending}
+                onClick={async () => {
+                  if (!repasse) return;
+                  setEscolherResidual(false);
+                  try {
+                    await setResidualMut.mutateAsync({ repasseId: repasse.id, beneficiarioId: b.id });
+                    await distribuir(b.id);
+                  } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+                }}
+              >
+                {b.pessoa?.nome ?? "Beneficiário"}
+              </Button>
+            ))}
+            {beneficiarios.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Cadastre os beneficiários desta competência antes de distribuir.
+              </p>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmar alteração do limite anual */}
+      <AlertDialog open={!!confirmLimite} onOpenChange={(o) => !o && setConfirmLimite(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Alterar o limite do ano?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmLimite && (
+                <>
+                  Alterar o limite anual de {money(confirmLimite.atual)} para{" "}
+                  {money(confirmLimite.novo)}. Vale para todas as competências de {anoSelecionado}
+                  {" "}desta conta.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); confirmLimite?.onConfirm(); }}
+            >
+              Confirmar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

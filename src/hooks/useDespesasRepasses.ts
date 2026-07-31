@@ -167,6 +167,10 @@ export interface LimiteAnual {
   pessoa_id: string;
   ano: number;
   valor_limite: number;
+  competencia_origem: string | null;
+  definido_por: string | null;
+  definido_por_nome: string | null;
+  definido_em: string | null;
 }
 
 export function useLimitesAnuais(contaId: string | null, ano: number) {
@@ -190,6 +194,7 @@ export function useSaveLimiteAnual() {
   return useMutation({
     mutationFn: async (input: {
       conta_id: string; pessoa_id: string; ano: number; valor_limite: number | null;
+      competencia_origem?: string | null;
     }) => {
       if (input.valor_limite === null) {
         const { error } = await supabase
@@ -201,12 +206,56 @@ export function useSaveLimiteAnual() {
         if (error) throw error;
         return;
       }
+      const { data: auth } = await supabase.auth.getUser();
+      const userId = auth?.user?.id ?? null;
+      let nome: string | null = auth?.user?.email ?? null;
+      if (userId) {
+        const { data: perfil } = await supabase
+          .from("user_profiles")
+          .select("name")
+          .eq("user_id", userId)
+          .maybeSingle();
+        nome = (perfil as any)?.name ?? nome;
+      }
       const { error } = await supabase
         .from("despesas_repasse_benef_limite_anual" as any)
-        .upsert(input as any, { onConflict: "conta_id,pessoa_id,ano" } as any);
+        .upsert({
+          conta_id: input.conta_id,
+          pessoa_id: input.pessoa_id,
+          ano: input.ano,
+          valor_limite: input.valor_limite,
+          competencia_origem: input.competencia_origem ?? null,
+          definido_por: userId,
+          definido_por_nome: nome,
+          definido_em: new Date().toISOString(),
+        } as any, { onConflict: "conta_id,pessoa_id,ano" } as any);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [CONTAS_KEY] }),
+  });
+}
+
+/** Marca um beneficiário como residual ("recebe a sobra"), desmarcando os demais. */
+export function useSetBeneficiarioResidual() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ repasseId, beneficiarioId }: { repasseId: string; beneficiarioId: string }) => {
+      const { error: e1 } = await supabase
+        .from("despesas_repasse_beneficiarios" as any)
+        .update({ is_residual: false } as any)
+        .eq("repasse_id", repasseId)
+        .neq("id", beneficiarioId);
+      if (e1) throw e1;
+      const { error: e2 } = await supabase
+        .from("despesas_repasse_beneficiarios" as any)
+        .update({ is_residual: true } as any)
+        .eq("id", beneficiarioId);
+      if (e2) throw e2;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [CONTAS_KEY] });
+      qc.invalidateQueries({ queryKey: [REPASSES_KEY] });
+    },
   });
 }
 
