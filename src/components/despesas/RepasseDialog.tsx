@@ -123,6 +123,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     pessoa_id: null as string | null,
     valor: 0,
     valor_limite: "" as string,
+    limite_anual: "" as string,
     data_recebimento: "",
     is_residual: false,
     observacao: "",
@@ -277,6 +278,14 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
         observacao: novoBenef.observacao || null,
         ordem: beneficiarios.length + 1,
       } as any);
+      if (novoBenef.limite_anual !== "") {
+        await saveLimiteAnual.mutateAsync({
+          conta_id: conta.id,
+          pessoa_id: novoBenef.pessoa_id,
+          ano: anoSelecionado,
+          valor_limite: Number(novoBenef.limite_anual),
+        });
+      }
       setNovoBenef(benefVazio);
     } catch (e: any) { toast.error(e?.message ?? "Erro"); }
   }
