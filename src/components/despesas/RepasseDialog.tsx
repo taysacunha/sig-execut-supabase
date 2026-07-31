@@ -1003,7 +1003,14 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                   <Label>Pessoa</Label>
                   <ComboboxSelect
                     value={novoBenef.pessoa_id}
-                    onChange={(v) => setNovoBenef({ ...novoBenef, pessoa_id: v })}
+                    onChange={(v) => {
+                      const lim = v ? limiteAnualDe(v) : null;
+                      setNovoBenef({
+                        ...novoBenef,
+                        pessoa_id: v,
+                        limite_anual: lim === null ? "" : String(lim),
+                      });
+                    }}
                     options={(pessoas.data ?? []).map((p) => ({
                       value: p.id,
                       label: `${p.nome} (${p.tipo_pessoa === "juridica" ? "PJ" : "PF"})`,
@@ -1028,6 +1035,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                 <div className="space-y-1">
                   <Label>Limite ano {anoSelecionado}</Label>
                   <Input type="number" step="0.01" min={0} className="text-right" placeholder="opcional"
+                    title={novoBenef.pessoa_id ? limiteInfoDe(novoBenef.pessoa_id) : ""}
                     value={novoBenef.limite_anual}
                     onChange={(e) => setNovoBenef({ ...novoBenef, limite_anual: e.target.value })} />
                 </div>
