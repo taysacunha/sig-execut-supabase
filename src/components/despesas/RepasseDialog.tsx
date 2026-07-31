@@ -371,7 +371,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
           pessoa_id: novoBenef.pessoa_id,
           ano: anoSelecionado,
           valor_limite: Number(novoBenef.limite_anual),
+          competencia_origem: repasse.competencia,
         });
+        limitesAnuais.refetch();
       }
       setNovoBenef(benefVazio);
     } catch (e: any) { toast.error(e?.message ?? "Erro"); }
