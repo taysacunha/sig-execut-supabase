@@ -37,6 +37,7 @@ export interface RepasseBeneficiario {
 
 export interface Repasse {
   id: string;
+  conta_id: string | null;
   proprietario_id: string;
   centro_custo_id: string;
   competencia: string;
@@ -57,6 +58,157 @@ export interface Repasse {
 }
 
 export const REPASSES_KEY = "despesas-repasses";
+export const CONTAS_KEY = "despesas-repasse-contas";
+
+export interface RepasseConta {
+  id: string;
+  proprietario_id: string;
+  centro_custo_id: string;
+  observacao: string | null;
+  proprietario?: { nome: string; cpf_cnpj: string | null } | null;
+  centro_custo?: { nome: string } | null;
+  competencias: Repasse[];
+}
+
+export interface ContaFiltros {
+  centroCustoId?: string;
+  proprietarioId?: string;
+  status?: RepasseStatus | "todos";
+  competencia?: string;
+}
+
+export function useRepasseContas(filtros: ContaFiltros = {}) {
+  return useQuery({
+    queryKey: [CONTAS_KEY, filtros],
+    queryFn: async () => {
+      let q = supabase
+        .from("despesas_repasse_contas" as any)
+        .select(
+          `id, proprietario_id, centro_custo_id, observacao,
+           proprietario:despesas_pessoas(nome, cpf_cnpj),
+           centro_custo:despesas_centros_custo(nome),
+           competencias:despesas_repasses(
+             *,
+             itens:despesas_repasse_itens(*),
+             beneficiarios:despesas_repasse_beneficiarios(
+               *, pessoa:despesas_pessoas(nome, tipo_pessoa, cpf_cnpj)
+             )
+           )`
+        );
+
+      if (filtros.centroCustoId) q = q.eq("centro_custo_id", filtros.centroCustoId);
+      if (filtros.proprietarioId) q = q.eq("proprietario_id", filtros.proprietarioId);
+
+      const { data, error } = await q.limit(1000);
+      if (error) throw error;
+
+      return ((data ?? []) as any[]).map((c) => ({
+        ...c,
+        competencias: ((c.competencias ?? []) as Repasse[])
+          .slice()
+          .sort((a, b) => (a.competencia < b.competencia ? 1 : -1)),
+      })) as RepasseConta[];
+    },
+  });
+}
+
+export function useCriarConta() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      proprietarioId, centroCustoId,
+    }: { proprietarioId: string; centroCustoId: string }) => {
+      const { data, error } = await supabase.rpc("despesas_repasse_criar_conta" as any, {
+        _proprietario_id: proprietarioId,
+        _centro_custo_id: centroCustoId,
+      } as any);
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [CONTAS_KEY] }),
+  });
+}
+
+export function useAddCompetencia() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ contaId, competencia }: { contaId: string; competencia: string }) => {
+      const { data, error } = await supabase.rpc("despesas_repasse_add_competencia" as any, {
+        _conta_id: contaId,
+        _competencia: competencia,
+      } as any);
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [CONTAS_KEY] });
+      qc.invalidateQueries({ queryKey: [REPASSES_KEY] });
+    },
+  });
+}
+
+export function useDeleteConta() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("despesas_repasse_contas" as any)
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [CONTAS_KEY] }),
+  });
+}
+
+export interface LimiteAnual {
+  id: string;
+  conta_id: string;
+  pessoa_id: string;
+  ano: number;
+  valor_limite: number;
+}
+
+export function useLimitesAnuais(contaId: string | null, ano: number) {
+  return useQuery({
+    queryKey: [CONTAS_KEY, "limites-anuais", contaId, ano],
+    enabled: !!contaId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("despesas_repasse_benef_limite_anual" as any)
+        .select("*")
+        .eq("conta_id", contaId!)
+        .eq("ano", ano);
+      if (error) throw error;
+      return (data ?? []) as unknown as LimiteAnual[];
+    },
+  });
+}
+
+export function useSaveLimiteAnual() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      conta_id: string; pessoa_id: string; ano: number; valor_limite: number | null;
+    }) => {
+      if (input.valor_limite === null) {
+        const { error } = await supabase
+          .from("despesas_repasse_benef_limite_anual" as any)
+          .delete()
+          .eq("conta_id", input.conta_id)
+          .eq("pessoa_id", input.pessoa_id)
+          .eq("ano", input.ano);
+        if (error) throw error;
+        return;
+      }
+      const { error } = await supabase
+        .from("despesas_repasse_benef_limite_anual" as any)
+        .upsert(input as any, { onConflict: "conta_id,pessoa_id,ano" } as any);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [CONTAS_KEY] }),
+  });
+}
 
 export interface RepasseFiltros {
   competencia?: string; // yyyy-mm-01
