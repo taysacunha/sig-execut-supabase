@@ -28,7 +28,11 @@ import {
 import { useDespesasLookups } from "@/hooks/useDespesasLancamentos";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
 import { usePessoas, PapelPessoa } from "@/hooks/useDespesasPessoas";
-import { useDespesasValues } from "@/contexts/DespesasValuesContext";
+import {
+  useDespesasValues,
+  DespesasValuesScope,
+  ToggleValuesButton,
+} from "@/contexts/DespesasValuesContext";
 import { PessoaDialog } from "@/components/despesas/PessoaDialog";
 
 interface Props {
@@ -51,7 +55,7 @@ const tipos: { v: ImovelTipo; l: string }[] = [
   { v: "outro", l: "Outro" },
 ];
 
-export function ImovelDialog({ open, onOpenChange, editing }: Props) {
+function ImovelDialogInner({ open, onOpenChange, editing }: Props) {
   const { centros, pessoas } = useDespesasLookups();
   const saveMut = useSaveImovel();
 
@@ -150,7 +154,10 @@ export function ImovelDialog({ open, onOpenChange, editing }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editing ? "Editar imóvel" : "Novo imóvel"}</DialogTitle>
+          <div className="flex items-center justify-between gap-2 pr-8">
+            <DialogTitle>{editing ? "Editar imóvel" : "Novo imóvel"}</DialogTitle>
+            <ToggleValuesButton />
+          </div>
         </DialogHeader>
 
         <Tabs defaultValue="dados">
@@ -476,5 +483,13 @@ function HistoricoTab({ imovelId }: { imovelId: string }) {
         ))}
       </TableBody>
     </Table>
+  );
+}
+
+export function ImovelDialog(props: Props) {
+  return (
+    <DespesasValuesScope active={props.open}>
+      <ImovelDialogInner {...props} />
+    </DespesasValuesScope>
   );
 }
