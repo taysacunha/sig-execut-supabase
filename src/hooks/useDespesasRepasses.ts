@@ -213,7 +213,7 @@ export function useSaveLimiteAnual() {
         const { data: perfil } = await supabase
           .from("user_profiles")
           .select("name")
-          .eq("id", userId)
+          .eq("user_id", userId)
           .maybeSingle();
         nome = (perfil as any)?.name ?? nome;
       }
