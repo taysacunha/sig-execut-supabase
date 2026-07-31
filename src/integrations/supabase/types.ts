@@ -1308,6 +1308,51 @@ export type Database = {
           },
         ]
       }
+      despesas_repasse_benef_limite_anual: {
+        Row: {
+          ano: number
+          conta_id: string
+          created_at: string
+          id: string
+          pessoa_id: string
+          updated_at: string
+          valor_limite: number
+        }
+        Insert: {
+          ano: number
+          conta_id: string
+          created_at?: string
+          id?: string
+          pessoa_id: string
+          updated_at?: string
+          valor_limite: number
+        }
+        Update: {
+          ano?: number
+          conta_id?: string
+          created_at?: string
+          id?: string
+          pessoa_id?: string
+          updated_at?: string
+          valor_limite?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_repasse_benef_limite_anual_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_repasse_contas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_repasse_benef_limite_anual_pessoa_id_fkey"
+            columns: ["pessoa_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_pessoas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       despesas_repasse_beneficiarios: {
         Row: {
           created_at: string
@@ -1361,6 +1406,51 @@ export type Database = {
             columns: ["repasse_id"]
             isOneToOne: false
             referencedRelation: "despesas_repasses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      despesas_repasse_contas: {
+        Row: {
+          centro_custo_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          observacao: string | null
+          proprietario_id: string
+          updated_at: string
+        }
+        Insert: {
+          centro_custo_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          observacao?: string | null
+          proprietario_id: string
+          updated_at?: string
+        }
+        Update: {
+          centro_custo_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          observacao?: string | null
+          proprietario_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_repasse_contas_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_centros_custo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_repasse_contas_proprietario_id_fkey"
+            columns: ["proprietario_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_pessoas"
             referencedColumns: ["id"]
           },
         ]
@@ -1430,6 +1520,7 @@ export type Database = {
         Row: {
           centro_custo_id: string
           competencia: string
+          conta_id: string | null
           created_at: string
           created_by: string | null
           data_pagamento: string | null
@@ -1447,6 +1538,7 @@ export type Database = {
         Insert: {
           centro_custo_id: string
           competencia: string
+          conta_id?: string | null
           created_at?: string
           created_by?: string | null
           data_pagamento?: string | null
@@ -1464,6 +1556,7 @@ export type Database = {
         Update: {
           centro_custo_id?: string
           competencia?: string
+          conta_id?: string | null
           created_at?: string
           created_by?: string | null
           data_pagamento?: string | null
@@ -1484,6 +1577,13 @@ export type Database = {
             columns: ["centro_custo_id"]
             isOneToOne: false
             referencedRelation: "despesas_centros_custo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_repasses_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_repasse_contas"
             referencedColumns: ["id"]
           },
           {
@@ -4609,6 +4709,14 @@ export type Database = {
       despesas_recalcular_lancamento: {
         Args: { _lancamento_id: string }
         Returns: undefined
+      }
+      despesas_repasse_add_competencia: {
+        Args: { _competencia: string; _conta_id: string }
+        Returns: string
+      }
+      despesas_repasse_criar_conta: {
+        Args: { _centro_custo_id: string; _proprietario_id: string }
+        Returns: string
       }
       despesas_repasse_recalcular: {
         Args: { _repasse_id: string }
