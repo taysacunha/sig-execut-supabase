@@ -400,7 +400,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl w-[95vw]">
+      <DialogContent className="max-w-[98vw] w-[98vw] h-[95vh] max-h-[95vh] sm:max-h-[95vh]">
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 pr-8">
             <DialogTitle>
@@ -411,8 +411,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
           </div>
         </DialogHeader>
 
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
         {/* Barra de competências: anos + meses */}
-        <div className="space-y-2 rounded-md border p-2">
+        <div className="sticky top-0 z-10 shrink-0 space-y-2 rounded-md border bg-background p-2">
           <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
@@ -448,6 +449,14 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                   type="month" className="h-9 w-52 shrink-0 px-3"
                   value={novaComp}
                   onChange={(e) => setNovaComp(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setAddOpen(false);
+                      setNovaComp("");
+                    }
+                  }}
                 />
                 <Button
                   size="sm"
@@ -456,6 +465,17 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                   disabled={addComp.isPending}
                 >
                   Adicionar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="ml-2 shrink-0"
+                  onClick={() => {
+                    setAddOpen(false);
+                    setNovaComp("");
+                  }}
+                >
+                  Cancelar
                 </Button>
               </div>
             )}
@@ -487,7 +507,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border px-4 py-2 text-sm">
+        <div className="shrink-0 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border px-4 py-2 text-sm">
           <span className="text-muted-foreground">
             {repasse ? mesLabel(repasse.competencia) : `Consolidado · ${competencias.length} competência(s)`}
           </span>
@@ -972,8 +992,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
           </TabsContent>
         </Tabs>
         )}
+        </div>
 
-        <DialogFooter className="mt-4 gap-2">
+        <DialogFooter className="shrink-0 gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
           {repasse && (
             repasse.status === "pago" ? (
