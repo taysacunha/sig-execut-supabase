@@ -418,9 +418,9 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
           </Table>
 
           {podeEditarBenef && (
-            <div className="border rounded-md p-3 mt-3 space-y-3">
-              <div className="grid gap-3 md:grid-cols-[2fr_minmax(170px,1fr)_minmax(150px,1fr)] items-end">
-              <div className="space-y-1">
+            <div className="border rounded-md p-3 mt-3">
+              <div className="grid gap-3 items-end xl:grid-cols-[minmax(200px,2fr)_minmax(170px,1.2fr)_minmax(120px,1fr)_minmax(140px,1fr)_minmax(160px,1.5fr)_auto] md:grid-cols-2">
+              <div className="space-y-1 min-w-0">
                 <Label>Pessoa</Label>
                 <ComboboxSelect
                   value={novoBenef.pessoa_id}
@@ -436,14 +436,14 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                   allowClear
                 />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 min-w-0">
                 <Label>Valor</Label>
                 <div className="flex gap-2">
                   <Input
                     type="number"
                     step="0.01"
                     min={0}
-                    className="text-right w-full min-w-[90px]"
+                    className="text-right w-full min-w-0"
                     value={novoBenef.valor}
                     onChange={(e) => setNovoBenef({ ...novoBenef, valor: Number(e.target.value) })}
                   />
@@ -461,8 +461,8 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                   </Button>
                 </div>
               </div>
-              <div className="space-y-1">
-                <Label>Limite (opcional)</Label>
+              <div className="space-y-1 min-w-0">
+                <Label>Limite</Label>
                 <Input
                   type="number" step="0.01" min={0} className="text-right w-full"
                   placeholder="sem limite"
@@ -470,9 +470,7 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                   onChange={(e) => setNovoBenef({ ...novoBenef, valor_limite: e.target.value })}
                 />
               </div>
-              </div>
-              <div className="grid gap-3 md:grid-cols-[minmax(160px,1fr)_2fr_auto] items-end">
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <Label>Recebido em</Label>
                   <Input
                     type="date" className="w-full"
@@ -480,22 +478,22 @@ export function RepasseDialog({ open, onOpenChange, repasse }: Props) {
                     onChange={(e) => setNovoBenef({ ...novoBenef, data_recebimento: e.target.value })}
                   />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <Label>Observação</Label>
                   <Input
                     value={novoBenef.observacao}
                     onChange={(e) => setNovoBenef({ ...novoBenef, observacao: e.target.value })}
                   />
-                  <label className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
-                    <input type="checkbox" checked={novoBenef.is_residual}
-                      onChange={(e) => setNovoBenef({ ...novoBenef, is_residual: e.target.checked })} />
-                    Recebe a sobra (proprietária)
-                  </label>
                 </div>
-                <Button onClick={adicionarBenef} className="shrink-0">
+                <Button onClick={adicionarBenef} className="shrink-0 w-full xl:w-auto">
                   <Plus className="h-4 w-4 mr-1" /> Adicionar
                 </Button>
               </div>
+              <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                <input type="checkbox" checked={novoBenef.is_residual}
+                  onChange={(e) => setNovoBenef({ ...novoBenef, is_residual: e.target.checked })} />
+                Recebe a sobra (proprietária)
+              </label>
             </div>
           )}
           </TabsContent>
