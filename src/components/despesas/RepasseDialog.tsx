@@ -930,7 +930,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                       <TableCell className="text-right text-muted-foreground">
                         {b.valor_limite == null ? "—" : money(Number(b.valor_limite))}
                       </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
+                      <TableCell className="text-right text-muted-foreground" title={limiteInfoDe(b.pessoa_id)}>
                         {limiteAnualDe(b.pessoa_id) === null ? "—" : (
                           <>
                             {money(Number(limiteAnualDe(b.pessoa_id)))}
@@ -949,11 +949,22 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                           : "—"}
                       </TableCell>
                       <TableCell className="text-center">
-                        {b.is_residual ? (
-                          <Check className="mx-auto h-4 w-4 text-emerald-600" />
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
+                        <input
+                          type="radio"
+                          name={`residual-${repasse.id}`}
+                          checked={b.is_residual}
+                          disabled={!podeEditarBenef || setResidualMut.isPending}
+                          title="Recebe o valor restante do mês"
+                          onChange={() => setResidualMut.mutate(
+                            { repasseId: repasse.id, beneficiarioId: b.id },
+                            {
+                              onSuccess: () => toast.success(
+                                `${b.pessoa?.nome ?? "Beneficiário"} passa a receber a sobra do mês`,
+                              ),
+                              onError: (err: any) => toast.error(err?.message ?? "Erro"),
+                            },
+                          )}
+                        />
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground break-words">{b.observacao ?? ""}</TableCell>
                       <TableCell className="whitespace-nowrap">
