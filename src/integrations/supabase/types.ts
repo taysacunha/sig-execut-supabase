@@ -1311,33 +1311,42 @@ export type Database = {
       despesas_repasse_beneficiarios: {
         Row: {
           created_at: string
+          data_recebimento: string | null
           id: string
+          is_residual: boolean
           observacao: string | null
           ordem: number
           pessoa_id: string
           repasse_id: string
           updated_at: string
           valor: number
+          valor_limite: number | null
         }
         Insert: {
           created_at?: string
+          data_recebimento?: string | null
           id?: string
+          is_residual?: boolean
           observacao?: string | null
           ordem?: number
           pessoa_id: string
           repasse_id: string
           updated_at?: string
           valor: number
+          valor_limite?: number | null
         }
         Update: {
           created_at?: string
+          data_recebimento?: string | null
           id?: string
+          is_residual?: boolean
           observacao?: string | null
           ordem?: number
           pessoa_id?: string
           repasse_id?: string
           updated_at?: string
           valor?: number
+          valor_limite?: number | null
         }
         Relationships: [
           {
