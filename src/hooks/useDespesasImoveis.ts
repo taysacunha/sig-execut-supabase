@@ -32,8 +32,8 @@ export interface Imovel {
   is_active: boolean;
   created_at: string;
   updated_at: string;
-  proprietario?: { nome: string } | null;
-  inquilino?: { nome: string } | null;
+  proprietario?: { nome: string; cpf_cnpj?: string | null } | null;
+  inquilino?: { nome: string; cpf_cnpj?: string | null } | null;
   centro_custo?: { nome: string } | null;
 }
 
@@ -79,8 +79,8 @@ export function useImoveis(filtros: ImovelFiltros = {}) {
         .from("despesas_imoveis" as any)
         .select(
           `*,
-           proprietario:despesas_pessoas!despesas_imoveis_proprietario_id_fkey(nome),
-           inquilino:despesas_pessoas!despesas_imoveis_inquilino_id_fkey(nome),
+           proprietario:despesas_pessoas!despesas_imoveis_proprietario_id_fkey(nome, cpf_cnpj),
+           inquilino:despesas_pessoas!despesas_imoveis_inquilino_id_fkey(nome, cpf_cnpj),
            centro_custo:despesas_centros_custo(nome)`
         )
         .eq("is_active", true)

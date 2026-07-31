@@ -65,6 +65,8 @@ export function useDespesasPermissions() {
   const isAdmin = role === "admin" || role === "super_admin";
 
   const nivelDe = (aba: DespesasAba): DespesasNivel => {
+    // Super admin sempre tem acesso total, mesmo com linha explícita cadastrada.
+    if (role === "super_admin") return "delete";
     const found = perms.find((p) => p.aba === aba);
     if (found) return found.nivel;
     return isAdmin ? "delete" : "sem_acesso";

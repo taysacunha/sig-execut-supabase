@@ -27,6 +27,9 @@ export interface RepasseBeneficiario {
   repasse_id: string;
   pessoa_id: string;
   valor: number;
+  valor_limite: number | null;
+  data_recebimento: string | null;
+  is_residual: boolean;
   ordem: number;
   observacao: string | null;
   pessoa?: { nome: string; tipo_pessoa: "fisica" | "juridica"; cpf_cnpj: string | null } | null;

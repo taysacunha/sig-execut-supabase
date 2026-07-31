@@ -156,7 +156,26 @@ export function useSaveLancamento() {
           .from("despesas_lancamentos" as any)
           .update(input as any)
           .eq("id", id);
-        if (error) throw error;
+        if (error) {
+          // Colisão com outra parcela da mesma série (mesma data de vencimento).
+          // Nesse caso desvinculamos a parcela da série e gravamos como manual.
+          if (
+            error.code === "23505" ||
+            (error.message ?? "").includes("uq_desp_lanc_serie_venc")
+          ) {
+            const { error: err2 } = await supabase
+              .from("despesas_lancamentos" as any)
+              .update({ ...(input as any), serie_recorrencia_id: null, is_manual: true })
+              .eq("id", id);
+            if (err2) {
+              throw new Error(
+                "Já existe uma parcela desta recorrência com a mesma data de vencimento. Escolha outra data.",
+              );
+            }
+            return id;
+          }
+          throw error;
+        }
         return id;
       }
       const { data: userRes } = await supabase.auth.getUser();
