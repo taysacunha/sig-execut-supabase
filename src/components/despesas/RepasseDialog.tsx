@@ -123,6 +123,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     pessoa_id: null as string | null,
     valor: 0,
     valor_limite: "" as string,
+    limite_anual: "" as string,
     data_recebimento: "",
     is_residual: false,
     observacao: "",
@@ -277,6 +278,14 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
         observacao: novoBenef.observacao || null,
         ordem: beneficiarios.length + 1,
       } as any);
+      if (novoBenef.limite_anual !== "") {
+        await saveLimiteAnual.mutateAsync({
+          conta_id: conta.id,
+          pessoa_id: novoBenef.pessoa_id,
+          ano: anoSelecionado,
+          valor_limite: Number(novoBenef.limite_anual),
+        });
+      }
       setNovoBenef(benefVazio);
     } catch (e: any) { toast.error(e?.message ?? "Erro"); }
   }
@@ -603,14 +612,22 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               </div>
             </div>
 
+            <p className="mb-2 text-xs text-muted-foreground">
+              <strong>Valor</strong> é o que a pessoa recebe neste mês. <strong>Limite mês</strong> é o teto
+              dela na competência e <strong>Limite ano</strong> o teto no ano {anoSelecionado} (soma de todas
+              as competências). Quem estiver marcado em <strong>Sobra</strong> recebe todo o restante do
+              líquido ao usar “Distribuir por limite” — normalmente a proprietária.
+            </p>
+
             <Table className="table-fixed">
               <TableHeader><TableRow>
                 <TableHead className="w-10">#</TableHead>
-                <TableHead className="w-[22%]">Pessoa</TableHead>
-                <TableHead className="text-right w-[13%]">Valor</TableHead>
-                <TableHead className="text-right w-[13%]">Limite mês</TableHead>
-                <TableHead className="text-right w-[16%]">Limite ano {anoSelecionado}</TableHead>
-                <TableHead className="w-[13%]">Recebido em</TableHead>
+                <TableHead className="w-[20%]">Pessoa</TableHead>
+                <TableHead className="text-right w-[12%]">Valor</TableHead>
+                <TableHead className="text-right w-[12%]">Limite mês</TableHead>
+                <TableHead className="text-right w-[15%]">Limite ano {anoSelecionado}</TableHead>
+                <TableHead className="w-[12%]">Recebido em</TableHead>
+                <TableHead className="text-center w-16" title="Recebe o valor restante do mês">Sobra</TableHead>
                 <TableHead>Observação</TableHead>
                 <TableHead className="w-24" />
               </TableRow></TableHeader>
@@ -651,14 +668,14 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                         <Input type="date" className="w-full" value={editBenef.data_recebimento}
                           onChange={(e) => setEditBenef({ ...editBenef, data_recebimento: e.target.value })} />
                       </TableCell>
+                      <TableCell className="text-center">
+                        <input type="checkbox" checked={editBenef.is_residual}
+                          title="Recebe o valor restante do mês"
+                          onChange={(e) => setEditBenef({ ...editBenef, is_residual: e.target.checked })} />
+                      </TableCell>
                       <TableCell>
                         <Input value={editBenef.observacao}
                           onChange={(e) => setEditBenef({ ...editBenef, observacao: e.target.value })} />
-                        <label className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                          <input type="checkbox" checked={editBenef.is_residual}
-                            onChange={(e) => setEditBenef({ ...editBenef, is_residual: e.target.checked })} />
-                          Recebe a sobra
-                        </label>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         <Button size="icon" variant="ghost" onClick={salvarBenefEdit} disabled={saveBenef.isPending} title="Salvar">
@@ -677,10 +694,16 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                         <div className="text-xs text-muted-foreground break-words">
                           {b.pessoa?.tipo_pessoa === "juridica" ? "PJ" : "PF"}
                           {b.pessoa?.cpf_cnpj ? ` · ${b.pessoa.cpf_cnpj}` : ""}
-                          {b.is_residual ? " · recebe a sobra" : ""}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right">{money(Number(b.valor))}</TableCell>
+                      <TableCell className="text-right">
+                        {money(Number(b.valor))}
+                        {b.is_residual && (
+                          <div className="text-[11px] text-muted-foreground">
+                            sobra do mês {money(restante + Number(b.valor))}
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right text-muted-foreground">
                         {b.valor_limite == null ? "—" : money(Number(b.valor_limite))}
                       </TableCell>
@@ -698,6 +721,13 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                         {b.data_recebimento
                           ? new Date(b.data_recebimento + "T00:00:00").toLocaleDateString("pt-BR")
                           : "—"}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {b.is_residual ? (
+                          <Check className="mx-auto h-4 w-4 text-emerald-600" />
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground break-words">{b.observacao ?? ""}</TableCell>
                       <TableCell className="whitespace-nowrap">
@@ -731,7 +761,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
             </Table>
 
             {podeEditarBenef && (
-              <div className="mt-3 grid gap-2 md:grid-cols-[2fr_minmax(130px,1fr)_minmax(130px,1fr)_minmax(140px,1fr)_1.4fr_auto] items-end">
+              <div className="mt-3 grid gap-2 md:grid-cols-[1.8fr_minmax(110px,1fr)_minmax(110px,1fr)_minmax(110px,1fr)_minmax(130px,1fr)_1.2fr_auto_auto] items-end">
                 <div className="space-y-1">
                   <Label>Pessoa</Label>
                   <ComboboxSelect
@@ -747,16 +777,22 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label>Valor</Label>
+                  <Label>Valor (do mês)</Label>
                   <Input type="number" step="0.01" min={0} className="text-right"
                     value={novoBenef.valor}
                     onChange={(e) => setNovoBenef({ ...novoBenef, valor: Number(e.target.value) })} />
                 </div>
                 <div className="space-y-1">
-                  <Label>Limite mês</Label>
+                  <Label>Limite mês (teto)</Label>
                   <Input type="number" step="0.01" min={0} className="text-right" placeholder="opcional"
                     value={novoBenef.valor_limite}
                     onChange={(e) => setNovoBenef({ ...novoBenef, valor_limite: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Limite ano {anoSelecionado}</Label>
+                  <Input type="number" step="0.01" min={0} className="text-right" placeholder="opcional"
+                    value={novoBenef.limite_anual}
+                    onChange={(e) => setNovoBenef({ ...novoBenef, limite_anual: e.target.value })} />
                 </div>
                 <div className="space-y-1">
                   <Label>Recebido em</Label>
@@ -767,11 +803,14 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                   <Label>Observação</Label>
                   <Input value={novoBenef.observacao}
                     onChange={(e) => setNovoBenef({ ...novoBenef, observacao: e.target.value })} />
-                  <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                </div>
+                <div className="space-y-1">
+                  <Label className="whitespace-nowrap">Sobra</Label>
+                  <div className="flex h-10 items-center justify-center">
                     <input type="checkbox" checked={novoBenef.is_residual}
+                      title="Recebe o valor restante do mês"
                       onChange={(e) => setNovoBenef({ ...novoBenef, is_residual: e.target.checked })} />
-                    Recebe a sobra
-                  </label>
+                  </div>
                 </div>
                 <Button onClick={adicionarBenef} disabled={saveBenef.isPending} title="Adicionar beneficiário">
                   <Plus className="h-4 w-4" />
@@ -779,8 +818,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               </div>
             )}
             <p className="mt-2 text-xs text-muted-foreground">
-              O limite anual é opcional e vale para o ano da competência ({anoSelecionado}); edite a linha
-              do beneficiário para defini-lo.
+              O limite anual é opcional, vale para o ano da competência ({anoSelecionado}) e pode ser
+              informado ao adicionar ou ao editar a linha do beneficiário. Apenas um beneficiário pode
+              ficar com a sobra.
             </p>
             </>
             )}
