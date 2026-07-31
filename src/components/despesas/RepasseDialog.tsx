@@ -188,6 +188,17 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const limiteAnualDe = (pessoaId: string) =>
     limitesAnuais.data?.find((l) => l.pessoa_id === pessoaId)?.valor_limite ?? null;
 
+  const limiteInfoDe = (pessoaId: string) => {
+    const l = limitesAnuais.data?.find((x) => x.pessoa_id === pessoaId);
+    if (!l) return "";
+    const origem = l.competencia_origem ? mesLabel(l.competencia_origem) : "competência não registrada";
+    const quem = l.definido_por_nome ? ` por ${l.definido_por_nome}` : "";
+    const quando = l.definido_em
+      ? ` em ${new Date(l.definido_em).toLocaleDateString("pt-BR")}`
+      : "";
+    return `Definido em ${origem}${quem}${quando} — vale para todas as competências de ${anoSelecionado}`;
+  };
+
   const recebidoNoAno = (pessoaId: string) =>
     competencias
       .filter((c) => c.competencia.slice(0, 4) === String(anoSelecionado))
