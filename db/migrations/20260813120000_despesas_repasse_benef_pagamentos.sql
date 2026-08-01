@@ -101,7 +101,8 @@ BEGIN
   UPDATE public.despesas_repasse_beneficiarios
      SET valor = v_total,
          updated_at = now()
-   WHERE id = v_benef;
+   WHERE id = v_benef
+     AND valor IS DISTINCT FROM v_total;
 
   IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
   RETURN NEW;
