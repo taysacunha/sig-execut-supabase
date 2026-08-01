@@ -940,6 +940,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                       </TableCell>
                     </TableRow>
                   ) : (
+                    <Fragment key={b.id}>
                     <TableRow key={b.id}>
                       <TableCell>{i + 1}</TableCell>
                       <TableCell className="align-top">
@@ -1034,6 +1035,141 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                         )}
                       </TableCell>
                     </TableRow>
+                    {expandido === b.id && (
+                      <TableRow key={`${b.id}-pag`}>
+                        <TableCell colSpan={9} className="bg-muted/40">
+                          <div className="text-xs font-semibold mb-2">
+                            Repasses de {b.pessoa?.nome ?? "—"} em {mesLabel(repasse.competencia)}
+                          </div>
+                          <Table>
+                            <TableHeader><TableRow>
+                              <TableHead className="w-36">Data</TableHead>
+                              <TableHead className="text-right w-36">Valor</TableHead>
+                              <TableHead>Imóvel de origem</TableHead>
+                              <TableHead>Observação</TableHead>
+                              <TableHead className="w-24" />
+                            </TableRow></TableHeader>
+                            <TableBody>
+                              {(b.pagamentos ?? []).length === 0 && (
+                                <TableRow>
+                                  <TableCell colSpan={5} className="text-sm text-muted-foreground">
+                                    Nenhum repasse lançado ainda.
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                              {(b.pagamentos ?? [])
+                                .slice()
+                                .sort((x, y) => (x.data < y.data ? -1 : 1))
+                                .map((p) =>
+                                  editPag?.id === p.id ? (
+                                    <TableRow key={p.id}>
+                                      <TableCell>
+                                        <Input type="date" value={editPag.data}
+                                          onChange={(e) => setEditPag({ ...editPag, data: e.target.value })} />
+                                      </TableCell>
+                                      <TableCell>
+                                        <Input type="number" step="0.01" min={0} className="text-right"
+                                          value={editPag.valor}
+                                          onChange={(e) => setEditPag({ ...editPag, valor: Number(e.target.value) })} />
+                                      </TableCell>
+                                      <TableCell>
+                                        <ComboboxSelect
+                                          value={editPag.imovel_id}
+                                          onChange={(v) => setEditPag({ ...editPag, imovel_id: v })}
+                                          options={imovelOptions}
+                                          placeholder="Sem imóvel"
+                                          searchPlaceholder="Buscar imóvel…"
+                                        />
+                                      </TableCell>
+                                      <TableCell>
+                                        <Input value={editPag.observacao}
+                                          onChange={(e) => setEditPag({ ...editPag, observacao: e.target.value })} />
+                                      </TableCell>
+                                      <TableCell className="whitespace-nowrap">
+                                        <Button size="icon" variant="ghost" title="Salvar"
+                                          disabled={savePag.isPending}
+                                          onClick={() => salvarPagEdit(b.id)}>
+                                          <Check className="h-4 w-4 text-emerald-600" />
+                                        </Button>
+                                        <Button size="icon" variant="ghost" title="Cancelar"
+                                          onClick={() => setEditPag(null)}>
+                                          <X className="h-4 w-4" />
+                                        </Button>
+                                      </TableCell>
+                                    </TableRow>
+                                  ) : (
+                                    <TableRow key={p.id}>
+                                      <TableCell className="text-sm">
+                                        {new Date(p.data + "T00:00:00").toLocaleDateString("pt-BR")}
+                                      </TableCell>
+                                      <TableCell className="text-right">{money(Number(p.valor))}</TableCell>
+                                      <TableCell className="text-sm">{imovelLabel(p.imovel_id)}</TableCell>
+                                      <TableCell className="text-sm text-muted-foreground">
+                                        {p.observacao ?? ""}
+                                      </TableCell>
+                                      <TableCell className="whitespace-nowrap">
+                                        {podeEditarBenef && (
+                                          <>
+                                            <Button size="icon" variant="ghost" title="Editar"
+                                              onClick={() => setEditPag({
+                                                id: p.id, data: p.data, valor: Number(p.valor),
+                                                imovel_id: p.imovel_id, observacao: p.observacao ?? "",
+                                              })}>
+                                              <Pencil className="h-4 w-4" />
+                                            </Button>
+                                            <Button size="icon" variant="ghost" title="Excluir"
+                                              onClick={() => setConfirmDelPag({
+                                                id: p.id,
+                                                label: `${new Date(p.data + "T00:00:00").toLocaleDateString("pt-BR")} — ${money(Number(p.valor))}`,
+                                              })}>
+                                              <Trash2 className="h-4 w-4 text-destructive" />
+                                            </Button>
+                                          </>
+                                        )}
+                                      </TableCell>
+                                    </TableRow>
+                                  ),
+                                )}
+                            </TableBody>
+                          </Table>
+                          {podeEditarBenef && (
+                            <div className="mt-2 grid gap-2 md:grid-cols-[150px_150px_1.5fr_1.5fr_auto] items-end">
+                              <div className="space-y-1">
+                                <Label>Data</Label>
+                                <Input type="date" value={novoPag.data}
+                                  onChange={(e) => setNovoPag({ ...novoPag, data: e.target.value })} />
+                              </div>
+                              <div className="space-y-1">
+                                <Label>Valor</Label>
+                                <Input type="number" step="0.01" min={0} className="text-right"
+                                  value={novoPag.valor}
+                                  onChange={(e) => setNovoPag({ ...novoPag, valor: Number(e.target.value) })} />
+                              </div>
+                              <div className="space-y-1">
+                                <Label>Imóvel de origem</Label>
+                                <ComboboxSelect
+                                  value={novoPag.imovel_id}
+                                  onChange={(v) => setNovoPag({ ...novoPag, imovel_id: v })}
+                                  options={imovelOptions}
+                                  placeholder="Sem imóvel"
+                                  searchPlaceholder="Buscar imóvel…"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label>Observação</Label>
+                                <Input value={novoPag.observacao}
+                                  onChange={(e) => setNovoPag({ ...novoPag, observacao: e.target.value })} />
+                              </div>
+                              <Button onClick={() => adicionarPag(b)} disabled={savePag.isPending}
+                                title="Adicionar repasse">
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    </Fragment>
                   ),
                 )}
               </TableBody>
