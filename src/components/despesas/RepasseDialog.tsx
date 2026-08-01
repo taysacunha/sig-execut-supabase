@@ -330,21 +330,15 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
   async function adicionarBenef() {
     if (!repasse || !conta) return;
-    if (!novoBenef.pessoa_id || novoBenef.valor <= 0) {
-      toast.error("Selecione a pessoa e informe um valor");
+    if (!novoBenef.pessoa_id) {
+      toast.error("Selecione a pessoa");
+      return;
+    }
+    if (beneficiarios.some((b) => b.pessoa_id === novoBenef.pessoa_id)) {
+      toast.error("Esta pessoa já é beneficiária desta competência.");
       return;
     }
     const limAno = limiteAnualDe(novoBenef.pessoa_id);
-    const limAnoNovo = novoBenef.limite_anual !== "" ? Number(novoBenef.limite_anual) : limAno;
-    if (
-      limAnoNovo !== null &&
-      recebidoNoAno(novoBenef.pessoa_id) + novoBenef.valor > Number(limAnoNovo) + 0.009
-    ) {
-      toast.error(
-        `Limite do ano ${anoSelecionado} atingido para este beneficiário. Aumente o "Limite ano" para liberar mais.`,
-      );
-      return;
-    }
     if (
       limAno !== null &&
       novoBenef.limite_anual !== "" &&
@@ -366,10 +360,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
       await saveBenef.mutateAsync({
         repasse_id: repasse.id,
         pessoa_id: novoBenef.pessoa_id,
-        valor: novoBenef.valor,
+        valor: 0,
         valor_limite: novoBenef.valor_limite === "" ? null : Number(novoBenef.valor_limite),
-        data_recebimento: novoBenef.data_recebimento || null,
-        is_residual: novoBenef.is_residual,
+        is_proprietario: novoBenef.is_proprietario,
         observacao: novoBenef.observacao || null,
         ordem: beneficiarios.length + 1,
       } as any);
