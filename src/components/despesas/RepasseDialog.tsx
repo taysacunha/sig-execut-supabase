@@ -26,6 +26,7 @@ import {
   useSaveRepasseBeneficiario, useDeleteRepasseBeneficiario,
   useRepasseInquilinos, useAddCompetencia, useLimitesAnuais, useSaveLimiteAnual,
   useDeleteRepasse, useUpdateRepasseCampos, useSetBeneficiarioResidual,
+  useSaveBenefPagamento, useDeleteBenefPagamento,
 } from "@/hooks/useDespesasRepasses";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
 import { usePessoas } from "@/hooks/useDespesasPessoas";
