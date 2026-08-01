@@ -23,6 +23,8 @@ import {
   HelpCircle,
   Link2
 } from "lucide-react";
+import { CalendarX } from "lucide-react";
+import { UnallocatedBrokersTab } from "@/components/validation/UnallocatedBrokersTab";
 
 interface ValidationReportPanelProps {
   result: PostValidationResult | null;
@@ -30,10 +32,13 @@ interface ValidationReportPanelProps {
   brokerDiagnostics?: BrokerAllocationDiagnostic[];
   eligibilityExclusions?: EligibilityExclusion[];
   brokerEligibilityMap?: BrokerExternalEligibility[];
+  scheduleId?: string;
+  weekStart?: string;
+  weekEnd?: string;
 }
 
 type SeverityFilter = "all" | "error" | "warning";
-type ViewMode = "broker" | "rule" | "diagnostic" | "eligibility";
+type ViewMode = "broker" | "rule" | "diagnostic" | "eligibility" | "unallocated";
 
 // ═══════════════════════════════════════════════════════════
 // RULE EXPLANATIONS MAP
@@ -109,7 +114,7 @@ function humanizeExclusionReason(reason: string): string {
 // ═══════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════
-export function ValidationReportPanel({ result, onClose, brokerDiagnostics, eligibilityExclusions, brokerEligibilityMap }: ValidationReportPanelProps) {
+export function ValidationReportPanel({ result, onClose, brokerDiagnostics, eligibilityExclusions, brokerEligibilityMap, scheduleId, weekStart, weekEnd }: ValidationReportPanelProps) {
   const [expandedBrokers, setExpandedBrokers] = useState<Set<string>>(new Set());
   const [expandedRules, setExpandedRules] = useState<Set<string>>(new Set());
   const [expandedDiagnostics, setExpandedDiagnostics] = useState<Set<string>>(new Set());
@@ -424,6 +429,15 @@ export function ValidationReportPanel({ result, onClose, brokerDiagnostics, elig
                 <Link2 className="h-3 w-3" />
                 Vínculos
               </Button>
+              <Button
+                variant={viewMode === "unallocated" ? "default" : "outline"}
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => setViewMode("unallocated")}
+              >
+                <CalendarX className="h-3 w-3" />
+                Sem alocação
+              </Button>
             </div>
             <div className="flex gap-1">
               {hasActiveFilters && (
@@ -489,8 +503,16 @@ export function ValidationReportPanel({ result, onClose, brokerDiagnostics, elig
               searchBroker={searchBroker}
               brokerReports={result.brokerReports}
             />
+          ) : viewMode === "unallocated" ? (
+            <UnallocatedBrokersTab
+              scheduleId={scheduleId}
+              startDate={weekStart}
+              endDate={weekEnd}
+              diagnostics={brokerDiagnostics}
+              eligibilityExclusions={eligibilityExclusions}
+            />
           ) : null}
-          {filteredBrokerReports.length === 0 && filteredGlobalViolations.length === 0 && filteredViolationsByRule.size === 0 && hasActiveFilters && (
+          {viewMode !== "unallocated" && filteredBrokerReports.length === 0 && filteredGlobalViolations.length === 0 && filteredViolationsByRule.size === 0 && hasActiveFilters && (
             <div className="text-center py-8 text-muted-foreground text-sm">
               Nenhum resultado para os filtros aplicados.
             </div>

@@ -2307,6 +2307,9 @@ const Schedules = () => {
                 brokerDiagnostics={getLastGenerationTrace()?.brokerDiagnostics}
                 eligibilityExclusions={getLastGenerationTrace()?.eligibilityExclusions}
                 brokerEligibilityMap={getLastGenerationTrace()?.brokerEligibilityMap || persistedEligibilityMap || undefined}
+                scheduleId={selectedScheduleId || undefined}
+                weekStart={schedules?.find(s => s.id === selectedScheduleId)?.week_start_date}
+                weekEnd={schedules?.find(s => s.id === selectedScheduleId)?.week_end_date}
               />
             </div>
           ) : (
