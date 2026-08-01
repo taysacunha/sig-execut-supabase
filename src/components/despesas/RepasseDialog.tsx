@@ -154,6 +154,8 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   >(null);
   const [confirmDelPag, setConfirmDelPag] = useState<{ id: string; label: string } | null>(null);
   const [reabrir, setReabrir] = useState<{ repasse: Repasse; justificativa: string } | null>(null);
+  const [confirmFechar, setConfirmFechar] = useState<Repasse | null>(null);
+  const [confirmPago, setConfirmPago] = useState<Repasse | null>(null);
   const [itemDuplicado, setItemDuplicado] = useState<{ id: string; label: string } | null>(null);
   const [escolherResidual, setEscolherResidual] = useState(false);
   const [confirmLimite, setConfirmLimite] = useState<
@@ -333,13 +335,18 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   async function confirmarReabertura() {
     if (!reabrir) return;
     const just = reabrir.justificativa.trim();
-    if (just.length < 10) {
+    const eraPago = reabrir.repasse.status === "pago";
+    if (eraPago && just.length < 10) {
       toast.error("Informe uma justificativa com pelo menos 10 caracteres");
       return;
     }
     try {
-      await updStatus.mutateAsync({ id: reabrir.repasse.id, status: "aberto" });
-      const carimbo = `[Reabertura ${new Date().toLocaleDateString("pt-BR")}] ${just}`;
+      await updStatus.mutateAsync({
+        id: reabrir.repasse.id,
+        status: "aberto",
+        ...(eraPago ? { data_pagamento: null } : {}),
+      });
+      const carimbo = `[Reabertura ${new Date().toLocaleDateString("pt-BR")}] ${just || "sem justificativa"}`;
       await updCampos.mutateAsync({
         id: reabrir.repasse.id,
         campos: {
@@ -429,7 +436,24 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
   async function marcarPago() {
     if (!repasse) return;
-    return marcarPagoInterno();
+    if (distribuido <= 0) {
+      toast.error("Defina ao menos um beneficiário antes de baixar o repasse.");
+      return;
+    }
+    if (distribuido > Number(repasse.valor_liquido || 0) + 0.009) {
+      toast.error("Soma dos beneficiários excede o valor líquido.");
+      return;
+    }
+    setConfirmPago(repasse);
+  }
+
+  async function confirmarFechamento() {
+    if (!confirmFechar) return;
+    try {
+      await updStatus.mutateAsync({ id: confirmFechar.id, status: "fechado" });
+      setConfirmFechar(null);
+      toast.success("Competência fechada — use “Reabrir” para voltar a editar");
+    } catch (e: any) { toast.error(e?.message ?? "Erro ao fechar competência"); }
   }
 
   function validarLimitesPag(
@@ -1549,7 +1573,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
         <DialogFooter className="shrink-0 gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
           {repasse && (
-            repasse.status === "pago" ? (
+            repasse.status === "pago" || repasse.status === "fechado" ? (
               <Button variant="outline" onClick={() => setReabrir({ repasse, justificativa: "" })}>
                 <RotateCcw className="h-4 w-4 mr-1" />
                 Reabrir {mesLabel(repasse.competencia)}
@@ -1562,7 +1586,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
             )
           )}
           {repasse?.status === "aberto" && (
-            <Button variant="outline" onClick={() => updStatus.mutate({ id: repasse.id, status: "fechado" })}>
+            <Button variant="outline" onClick={() => setConfirmFechar(repasse)}>
               Fechar {mesLabel(repasse.competencia)}
             </Button>
           )}
@@ -1638,10 +1662,17 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
       <AlertDialog open={!!reabrir} onOpenChange={(o) => !o && setReabrir(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Reabrir competência paga?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {reabrir?.repasse.status === "pago"
+                ? "Reabrir competência paga?"
+                : "Reabrir competência fechada?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {reabrir ? mesLabel(reabrir.repasse.competencia) : ""} voltará ao status “Fechado”,
-              permitindo ajustes ou exclusão. Justifique a reabertura (mínimo 10 caracteres).
+              {reabrir ? mesLabel(reabrir.repasse.competencia) : ""} voltará ao status “Aberto”,
+              permitindo ajustes ou exclusão.
+              {reabrir?.repasse.status === "pago"
+                ? " A data de pagamento será limpa. Justifique a reabertura (mínimo 10 caracteres)."
+                : " Você pode registrar um motivo (opcional)."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <Textarea
@@ -1659,6 +1690,55 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               disabled={updStatus.isPending || updCampos.isPending}
             >
               Reabrir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!confirmFechar} onOpenChange={(o) => !o && setConfirmFechar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Fechar competência?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmFechar ? mesLabel(confirmFechar.competencia) : ""} ficará fechada e os itens
+              não poderão mais ser editados. Esta ação pode ser desfeita depois pelo botão
+              “Reabrir”.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); confirmarFechamento(); }}
+              disabled={updStatus.isPending}
+            >
+              Fechar competência
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!confirmPago} onOpenChange={(o) => !o && setConfirmPago(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Marcar competência como paga?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmPago ? mesLabel(confirmPago.competencia) : ""} — líquido{" "}
+              {money(Number(confirmPago?.valor_liquido || 0))}, distribuído {money(distribuido)}.
+              Será criado o lançamento no calendário e a competência ficará bloqueada para edição.
+              Esta ação pode ser desfeita depois pelo botão “Reabrir”.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async (e) => {
+                e.preventDefault();
+                await marcarPagoInterno();
+                setConfirmPago(null);
+              }}
+              disabled={updStatus.isPending}
+            >
+              Marcar como pago
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
