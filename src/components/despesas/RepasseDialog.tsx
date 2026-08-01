@@ -1586,6 +1586,26 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={!!confirmDelPag} onOpenChange={(o) => !o && setConfirmDelPag(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir repasse?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDelPag?.label} — esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); excluirPag(); }}
+              disabled={delPag.isPending}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={!!confirmDelComp} onOpenChange={(o) => !o && setConfirmDelComp(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
