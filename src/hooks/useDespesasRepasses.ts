@@ -251,13 +251,15 @@ export function useSaveLimiteAnual() {
 export function useSetBeneficiarioResidual() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ repasseId, beneficiarioId }: { repasseId: string; beneficiarioId: string }) => {
-      const { error: e1 } = await supabase
+    mutationFn: async ({ repasseId, beneficiarioId }: { repasseId: string; beneficiarioId: string | null }) => {
+      let q = supabase
         .from("despesas_repasse_beneficiarios" as any)
         .update({ is_residual: false } as any)
-        .eq("repasse_id", repasseId)
-        .neq("id", beneficiarioId);
+        .eq("repasse_id", repasseId);
+      if (beneficiarioId) q = q.neq("id", beneficiarioId);
+      const { error: e1 } = await q;
       if (e1) throw e1;
+      if (!beneficiarioId) return;
       const { error: e2 } = await supabase
         .from("despesas_repasse_beneficiarios" as any)
         .update({ is_residual: true } as any)
