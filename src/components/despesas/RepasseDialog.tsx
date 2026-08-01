@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
@@ -1017,8 +1017,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                                 valor_limite: b.valor_limite == null ? "" : String(b.valor_limite),
                                 limite_anual: limiteAnualDe(b.pessoa_id) === null
                                   ? "" : String(limiteAnualDe(b.pessoa_id)),
-                                data_recebimento: b.data_recebimento ?? "",
-                                is_residual: b.is_residual,
+                                 data_recebimento: b.data_recebimento ?? "",
+                                 is_residual: b.is_residual,
+                                 is_proprietario: !!b.is_proprietario,
                                 observacao: b.observacao ?? "",
                               })}>
                               <Pencil className="h-4 w-4" />
