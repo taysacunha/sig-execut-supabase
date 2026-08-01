@@ -695,12 +695,31 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[98vw] w-[98vw] h-[95vh] max-h-[95vh] sm:max-h-[95vh]">
         <DialogHeader>
-          <div className="flex items-center justify-between gap-2 pr-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pr-8">
             <DialogTitle>
               Repasse — {conta.proprietario?.nome}
               <span className="text-muted-foreground font-normal"> · {conta.centro_custo?.nome}</span>
             </DialogTitle>
-            <ToggleValuesButton />
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              <span className="text-muted-foreground">
+                {repasse ? mesLabel(repasse.competencia) : `Consolidado · ${competencias.length} competência(s)`}
+              </span>
+              <span className="text-muted-foreground">
+                Bruto <span className="font-semibold text-foreground">{money(totalBruto)}</span>
+              </span>
+              <span className="text-muted-foreground">
+                Taxa <span className="font-semibold text-destructive">−{money(totalTaxa)}</span>
+              </span>
+              <span className="text-muted-foreground">
+                Líquido <span className="font-semibold text-primary">{money(totalLiquido)}</span>
+              </span>
+              {repasse && (
+                <span className="text-muted-foreground">
+                  Status <span className="font-semibold text-foreground">{statusLabel[repasse.status]}</span>
+                </span>
+              )}
+              <ToggleValuesButton />
+            </div>
           </div>
         </DialogHeader>
 
