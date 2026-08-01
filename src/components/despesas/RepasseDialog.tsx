@@ -901,10 +901,8 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                           searchPlaceholder="Buscar…"
                         />
                       </TableCell>
-                      <TableCell>
-                        <Input type="number" step="0.01" min={0} className="text-right w-full"
-                          value={editBenef.valor}
-                          onChange={(e) => setEditBenef({ ...editBenef, valor: Number(e.target.value) })} />
+                      <TableCell className="text-right text-muted-foreground">
+                        {money(Number(editBenef.valor))}
                       </TableCell>
                       <TableCell>
                         <Input type="number" step="0.01" min={0} className="text-right w-full"
@@ -916,9 +914,12 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                           placeholder="opcional" value={editBenef.limite_anual}
                           onChange={(e) => setEditBenef({ ...editBenef, limite_anual: e.target.value })} />
                       </TableCell>
-                      <TableCell>
-                        <Input type="date" className="w-full" value={editBenef.data_recebimento}
-                          onChange={(e) => setEditBenef({ ...editBenef, data_recebimento: e.target.value })} />
+                      <TableCell className="text-xs">
+                        <label className="flex items-center gap-2">
+                          <input type="checkbox" checked={editBenef.is_proprietario}
+                            onChange={(e) => setEditBenef({ ...editBenef, is_proprietario: e.target.checked })} />
+                          Proprietário
+                        </label>
                       </TableCell>
                       <TableCell className="text-center">
                         <input type="checkbox" checked={editBenef.is_residual}
