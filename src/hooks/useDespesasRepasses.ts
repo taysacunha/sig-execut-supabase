@@ -348,10 +348,10 @@ export function useUpdateRepasseStatus() {
     }: {
       id: string;
       status: RepasseStatus;
-      data_pagamento?: string;
+      data_pagamento?: string | null;
     }) => {
       const payload: any = { status };
-      if (data_pagamento) payload.data_pagamento = data_pagamento;
+      if (data_pagamento !== undefined) payload.data_pagamento = data_pagamento;
       const { error } = await supabase
         .from("despesas_repasses" as any)
         .update(payload)
