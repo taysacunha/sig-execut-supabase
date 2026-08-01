@@ -383,6 +383,91 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
   async function marcarPago() {
     if (!repasse) return;
+    return marcarPagoInterno();
+  }
+
+  function validarLimitesPag(
+    b: { id: string; pessoa_id: string; valor: number; valor_limite: number | null },
+    valorNovo: number,
+    valorAnterior = 0,
+  ) {
+    const totalMes = Number(b.valor || 0) - valorAnterior + valorNovo;
+    if (b.valor_limite != null && totalMes > Number(b.valor_limite) + 0.009) {
+      toast.error(
+        `Total do mês (${money(totalMes)}) excede o limite mensal deste beneficiário (${money(Number(b.valor_limite))}).`,
+      );
+      return false;
+    }
+    const limAno = limiteAnualDe(b.pessoa_id);
+    if (limAno !== null) {
+      const totalAno = recebidoNoAno(b.pessoa_id) - valorAnterior + valorNovo;
+      if (totalAno > Number(limAno) + 0.009) {
+        toast.error(
+          `Limite do ano ${anoSelecionado} atingido para este beneficiário. Aumente o “Limite ano” para liberar mais.`,
+        );
+        return false;
+      }
+    }
+    return true;
+  }
+
+  async function adicionarPag(b: {
+    id: string; pessoa_id: string; valor: number; valor_limite: number | null;
+  }) {
+    if (!repasse) return;
+    if (!novoPag.data || novoPag.valor <= 0) {
+      toast.error("Informe a data e o valor do repasse");
+      return;
+    }
+    if (!validarLimitesPag(b, novoPag.valor)) return;
+    try {
+      await savePag.mutateAsync({
+        beneficiario_id: b.id,
+        data: novoPag.data,
+        valor: novoPag.valor,
+        imovel_id: novoPag.imovel_id,
+        observacao: novoPag.observacao || null,
+      } as any);
+      setNovoPag({ ...pagVazio, data: repasse.competencia });
+      toast.success("Repasse lançado");
+    } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+  }
+
+  async function salvarPagEdit(beneficiarioId: string) {
+    if (!editPag) return;
+    const b = beneficiarios.find((x) => x.id === beneficiarioId);
+    if (!b) return;
+    if (!editPag.data || editPag.valor <= 0) {
+      toast.error("Informe a data e o valor do repasse");
+      return;
+    }
+    const anterior = Number((b.pagamentos ?? []).find((p) => p.id === editPag.id)?.valor ?? 0);
+    if (!validarLimitesPag(b, editPag.valor, anterior)) return;
+    try {
+      await savePag.mutateAsync({
+        id: editPag.id,
+        beneficiario_id: b.id,
+        data: editPag.data,
+        valor: editPag.valor,
+        imovel_id: editPag.imovel_id,
+        observacao: editPag.observacao || null,
+      } as any);
+      setEditPag(null);
+      toast.success("Repasse atualizado");
+    } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+  }
+
+  async function excluirPag() {
+    if (!confirmDelPag) return;
+    try {
+      await delPag.mutateAsync(confirmDelPag.id);
+      setConfirmDelPag(null);
+      toast.success("Repasse excluído");
+    } catch (e: any) { toast.error(e?.message ?? "Erro ao excluir"); }
+  }
+
+  async function marcarPagoInterno() {
+    if (!repasse) return;
     if (distribuido <= 0) {
       toast.error("Defina ao menos um beneficiário antes de baixar o repasse.");
       return;
