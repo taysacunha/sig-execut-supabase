@@ -160,6 +160,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const [confirmLimite, setConfirmLimite] = useState<
     { atual: number; novo: number; onConfirm: () => void } | null
   >(null);
+  const [mostrarSemSaldo, setMostrarSemSaldo] = useState(false);
   const [editItem, setEditItem] = useState<
     {
       id: string; tipo: RepasseItemTipo; origem: RepasseItemOrigem;
@@ -221,6 +222,52 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
   const podeEditarItens = repasse?.status === "aberto";
   const podeEditarBenef = !!repasse && repasse.status !== "pago" && repasse.status !== "cancelado";
+
+  // Saldo por imóvel na competência: créditos − débitos − repasses já lançados
+  const saldosPorImovel = (() => {
+    const map = new Map<
+      string,
+      { imovel_id: string | null; label: string; credito: number; debito: number; repassado: number }
+    >();
+    const chave = (id: string | null | undefined) => id ?? "__sem__";
+    const get = (id: string | null | undefined) => {
+      const k = chave(id);
+      let r = map.get(k);
+      if (!r) {
+        r = {
+          imovel_id: id ?? null,
+          label: id ? imovelLabel(id) : "Sem imóvel",
+          credito: 0, debito: 0, repassado: 0,
+        };
+        map.set(k, r);
+      }
+      return r;
+    };
+    for (const it of repasse?.itens ?? []) {
+      const r = get(it.imovel_id);
+      if (it.tipo === "credito") r.credito += Number(it.valor || 0);
+      else r.debito += Number(it.valor || 0);
+    }
+    for (const b of beneficiarios) {
+      for (const p of b.pagamentos ?? []) {
+        get(p.imovel_id).repassado += Number(p.valor || 0);
+      }
+    }
+    return Array.from(map.values())
+      .map((r) => ({ ...r, disponivel: r.credito - r.debito - r.repassado }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  })();
+
+  const disponivelDoImovel = (id: string | null | undefined) =>
+    saldosPorImovel.find((s) => (s.imovel_id ?? null) === (id ?? null))?.disponivel ?? 0;
+
+  const imovelOptionsComSaldo = (idAtual?: string | null) =>
+    imovelOptions
+      .filter((o) => disponivelDoImovel(o.value) > 0.009 || o.value === idAtual)
+      .map((o) => ({
+        ...o,
+        label: `${o.label} · disponível ${money(disponivelDoImovel(o.value))}`,
+      }));
 
   const origemLabel = (o: RepasseItemOrigem) => origens.find((x) => x.v === o)?.l ?? o;
 
@@ -420,6 +467,11 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
       return;
     }
     if (!validarLimitesPag(b, novoPag.valor)) return;
+    if (novoPag.imovel_id && novoPag.valor > disponivelDoImovel(novoPag.imovel_id) + 0.009) {
+      toast.warning(
+        `Valor acima do saldo do imóvel (disponível ${money(disponivelDoImovel(novoPag.imovel_id))}).`,
+      );
+    }
     try {
       await savePag.mutateAsync({
         beneficiario_id: b.id,
@@ -443,6 +495,14 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     }
     const anterior = Number((b.pagamentos ?? []).find((p) => p.id === editPag.id)?.valor ?? 0);
     if (!validarLimitesPag(b, editPag.valor, anterior)) return;
+    if (
+      editPag.imovel_id &&
+      editPag.valor > disponivelDoImovel(editPag.imovel_id) + anterior + 0.009
+    ) {
+      toast.warning(
+        `Valor acima do saldo do imóvel (disponível ${money(disponivelDoImovel(editPag.imovel_id) + anterior)}).`,
+      );
+    }
     try {
       await savePag.mutateAsync({
         id: editPag.id,
@@ -956,6 +1016,73 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               )}
             </div>
 
+            <div className="rounded-md border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold">Saldo por imóvel</div>
+                <Button variant="ghost" size="sm" onClick={() => setMostrarSemSaldo((v) => !v)}>
+                  {mostrarSemSaldo ? "Ocultar imóveis sem saldo" : "Mostrar imóveis sem saldo"}
+                </Button>
+              </div>
+              {saldosPorImovel.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Nenhum item lançado nesta competência.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead>Imóvel</TableHead>
+                    <TableHead className="text-right w-32">Crédito</TableHead>
+                    <TableHead className="text-right w-32">Débito</TableHead>
+                    <TableHead className="text-right w-36">Já repassado</TableHead>
+                    <TableHead className="text-right w-36">Disponível</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {saldosPorImovel
+                      .filter((s) => mostrarSemSaldo || s.disponivel > 0.009)
+                      .map((s) => (
+                        <TableRow key={s.imovel_id ?? "sem"}>
+                          <TableCell className="text-sm">{s.label}</TableCell>
+                          <TableCell className="text-right">{money(s.credito)}</TableCell>
+                          <TableCell className="text-right text-destructive">
+                            {s.debito ? `−${money(s.debito)}` : money(0)}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {money(s.repassado)}
+                          </TableCell>
+                          <TableCell
+                            className={`text-right font-semibold ${s.disponivel > 0.009 ? "text-primary" : "text-muted-foreground"}`}
+                          >
+                            {money(s.disponivel)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    {saldosPorImovel.filter((s) => mostrarSemSaldo || s.disponivel > 0.009).length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-sm text-muted-foreground">
+                          Nenhum imóvel com saldo disponível nesta competência.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    <TableRow>
+                      <TableCell className="text-sm font-semibold">Total</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {money(saldosPorImovel.reduce((s, r) => s + r.credito, 0))}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-destructive">
+                        −{money(saldosPorImovel.reduce((s, r) => s + r.debito, 0))}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {money(saldosPorImovel.reduce((s, r) => s + r.repassado, 0))}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-primary">
+                        {money(saldosPorImovel.reduce((s, r) => s + r.disponivel, 0))}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+
             <Table className="table-fixed">
               <TableHeader><TableRow>
                 <TableHead className="w-10">#</TableHead>
@@ -1161,7 +1288,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                                         <ComboboxSelect
                                           value={editPag.imovel_id}
                                           onChange={(v) => setEditPag({ ...editPag, imovel_id: v })}
-                                          options={imovelOptions}
+                                          options={imovelOptionsComSaldo(editPag.imovel_id)}
                                           placeholder="Sem imóvel"
                                           searchPlaceholder="Buscar imóvel…"
                                         />
@@ -1235,8 +1362,13 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                                 <ComboboxSelect
                                   value={novoPag.imovel_id}
                                   onChange={(v) => setNovoPag({ ...novoPag, imovel_id: v })}
-                                  options={imovelOptions}
-                                  placeholder="Sem imóvel"
+                                  options={imovelOptionsComSaldo(novoPag.imovel_id)}
+                                  disabled={imovelOptionsComSaldo(novoPag.imovel_id).length === 0}
+                                  placeholder={
+                                    imovelOptionsComSaldo(novoPag.imovel_id).length === 0
+                                      ? "Nenhum imóvel com saldo disponível"
+                                      : "Sem imóvel"
+                                  }
                                   searchPlaceholder="Buscar imóvel…"
                                 />
                               </div>
