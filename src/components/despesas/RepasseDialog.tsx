@@ -1024,7 +1024,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
             </Table>
 
             {podeEditarBenef && (
-              <div className="mt-3 grid gap-2 md:grid-cols-[1.8fr_minmax(110px,1fr)_minmax(110px,1fr)_minmax(110px,1fr)_minmax(130px,1fr)_1.2fr_auto_auto] items-end">
+              <div className="mt-3 grid gap-2 md:grid-cols-[1.8fr_minmax(120px,1fr)_minmax(130px,1fr)_auto_1.2fr_auto] items-end">
                 <div className="space-y-1">
                   <Label>Pessoa</Label>
                   <ComboboxSelect
@@ -1035,22 +1035,19 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                         ...novoBenef,
                         pessoa_id: v,
                         limite_anual: lim === null ? "" : String(lim),
+                        is_proprietario: v === conta.proprietario_id,
                       });
                     }}
-                    options={(pessoas.data ?? []).map((p) => ({
-                      value: p.id,
-                      label: `${p.nome} (${p.tipo_pessoa === "juridica" ? "PJ" : "PF"})`,
-                      keywords: [p.cpf_cnpj ?? "", ...(p.papeis ?? [])],
-                    }))}
+                    options={(pessoas.data ?? [])
+                      .filter((p) => !beneficiarios.some((b) => b.pessoa_id === p.id))
+                      .map((p) => ({
+                        value: p.id,
+                        label: `${p.nome} (${p.tipo_pessoa === "juridica" ? "PJ" : "PF"})`,
+                        keywords: [p.cpf_cnpj ?? "", ...(p.papeis ?? [])],
+                      }))}
                     placeholder="Selecione uma pessoa"
                     searchPlaceholder="Buscar…"
                   />
-                </div>
-                <div className="space-y-1">
-                  <Label>Valor (do mês)</Label>
-                  <Input type="number" step="0.01" min={0} className="text-right"
-                    value={novoBenef.valor}
-                    onChange={(e) => setNovoBenef({ ...novoBenef, valor: Number(e.target.value) })} />
                 </div>
                 <div className="space-y-1">
                   <Label>Limite mês (teto)</Label>
@@ -1066,28 +1063,27 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                     onChange={(e) => setNovoBenef({ ...novoBenef, limite_anual: e.target.value })} />
                 </div>
                 <div className="space-y-1">
-                  <Label>Recebido em</Label>
-                  <Input type="date" value={novoBenef.data_recebimento}
-                    onChange={(e) => setNovoBenef({ ...novoBenef, data_recebimento: e.target.value })} />
+                  <Label className="whitespace-nowrap">Proprietário</Label>
+                  <div className="flex h-10 items-center justify-center">
+                    <input type="checkbox" checked={novoBenef.is_proprietario}
+                      title="Este beneficiário é o proprietário da conta"
+                      onChange={(e) => setNovoBenef({ ...novoBenef, is_proprietario: e.target.checked })} />
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <Label>Observação</Label>
                   <Input value={novoBenef.observacao}
                     onChange={(e) => setNovoBenef({ ...novoBenef, observacao: e.target.value })} />
                 </div>
-                <div className="space-y-1">
-                  <Label className="whitespace-nowrap">Sobra</Label>
-                  <div className="flex h-10 items-center justify-center">
-                    <input type="checkbox" checked={novoBenef.is_residual}
-                      title="Recebe o valor restante do mês"
-                      onChange={(e) => setNovoBenef({ ...novoBenef, is_residual: e.target.checked })} />
-                  </div>
-                </div>
                 <Button onClick={adicionarBenef} disabled={saveBenef.isPending} title="Adicionar beneficiário">
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
             )}
+            <p className="mt-2 text-xs text-muted-foreground">
+              Cadastre a pessoa com os limites e depois lance os repasses dela (várias datas por mês,
+              cada um com o imóvel de origem) clicando em “Repasses” na linha do beneficiário.
+            </p>
             <p className="mt-2 text-xs text-muted-foreground">
               O limite anual é opcional e único por beneficiário no ano {anoSelecionado} — informe uma vez
               (aqui, na edição da linha ou no painel “Limites anuais”) e ele vale para todas as
