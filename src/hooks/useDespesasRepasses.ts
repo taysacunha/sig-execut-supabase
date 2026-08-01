@@ -503,6 +503,67 @@ export interface RepasseInquilinoRow {
   inquilino: { id: string; nome: string; tipo_pessoa: "fisica" | "juridica"; cpf_cnpj: string | null } | null;
 }
 
+function traduzPagamento(error: any) {
+  const msg = String(error?.message ?? "");
+  if (error?.code === "23505" || /duplicate key|unique/i.test(msg)) {
+    return new Error(
+      "Já existe um repasse para este beneficiário nesta data e imóvel. Edite o repasse existente ou use outra data.",
+    );
+  }
+  return error;
+}
+
+export function useSaveBenefPagamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      input: Partial<RepasseBenefPagamento> & { beneficiario_id: string; data: string; valor: number },
+    ) => {
+      if (input.id) {
+        const { error } = await supabase
+          .from("despesas_repasse_benef_pagamentos" as any)
+          .update(input as any)
+          .eq("id", input.id);
+        if (error) throw traduzPagamento(error);
+      } else {
+        const { error } = await supabase
+          .from("despesas_repasse_benef_pagamentos" as any)
+          .insert(input as any);
+        if (error) throw traduzPagamento(error);
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [REPASSES_KEY] });
+      qc.invalidateQueries({ queryKey: [CONTAS_KEY] });
+    },
+  });
+}
+
+export function useDeleteBenefPagamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("despesas_repasse_benef_pagamentos" as any)
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [REPASSES_KEY] });
+      qc.invalidateQueries({ queryKey: [CONTAS_KEY] });
+    },
+  });
+}
+
+interface RepasseInquilinoRowLegacy {
+  imovel_id: string;
+  imovel_codigo: string | null;
+  imovel_descricao: string;
+  endereco: string | null;
+  inquilino: { id: string; nome: string; tipo_pessoa: "fisica" | "juridica"; cpf_cnpj: string | null } | null;
+}
+
 export function useRepasseInquilinos(proprietarioId: string | null) {
   return useQuery({
     queryKey: [REPASSES_KEY, "inquilinos", proprietarioId],
