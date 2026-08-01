@@ -114,7 +114,7 @@ function humanizeExclusionReason(reason: string): string {
 // ═══════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════
-export function ValidationReportPanel({ result, onClose, brokerDiagnostics, eligibilityExclusions, brokerEligibilityMap }: ValidationReportPanelProps) {
+export function ValidationReportPanel({ result, onClose, brokerDiagnostics, eligibilityExclusions, brokerEligibilityMap, scheduleId, weekStart, weekEnd }: ValidationReportPanelProps) {
   const [expandedBrokers, setExpandedBrokers] = useState<Set<string>>(new Set());
   const [expandedRules, setExpandedRules] = useState<Set<string>>(new Set());
   const [expandedDiagnostics, setExpandedDiagnostics] = useState<Set<string>>(new Set());
@@ -428,6 +428,15 @@ export function ValidationReportPanel({ result, onClose, brokerDiagnostics, elig
               >
                 <Link2 className="h-3 w-3" />
                 Vínculos
+              </Button>
+              <Button
+                variant={viewMode === "unallocated" ? "default" : "outline"}
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => setViewMode("unallocated")}
+              >
+                <CalendarX className="h-3 w-3" />
+                Sem alocação
               </Button>
             </div>
             <div className="flex gap-1">
