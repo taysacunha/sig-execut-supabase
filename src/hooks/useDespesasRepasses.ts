@@ -556,14 +556,6 @@ export function useDeleteBenefPagamento() {
   });
 }
 
-interface RepasseInquilinoRowLegacy {
-  imovel_id: string;
-  imovel_codigo: string | null;
-  imovel_descricao: string;
-  endereco: string | null;
-  inquilino: { id: string; nome: string; tipo_pessoa: "fisica" | "juridica"; cpf_cnpj: string | null } | null;
-}
-
 export function useRepasseInquilinos(proprietarioId: string | null) {
   return useQuery({
     queryKey: [REPASSES_KEY, "inquilinos", proprietarioId],
