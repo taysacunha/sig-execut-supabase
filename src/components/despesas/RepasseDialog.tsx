@@ -18,7 +18,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, Pencil, Check, X, CalendarPlus, RotateCcw } from "lucide-react";
+import { Plus, Trash2, Pencil, Check, X, CalendarPlus, RotateCcw, ChevronDown } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Repasse, RepasseConta, RepasseItemOrigem, RepasseItemTipo,
@@ -1030,14 +1030,25 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                       <TableCell className="text-sm">
                         <Button
                           size="sm"
-                          variant={expandido === b.id ? "default" : "secondary"}
+                          variant={expandido === b.id ? "default" : "outline"}
+                          className={
+                            expandido === b.id
+                              ? "h-8 gap-1.5 shadow-sm"
+                              : "h-8 gap-1.5 border-border bg-muted text-foreground shadow-sm hover:bg-muted/70"
+                          }
                           onClick={() => {
                             setExpandido(expandido === b.id ? null : b.id);
                             setNovoPag({ ...pagVazio, data: repasse.competencia });
                             setEditPag(null);
                           }}
                         >
-                          {(b.pagamentos ?? []).length} repasse(s)
+                          <span>Gerenciar repasses</span>
+                          <span className="rounded bg-background/70 px-1.5 py-0.5 text-[11px] font-semibold text-foreground">
+                            {(b.pagamentos ?? []).length}
+                          </span>
+                          <ChevronDown
+                            className={`h-3.5 w-3.5 transition-transform ${expandido === b.id ? "rotate-180" : ""}`}
+                          />
                         </Button>
                       </TableCell>
                       <TableCell className="text-center">
