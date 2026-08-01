@@ -155,7 +155,6 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const [confirmDelPag, setConfirmDelPag] = useState<{ id: string; label: string } | null>(null);
   const [reabrir, setReabrir] = useState<{ repasse: Repasse; justificativa: string } | null>(null);
   const [itemDuplicado, setItemDuplicado] = useState<{ id: string; label: string } | null>(null);
-  const [limitesAbertos, setLimitesAbertos] = useState(false);
   const [escolherResidual, setEscolherResidual] = useState(false);
   const [confirmLimite, setConfirmLimite] = useState<
     { atual: number; novo: number; onConfirm: () => void } | null
