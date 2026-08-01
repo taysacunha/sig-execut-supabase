@@ -102,7 +102,8 @@ export function useRepasseContas(filtros: ContaFiltros = {}) {
              *,
              itens:despesas_repasse_itens(*),
              beneficiarios:despesas_repasse_beneficiarios(
-               *, pessoa:despesas_pessoas(nome, tipo_pessoa, cpf_cnpj)
+               *, pessoa:despesas_pessoas(nome, tipo_pessoa, cpf_cnpj),
+               pagamentos:despesas_repasse_benef_pagamentos(*)
              )
            )`
         );
@@ -289,7 +290,8 @@ export function useRepasses(filtros: RepasseFiltros = {}) {
            centro_custo:despesas_centros_custo(nome),
            itens:despesas_repasse_itens(*),
            beneficiarios:despesas_repasse_beneficiarios(
-             *, pessoa:despesas_pessoas(nome, tipo_pessoa, cpf_cnpj)
+             *, pessoa:despesas_pessoas(nome, tipo_pessoa, cpf_cnpj),
+             pagamentos:despesas_repasse_benef_pagamentos(*)
            )`
         )
         .order("competencia", { ascending: false });
