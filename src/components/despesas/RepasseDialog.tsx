@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
@@ -26,6 +26,7 @@ import {
   useSaveRepasseBeneficiario, useDeleteRepasseBeneficiario,
   useRepasseInquilinos, useAddCompetencia, useLimitesAnuais, useSaveLimiteAnual,
   useDeleteRepasse, useUpdateRepasseCampos, useSetBeneficiarioResidual,
+  useSaveBenefPagamento, useDeleteBenefPagamento,
 } from "@/hooks/useDespesasRepasses";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
 import { usePessoas } from "@/hooks/useDespesasPessoas";
@@ -73,6 +74,8 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const updCampos = useUpdateRepasseCampos();
   const saveLimiteAnual = useSaveLimiteAnual();
   const setResidualMut = useSetBeneficiarioResidual();
+  const savePag = useSaveBenefPagamento();
+  const delPag = useDeleteBenefPagamento();
   const pessoas = usePessoas({});
   const inquilinos = useRepasseInquilinos(conta?.proprietario_id ?? null);
 
@@ -122,11 +125,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
   const benefVazio = {
     pessoa_id: null as string | null,
-    valor: 0,
     valor_limite: "" as string,
     limite_anual: "" as string,
-    data_recebimento: "",
-    is_residual: false,
+    is_proprietario: false,
     observacao: "",
   };
   const [novoBenef, setNovoBenef] = useState(benefVazio);
@@ -145,6 +146,13 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     { tipo: "item" | "benef"; id: string; label: string } | null
   >(null);
   const [confirmDelComp, setConfirmDelComp] = useState<Repasse | null>(null);
+  const [expandido, setExpandido] = useState<string | null>(null);
+  const pagVazio = { data: "", valor: 0, imovel_id: null as string | null, observacao: "" };
+  const [novoPag, setNovoPag] = useState(pagVazio);
+  const [editPag, setEditPag] = useState<
+    { id: string; data: string; valor: number; imovel_id: string | null; observacao: string } | null
+  >(null);
+  const [confirmDelPag, setConfirmDelPag] = useState<{ id: string; label: string } | null>(null);
   const [reabrir, setReabrir] = useState<{ repasse: Repasse; justificativa: string } | null>(null);
   const [itemDuplicado, setItemDuplicado] = useState<{ id: string; label: string } | null>(null);
   const [limitesAbertos, setLimitesAbertos] = useState(false);
@@ -161,7 +169,8 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const [editBenef, setEditBenef] = useState<
     {
       id: string; pessoa_id: string | null; valor: number; valor_limite: string;
-      limite_anual: string; data_recebimento: string; is_residual: boolean; observacao: string;
+      limite_anual: string; data_recebimento: string; is_residual: boolean;
+      is_proprietario: boolean; observacao: string;
     } | null
   >(null);
 
@@ -283,7 +292,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
       return;
     }
     try {
-      await updStatus.mutateAsync({ id: reabrir.repasse.id, status: "fechado" });
+      await updStatus.mutateAsync({ id: reabrir.repasse.id, status: "aberto" });
       const carimbo = `[Reabertura ${new Date().toLocaleDateString("pt-BR")}] ${just}`;
       await updCampos.mutateAsync({
         id: reabrir.repasse.id,
@@ -291,9 +300,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
           observacao: reabrir.repasse.observacao
             ? `${reabrir.repasse.observacao}\n${carimbo}`
             : carimbo,
-        },
+        } as any,
       });
-      toast.success("Competência reaberta (status: fechado)");
+      toast.success("Competência reaberta (status: aberto)");
       setReabrir(null);
     } catch (e: any) { toast.error(e?.message ?? "Erro ao reabrir"); }
   }
@@ -322,21 +331,15 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
   async function adicionarBenef() {
     if (!repasse || !conta) return;
-    if (!novoBenef.pessoa_id || novoBenef.valor <= 0) {
-      toast.error("Selecione a pessoa e informe um valor");
+    if (!novoBenef.pessoa_id) {
+      toast.error("Selecione a pessoa");
+      return;
+    }
+    if (beneficiarios.some((b) => b.pessoa_id === novoBenef.pessoa_id)) {
+      toast.error("Esta pessoa já é beneficiária desta competência.");
       return;
     }
     const limAno = limiteAnualDe(novoBenef.pessoa_id);
-    const limAnoNovo = novoBenef.limite_anual !== "" ? Number(novoBenef.limite_anual) : limAno;
-    if (
-      limAnoNovo !== null &&
-      recebidoNoAno(novoBenef.pessoa_id) + novoBenef.valor > Number(limAnoNovo) + 0.009
-    ) {
-      toast.error(
-        `Limite do ano ${anoSelecionado} atingido para este beneficiário. Aumente o "Limite ano" para liberar mais.`,
-      );
-      return;
-    }
     if (
       limAno !== null &&
       novoBenef.limite_anual !== "" &&
@@ -358,10 +361,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
       await saveBenef.mutateAsync({
         repasse_id: repasse.id,
         pessoa_id: novoBenef.pessoa_id,
-        valor: novoBenef.valor,
+        valor: 0,
         valor_limite: novoBenef.valor_limite === "" ? null : Number(novoBenef.valor_limite),
-        data_recebimento: novoBenef.data_recebimento || null,
-        is_residual: novoBenef.is_residual,
+        is_proprietario: novoBenef.is_proprietario,
         observacao: novoBenef.observacao || null,
         ordem: beneficiarios.length + 1,
       } as any);
@@ -380,6 +382,91 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   }
 
   async function marcarPago() {
+    if (!repasse) return;
+    return marcarPagoInterno();
+  }
+
+  function validarLimitesPag(
+    b: { id: string; pessoa_id: string; valor: number; valor_limite: number | null },
+    valorNovo: number,
+    valorAnterior = 0,
+  ) {
+    const totalMes = Number(b.valor || 0) - valorAnterior + valorNovo;
+    if (b.valor_limite != null && totalMes > Number(b.valor_limite) + 0.009) {
+      toast.error(
+        `Total do mês (${money(totalMes)}) excede o limite mensal deste beneficiário (${money(Number(b.valor_limite))}).`,
+      );
+      return false;
+    }
+    const limAno = limiteAnualDe(b.pessoa_id);
+    if (limAno !== null) {
+      const totalAno = recebidoNoAno(b.pessoa_id) - valorAnterior + valorNovo;
+      if (totalAno > Number(limAno) + 0.009) {
+        toast.error(
+          `Limite do ano ${anoSelecionado} atingido para este beneficiário. Aumente o “Limite ano” para liberar mais.`,
+        );
+        return false;
+      }
+    }
+    return true;
+  }
+
+  async function adicionarPag(b: {
+    id: string; pessoa_id: string; valor: number; valor_limite: number | null;
+  }) {
+    if (!repasse) return;
+    if (!novoPag.data || novoPag.valor <= 0) {
+      toast.error("Informe a data e o valor do repasse");
+      return;
+    }
+    if (!validarLimitesPag(b, novoPag.valor)) return;
+    try {
+      await savePag.mutateAsync({
+        beneficiario_id: b.id,
+        data: novoPag.data,
+        valor: novoPag.valor,
+        imovel_id: novoPag.imovel_id,
+        observacao: novoPag.observacao || null,
+      } as any);
+      setNovoPag({ ...pagVazio, data: repasse.competencia });
+      toast.success("Repasse lançado");
+    } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+  }
+
+  async function salvarPagEdit(beneficiarioId: string) {
+    if (!editPag) return;
+    const b = beneficiarios.find((x) => x.id === beneficiarioId);
+    if (!b) return;
+    if (!editPag.data || editPag.valor <= 0) {
+      toast.error("Informe a data e o valor do repasse");
+      return;
+    }
+    const anterior = Number((b.pagamentos ?? []).find((p) => p.id === editPag.id)?.valor ?? 0);
+    if (!validarLimitesPag(b, editPag.valor, anterior)) return;
+    try {
+      await savePag.mutateAsync({
+        id: editPag.id,
+        beneficiario_id: b.id,
+        data: editPag.data,
+        valor: editPag.valor,
+        imovel_id: editPag.imovel_id,
+        observacao: editPag.observacao || null,
+      } as any);
+      setEditPag(null);
+      toast.success("Repasse atualizado");
+    } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+  }
+
+  async function excluirPag() {
+    if (!confirmDelPag) return;
+    try {
+      await delPag.mutateAsync(confirmDelPag.id);
+      setConfirmDelPag(null);
+      toast.success("Repasse excluído");
+    } catch (e: any) { toast.error(e?.message ?? "Erro ao excluir"); }
+  }
+
+  async function marcarPagoInterno() {
     if (!repasse) return;
     if (distribuido <= 0) {
       toast.error("Defina ao menos um beneficiário antes de baixar o repasse.");
@@ -436,8 +523,8 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
   async function salvarBenefEdit() {
     if (!repasse || !conta || !editBenef) return;
-    if (!editBenef.pessoa_id || editBenef.valor <= 0) {
-      toast.error("Selecione a pessoa e informe um valor");
+    if (!editBenef.pessoa_id) {
+      toast.error("Selecione a pessoa");
       return;
     }
     const limAnoEdit = editBenef.limite_anual === "" ? null : Number(editBenef.limite_anual);
@@ -466,7 +553,8 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
   async function executarBenefEdit(editBenef: {
     id: string; pessoa_id: string | null; valor: number; valor_limite: string;
-    limite_anual: string; data_recebimento: string; is_residual: boolean; observacao: string;
+    limite_anual: string; data_recebimento: string; is_residual: boolean;
+    is_proprietario: boolean; observacao: string;
   }) {
     if (!repasse || !conta || !editBenef.pessoa_id) return;
     try {
@@ -476,6 +564,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
         valor_limite: editBenef.valor_limite === "" ? null : Number(editBenef.valor_limite),
         data_recebimento: editBenef.data_recebimento || null,
         is_residual: editBenef.is_residual,
+        is_proprietario: editBenef.is_proprietario,
         observacao: (editBenef.observacao || null) as any,
       } as any);
       await saveLimiteAnual.mutateAsync({
@@ -871,10 +960,10 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               <TableHeader><TableRow>
                 <TableHead className="w-10">#</TableHead>
                 <TableHead className="w-[20%]">Pessoa</TableHead>
-                <TableHead className="text-right w-[12%]">Valor</TableHead>
+                <TableHead className="text-right w-[12%]">Total do mês</TableHead>
                 <TableHead className="text-right w-[12%]">Limite mês</TableHead>
                 <TableHead className="text-right w-[15%]">Limite ano {anoSelecionado}</TableHead>
-                <TableHead className="w-[12%]">Recebido em</TableHead>
+                <TableHead className="w-[14%]">Repasses</TableHead>
                 <TableHead className="text-center w-16" title="Recebe o valor restante do mês">Sobra</TableHead>
                 <TableHead>Observação</TableHead>
                 <TableHead className="w-24" />
@@ -897,10 +986,8 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                           searchPlaceholder="Buscar…"
                         />
                       </TableCell>
-                      <TableCell>
-                        <Input type="number" step="0.01" min={0} className="text-right w-full"
-                          value={editBenef.valor}
-                          onChange={(e) => setEditBenef({ ...editBenef, valor: Number(e.target.value) })} />
+                      <TableCell className="text-right text-muted-foreground">
+                        {money(Number(editBenef.valor))}
                       </TableCell>
                       <TableCell>
                         <Input type="number" step="0.01" min={0} className="text-right w-full"
@@ -912,9 +999,12 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                           placeholder="opcional" value={editBenef.limite_anual}
                           onChange={(e) => setEditBenef({ ...editBenef, limite_anual: e.target.value })} />
                       </TableCell>
-                      <TableCell>
-                        <Input type="date" className="w-full" value={editBenef.data_recebimento}
-                          onChange={(e) => setEditBenef({ ...editBenef, data_recebimento: e.target.value })} />
+                      <TableCell className="text-xs">
+                        <label className="flex items-center gap-2">
+                          <input type="checkbox" checked={editBenef.is_proprietario}
+                            onChange={(e) => setEditBenef({ ...editBenef, is_proprietario: e.target.checked })} />
+                          Proprietário
+                        </label>
                       </TableCell>
                       <TableCell className="text-center">
                         <input type="checkbox" checked={editBenef.is_residual}
@@ -935,6 +1025,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                       </TableCell>
                     </TableRow>
                   ) : (
+                    <Fragment key={b.id}>
                     <TableRow key={b.id}>
                       <TableCell>{i + 1}</TableCell>
                       <TableCell className="align-top">
@@ -943,6 +1034,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                           {b.pessoa?.tipo_pessoa === "juridica" ? "PJ" : "PF"}
                           {b.pessoa?.cpf_cnpj ? ` · ${b.pessoa.cpf_cnpj}` : ""}
                         </div>
+                        {b.is_proprietario && (
+                          <Badge variant="secondary" className="mt-1">Proprietário</Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         {money(Number(b.valor))}
@@ -969,9 +1063,17 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                         )}
                       </TableCell>
                       <TableCell className="text-sm">
-                        {b.data_recebimento
-                          ? new Date(b.data_recebimento + "T00:00:00").toLocaleDateString("pt-BR")
-                          : "—"}
+                        <Button
+                          size="sm"
+                          variant={expandido === b.id ? "secondary" : "outline"}
+                          onClick={() => {
+                            setExpandido(expandido === b.id ? null : b.id);
+                            setNovoPag({ ...pagVazio, data: repasse.competencia });
+                            setEditPag(null);
+                          }}
+                        >
+                          {(b.pagamentos ?? []).length} repasse(s)
+                        </Button>
                       </TableCell>
                       <TableCell className="text-center">
                         <input
@@ -1001,8 +1103,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                                 valor_limite: b.valor_limite == null ? "" : String(b.valor_limite),
                                 limite_anual: limiteAnualDe(b.pessoa_id) === null
                                   ? "" : String(limiteAnualDe(b.pessoa_id)),
-                                data_recebimento: b.data_recebimento ?? "",
-                                is_residual: b.is_residual,
+                                 data_recebimento: b.data_recebimento ?? "",
+                                 is_residual: b.is_residual,
+                                 is_proprietario: !!b.is_proprietario,
                                 observacao: b.observacao ?? "",
                               })}>
                               <Pencil className="h-4 w-4" />
@@ -1017,13 +1120,148 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                         )}
                       </TableCell>
                     </TableRow>
+                    {expandido === b.id && (
+                      <TableRow key={`${b.id}-pag`}>
+                        <TableCell colSpan={9} className="bg-muted/40">
+                          <div className="text-xs font-semibold mb-2">
+                            Repasses de {b.pessoa?.nome ?? "—"} em {mesLabel(repasse.competencia)}
+                          </div>
+                          <Table>
+                            <TableHeader><TableRow>
+                              <TableHead className="w-36">Data</TableHead>
+                              <TableHead className="text-right w-36">Valor</TableHead>
+                              <TableHead>Imóvel de origem</TableHead>
+                              <TableHead>Observação</TableHead>
+                              <TableHead className="w-24" />
+                            </TableRow></TableHeader>
+                            <TableBody>
+                              {(b.pagamentos ?? []).length === 0 && (
+                                <TableRow>
+                                  <TableCell colSpan={5} className="text-sm text-muted-foreground">
+                                    Nenhum repasse lançado ainda.
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                              {(b.pagamentos ?? [])
+                                .slice()
+                                .sort((x, y) => (x.data < y.data ? -1 : 1))
+                                .map((p) =>
+                                  editPag?.id === p.id ? (
+                                    <TableRow key={p.id}>
+                                      <TableCell>
+                                        <Input type="date" value={editPag.data}
+                                          onChange={(e) => setEditPag({ ...editPag, data: e.target.value })} />
+                                      </TableCell>
+                                      <TableCell>
+                                        <Input type="number" step="0.01" min={0} className="text-right"
+                                          value={editPag.valor}
+                                          onChange={(e) => setEditPag({ ...editPag, valor: Number(e.target.value) })} />
+                                      </TableCell>
+                                      <TableCell>
+                                        <ComboboxSelect
+                                          value={editPag.imovel_id}
+                                          onChange={(v) => setEditPag({ ...editPag, imovel_id: v })}
+                                          options={imovelOptions}
+                                          placeholder="Sem imóvel"
+                                          searchPlaceholder="Buscar imóvel…"
+                                        />
+                                      </TableCell>
+                                      <TableCell>
+                                        <Input value={editPag.observacao}
+                                          onChange={(e) => setEditPag({ ...editPag, observacao: e.target.value })} />
+                                      </TableCell>
+                                      <TableCell className="whitespace-nowrap">
+                                        <Button size="icon" variant="ghost" title="Salvar"
+                                          disabled={savePag.isPending}
+                                          onClick={() => salvarPagEdit(b.id)}>
+                                          <Check className="h-4 w-4 text-emerald-600" />
+                                        </Button>
+                                        <Button size="icon" variant="ghost" title="Cancelar"
+                                          onClick={() => setEditPag(null)}>
+                                          <X className="h-4 w-4" />
+                                        </Button>
+                                      </TableCell>
+                                    </TableRow>
+                                  ) : (
+                                    <TableRow key={p.id}>
+                                      <TableCell className="text-sm">
+                                        {new Date(p.data + "T00:00:00").toLocaleDateString("pt-BR")}
+                                      </TableCell>
+                                      <TableCell className="text-right">{money(Number(p.valor))}</TableCell>
+                                      <TableCell className="text-sm">{imovelLabel(p.imovel_id)}</TableCell>
+                                      <TableCell className="text-sm text-muted-foreground">
+                                        {p.observacao ?? ""}
+                                      </TableCell>
+                                      <TableCell className="whitespace-nowrap">
+                                        {podeEditarBenef && (
+                                          <>
+                                            <Button size="icon" variant="ghost" title="Editar"
+                                              onClick={() => setEditPag({
+                                                id: p.id, data: p.data, valor: Number(p.valor),
+                                                imovel_id: p.imovel_id, observacao: p.observacao ?? "",
+                                              })}>
+                                              <Pencil className="h-4 w-4" />
+                                            </Button>
+                                            <Button size="icon" variant="ghost" title="Excluir"
+                                              onClick={() => setConfirmDelPag({
+                                                id: p.id,
+                                                label: `${new Date(p.data + "T00:00:00").toLocaleDateString("pt-BR")} — ${money(Number(p.valor))}`,
+                                              })}>
+                                              <Trash2 className="h-4 w-4 text-destructive" />
+                                            </Button>
+                                          </>
+                                        )}
+                                      </TableCell>
+                                    </TableRow>
+                                  ),
+                                )}
+                            </TableBody>
+                          </Table>
+                          {podeEditarBenef && (
+                            <div className="mt-2 grid gap-2 md:grid-cols-[150px_150px_1.5fr_1.5fr_auto] items-end">
+                              <div className="space-y-1">
+                                <Label>Data</Label>
+                                <Input type="date" value={novoPag.data}
+                                  onChange={(e) => setNovoPag({ ...novoPag, data: e.target.value })} />
+                              </div>
+                              <div className="space-y-1">
+                                <Label>Valor</Label>
+                                <Input type="number" step="0.01" min={0} className="text-right"
+                                  value={novoPag.valor}
+                                  onChange={(e) => setNovoPag({ ...novoPag, valor: Number(e.target.value) })} />
+                              </div>
+                              <div className="space-y-1">
+                                <Label>Imóvel de origem</Label>
+                                <ComboboxSelect
+                                  value={novoPag.imovel_id}
+                                  onChange={(v) => setNovoPag({ ...novoPag, imovel_id: v })}
+                                  options={imovelOptions}
+                                  placeholder="Sem imóvel"
+                                  searchPlaceholder="Buscar imóvel…"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label>Observação</Label>
+                                <Input value={novoPag.observacao}
+                                  onChange={(e) => setNovoPag({ ...novoPag, observacao: e.target.value })} />
+                              </div>
+                              <Button onClick={() => adicionarPag(b)} disabled={savePag.isPending}
+                                title="Adicionar repasse">
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    </Fragment>
                   ),
                 )}
               </TableBody>
             </Table>
 
             {podeEditarBenef && (
-              <div className="mt-3 grid gap-2 md:grid-cols-[1.8fr_minmax(110px,1fr)_minmax(110px,1fr)_minmax(110px,1fr)_minmax(130px,1fr)_1.2fr_auto_auto] items-end">
+              <div className="mt-3 grid gap-2 md:grid-cols-[1.8fr_minmax(120px,1fr)_minmax(130px,1fr)_auto_1.2fr_auto] items-end">
                 <div className="space-y-1">
                   <Label>Pessoa</Label>
                   <ComboboxSelect
@@ -1034,22 +1272,19 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                         ...novoBenef,
                         pessoa_id: v,
                         limite_anual: lim === null ? "" : String(lim),
+                        is_proprietario: v === conta.proprietario_id,
                       });
                     }}
-                    options={(pessoas.data ?? []).map((p) => ({
-                      value: p.id,
-                      label: `${p.nome} (${p.tipo_pessoa === "juridica" ? "PJ" : "PF"})`,
-                      keywords: [p.cpf_cnpj ?? "", ...(p.papeis ?? [])],
-                    }))}
+                    options={(pessoas.data ?? [])
+                      .filter((p) => !beneficiarios.some((b) => b.pessoa_id === p.id))
+                      .map((p) => ({
+                        value: p.id,
+                        label: `${p.nome} (${p.tipo_pessoa === "juridica" ? "PJ" : "PF"})`,
+                        keywords: [p.cpf_cnpj ?? "", ...(p.papeis ?? [])],
+                      }))}
                     placeholder="Selecione uma pessoa"
                     searchPlaceholder="Buscar…"
                   />
-                </div>
-                <div className="space-y-1">
-                  <Label>Valor (do mês)</Label>
-                  <Input type="number" step="0.01" min={0} className="text-right"
-                    value={novoBenef.valor}
-                    onChange={(e) => setNovoBenef({ ...novoBenef, valor: Number(e.target.value) })} />
                 </div>
                 <div className="space-y-1">
                   <Label>Limite mês (teto)</Label>
@@ -1065,28 +1300,27 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                     onChange={(e) => setNovoBenef({ ...novoBenef, limite_anual: e.target.value })} />
                 </div>
                 <div className="space-y-1">
-                  <Label>Recebido em</Label>
-                  <Input type="date" value={novoBenef.data_recebimento}
-                    onChange={(e) => setNovoBenef({ ...novoBenef, data_recebimento: e.target.value })} />
+                  <Label className="whitespace-nowrap">Proprietário</Label>
+                  <div className="flex h-10 items-center justify-center">
+                    <input type="checkbox" checked={novoBenef.is_proprietario}
+                      title="Este beneficiário é o proprietário da conta"
+                      onChange={(e) => setNovoBenef({ ...novoBenef, is_proprietario: e.target.checked })} />
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <Label>Observação</Label>
                   <Input value={novoBenef.observacao}
                     onChange={(e) => setNovoBenef({ ...novoBenef, observacao: e.target.value })} />
                 </div>
-                <div className="space-y-1">
-                  <Label className="whitespace-nowrap">Sobra</Label>
-                  <div className="flex h-10 items-center justify-center">
-                    <input type="checkbox" checked={novoBenef.is_residual}
-                      title="Recebe o valor restante do mês"
-                      onChange={(e) => setNovoBenef({ ...novoBenef, is_residual: e.target.checked })} />
-                  </div>
-                </div>
                 <Button onClick={adicionarBenef} disabled={saveBenef.isPending} title="Adicionar beneficiário">
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
             )}
+            <p className="mt-2 text-xs text-muted-foreground">
+              Cadastre a pessoa com os limites e depois lance os repasses dela (várias datas por mês,
+              cada um com o imóvel de origem) clicando em “Repasses” na linha do beneficiário.
+            </p>
             <p className="mt-2 text-xs text-muted-foreground">
               O limite anual é opcional e único por beneficiário no ano {anoSelecionado} — informe uma vez
               (aqui, na edição da linha ou no painel “Limites anuais”) e ele vale para todas as
@@ -1345,6 +1579,26 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
             <AlertDialogAction
               onClick={(e) => { e.preventDefault(); confirmarExclusao(); }}
               disabled={delItem.isPending || delBenef.isPending}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!confirmDelPag} onOpenChange={(o) => !o && setConfirmDelPag(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir repasse?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDelPag?.label} — esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); excluirPag(); }}
+              disabled={delPag.isPending}
             >
               Excluir
             </AlertDialogAction>

@@ -22,6 +22,15 @@ export interface RepasseItem {
   valor: number;
 }
 
+export interface RepasseBenefPagamento {
+  id: string;
+  beneficiario_id: string;
+  data: string;
+  valor: number;
+  imovel_id: string | null;
+  observacao: string | null;
+}
+
 export interface RepasseBeneficiario {
   id: string;
   repasse_id: string;
@@ -30,9 +39,11 @@ export interface RepasseBeneficiario {
   valor_limite: number | null;
   data_recebimento: string | null;
   is_residual: boolean;
+  is_proprietario?: boolean;
   ordem: number;
   observacao: string | null;
   pessoa?: { nome: string; tipo_pessoa: "fisica" | "juridica"; cpf_cnpj: string | null } | null;
+  pagamentos?: RepasseBenefPagamento[];
 }
 
 export interface Repasse {
@@ -91,7 +102,8 @@ export function useRepasseContas(filtros: ContaFiltros = {}) {
              *,
              itens:despesas_repasse_itens(*),
              beneficiarios:despesas_repasse_beneficiarios(
-               *, pessoa:despesas_pessoas(nome, tipo_pessoa, cpf_cnpj)
+               *, pessoa:despesas_pessoas(nome, tipo_pessoa, cpf_cnpj),
+               pagamentos:despesas_repasse_benef_pagamentos(*)
              )
            )`
         );
@@ -278,7 +290,8 @@ export function useRepasses(filtros: RepasseFiltros = {}) {
            centro_custo:despesas_centros_custo(nome),
            itens:despesas_repasse_itens(*),
            beneficiarios:despesas_repasse_beneficiarios(
-             *, pessoa:despesas_pessoas(nome, tipo_pessoa, cpf_cnpj)
+             *, pessoa:despesas_pessoas(nome, tipo_pessoa, cpf_cnpj),
+             pagamentos:despesas_repasse_benef_pagamentos(*)
            )`
         )
         .order("competencia", { ascending: false });
@@ -488,6 +501,59 @@ export interface RepasseInquilinoRow {
   imovel_descricao: string;
   endereco: string | null;
   inquilino: { id: string; nome: string; tipo_pessoa: "fisica" | "juridica"; cpf_cnpj: string | null } | null;
+}
+
+function traduzPagamento(error: any) {
+  const msg = String(error?.message ?? "");
+  if (error?.code === "23505" || /duplicate key|unique/i.test(msg)) {
+    return new Error(
+      "Já existe um repasse para este beneficiário nesta data e imóvel. Edite o repasse existente ou use outra data.",
+    );
+  }
+  return error;
+}
+
+export function useSaveBenefPagamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      input: Partial<RepasseBenefPagamento> & { beneficiario_id: string; data: string; valor: number },
+    ) => {
+      if (input.id) {
+        const { error } = await supabase
+          .from("despesas_repasse_benef_pagamentos" as any)
+          .update(input as any)
+          .eq("id", input.id);
+        if (error) throw traduzPagamento(error);
+      } else {
+        const { error } = await supabase
+          .from("despesas_repasse_benef_pagamentos" as any)
+          .insert(input as any);
+        if (error) throw traduzPagamento(error);
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [REPASSES_KEY] });
+      qc.invalidateQueries({ queryKey: [CONTAS_KEY] });
+    },
+  });
+}
+
+export function useDeleteBenefPagamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("despesas_repasse_benef_pagamentos" as any)
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [REPASSES_KEY] });
+      qc.invalidateQueries({ queryKey: [CONTAS_KEY] });
+    },
+  });
 }
 
 export function useRepasseInquilinos(proprietarioId: string | null) {
