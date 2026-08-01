@@ -819,25 +819,6 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
           )}
         </div>
 
-        <div className="shrink-0 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border px-4 py-2 text-sm">
-          <span className="text-muted-foreground">
-            {repasse ? mesLabel(repasse.competencia) : `Consolidado · ${competencias.length} competência(s)`}
-          </span>
-          <span className="text-muted-foreground">
-            Bruto <span className="font-semibold text-foreground">{money(totalBruto)}</span>
-          </span>
-          <span className="text-muted-foreground">
-            Taxa admin. <span className="font-semibold text-destructive">−{money(totalTaxa)}</span>
-          </span>
-          <span className="text-muted-foreground">
-            Líquido <span className="font-semibold text-primary">{money(totalLiquido)}</span>
-          </span>
-          {repasse && (
-            <span className="text-muted-foreground">
-              Status <span className="font-semibold text-foreground">{statusLabel[repasse.status]}</span>
-            </span>
-          )}
-        </div>
 
         {competencias.length === 0 ? (
           <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">
