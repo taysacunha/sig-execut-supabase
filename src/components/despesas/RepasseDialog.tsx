@@ -1288,7 +1288,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                                         <ComboboxSelect
                                           value={editPag.imovel_id}
                                           onChange={(v) => setEditPag({ ...editPag, imovel_id: v })}
-                                          options={imovelOptions}
+                                          options={imovelOptionsComSaldo(editPag.imovel_id)}
                                           placeholder="Sem imóvel"
                                           searchPlaceholder="Buscar imóvel…"
                                         />
@@ -1362,8 +1362,13 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                                 <ComboboxSelect
                                   value={novoPag.imovel_id}
                                   onChange={(v) => setNovoPag({ ...novoPag, imovel_id: v })}
-                                  options={imovelOptions}
-                                  placeholder="Sem imóvel"
+                                  options={imovelOptionsComSaldo(novoPag.imovel_id)}
+                                  disabled={imovelOptionsComSaldo(novoPag.imovel_id).length === 0}
+                                  placeholder={
+                                    imovelOptionsComSaldo(novoPag.imovel_id).length === 0
+                                      ? "Nenhum imóvel com saldo disponível"
+                                      : "Sem imóvel"
+                                  }
                                   searchPlaceholder="Buscar imóvel…"
                                 />
                               </div>
