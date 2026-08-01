@@ -155,7 +155,6 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const [confirmDelPag, setConfirmDelPag] = useState<{ id: string; label: string } | null>(null);
   const [reabrir, setReabrir] = useState<{ repasse: Repasse; justificativa: string } | null>(null);
   const [itemDuplicado, setItemDuplicado] = useState<{ id: string; label: string } | null>(null);
-  const [limitesAbertos, setLimitesAbertos] = useState(false);
   const [escolherResidual, setEscolherResidual] = useState(false);
   const [confirmLimite, setConfirmLimite] = useState<
     { atual: number; novo: number; onConfirm: () => void } | null
@@ -695,12 +694,31 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[98vw] w-[98vw] h-[95vh] max-h-[95vh] sm:max-h-[95vh]">
         <DialogHeader>
-          <div className="flex items-center justify-between gap-2 pr-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pr-8">
             <DialogTitle>
               Repasse — {conta.proprietario?.nome}
               <span className="text-muted-foreground font-normal"> · {conta.centro_custo?.nome}</span>
             </DialogTitle>
-            <ToggleValuesButton />
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              <span className="text-muted-foreground">
+                {repasse ? mesLabel(repasse.competencia) : `Consolidado · ${competencias.length} competência(s)`}
+              </span>
+              <span className="text-muted-foreground">
+                Bruto <span className="font-semibold text-foreground">{money(totalBruto)}</span>
+              </span>
+              <span className="text-muted-foreground">
+                Taxa <span className="font-semibold text-destructive">−{money(totalTaxa)}</span>
+              </span>
+              <span className="text-muted-foreground">
+                Líquido <span className="font-semibold text-primary">{money(totalLiquido)}</span>
+              </span>
+              {repasse && (
+                <span className="text-muted-foreground">
+                  Status <span className="font-semibold text-foreground">{statusLabel[repasse.status]}</span>
+                </span>
+              )}
+              <ToggleValuesButton />
+            </div>
           </div>
         </DialogHeader>
 
@@ -800,25 +818,6 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
           )}
         </div>
 
-        <div className="shrink-0 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border px-4 py-2 text-sm">
-          <span className="text-muted-foreground">
-            {repasse ? mesLabel(repasse.competencia) : `Consolidado · ${competencias.length} competência(s)`}
-          </span>
-          <span className="text-muted-foreground">
-            Bruto <span className="font-semibold text-foreground">{money(totalBruto)}</span>
-          </span>
-          <span className="text-muted-foreground">
-            Taxa admin. <span className="font-semibold text-destructive">−{money(totalTaxa)}</span>
-          </span>
-          <span className="text-muted-foreground">
-            Líquido <span className="font-semibold text-primary">{money(totalLiquido)}</span>
-          </span>
-          {repasse && (
-            <span className="text-muted-foreground">
-              Status <span className="font-semibold text-foreground">{statusLabel[repasse.status]}</span>
-            </span>
-          )}
-        </div>
 
         {competencias.length === 0 ? (
           <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">
@@ -896,192 +895,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               </div>
             </div>
 
-            <p className="mb-2 text-xs text-muted-foreground">
-              <strong>Valor</strong> é o que a pessoa recebe neste mês. <strong>Limite mês</strong> é o teto
-              dela na competência e <strong>Limite ano</strong> o teto no ano {anoSelecionado}: é um
-              <strong> valor único para o ano todo</strong>, vale para todas as competências desta conta —
-              informar em um mês já vale para os demais (reinformar apenas substitui o valor).
-              Quem estiver marcado em <strong>Sobra</strong> recebe todo o restante do
-              líquido ao usar “Distribuir por limite” — normalmente a proprietária.
-            </p>
 
-            <div className="mb-3 rounded-md border">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium"
-                onClick={() => setLimitesAbertos((v) => !v)}
-              >
-                <span>Limites anuais de {anoSelecionado} · {pessoasDoAno.length} beneficiário(s)</span>
-                <span className="text-xs text-muted-foreground">
-                  {limitesAbertos ? "ocultar" : "mostrar"}
-                </span>
-              </button>
-              {limitesAbertos && (
-                <div className="border-t p-3">
-                  {pessoasDoAno.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">
-                      Nenhum beneficiário com movimento ou limite neste ano.
-                    </div>
-                  ) : (
-                    <Table className="table-fixed">
-                      <TableHeader><TableRow>
-                        <TableHead>Pessoa</TableHead>
-                        <TableHead className="text-right w-40">Limite do ano</TableHead>
-                        <TableHead className="text-right w-40">Consumido</TableHead>
-                        <TableHead className="text-right w-40">Saldo</TableHead>
-                        <TableHead className="w-40" />
-                      </TableRow></TableHeader>
-                      <TableBody>
-                        {pessoasDoAno.map((p) => {
-                          const lim = limiteAnualDe(p.id);
-                          const usado = recebidoNoAno(p.id);
-                          const saldo = lim === null ? null : Number(lim) - usado;
-                          return (
-                            <TableRow key={p.id}>
-                              <TableCell className="break-words">{p.nome}</TableCell>
-                              <TableCell className="text-right">
-                                {lim === null ? "sem limite" : money(Number(lim))}
-                              </TableCell>
-                              <TableCell className="text-right">{money(usado)}</TableCell>
-                              <TableCell
-                                className={`text-right ${
-                                  saldo !== null && saldo < 0 ? "text-destructive" : ""
-                                }`}
-                              >
-                                {saldo === null ? "—" : money(saldo)}
-                              </TableCell>
-                              <TableCell>
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  min={0}
-                                  className="text-right"
-                                  placeholder="definir limite"
-                                  title={limiteInfoDe(p.id)}
-                                  defaultValue={lim === null ? "" : String(lim)}
-                                  onBlur={(e) => {
-                                    const v = e.target.value;
-                                    const novoLim = v === "" ? null : Number(v);
-                                    if (novoLim === (lim === null ? null : Number(lim))) return;
-                                    if (lim !== null && novoLim !== null) {
-                                      setConfirmLimite({
-                                        atual: Number(lim),
-                                        novo: novoLim,
-                                        onConfirm: () => {
-                                          setConfirmLimite(null);
-                                          saveLimiteAnual.mutate({
-                                            conta_id: conta.id,
-                                            pessoa_id: p.id,
-                                            ano: anoSelecionado,
-                                            valor_limite: novoLim,
-                                            competencia_origem: repasse?.competencia ?? null,
-                                          }, {
-                                            onSuccess: () => {
-                                              limitesAnuais.refetch();
-                                              toast.success("Limite anual atualizado");
-                                            },
-                                            onError: (err: any) => toast.error(err?.message ?? "Erro"),
-                                          });
-                                        },
-                                      });
-                                      return;
-                                    }
-                                    saveLimiteAnual.mutate({
-                                      conta_id: conta.id,
-                                      pessoa_id: p.id,
-                                      ano: anoSelecionado,
-                                      valor_limite: novoLim,
-                                      competencia_origem: repasse?.competencia ?? null,
-                                    }, {
-                                      onSuccess: () => {
-                                        limitesAnuais.refetch();
-                                        toast.success("Limite anual atualizado");
-                                      },
-                                      onError: (err: any) => toast.error(err?.message ?? "Erro"),
-                                    });
-                                  }}
-                                />
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  )}
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Um limite por beneficiário por ano. Ao atingir o limite, novos valores são bloqueados
-                    até que o limite seja aumentado aqui.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-md border p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-sm font-semibold">Saldo por imóvel</div>
-                <Button variant="ghost" size="sm" onClick={() => setMostrarSemSaldo((v) => !v)}>
-                  {mostrarSemSaldo ? "Ocultar imóveis sem saldo" : "Mostrar imóveis sem saldo"}
-                </Button>
-              </div>
-              {saldosPorImovel.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  Nenhum item lançado nesta competência.
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader><TableRow>
-                    <TableHead>Imóvel</TableHead>
-                    <TableHead className="text-right w-32">Crédito</TableHead>
-                    <TableHead className="text-right w-32">Débito</TableHead>
-                    <TableHead className="text-right w-36">Já repassado</TableHead>
-                    <TableHead className="text-right w-36">Disponível</TableHead>
-                  </TableRow></TableHeader>
-                  <TableBody>
-                    {saldosPorImovel
-                      .filter((s) => mostrarSemSaldo || s.disponivel > 0.009)
-                      .map((s) => (
-                        <TableRow key={s.imovel_id ?? "sem"}>
-                          <TableCell className="text-sm">{s.label}</TableCell>
-                          <TableCell className="text-right">{money(s.credito)}</TableCell>
-                          <TableCell className="text-right text-destructive">
-                            {s.debito ? `−${money(s.debito)}` : money(0)}
-                          </TableCell>
-                          <TableCell className="text-right text-muted-foreground">
-                            {money(s.repassado)}
-                          </TableCell>
-                          <TableCell
-                            className={`text-right font-semibold ${s.disponivel > 0.009 ? "text-primary" : "text-muted-foreground"}`}
-                          >
-                            {money(s.disponivel)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    {saldosPorImovel.filter((s) => mostrarSemSaldo || s.disponivel > 0.009).length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-sm text-muted-foreground">
-                          Nenhum imóvel com saldo disponível nesta competência.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    <TableRow>
-                      <TableCell className="text-sm font-semibold">Total</TableCell>
-                      <TableCell className="text-right font-semibold">
-                        {money(saldosPorImovel.reduce((s, r) => s + r.credito, 0))}
-                      </TableCell>
-                      <TableCell className="text-right font-semibold text-destructive">
-                        −{money(saldosPorImovel.reduce((s, r) => s + r.debito, 0))}
-                      </TableCell>
-                      <TableCell className="text-right font-semibold">
-                        {money(saldosPorImovel.reduce((s, r) => s + r.repassado, 0))}
-                      </TableCell>
-                      <TableCell className="text-right font-semibold text-primary">
-                        {money(saldosPorImovel.reduce((s, r) => s + r.disponivel, 0))}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              )}
-            </div>
 
             <Table className="table-fixed">
               <TableHeader><TableRow>
@@ -1453,11 +1267,73 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               Cadastre a pessoa com os limites e depois lance os repasses dela (várias datas por mês,
               cada um com o imóvel de origem) clicando em “Repasses” na linha do beneficiário.
             </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              O limite anual é opcional e único por beneficiário no ano {anoSelecionado} — informe uma vez
-              (aqui, na edição da linha ou no painel “Limites anuais”) e ele vale para todas as
-              competências desta conta. Apenas um beneficiário pode ficar com a sobra.
-            </p>
+
+            <div className="mt-4 rounded-md border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold">Saldo por imóvel</div>
+                <Button variant="ghost" size="sm" onClick={() => setMostrarSemSaldo((v) => !v)}>
+                  {mostrarSemSaldo ? "Ocultar imóveis sem saldo" : "Mostrar imóveis sem saldo"}
+                </Button>
+              </div>
+              {saldosPorImovel.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Nenhum item lançado nesta competência.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead>Imóvel</TableHead>
+                    <TableHead className="text-right w-32">Crédito</TableHead>
+                    <TableHead className="text-right w-32">Débito</TableHead>
+                    <TableHead className="text-right w-36">Já repassado</TableHead>
+                    <TableHead className="text-right w-36">Disponível</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {saldosPorImovel
+                      .filter((s) => mostrarSemSaldo || s.disponivel > 0.009)
+                      .map((s) => (
+                        <TableRow key={s.imovel_id ?? "sem"}>
+                          <TableCell className="text-sm">{s.label}</TableCell>
+                          <TableCell className="text-right">{money(s.credito)}</TableCell>
+                          <TableCell className="text-right text-destructive">
+                            {s.debito ? `−${money(s.debito)}` : money(0)}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {money(s.repassado)}
+                          </TableCell>
+                          <TableCell
+                            className={`text-right font-semibold ${s.disponivel > 0.009 ? "text-primary" : "text-muted-foreground"}`}
+                          >
+                            {money(s.disponivel)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    {saldosPorImovel.filter((s) => mostrarSemSaldo || s.disponivel > 0.009).length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-sm text-muted-foreground">
+                          Nenhum imóvel com saldo disponível nesta competência.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    <TableRow>
+                      <TableCell className="text-sm font-semibold">Total</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {money(saldosPorImovel.reduce((s, r) => s + r.credito, 0))}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-destructive">
+                        −{money(saldosPorImovel.reduce((s, r) => s + r.debito, 0))}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {money(saldosPorImovel.reduce((s, r) => s + r.repassado, 0))}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-primary">
+                        {money(saldosPorImovel.reduce((s, r) => s + r.disponivel, 0))}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              )}
+            </div>
             </>
             )}
           </TabsContent>
