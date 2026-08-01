@@ -437,8 +437,8 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
   async function salvarBenefEdit() {
     if (!repasse || !conta || !editBenef) return;
-    if (!editBenef.pessoa_id || editBenef.valor <= 0) {
-      toast.error("Selecione a pessoa e informe um valor");
+    if (!editBenef.pessoa_id) {
+      toast.error("Selecione a pessoa");
       return;
     }
     const limAnoEdit = editBenef.limite_anual === "" ? null : Number(editBenef.limite_anual);
