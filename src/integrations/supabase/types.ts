@@ -1365,11 +1365,60 @@ export type Database = {
           },
         ]
       }
+      despesas_repasse_benef_pagamentos: {
+        Row: {
+          beneficiario_id: string
+          created_at: string
+          data: string
+          id: string
+          imovel_id: string | null
+          observacao: string | null
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          beneficiario_id: string
+          created_at?: string
+          data?: string
+          id?: string
+          imovel_id?: string | null
+          observacao?: string | null
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          beneficiario_id?: string
+          created_at?: string
+          data?: string
+          id?: string
+          imovel_id?: string | null
+          observacao?: string | null
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_repasse_benef_pagamentos_beneficiario_id_fkey"
+            columns: ["beneficiario_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_repasse_beneficiarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_repasse_benef_pagamentos_imovel_id_fkey"
+            columns: ["imovel_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_imoveis"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       despesas_repasse_beneficiarios: {
         Row: {
           created_at: string
           data_recebimento: string | null
           id: string
+          is_proprietario: boolean
           is_residual: boolean
           observacao: string | null
           ordem: number
@@ -1383,6 +1432,7 @@ export type Database = {
           created_at?: string
           data_recebimento?: string | null
           id?: string
+          is_proprietario?: boolean
           is_residual?: boolean
           observacao?: string | null
           ordem?: number
@@ -1396,6 +1446,7 @@ export type Database = {
           created_at?: string
           data_recebimento?: string | null
           id?: string
+          is_proprietario?: boolean
           is_residual?: boolean
           observacao?: string | null
           ordem?: number
