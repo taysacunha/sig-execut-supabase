@@ -169,7 +169,8 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const [editBenef, setEditBenef] = useState<
     {
       id: string; pessoa_id: string | null; valor: number; valor_limite: string;
-      limite_anual: string; data_recebimento: string; is_residual: boolean; observacao: string;
+      limite_anual: string; data_recebimento: string; is_residual: boolean;
+      is_proprietario: boolean; observacao: string;
     } | null
   >(null);
 
@@ -467,7 +468,8 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
   async function executarBenefEdit(editBenef: {
     id: string; pessoa_id: string | null; valor: number; valor_limite: string;
-    limite_anual: string; data_recebimento: string; is_residual: boolean; observacao: string;
+    limite_anual: string; data_recebimento: string; is_residual: boolean;
+    is_proprietario: boolean; observacao: string;
   }) {
     if (!repasse || !conta || !editBenef.pessoa_id) return;
     try {
@@ -477,6 +479,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
         valor_limite: editBenef.valor_limite === "" ? null : Number(editBenef.valor_limite),
         data_recebimento: editBenef.data_recebimento || null,
         is_residual: editBenef.is_residual,
+        is_proprietario: editBenef.is_proprietario,
         observacao: (editBenef.observacao || null) as any,
       } as any);
       await saveLimiteAnual.mutateAsync({
