@@ -222,6 +222,52 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const podeEditarItens = repasse?.status === "aberto";
   const podeEditarBenef = !!repasse && repasse.status !== "pago" && repasse.status !== "cancelado";
 
+  // Saldo por imóvel na competência: créditos − débitos − repasses já lançados
+  const saldosPorImovel = (() => {
+    const map = new Map<
+      string,
+      { imovel_id: string | null; label: string; credito: number; debito: number; repassado: number }
+    >();
+    const chave = (id: string | null | undefined) => id ?? "__sem__";
+    const get = (id: string | null | undefined) => {
+      const k = chave(id);
+      let r = map.get(k);
+      if (!r) {
+        r = {
+          imovel_id: id ?? null,
+          label: id ? imovelLabel(id) : "Sem imóvel",
+          credito: 0, debito: 0, repassado: 0,
+        };
+        map.set(k, r);
+      }
+      return r;
+    };
+    for (const it of repasse?.itens ?? []) {
+      const r = get(it.imovel_id);
+      if (it.tipo === "credito") r.credito += Number(it.valor || 0);
+      else r.debito += Number(it.valor || 0);
+    }
+    for (const b of beneficiarios) {
+      for (const p of b.pagamentos ?? []) {
+        get(p.imovel_id).repassado += Number(p.valor || 0);
+      }
+    }
+    return Array.from(map.values())
+      .map((r) => ({ ...r, disponivel: r.credito - r.debito - r.repassado }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  })();
+
+  const disponivelDoImovel = (id: string | null | undefined) =>
+    saldosPorImovel.find((s) => (s.imovel_id ?? null) === (id ?? null))?.disponivel ?? 0;
+
+  const imovelOptionsComSaldo = (idAtual?: string | null) =>
+    imovelOptions
+      .filter((o) => disponivelDoImovel(o.value) > 0.009 || o.value === idAtual)
+      .map((o) => ({
+        ...o,
+        label: `${o.label} · disponível ${money(disponivelDoImovel(o.value))}`,
+      }));
+
   const origemLabel = (o: RepasseItemOrigem) => origens.find((x) => x.v === o)?.l ?? o;
 
   // Duplicidade: mesmo tipo + origem + imóvel dentro da competência (itens manuais)
@@ -420,6 +466,11 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
       return;
     }
     if (!validarLimitesPag(b, novoPag.valor)) return;
+    if (novoPag.imovel_id && novoPag.valor > disponivelDoImovel(novoPag.imovel_id) + 0.009) {
+      toast.warning(
+        `Valor acima do saldo do imóvel (disponível ${money(disponivelDoImovel(novoPag.imovel_id))}).`,
+      );
+    }
     try {
       await savePag.mutateAsync({
         beneficiario_id: b.id,
