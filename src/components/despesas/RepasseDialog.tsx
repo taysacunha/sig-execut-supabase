@@ -74,6 +74,8 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const updCampos = useUpdateRepasseCampos();
   const saveLimiteAnual = useSaveLimiteAnual();
   const setResidualMut = useSetBeneficiarioResidual();
+  const savePag = useSaveBenefPagamento();
+  const delPag = useDeleteBenefPagamento();
   const pessoas = usePessoas({});
   const inquilinos = useRepasseInquilinos(conta?.proprietario_id ?? null);
 
@@ -123,11 +125,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
   const benefVazio = {
     pessoa_id: null as string | null,
-    valor: 0,
     valor_limite: "" as string,
     limite_anual: "" as string,
-    data_recebimento: "",
-    is_residual: false,
+    is_proprietario: false,
     observacao: "",
   };
   const [novoBenef, setNovoBenef] = useState(benefVazio);
@@ -146,6 +146,13 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     { tipo: "item" | "benef"; id: string; label: string } | null
   >(null);
   const [confirmDelComp, setConfirmDelComp] = useState<Repasse | null>(null);
+  const [expandido, setExpandido] = useState<string | null>(null);
+  const pagVazio = { data: "", valor: 0, imovel_id: null as string | null, observacao: "" };
+  const [novoPag, setNovoPag] = useState(pagVazio);
+  const [editPag, setEditPag] = useState<
+    { id: string; data: string; valor: number; imovel_id: string | null; observacao: string } | null
+  >(null);
+  const [confirmDelPag, setConfirmDelPag] = useState<{ id: string; label: string } | null>(null);
   const [reabrir, setReabrir] = useState<{ repasse: Repasse; justificativa: string } | null>(null);
   const [itemDuplicado, setItemDuplicado] = useState<{ id: string; label: string } | null>(null);
   const [limitesAbertos, setLimitesAbertos] = useState(false);
