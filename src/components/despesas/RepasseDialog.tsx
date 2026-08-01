@@ -1030,7 +1030,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                       <TableCell className="text-sm">
                         <Button
                           size="sm"
-                          variant={expandido === b.id ? "secondary" : "outline"}
+                          variant={expandido === b.id ? "default" : "secondary"}
                           onClick={() => {
                             setExpandido(expandido === b.id ? null : b.id);
                             setNovoPag({ ...pagVazio, data: repasse.competencia });
