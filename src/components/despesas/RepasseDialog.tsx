@@ -948,6 +948,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                           {b.pessoa?.tipo_pessoa === "juridica" ? "PJ" : "PF"}
                           {b.pessoa?.cpf_cnpj ? ` · ${b.pessoa.cpf_cnpj}` : ""}
                         </div>
+                        {b.is_proprietario && (
+                          <Badge variant="secondary" className="mt-1">Proprietário</Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         {money(Number(b.valor))}
@@ -974,9 +977,17 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                         )}
                       </TableCell>
                       <TableCell className="text-sm">
-                        {b.data_recebimento
-                          ? new Date(b.data_recebimento + "T00:00:00").toLocaleDateString("pt-BR")
-                          : "—"}
+                        <Button
+                          size="sm"
+                          variant={expandido === b.id ? "secondary" : "outline"}
+                          onClick={() => {
+                            setExpandido(expandido === b.id ? null : b.id);
+                            setNovoPag({ ...pagVazio, data: repasse.competencia });
+                            setEditPag(null);
+                          }}
+                        >
+                          {(b.pagamentos ?? []).length} repasse(s)
+                        </Button>
                       </TableCell>
                       <TableCell className="text-center">
                         <input
