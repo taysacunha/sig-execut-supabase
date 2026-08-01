@@ -22,6 +22,15 @@ export interface RepasseItem {
   valor: number;
 }
 
+export interface RepasseBenefPagamento {
+  id: string;
+  beneficiario_id: string;
+  data: string;
+  valor: number;
+  imovel_id: string | null;
+  observacao: string | null;
+}
+
 export interface RepasseBeneficiario {
   id: string;
   repasse_id: string;
@@ -30,9 +39,11 @@ export interface RepasseBeneficiario {
   valor_limite: number | null;
   data_recebimento: string | null;
   is_residual: boolean;
+  is_proprietario?: boolean;
   ordem: number;
   observacao: string | null;
   pessoa?: { nome: string; tipo_pessoa: "fisica" | "juridica"; cpf_cnpj: string | null } | null;
+  pagamentos?: RepasseBenefPagamento[];
 }
 
 export interface Repasse {
