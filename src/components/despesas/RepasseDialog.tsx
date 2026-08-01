@@ -1268,11 +1268,73 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               Cadastre a pessoa com os limites e depois lance os repasses dela (várias datas por mês,
               cada um com o imóvel de origem) clicando em “Repasses” na linha do beneficiário.
             </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              O limite anual é opcional e único por beneficiário no ano {anoSelecionado} — informe uma vez
-              (aqui, na edição da linha ou no painel “Limites anuais”) e ele vale para todas as
-              competências desta conta. Apenas um beneficiário pode ficar com a sobra.
-            </p>
+
+            <div className="mt-4 rounded-md border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold">Saldo por imóvel</div>
+                <Button variant="ghost" size="sm" onClick={() => setMostrarSemSaldo((v) => !v)}>
+                  {mostrarSemSaldo ? "Ocultar imóveis sem saldo" : "Mostrar imóveis sem saldo"}
+                </Button>
+              </div>
+              {saldosPorImovel.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Nenhum item lançado nesta competência.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead>Imóvel</TableHead>
+                    <TableHead className="text-right w-32">Crédito</TableHead>
+                    <TableHead className="text-right w-32">Débito</TableHead>
+                    <TableHead className="text-right w-36">Já repassado</TableHead>
+                    <TableHead className="text-right w-36">Disponível</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {saldosPorImovel
+                      .filter((s) => mostrarSemSaldo || s.disponivel > 0.009)
+                      .map((s) => (
+                        <TableRow key={s.imovel_id ?? "sem"}>
+                          <TableCell className="text-sm">{s.label}</TableCell>
+                          <TableCell className="text-right">{money(s.credito)}</TableCell>
+                          <TableCell className="text-right text-destructive">
+                            {s.debito ? `−${money(s.debito)}` : money(0)}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {money(s.repassado)}
+                          </TableCell>
+                          <TableCell
+                            className={`text-right font-semibold ${s.disponivel > 0.009 ? "text-primary" : "text-muted-foreground"}`}
+                          >
+                            {money(s.disponivel)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    {saldosPorImovel.filter((s) => mostrarSemSaldo || s.disponivel > 0.009).length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-sm text-muted-foreground">
+                          Nenhum imóvel com saldo disponível nesta competência.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    <TableRow>
+                      <TableCell className="text-sm font-semibold">Total</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {money(saldosPorImovel.reduce((s, r) => s + r.credito, 0))}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-destructive">
+                        −{money(saldosPorImovel.reduce((s, r) => s + r.debito, 0))}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {money(saldosPorImovel.reduce((s, r) => s + r.repassado, 0))}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-primary">
+                        {money(saldosPorImovel.reduce((s, r) => s + r.disponivel, 0))}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              )}
+            </div>
             </>
             )}
           </TabsContent>
