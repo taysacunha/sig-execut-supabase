@@ -1311,8 +1311,12 @@ export type Database = {
       despesas_repasse_benef_limite_anual: {
         Row: {
           ano: number
+          competencia_origem: string | null
           conta_id: string
           created_at: string
+          definido_em: string
+          definido_por: string | null
+          definido_por_nome: string | null
           id: string
           pessoa_id: string
           updated_at: string
@@ -1320,8 +1324,12 @@ export type Database = {
         }
         Insert: {
           ano: number
+          competencia_origem?: string | null
           conta_id: string
           created_at?: string
+          definido_em?: string
+          definido_por?: string | null
+          definido_por_nome?: string | null
           id?: string
           pessoa_id: string
           updated_at?: string
@@ -1329,8 +1337,12 @@ export type Database = {
         }
         Update: {
           ano?: number
+          competencia_origem?: string | null
           conta_id?: string
           created_at?: string
+          definido_em?: string
+          definido_por?: string | null
+          definido_por_nome?: string | null
           id?: string
           pessoa_id?: string
           updated_at?: string
