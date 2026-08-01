@@ -292,7 +292,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
       return;
     }
     try {
-      await updStatus.mutateAsync({ id: reabrir.repasse.id, status: "fechado" });
+      await updStatus.mutateAsync({ id: reabrir.repasse.id, status: "aberto" });
       const carimbo = `[Reabertura ${new Date().toLocaleDateString("pt-BR")}] ${just}`;
       await updCampos.mutateAsync({
         id: reabrir.repasse.id,
@@ -300,9 +300,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
           observacao: reabrir.repasse.observacao
             ? `${reabrir.repasse.observacao}\n${carimbo}`
             : carimbo,
-        },
+        } as any,
       });
-      toast.success("Competência reaberta (status: fechado)");
+      toast.success("Competência reaberta (status: aberto)");
       setReabrir(null);
     } catch (e: any) { toast.error(e?.message ?? "Erro ao reabrir"); }
   }
