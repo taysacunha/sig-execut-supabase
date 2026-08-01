@@ -1,9 +1,11 @@
 # Investigar por que Hugo e Taciana ficaram sem alocação (03–09/08)
 
 ## Situação
+
 Ainda não dá para afirmar a causa: não tenho acesso de leitura ao banco nesta sessão, e cada motivo de exclusão deixa um rastro diferente. A decisão de elegibilidade está em `src/lib/scheduleGenerator.ts` (`isBrokerAvailableForShiftWithReason`, ~linha 3119, e `isBrokerAvailableForInternalShift`, ~linha 4689) e já calcula o motivo. Então o primeiro passo é obter o motivo real, não mudar regra.
 
 Hipóteses possíveis (todas verificáveis):
+
 1. `brokers.weekday_shift_availability` da quarta sem o turno, mesmo com `wednesday` em `available_weekdays` — a regra global bloqueia mesmo que o vínculo permita.
 2. `location_brokers.weekday_shift_availability` com array vazio em `wednesday` — hoje o código trata array vazio como "nenhum turno" e bloqueia.
 3. Nenhum `location_periods` vigente cobrindo 03–09/08 nos locais deles, ou config do dia ausente / modo `specific_date` sem data cadastrada.
@@ -11,6 +13,7 @@ Hipóteses possíveis (todas verificáveis):
 5. Regras de escala (meta de 2 externos, não-consecutivo, proteção de cobertura do Bessa) bloquearam e não sobrou demanda.
 
 ## Etapa 1 — Diagnóstico (rodar no SQL Editor e me enviar o retorno)
+
 ```sql
 -- A) dados dos corretores
 select id, name, is_active, available_weekdays,
@@ -50,12 +53,23 @@ where sa.assignment_date between '2026-08-03' and '2026-08-09'
 ```
 
 ## Etapa 2 — Correção conforme o resultado
+
 - Se for dado (disponibilidade vazia/errada, período faltando): ajuste pontual de cadastro, sem mexer no gerador.
 - Se for o tratamento de array vazio no vínculo (hipótese 2): alinhar `isBrokerAvailableForShiftWithReason` para cair no fallback da disponibilidade global quando o array do dia no vínculo estiver vazio, em vez de bloquear.
 - Se for regra de escala: manter a regra e expor o motivo na tela.
 
 ## Etapa 3 — Prevenção
+
 Adicionar ao Relatório de Validação uma seção "Corretores sem nenhuma alocação na semana", com o motivo dominante por corretor (o gerador já coleta esses motivos), para não depender mais de SQL manual em casos assim.
 
 ## Notas técnicas
+
 Nenhuma alteração de regra de negócio antes do retorno da Etapa 1.
+
+&nbsp;
+
+Executei a SQL e retornou isso: Failed to run sql query: ERROR:  42703: column sa.shift does not exist
+
+```
+LINE 30: select b.name, sa.assignment_date, sa.shift, l.name as local
+```
