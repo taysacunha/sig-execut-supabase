@@ -23,6 +23,8 @@ import {
   HelpCircle,
   Link2
 } from "lucide-react";
+import { CalendarX } from "lucide-react";
+import { UnallocatedBrokersTab } from "@/components/validation/UnallocatedBrokersTab";
 
 interface ValidationReportPanelProps {
   result: PostValidationResult | null;
@@ -30,10 +32,13 @@ interface ValidationReportPanelProps {
   brokerDiagnostics?: BrokerAllocationDiagnostic[];
   eligibilityExclusions?: EligibilityExclusion[];
   brokerEligibilityMap?: BrokerExternalEligibility[];
+  scheduleId?: string;
+  weekStart?: string;
+  weekEnd?: string;
 }
 
 type SeverityFilter = "all" | "error" | "warning";
-type ViewMode = "broker" | "rule" | "diagnostic" | "eligibility";
+type ViewMode = "broker" | "rule" | "diagnostic" | "eligibility" | "unallocated";
 
 // ═══════════════════════════════════════════════════════════
 // RULE EXPLANATIONS MAP
