@@ -1021,6 +1021,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                 <TableHead className="w-10">#</TableHead>
                 <TableHead className="w-[20%]">Pessoa</TableHead>
                 <TableHead className="text-right w-[12%]">Total do mês</TableHead>
+                <TableHead className="text-right w-[12%]">Total do mês</TableHead>
                 <TableHead className="text-right w-[12%]">Limite mês</TableHead>
                 <TableHead className="text-right w-[15%]">Limite ano {anoSelecionado}</TableHead>
                 <TableHead className="w-[14%]">Repasses</TableHead>
