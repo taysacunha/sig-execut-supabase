@@ -160,6 +160,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const [confirmLimite, setConfirmLimite] = useState<
     { atual: number; novo: number; onConfirm: () => void } | null
   >(null);
+  const [mostrarSemSaldo, setMostrarSemSaldo] = useState(false);
   const [editItem, setEditItem] = useState<
     {
       id: string; tipo: RepasseItemTipo; origem: RepasseItemOrigem;
@@ -494,6 +495,14 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     }
     const anterior = Number((b.pagamentos ?? []).find((p) => p.id === editPag.id)?.valor ?? 0);
     if (!validarLimitesPag(b, editPag.valor, anterior)) return;
+    if (
+      editPag.imovel_id &&
+      editPag.valor > disponivelDoImovel(editPag.imovel_id) + anterior + 0.009
+    ) {
+      toast.warning(
+        `Valor acima do saldo do imóvel (disponível ${money(disponivelDoImovel(editPag.imovel_id) + anterior)}).`,
+      );
+    }
     try {
       await savePag.mutateAsync({
         id: editPag.id,
