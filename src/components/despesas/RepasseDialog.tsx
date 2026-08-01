@@ -1034,7 +1034,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                           className={
                             expandido === b.id
                               ? "h-8 gap-1.5 shadow-sm"
-                              : "h-8 gap-1.5 border-border bg-muted text-foreground shadow-sm hover:bg-muted/70"
+                              : "h-8 gap-1.5 border-border bg-muted text-foreground shadow-sm hover:bg-muted/70 hover:text-foreground"
                           }
                           onClick={() => {
                             setExpandido(expandido === b.id ? null : b.id);
@@ -1057,16 +1057,22 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                           name={`residual-${repasse.id}`}
                           checked={b.is_residual}
                           disabled={!podeEditarBenef || setResidualMut.isPending}
-                          title="Recebe o valor restante do mês"
-                          onChange={() => setResidualMut.mutate(
-                            { repasseId: repasse.id, beneficiarioId: b.id },
-                            {
-                              onSuccess: () => toast.success(
-                                `${b.pessoa?.nome ?? "Beneficiário"} passa a receber a sobra do mês`,
-                              ),
-                              onError: (err: any) => toast.error(err?.message ?? "Erro"),
-                            },
-                          )}
+                          title="Recebe o valor restante do mês (clique novamente para desmarcar)"
+                          onChange={() => {}}
+                          onClick={() => {
+                            const desmarcar = b.is_residual;
+                            setResidualMut.mutate(
+                              { repasseId: repasse.id, beneficiarioId: desmarcar ? null : b.id },
+                              {
+                                onSuccess: () => toast.success(
+                                  desmarcar
+                                    ? "Nenhum beneficiário recebe a sobra do mês"
+                                    : `${b.pessoa?.nome ?? "Beneficiário"} passa a receber a sobra do mês`,
+                                ),
+                                onError: (err: any) => toast.error(err?.message ?? "Erro"),
+                              },
+                            );
+                          }}
                         />
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground break-words">{b.observacao ?? ""}</TableCell>
