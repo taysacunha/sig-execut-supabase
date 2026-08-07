@@ -240,7 +240,13 @@ const VendasDashboard = () => {
         grouped[id].converted += p.proposals_converted || 0;
       });
       
-      return Object.values(grouped).sort((a, b) => b.count - a.count).slice(0, 10);
+      return Object.values(grouped)
+        .sort((a, b) => {
+          if (b.count !== a.count) return b.count - a.count;
+          if (b.converted !== a.converted) return b.converted - a.converted;
+          return a.name.localeCompare(b.name);
+        })
+        .slice(0, 10);
     },
     ...queryConfig,
   });
