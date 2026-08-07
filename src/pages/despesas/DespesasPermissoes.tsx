@@ -19,6 +19,7 @@ import type { DespesasAba, DespesasNivel } from "@/hooks/useDespesasPermissions"
 const ABAS: { key: DespesasAba; label: string }[] = [
   { key: "calendario", label: "Calendário" },
   { key: "imoveis", label: "Imóveis" },
+  { key: "bens", label: "Bens permanentes" },
   { key: "repasses", label: "Repasses" },
   { key: "cadastros", label: "Cadastros" },
 ];
@@ -35,19 +36,19 @@ const NIVEL_ORDEM: Record<DespesasNivel, number> = { sem_acesso: 0, view: 1, edi
 const PERFIS_RAPIDOS: Record<string, { label: string; niveis: Record<DespesasAba, DespesasNivel> }> = {
   visualizador: {
     label: "Visualizador financeiro (view em tudo)",
-    niveis: { calendario: "view", imoveis: "view", repasses: "view", cadastros: "view" },
+    niveis: { calendario: "view", imoveis: "view", bens: "view", repasses: "view", cadastros: "view" },
   },
   operador: {
     label: "Operador de contas (edit no operacional)",
-    niveis: { calendario: "edit", imoveis: "edit", repasses: "edit", cadastros: "view" },
+    niveis: { calendario: "edit", imoveis: "edit", bens: "edit", repasses: "edit", cadastros: "view" },
   },
   administrador: {
     label: "Administrador de despesas (excluir em tudo)",
-    niveis: { calendario: "delete", imoveis: "delete", repasses: "delete", cadastros: "delete" },
+    niveis: { calendario: "delete", imoveis: "delete", bens: "delete", repasses: "delete", cadastros: "delete" },
   },
   revogar: {
     label: "Revogar acesso (sem acesso em tudo)",
-    niveis: { calendario: "sem_acesso", imoveis: "sem_acesso", repasses: "sem_acesso", cadastros: "sem_acesso" },
+    niveis: { calendario: "sem_acesso", imoveis: "sem_acesso", bens: "sem_acesso", repasses: "sem_acesso", cadastros: "sem_acesso" },
   },
 };
 
