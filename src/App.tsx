@@ -79,6 +79,7 @@ const VendasHelp = lazy(() => import("./pages/vendas/VendasHelp"));
 const DespesasDashboard = lazy(() => import("./pages/despesas/DespesasDashboard"));
 const DespesasCalendario = lazy(() => import("./pages/despesas/DespesasCalendario"));
 const DespesasImoveis = lazy(() => import("./pages/despesas/DespesasImoveis"));
+const DespesasBens = lazy(() => import("./pages/despesas/DespesasBens"));
 const DespesasRepasses = lazy(() => import("./pages/despesas/DespesasRepasses"));
 const DespesasCadastros = lazy(() => import("./pages/despesas/DespesasCadastros"));
 const DespesasPermissoes = lazy(() => import("./pages/despesas/DespesasPermissoes"));
@@ -230,6 +231,7 @@ const App = () => {
               <Route path="recorrencias" element={<DespesasRecorrencias />} />
               <Route path="notificacoes" element={<DespesasNotificacoes />} />
               <Route path="imoveis" element={<DespesasImoveis />} />
+              <Route path="bens" element={<DespesasBens />} />
               <Route path="repasses" element={<DespesasRepasses />} />
               <Route path="cadastros" element={<DespesasCadastros />} />
               <Route path="relatorios" element={<DespesasRelatorios />} />
