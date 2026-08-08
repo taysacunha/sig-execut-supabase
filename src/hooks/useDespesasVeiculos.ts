@@ -158,28 +158,6 @@ export function useVeiculosDocumentosAtivos() {
   });
 }
 
-function useSaveVeiculoDocumentoLegacy() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: Partial<VeiculoDocumento> & { veiculo_id: string }) => {
-      if (input.id) {
-        const { error } = await supabase
-          .from("despesas_veiculo_documentos" as any)
-          .update(input as any)
-          .eq("id", input.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("despesas_veiculo_documentos" as any)
-          .insert(input as any);
-        if (error) throw error;
-      }
-    },
-    onSuccess: (_d, v) =>
-      qc.invalidateQueries({ queryKey: [VEICULOS_KEY, "docs", v.veiculo_id] }),
-  });
-}
-
 export function useDeleteVeiculoDocumento() {
   const qc = useQueryClient();
   return useMutation({
