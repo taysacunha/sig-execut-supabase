@@ -132,6 +132,49 @@ export function useSaveVeiculoDocumento() {
         if (error) throw error;
       }
     },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: [VEICULOS_KEY, "docs", v.veiculo_id] });
+      qc.invalidateQueries({ queryKey: [VEICULOS_KEY, "docs-ativos"] });
+    },
+  });
+}
+
+/** Documentos ativos de todos os veículos, agrupados por veiculo_id. */
+export function useVeiculosDocumentosAtivos() {
+  return useQuery({
+    queryKey: [VEICULOS_KEY, "docs-ativos"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("despesas_veiculo_documentos" as any)
+        .select("*")
+        .eq("ativo", true);
+      if (error) throw error;
+      const map: Record<string, VeiculoDocumento[]> = {};
+      for (const d of (data ?? []) as unknown as VeiculoDocumento[]) {
+        (map[d.veiculo_id] ??= []).push(d);
+      }
+      return map;
+    },
+  });
+}
+
+function useSaveVeiculoDocumentoLegacy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: Partial<VeiculoDocumento> & { veiculo_id: string }) => {
+      if (input.id) {
+        const { error } = await supabase
+          .from("despesas_veiculo_documentos" as any)
+          .update(input as any)
+          .eq("id", input.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("despesas_veiculo_documentos" as any)
+          .insert(input as any);
+        if (error) throw error;
+      }
+    },
     onSuccess: (_d, v) =>
       qc.invalidateQueries({ queryKey: [VEICULOS_KEY, "docs", v.veiculo_id] }),
   });
@@ -148,8 +191,10 @@ export function useDeleteVeiculoDocumento() {
       if (error) throw error;
       return veiculo_id;
     },
-    onSuccess: (veiculo_id) =>
-      qc.invalidateQueries({ queryKey: [VEICULOS_KEY, "docs", veiculo_id] }),
+    onSuccess: (veiculo_id) => {
+      qc.invalidateQueries({ queryKey: [VEICULOS_KEY, "docs", veiculo_id] });
+      qc.invalidateQueries({ queryKey: [VEICULOS_KEY, "docs-ativos"] });
+    },
   });
 }
 
