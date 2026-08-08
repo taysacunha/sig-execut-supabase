@@ -409,6 +409,212 @@ export type Database = {
         }
         Relationships: []
       }
+      despesas_bem_pagamentos: {
+        Row: {
+          bem_id: string
+          categoria_id: string | null
+          created_at: string
+          data_compra: string
+          descricao: string
+          id: string
+          lancamento_id: string | null
+          observacao: string | null
+          plano_conta_id: string | null
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          bem_id: string
+          categoria_id?: string | null
+          created_at?: string
+          data_compra: string
+          descricao: string
+          id?: string
+          lancamento_id?: string | null
+          observacao?: string | null
+          plano_conta_id?: string | null
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          bem_id?: string
+          categoria_id?: string | null
+          created_at?: string
+          data_compra?: string
+          descricao?: string
+          id?: string
+          lancamento_id?: string | null
+          observacao?: string | null
+          plano_conta_id?: string | null
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_bem_pagamentos_bem_id_fkey"
+            columns: ["bem_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_bens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_bem_pagamentos_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_categorias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_bem_pagamentos_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_lancamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_bem_pagamentos_plano_conta_id_fkey"
+            columns: ["plano_conta_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_planos_conta"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      despesas_bem_situacao_historico: {
+        Row: {
+          bem_id: string
+          changed_by: string | null
+          created_at: string
+          data: string
+          id: string
+          motivo: string | null
+          situacao_anterior: string | null
+          situacao_nova: string
+        }
+        Insert: {
+          bem_id: string
+          changed_by?: string | null
+          created_at?: string
+          data?: string
+          id?: string
+          motivo?: string | null
+          situacao_anterior?: string | null
+          situacao_nova: string
+        }
+        Update: {
+          bem_id?: string
+          changed_by?: string | null
+          created_at?: string
+          data?: string
+          id?: string
+          motivo?: string | null
+          situacao_anterior?: string | null
+          situacao_nova?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_bem_situacao_historico_bem_id_fkey"
+            columns: ["bem_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_bens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      despesas_bens: {
+        Row: {
+          categoria: string
+          centro_custo_id: string
+          codigo: string | null
+          created_at: string
+          created_by: string | null
+          data_aquisicao: string | null
+          descricao: string
+          fornecedor_id: string | null
+          garantia_ate: string | null
+          id: string
+          is_active: boolean
+          local: string | null
+          marca: string | null
+          modelo: string | null
+          nota_fiscal: string | null
+          numero_serie: string | null
+          observacao: string | null
+          quantidade: number
+          responsavel_id: string | null
+          situacao: string
+          updated_at: string
+        }
+        Insert: {
+          categoria?: string
+          centro_custo_id: string
+          codigo?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_aquisicao?: string | null
+          descricao: string
+          fornecedor_id?: string | null
+          garantia_ate?: string | null
+          id?: string
+          is_active?: boolean
+          local?: string | null
+          marca?: string | null
+          modelo?: string | null
+          nota_fiscal?: string | null
+          numero_serie?: string | null
+          observacao?: string | null
+          quantidade?: number
+          responsavel_id?: string | null
+          situacao?: string
+          updated_at?: string
+        }
+        Update: {
+          categoria?: string
+          centro_custo_id?: string
+          codigo?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_aquisicao?: string | null
+          descricao?: string
+          fornecedor_id?: string | null
+          garantia_ate?: string | null
+          id?: string
+          is_active?: boolean
+          local?: string | null
+          marca?: string | null
+          modelo?: string | null
+          nota_fiscal?: string | null
+          numero_serie?: string | null
+          observacao?: string | null
+          quantidade?: number
+          responsavel_id?: string | null
+          situacao?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_bens_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_centros_custo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_bens_fornecedor_id_fkey"
+            columns: ["fornecedor_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_pessoas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_bens_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_pessoas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       despesas_categorias: {
         Row: {
           created_at: string
@@ -4739,6 +4945,10 @@ export type Database = {
       despesas_gerar_encargos_veiculo: {
         Args: { _ano: number; _veiculo_id: string }
         Returns: number
+      }
+      despesas_gerar_lancamento_bem: {
+        Args: { _pagamento_id: string }
+        Returns: string
       }
       despesas_gerar_ocorrencias: {
         Args: { _ate?: string; _serie: string }
