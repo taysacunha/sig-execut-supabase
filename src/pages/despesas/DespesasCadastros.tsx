@@ -266,6 +266,7 @@ export default function DespesasCadastros() {
 
 function VeiculosTab({ canEdit, canDelete }: { canEdit: boolean; canDelete: boolean }) {
   const { data: veiculos = [], isLoading } = useVeiculos();
+  const { data: docsPorVeiculo = {} } = useVeiculosDocumentosAtivos();
   const delMut = useDeleteVeiculo();
   const gerarMut = useGerarEncargosVeiculo();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -274,13 +275,33 @@ function VeiculosTab({ canEdit, canDelete }: { canEdit: boolean; canDelete: bool
   const [confirmGerar, setConfirmGerar] = useState<Veiculo | null>(null);
   const [ano, setAno] = useState<number>(new Date().getFullYear());
 
+  const docsDoGerar = confirmGerar ? (docsPorVeiculo[confirmGerar.id] ?? []) : [];
+  const totalEstimado = docsDoGerar.reduce((s, d) => s + Number(d.valor ?? 0), 0);
+  const parcelasEstimadas = docsDoGerar.reduce((s, d) => s + Number(d.parcelas ?? 1), 0);
+  const fmtMoeda = (v: number) =>
+    v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
   async function gerar() {
     if (!confirmGerar) return;
+    const qtdDocs = docsDoGerar.length;
     try {
       const n = await gerarMut.mutateAsync({ veiculoId: confirmGerar.id, ano });
-      toast.success(`${n} lançamento(s) gerado(s)`);
+      if (n > 0) {
+        toast.success(`${n} lançamento(s) gerado(s) para ${ano}`);
+      } else if (qtdDocs === 0) {
+        toast.warning(
+          "Este veículo não possui documentos ativos. Cadastre IPVA, seguro etc. na aba Documentos do veículo.",
+        );
+      } else {
+        toast.info(`Nenhum lançamento novo: os encargos de ${ano} já foram gerados.`);
+      }
       setConfirmGerar(null);
-    } catch (e: any) { toast.error(e?.message ?? "Erro"); }
+    } catch (e: any) {
+      const msg = /centro de custo/i.test(e?.message ?? "")
+        ? "Defina o centro de custo do veículo antes de gerar encargos."
+        : (e?.message ?? "Erro");
+      toast.error(msg);
+    }
   }
 
   return (
@@ -308,6 +329,7 @@ function VeiculosTab({ canEdit, canDelete }: { canEdit: boolean; canDelete: bool
               <TableHead>Placa</TableHead>
               <TableHead>Motorista</TableHead>
               <TableHead>Centro</TableHead>
+              <TableHead>Documentos ativos</TableHead>
               <TableHead>Situação</TableHead>
               <TableHead className="text-right w-40">Ações</TableHead>
             </TableRow></TableHeader>
@@ -318,10 +340,23 @@ function VeiculosTab({ canEdit, canDelete }: { canEdit: boolean; canDelete: bool
                   <TableCell>{v.placa ?? "—"}</TableCell>
                   <TableCell>{v.motorista?.nome ?? "—"}</TableCell>
                   <TableCell>{v.centro_custo?.nome ?? "—"}</TableCell>
+                  <TableCell>
+                    {(docsPorVeiculo[v.id]?.length ?? 0) === 0 ? (
+                      <span className="text-muted-foreground">Nenhum</span>
+                    ) : (
+                      <Badge variant="secondary">{docsPorVeiculo[v.id].length}</Badge>
+                    )}
+                  </TableCell>
                   <TableCell>{v.data_venda ? "Vendido" : "Ativo"}</TableCell>
                   <TableCell className="text-right space-x-1">
                     {canEdit && !v.data_venda && (
-                      <Button size="icon" variant="ghost" title="Gerar encargos" onClick={() => { setConfirmGerar(v); setAno(new Date().getFullYear()); }}>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        title={v.centro_custo_id ? "Gerar encargos" : "Defina o centro de custo para gerar encargos"}
+                        disabled={!v.centro_custo_id}
+                        onClick={() => { setConfirmGerar(v); setAno(new Date().getFullYear()); }}
+                      >
                         <CalendarClock className="h-4 w-4" />
                       </Button>
                     )}
