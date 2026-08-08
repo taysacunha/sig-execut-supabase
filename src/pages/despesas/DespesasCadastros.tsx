@@ -409,16 +409,56 @@ function VeiculosTab({ canEdit, canDelete }: { canEdit: boolean; canDelete: bool
           <AlertDialogHeader>
             <AlertDialogTitle>Gerar encargos do veículo</AlertDialogTitle>
             <AlertDialogDescription>
-              Cria lançamentos parcelados no calendário para <b>{confirmGerar?.modelo}</b>.
+              Cria lançamentos parcelados no calendário para <b>{confirmGerar?.modelo}</b>, a partir dos
+              documentos ativos cadastrados na aba <b>Documentos</b> do veículo.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-2 space-y-2">
             <Label>Ano</Label>
             <Input type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} />
           </div>
+          {docsDoGerar.length === 0 ? (
+            <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+              Este veículo não possui documentos ativos — nada seria gerado. Abra o veículo e cadastre
+              IPVA, licenciamento, seguro etc. na aba <b>Documentos</b>.
+            </div>
+          ) : (
+            <div className="rounded-md border p-3 space-y-2 max-h-56 overflow-y-auto">
+              <p className="text-sm font-medium">
+                {docsDoGerar.length} documento(s) ativo(s) · {parcelasEstimadas} parcela(s) · total estimado {fmtMoeda(totalEstimado)}
+              </p>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                {docsDoGerar.map((d) => (
+                  <li key={d.id}>
+                    <span className="uppercase">{d.tipo}</span> — {fmtMoeda(Number(d.valor ?? 0))} em {d.parcelas}x ·
+                    1º venc. {new Date(d.vencimento_primeira_parcela + "T00:00:00").toLocaleDateString("pt-BR")}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted-foreground">
+                Lançamentos já existentes para {ano} não são duplicados.
+              </p>
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={(e) => { e.preventDefault(); gerar(); }}>Gerar</AlertDialogAction>
+            {docsDoGerar.length === 0 ? (
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  const v = confirmGerar;
+                  setConfirmGerar(null);
+                  setEditing(v);
+                  setDialogOpen(true);
+                }}
+              >
+                Cadastrar documentos
+              </AlertDialogAction>
+            ) : (
+              <AlertDialogAction onClick={(e) => { e.preventDefault(); gerar(); }} disabled={gerarMut.isPending}>
+                {gerarMut.isPending ? "Gerando…" : "Gerar"}
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
