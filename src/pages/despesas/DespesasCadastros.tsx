@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus, Pencil, Trash2, ShieldAlert } from "lucide-react";
 import {
-  useVeiculos, useDeleteVeiculo, useGerarEncargosVeiculo, Veiculo,
+  useVeiculos, useDeleteVeiculo, useGerarEncargosVeiculo, useVeiculosDocumentosAtivos, Veiculo,
 } from "@/hooks/useDespesasVeiculos";
 import { VeiculoDialog } from "@/components/despesas/VeiculoDialog";
 import { CalendarClock } from "lucide-react";
