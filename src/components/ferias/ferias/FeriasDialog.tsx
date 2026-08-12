@@ -296,6 +296,51 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const [correcaoDialogMotivo, setCorrecaoDialogMotivo] = useState("");
   const [correcaoDialogConfirmado, setCorrecaoDialogConfirmado] = useState(false);
 
+  // ===== Cancelamento do 2º período (ex.: desligamento) =====
+  // Não transforma o cadastro em exceção — as regras/datas seguem como padrão.
+  const [q2Cancelado, setQ2Cancelado] = useState(false);
+  const [q2CancMotivo, setQ2CancMotivo] = useState("");
+  const [q2CancJustificativa, setQ2CancJustificativa] = useState("");
+  const [q2CancDialogOpen, setQ2CancDialogOpen] = useState(false);
+  const [q2CancDialogMotivo, setQ2CancDialogMotivo] = useState("desligamento");
+  const [q2CancDialogJustificativa, setQ2CancDialogJustificativa] = useState("");
+
+  const Q2_MOTIVOS: Record<string, string> = {
+    desligamento: "Desligamento",
+    aviso_previo: "Aviso prévio",
+    outro: "Outro",
+  };
+
+  const confirmarCancelamentoQ2 = () => {
+    if (q2CancDialogJustificativa.trim().length < 5) {
+      toast.error("Informe a justificativa do cancelamento.");
+      return;
+    }
+    setQ2Cancelado(true);
+    setQ2CancMotivo(q2CancDialogMotivo);
+    setQ2CancJustificativa(q2CancDialogJustificativa.trim());
+    form.setValue("quinzena2_inicio", "");
+    form.setValue("quinzena2_fim", "");
+    form.setValue("gozo_quinzena2_inicio", "");
+    form.setValue("gozo_quinzena2_fim", "");
+    form.setValue("gozo_venda_q2_inicio", "");
+    form.setValue("gozo_venda_q2_fim", "");
+    if (form.getValues("quinzena_venda") === 2 && form.getValues("opcao_adicional") === "vender") {
+      form.setValue("gozo_venda_inicio", "");
+      form.setValue("gozo_venda_fim", "");
+      form.setValue("dias_vendidos", 0);
+      form.setValue("opcao_adicional", "nenhum");
+      toast.warning("A venda estava vinculada ao 2º período e foi removida.");
+    }
+    setQ2CancDialogOpen(false);
+  };
+
+  const reativarQ2 = () => {
+    setQ2Cancelado(false);
+    setQ2CancMotivo("");
+    setQ2CancJustificativa("");
+  };
+
   // Reseta quando o dialog fecha
   useEffect(() => {
     if (!open) {
