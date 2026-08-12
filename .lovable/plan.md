@@ -1,41 +1,46 @@
-# Cancelar o 2º período como exceção (caso Juliana) + conflito falso
+# Cancelar o 2º período mantendo a férias como Padrão (caso Juliana)
 
 ## O problema
 
 Ao editar as férias da Juliana e apagar as datas do 2º período, o sistema continua acusando conflito com Vanésia e não salva.
 
-O padrão continua sendo 2 períodos obrigatórios. O que muda é apenas a possibilidade de **cancelar o 2º período em caráter de exceção**, com motivo e justificativa — como no caso da Juliana, que está sendo desligada e não gozará o 2º período.
+A férias da Juliana é e continua **Padrão**: as datas seguem as regras normais e o 1º período foi gozado integralmente. A única mudança é o **cancelamento do 2º período por desligamento**. Isso não transforma o cadastro em "Exceção" — não muda aba, não exige motivo de exceção e não afeta as demais regras.
 
 Duas causas identificadas no código:
 
 1. **O aviso de conflito não é recalculado quando as datas mudam.** A verificação de conflito só roda quando o diálogo abre (depende apenas de `open` e do id da férias). Existe até uma variável observando as datas, mas ela não é usada como dependência. Resultado: o conflito detectado na abertura fica congelado na tela e continua bloqueando o salvamento mesmo depois de apagar o 2º período.
 
-2. **Hoje não existe caminho para cancelar o 2º período.** Apagar as datas na mão não é um fluxo suportado: sobra o campo de fim preenchido, nada é justificado/auditado e o banco recusa o valor vazio (uma migração tornou `quinzena2_inicio`/`quinzena2_fim` opcionais e outra, posterior, reverteu para obrigatórios).
+2. **Hoje não existe caminho para cancelar o 2º período.** Apagar as datas na mão não é um fluxo suportado: sobra o campo de fim preenchido, nada fica registrado sobre o porquê e o banco recusa o valor vazio (uma migração tornou `quinzena2_inicio`/`quinzena2_fim` opcionais e outra, posterior, reverteu para obrigatórios).
 
 ## O que será feito
 
 ### 1. Recalcular conflitos em tempo real
 A verificação passa a rodar (com pequeno atraso, para não disparar a cada tecla) sempre que mudarem: colaborador, datas dos dois períodos oficiais, tipo de opção adicional (venda / gozo diferente), dias vendidos, datas de gozo e os sub-períodos de exceção. Assim, ao limpar o 2º período, o aviso some sozinho e o bloqueio no salvar deixa de existir.
 
-### 2. Cancelamento do 2º período — só como exceção
-O padrão segue exigindo os 2 períodos: rótulo obrigatório, validação e mensagens de hoje ficam iguais para quem não está em exceção.
-
-Novo comportamento, disponível **apenas com a férias marcada como Exceção**:
-- Ação **"Cancelar 2º período"** no card do 2º período, com confirmação (AlertDialog) explicando que o 2º período deixará de existir no registro.
-- Exige motivo de exceção (novo motivo **"Desligamento do colaborador"**, somado aos motivos atuais) e justificativa preenchida — sem isso, não salva.
+### 2. Cancelar o 2º período (ação própria, independente de exceção)
+No card do 2º período, uma ação **"Cancelar 2º período"** com confirmação, disponível tanto em cadastro Padrão quanto em Exceção:
+- Pede o motivo do cancelamento (lista curta: **Desligamento**, **Aviso prévio**, **Outro**) e uma justificativa em texto.
+- Ao confirmar, limpa início/fim do 2º período e os campos de gozo/venda vinculados a ele. Se havia venda atribuída ao 2º período, avisa antes.
 - Bloqueada se o 2º período já foi enviado ao contador.
-- Ao cancelar, o sistema limpa início/fim do 2º período e também os campos de gozo/venda vinculados a ele, para não sobrar data solta. Se havia venda atribuída ao 2º período, avisa antes.
-- No formulário e na visualização, o 2º período aparece como **"Cancelado (exceção)"** com o motivo, em vez de sumir sem explicação.
-- O cancelamento é registrado na auditoria de férias (mesmo caminho já usado para correção de quinzena de venda).
+- O cadastro **continua Padrão**: nada de marcar `is_excecao`, nada de trocar de aba, nada de exigir motivo de exceção.
+- Enquanto o 2º período não estiver cancelado, ele segue obrigatório como hoje.
+- Pode ser desfeito ("Reativar 2º período"), voltando a exigir as datas.
 
-### 3. Banco de dados
-Primeiro será confirmada a obrigatoriedade atual das colunas. Se estiverem obrigatórias, uma migração volta `quinzena2_inicio`/`quinzena2_fim` a aceitarem vazio — necessário para gravar o cancelamento. A obrigatoriedade continua sendo garantida pela regra do formulário (só a exceção libera), não pela coluna.
+### 3. Como isso aparece no sistema
+- No formulário e na visualização, o card do 2º período mostra **"Cancelado — Desligamento"** com a justificativa e a data/usuário do cancelamento.
+- Relatório do contador e demais telas: o 2º período não é listado como férias a gozar, e sim identificado como cancelado.
+- Registro na auditoria de férias.
 
-### 4. Efeitos colaterais a conferir
-- Relatório do contador e visualização: conferir que o 2º período cancelado apareça identificado como tal e nada exiba "Invalid Date".
+### 4. Banco de dados
+- Confirmar a obrigatoriedade atual de `quinzena2_inicio`/`quinzena2_fim`; se estiverem obrigatórias, migração para aceitarem vazio (a obrigatoriedade passa a ser garantida pela regra do formulário).
+- Novas colunas em `ferias_ferias` para o cancelamento: `q2_cancelado` (booleano, padrão falso), `q2_cancelamento_motivo`, `q2_cancelamento_justificativa`, `q2_cancelado_em`, `q2_cancelado_por`.
+
+### 5. Efeitos colaterais a conferir
+- Visualização e PDF do contador: nada deve exibir "Invalid Date" com o 2º período vazio.
 - Cálculo de saldo de dias do período aquisitivo já soma o 2º período apenas quando ele existe.
 
 ## Detalhes técnicos
-- `src/components/ferias/ferias/FeriasDialog.tsx`: usar `watchedFields` (ampliado) como dependência do `useEffect` de conflitos com debounce (~400 ms) e limpar `conflicts` quando não houver intervalos; ação "Cancelar 2º período" (visível só com `is_excecao`) limpando `quinzena2_inicio/fim` e os campos de gozo/venda do período 2; em `validateVacation`, exigir 2º período quando não for exceção e exigir motivo + justificativa quando cancelado; novo motivo `desligamento`; auditoria via `registrar_evento_ferias` com ação `CANCELAMENTO_PERIODO_2`.
-- `src/components/ferias/ferias/FeriasViewDialog.tsx`: exibir o 2º período como cancelado (motivo/justificativa) quando as datas estiverem vazias e o registro for exceção.
-- Migração nova em `db/migrations/`: `ALTER TABLE ferias_ferias ALTER COLUMN quinzena2_inicio DROP NOT NULL;` e o mesmo para `quinzena2_fim` (apenas se a verificação confirmar que estão NOT NULL).
+- `src/components/ferias/ferias/FeriasDialog.tsx`: usar `watchedFields` (ampliado) como dependência do `useEffect` de conflitos com debounce (~400 ms) e limpar `conflicts` quando não houver intervalos; estado `q2Cancelado` + AlertDialog de confirmação com motivo/justificativa; ao cancelar, limpar `quinzena2_inicio/fim`, `gozo_quinzena2_*` e venda do período 2; em `validateVacation`, exigir 2º período apenas quando `q2_cancelado` for falso; payload grava as novas colunas — `is_excecao` permanece inalterado.
+- `src/components/ferias/ferias/FeriasViewDialog.tsx` e gerador de PDF do contador: renderizar o 2º período como cancelado (motivo + justificativa) em vez de datas.
+- Migração em `db/migrations/`: `DROP NOT NULL` em `quinzena2_inicio`/`quinzena2_fim` (se aplicável) e `ADD COLUMN IF NOT EXISTS` das cinco colunas de cancelamento.
+- `registrar_evento_ferias`: incluir `CANCELAMENTO_PERIODO_2` (e `REATIVACAO_PERIODO_2`) na lista de ações permitidas da função.
