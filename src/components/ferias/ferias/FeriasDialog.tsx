@@ -1536,9 +1536,29 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       : (data.opcao_adicional === "vender" ? (q1BloqueadoParaVenda ? 2 : (data.quinzena_venda || 1)) : null);
     const qvAntes = ferias?.quinzena_venda ?? null;
     const deveAuditar = permitirCorrecaoQV && finalQV !== qvAntes;
+    const q2CanceladoAntes = !!ferias?.q2_cancelado;
+    const q2MudouCancelamento = isEditing && q2CanceladoAntes !== q2Cancelado;
 
     mutation.mutate(data, {
       onSuccess: async () => {
+        if (q2MudouCancelamento && ferias?.id) {
+          try {
+            await (supabase as any).rpc("registrar_evento_ferias", {
+              p_record_id: ferias.id,
+              p_action: q2Cancelado ? "CANCELAMENTO_PERIODO_2" : "REATIVACAO_PERIODO_2",
+              p_payload: {
+                motivo: q2Cancelado ? q2CancMotivo : null,
+                justificativa: q2Cancelado ? q2CancJustificativa : null,
+                periodo_anterior: q2Cancelado
+                  ? { inicio: ferias.quinzena2_inicio, fim: ferias.quinzena2_fim }
+                  : null,
+                registrado_em: new Date().toISOString(),
+              },
+            });
+          } catch (e) {
+            console.error("Falha ao registrar auditoria do 2º período:", e);
+          }
+        }
         if (deveAuditar && ferias?.id) {
           try {
             await (supabase as any).rpc("registrar_evento_ferias", {
