@@ -1962,7 +1962,19 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                     </CardContent>
                   </Card>
                   <Card>
-                    <CardHeader className="pb-3"><CardTitle className="text-sm">2º Período (15 dias)</CardTitle></CardHeader>
+                    <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+                      <CardTitle className="text-sm">2º Período (15 dias)</CardTitle>
+                      {!ferias?.enviado_contador_q2 && (
+                        q2Cancelado ? (
+                          <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={reativarQ2}>Reativar 2º período</Button>
+                        ) : (
+                          <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => setQ2CancDialogOpen(true)}>Cancelar 2º período</Button>
+                        )
+                      )}
+                    </CardHeader>
+                    {q2Cancelado ? (
+                      <CardContent>{q2CanceladoBanner}</CardContent>
+                    ) : (
                     <CardContent className="grid grid-cols-2 gap-4">
                        <FormField control={form.control} name="quinzena2_inicio" render={({ field }) => (
                          <FormItem><FormLabel>Data de Início *</FormLabel><FormControl><Input type="date" min="1990-01-01" max="2100-12-31" {...field} /></FormControl><FormMessage /></FormItem>
@@ -1973,6 +1985,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                         {q2Inicio && q2Fim && <p className="text-xs text-muted-foreground mt-1">15 dias a partir de {formatDateBR(q2Inicio)}</p>}
                       </FormItem>
                     </CardContent>
+                    )}
                   </Card>
                 </>
               )}
