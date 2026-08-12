@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Calendar, User, Building2, AlertTriangle, DollarSign, Layers, Send } from "lucide-react";
-import { format, parseISO, addDays } from "date-fns";
+import { format, parseISO, addDays, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
