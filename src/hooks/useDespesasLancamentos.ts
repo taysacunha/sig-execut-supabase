@@ -115,13 +115,47 @@ export function useLancamentos(filtros: LancamentoFiltros) {
       if (filtros.dataInicio) query = query.gte("data_vencimento", filtros.dataInicio);
       if (filtros.dataFim) query = query.lte("data_vencimento", filtros.dataFim);
       if (filtros.serieId) query = query.eq("serie_recorrencia_id", filtros.serieId);
-      if (filtros.busca && filtros.busca.trim()) {
-        query = query.ilike("descricao", `%${filtros.busca.trim()}%`);
+      const termo = filtros.busca?.trim() ?? "";
+      if (termo) {
+        const safe = termo.replace(/[,()]/g, " ").trim();
+        if (safe) {
+          query = query.or(
+            [
+              `descricao.ilike.%${safe}%`,
+              `documento_numero.ilike.%${safe}%`,
+              `referencia_numero.ilike.%${safe}%`,
+              `referencia_numero_pasta.ilike.%${safe}%`,
+              `referencia_numero_venda.ilike.%${safe}%`,
+            ].join(",")
+          );
+        }
       }
 
       const { data, error } = await query.limit(1000);
       if (error) throw error;
-      return (data ?? []) as unknown as Lancamento[];
+      let lista = (data ?? []) as unknown as Lancamento[];
+
+      // Complemento em memória: busca sem acento e em campos relacionados
+      if (termo) {
+        const alvo = normalizeText(termo);
+        const bate = (v?: string | null) => !!v && normalizeText(v).includes(alvo);
+        const extras = lista.filter(
+          (l) => bate(l.pessoa?.nome) || bate(l.imovel?.codigo) || bate(l.imovel?.endereco)
+        );
+        // já vem filtrado pelo servidor; garante que registros com acento também casem
+        const porTexto = lista.filter(
+          (l) =>
+            bate(l.descricao) ||
+            bate(l.documento_numero) ||
+            bate(l.referencia_numero) ||
+            bate(l.referencia_numero_pasta) ||
+            bate(l.referencia_numero_venda)
+        );
+        const ids = new Set([...porTexto, ...extras].map((l) => l.id));
+        lista = lista.filter((l) => ids.has(l.id));
+      }
+
+      return lista;
     },
   });
 }
