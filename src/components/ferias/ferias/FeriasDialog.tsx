@@ -1478,8 +1478,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
             {isEditing ? "Editar Férias" : "Nova Férias"}
@@ -1487,17 +1487,18 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         </DialogHeader>
 
         {isEditing && ferias?.enviado_contador && (
-          <Alert variant="destructive" className="border-orange-500/50 bg-orange-500/10">
+          <Alert variant="destructive" className="shrink-0 border-orange-500/50 bg-orange-500/10 py-2">
             <ShieldAlert className="h-4 w-4" />
-            <AlertTitle>Férias já enviada ao contador</AlertTitle>
-            <AlertDescription>
-              Este registro foi encaminhado ao contador{ferias.enviado_contador_em ? ` em ${format(parseISO(ferias.enviado_contador_em), "dd/MM/yyyy", { locale: ptBR })}` : ""}. Alterações aqui ficarão apenas no sistema interno — comunique o contador separadamente se necessário.
+            <AlertTitle className="text-sm mb-0.5">Férias já enviada ao contador</AlertTitle>
+            <AlertDescription className="text-sm leading-relaxed">
+              Enviada ao contador{ferias.enviado_contador_em ? ` em ${format(parseISO(ferias.enviado_contador_em), "dd/MM/yyyy", { locale: ptBR })}` : ""}. Alterações aqui ficam só no sistema interno.
             </AlertDescription>
           </Alert>
         )}
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col min-h-0 flex-1">
+            <div className="space-y-6 overflow-y-auto min-h-0 flex-1 pr-1">
 
             {/* SEÇÃO 1: Tipo de Cadastro */}
             <div className="space-y-3">
