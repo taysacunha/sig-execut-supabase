@@ -131,7 +131,13 @@ export default function DespesasCalendario() {
     setSearchParams(next, { replace: true });
   }
 
-  const { data: rows = [], isLoading } = useLancamentos(filtros);
+  const buscaAtiva = !!filtros.busca?.trim();
+  const filtrosEfetivos = useMemo<LancamentoFiltros>(
+    () =>
+      buscaAtiva ? { ...filtros, dataInicio: undefined, dataFim: undefined } : filtros,
+    [filtros, buscaAtiva]
+  );
+  const { data: rows = [], isLoading } = useLancamentos(filtrosEfetivos);
   const lookups = useDespesasLookups();
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -167,22 +173,49 @@ export default function DespesasCalendario() {
   }, [rows]);
 
   // Duplicidade ±3 dias (mesmo valor, mesmo tipo, mesma pessoa) — client only.
-  const duplicados = useMemo(() => {
-    const set = new Set<string>();
-    for (let i = 0; i < rows.length; i++) {
-      for (let j = i + 1; j < rows.length; j++) {
-        const a = rows[i], b = rows[j];
-        if (a.tipo !== b.tipo) continue;
-        if (Number(a.valor_total) !== Number(b.valor_total)) continue;
-        if ((a.pessoa_id ?? "") !== (b.pessoa_id ?? "")) continue;
+  const { duplicados, gruposDuplicados } = useMemo(() => {
+    const candidatos = rows.filter(
+      (r) => r.status !== "cancelado" && r.status !== "gimob"
+    );
+    const grupos: string[][] = [];
+    const grupoDe = new Map<string, number>();
+
+    const mesmoContexto = (a: Lancamento, b: Lancamento) =>
+      a.tipo === b.tipo &&
+      Number(a.valor_total) === Number(b.valor_total) &&
+      (a.pessoa_id ?? "") === (b.pessoa_id ?? "") &&
+      (a.centro_custo_id ?? "") === (b.centro_custo_id ?? "") &&
+      (a.imovel_id ?? "") === (b.imovel_id ?? "") &&
+      (a.referencia_numero_pasta ?? "") === (b.referencia_numero_pasta ?? "") &&
+      (a.referencia_numero_venda ?? "") === (b.referencia_numero_venda ?? "") &&
+      // parcelas da mesma série de recorrência não são duplicidade
+      !(
+        (a as any).serie_recorrencia_id &&
+        (a as any).serie_recorrencia_id === (b as any).serie_recorrencia_id
+      );
+
+    for (let i = 0; i < candidatos.length; i++) {
+      for (let j = i + 1; j < candidatos.length; j++) {
+        const a = candidatos[i], b = candidatos[j];
+        if (!mesmoContexto(a, b)) continue;
         const diff = Math.abs(
-          (new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime())
-            / (1000 * 60 * 60 * 24)
+          (new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime()) /
+            (1000 * 60 * 60 * 24)
         );
-        if (diff <= 3) { set.add(a.id); set.add(b.id); }
+        if (diff > 3) continue;
+
+        const gi = grupoDe.get(a.id) ?? grupoDe.get(b.id);
+        if (gi === undefined) {
+          grupoDe.set(a.id, grupos.length);
+          grupoDe.set(b.id, grupos.length);
+          grupos.push([a.id, b.id]);
+        } else {
+          if (!grupoDe.has(a.id)) { grupoDe.set(a.id, gi); grupos[gi].push(a.id); }
+          if (!grupoDe.has(b.id)) { grupoDe.set(b.id, gi); grupos[gi].push(b.id); }
+        }
       }
     }
-    return set;
+    return { duplicados: new Set(grupoDe.keys()), gruposDuplicados: grupos.length };
   }, [rows]);
 
   if (!podeVer("calendario")) {
@@ -389,12 +422,17 @@ export default function DespesasCalendario() {
             />
           </div>
           <div className="space-y-1 md:col-span-2">
-            <Label>Buscar por descrição</Label>
+            <Label>Buscar (descrição, documento, pasta, venda, pessoa, imóvel)</Label>
             <Input
               placeholder="Digite para filtrar…"
               value={filtros.busca ?? ""}
               onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })}
             />
+            {buscaAtiva && (
+              <p className="text-xs text-muted-foreground">
+                Busca aplicada a todos os períodos (filtros de vencimento ignorados).
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -405,10 +443,10 @@ export default function DespesasCalendario() {
           <CardTitle className="text-base">
             Lançamentos {isLoading ? "" : `(${rowsVisiveis.length})`}
           </CardTitle>
-          {duplicados.size > 0 && (
+          {gruposDuplicados > 0 && (
             <Badge variant="destructive" className="gap-1">
               <AlertTriangle className="h-3 w-3" />
-              {duplicados.size / 2} possíveis duplicidades
+              {gruposDuplicados} possível(is) duplicidade(s)
             </Badge>
           )}
         </CardHeader>

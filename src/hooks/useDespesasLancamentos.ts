@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeText } from "@/lib/textUtils";
 
 export type LancamentoTipo = "a_pagar" | "a_receber";
 export type LancamentoStatus =
@@ -115,8 +116,48 @@ export function useLancamentos(filtros: LancamentoFiltros) {
       if (filtros.dataInicio) query = query.gte("data_vencimento", filtros.dataInicio);
       if (filtros.dataFim) query = query.lte("data_vencimento", filtros.dataFim);
       if (filtros.serieId) query = query.eq("serie_recorrencia_id", filtros.serieId);
-      if (filtros.busca && filtros.busca.trim()) {
-        query = query.ilike("descricao", `%${filtros.busca.trim()}%`);
+      const termo = filtros.busca?.trim() ?? "";
+      if (termo) {
+        const safe = termo.replace(/[,()]/g, " ").trim();
+        const alvo = normalizeText(safe);
+        const bate = (v?: string | null) => !!v && normalizeText(v).includes(alvo);
+
+        // Resolve pessoas e imóveis que casam com o termo (sem acento)
+        const [pessoasRes, imoveisRes, textoRes] = await Promise.all([
+          supabase.from("despesas_pessoas" as any).select("id, nome").limit(2000),
+          supabase.from("despesas_imoveis" as any).select("id, codigo, endereco").limit(2000),
+          supabase
+            .from("despesas_lancamentos" as any)
+            .select(
+              "id, descricao, documento_numero, referencia_numero, referencia_numero_pasta, referencia_numero_venda"
+            )
+            .limit(5000),
+        ]);
+
+        const pessoaIds = ((pessoasRes.data ?? []) as any[])
+          .filter((p) => bate(p.nome))
+          .map((p) => p.id as string);
+        const imovelIds = ((imoveisRes.data ?? []) as any[])
+          .filter((i) => bate(i.codigo) || bate(i.endereco))
+          .map((i) => i.id as string);
+        const textoIds = ((textoRes.data ?? []) as any[])
+          .filter(
+            (l) =>
+              bate(l.descricao) ||
+              bate(l.documento_numero) ||
+              bate(l.referencia_numero) ||
+              bate(l.referencia_numero_pasta) ||
+              bate(l.referencia_numero_venda)
+          )
+          .map((l) => l.id as string);
+
+        const ors: string[] = [];
+        if (textoIds.length) ors.push(`id.in.(${textoIds.join(",")})`);
+        if (pessoaIds.length) ors.push(`pessoa_id.in.(${pessoaIds.join(",")})`);
+        if (imovelIds.length) ors.push(`imovel_id.in.(${imovelIds.join(",")})`);
+
+        if (!ors.length) return [] as Lancamento[];
+        query = query.or(ors.join(","));
       }
 
       const { data, error } = await query.limit(1000);
