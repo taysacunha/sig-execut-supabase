@@ -21,13 +21,14 @@ import { getYearOptions } from "@/lib/dateUtils";
 import {
   Lancamento, LancamentoInput, LancamentoTipo, useDespesasLookups,
   useSaveLancamento, useLancamentoCredenciais, useSaveLancamentoCredenciais,
-  LancamentoCredenciais,
+  LancamentoCredenciais, PROPAGAVEIS,
 } from "@/hooks/useDespesasLancamentos";
 import {
   RecorrenciaBlock, RecorrenciaFormState,
 } from "./RecorrenciaBlock";
 import { useSaveRecorrencia } from "@/hooks/useDespesasRecorrencias";
 import { DuplicidadeAlert } from "./DuplicidadeAlert";
+import { PropagarRecorrenciaDialog, DiffItem } from "./PropagarRecorrenciaDialog";
 
 interface Props {
   open: boolean;
@@ -67,6 +68,10 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
   const [form, setForm] = useState<LancamentoInput>(emptyForm());
   const [credenciais, setCredenciais] = useState<LancamentoCredenciais>({});
   const [imovelPopoverOpen, setImovelPopoverOpen] = useState(false);
+  const [snapshot, setSnapshot] = useState<LancamentoInput | null>(null);
+  const [propagarOpen, setPropagarOpen] = useState(false);
+  const [diff, setDiff] = useState<DiffItem[]>([]);
+  const [patchPropagar, setPatchPropagar] = useState<Partial<LancamentoInput>>({});
   const canEditCredenciais = !credQuery.isError; // sem permissão → RLS bloqueia leitura
   const MESES_LABELS = [
     "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
@@ -91,7 +96,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
   useEffect(() => {
     if (!open) return;
     if (editing) {
-      setForm({
+      const inicial: LancamentoInput = {
         tipo: editing.tipo,
         descricao: editing.descricao,
         documento_numero: editing.documento_numero,
@@ -110,7 +115,9 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
         data_vencimento: editing.data_vencimento,
         valor_total: editing.valor_total == null ? null : Number(editing.valor_total),
         observacao: editing.observacao,
-      });
+      };
+      setForm(inicial);
+      setSnapshot(inicial);
       setRec({
         ativa: false,
         tipo: "mensal",
@@ -122,6 +129,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
     } else {
       setForm(emptyForm());
       setCredenciais({});
+      setSnapshot(null);
       setRec({
         ativa: false,
         tipo: "mensal",
@@ -151,6 +159,58 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
     !!form.data_vencimento &&
     !!form.data_competencia &&
     referenciaPreenchida;
+
+  const CAMPO_LABEL: Record<string, string> = {
+    descricao: "Descrição",
+    documento_numero: "Nº do documento",
+    pessoa_id: "Pessoa",
+    imovel_id: "Imóvel",
+    referencia_numero_pasta: "Nº de Pasta",
+    referencia_numero_venda: "Cód. Venda",
+    centro_custo_id: "Centro de custo",
+    categoria_id: "Categoria",
+    plano_conta_id: "Plano de conta",
+    conta_bancaria_id: "Conta bancária",
+    valor_total: "Valor total",
+    observacao: "Observação",
+  };
+
+  function exibirValor(campo: string, v: any): string {
+    if (v == null || v === "") return "—";
+    if (campo === "pessoa_id")
+      return (pessoas.data ?? []).find((p) => p.id === v)?.nome ?? String(v);
+    if (campo === "imovel_id") {
+      const i = (imoveis.data ?? []).find((x) => x.id === v);
+      return i ? `${i.codigo ? `${i.codigo} — ` : ""}${i.descricao}` : String(v);
+    }
+    if (campo === "centro_custo_id")
+      return (centros.data ?? []).find((c) => c.id === v)?.nome ?? String(v);
+    if (campo === "categoria_id")
+      return (categorias.data ?? []).find((c) => c.id === v)?.nome ?? String(v);
+    if (campo === "plano_conta_id")
+      return (planos.data ?? []).find((p) => p.id === v)?.nome ?? String(v);
+    if (campo === "conta_bancaria_id")
+      return (contas.data ?? []).find((c) => c.id === v)?.nome ?? String(v);
+    if (campo === "valor_total")
+      return Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    return String(v);
+  }
+
+  function calcularDiff(antes: LancamentoInput, depois: LancamentoInput): DiffItem[] {
+    const itens: DiffItem[] = [];
+    PROPAGAVEIS.forEach((campo) => {
+      const a = (antes as any)[campo] ?? null;
+      const b = (depois as any)[campo] ?? null;
+      if (String(a ?? "") === String(b ?? "")) return;
+      itens.push({
+        campo,
+        label: CAMPO_LABEL[campo as string] ?? String(campo),
+        de: exibirValor(campo as string, a),
+        para: exibirValor(campo as string, b),
+      });
+    });
+    return itens;
+  }
 
   async function salvar() {
     try {
@@ -208,6 +268,22 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
       } else {
         toast.success(editing ? "Lançamento atualizado" : "Lançamento criado");
       }
+
+      // Editando uma parcela de uma série: oferecer propagar às próximas.
+      if (editing?.serie_recorrencia_id && snapshot) {
+        const itens = calcularDiff(snapshot, payload);
+        if (itens.length) {
+          const patch: Partial<LancamentoInput> = {};
+          itens.forEach((d) => {
+            (patch as any)[d.campo] = (payload as any)[d.campo];
+          });
+          setDiff(itens);
+          setPatchPropagar(patch);
+          setPropagarOpen(true);
+          return;
+        }
+      }
+
       onOpenChange(false);
     } catch (e: any) {
       toast.error(e?.message ?? "Erro ao salvar lançamento");
@@ -215,6 +291,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
@@ -543,5 +620,25 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <PropagarRecorrenciaDialog
+        open={propagarOpen}
+        onOpenChange={setPropagarOpen}
+        serieId={editing?.serie_recorrencia_id ?? null}
+        dataVencimento={editing?.data_vencimento ?? null}
+        diff={diff}
+        patch={patchPropagar}
+        onAtualizarSerie={async (patch) => {
+          if (!editing?.serie_recorrencia_id) return;
+          const { serie_recorrencia_id } = editing;
+          const recPatch: any = { ...patch };
+          await saveRecMut.mutateAsync({
+            id: serie_recorrencia_id,
+            input: recPatch,
+          });
+        }}
+        onDone={() => onOpenChange(false)}
+      />
+    </>
   );
 }
