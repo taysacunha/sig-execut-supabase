@@ -636,6 +636,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     }
     setConflicts([]);
     setGozoDateError(null);
+    setQ2Cancelado(!!ferias?.q2_cancelado);
+    setQ2CancMotivo(ferias?.q2_cancelamento_motivo || "");
+    setQ2CancJustificativa(ferias?.q2_cancelamento_justificativa || "");
+    setQ2CancDialogMotivo(ferias?.q2_cancelamento_motivo || "desligamento");
+    setQ2CancDialogJustificativa(ferias?.q2_cancelamento_justificativa || "");
     if (!ferias) {
       setExcecaoTipo(null);
       setExcDistribuicaoTipo("");
