@@ -160,8 +160,59 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
     !!form.data_competencia &&
     referenciaPreenchida;
 
+  const CAMPO_LABEL: Record<string, string> = {
+    descricao: "Descrição",
+    documento_numero: "Nº do documento",
+    pessoa_id: "Pessoa",
+    imovel_id: "Imóvel",
+    referencia_numero_pasta: "Nº de Pasta",
+    referencia_numero_venda: "Cód. Venda",
+    centro_custo_id: "Centro de custo",
+    categoria_id: "Categoria",
+    plano_conta_id: "Plano de conta",
+    conta_bancaria_id: "Conta bancária",
+    valor_total: "Valor total",
+    observacao: "Observação",
+  };
+
+  function exibirValor(campo: string, v: any): string {
+    if (v == null || v === "") return "—";
+    if (campo === "pessoa_id")
+      return (pessoas.data ?? []).find((p) => p.id === v)?.nome ?? String(v);
+    if (campo === "imovel_id") {
+      const i = (imoveis.data ?? []).find((x) => x.id === v);
+      return i ? `${i.codigo ? `${i.codigo} — ` : ""}${i.descricao}` : String(v);
+    }
+    if (campo === "centro_custo_id")
+      return (centros.data ?? []).find((c) => c.id === v)?.nome ?? String(v);
+    if (campo === "categoria_id")
+      return (categorias.data ?? []).find((c) => c.id === v)?.nome ?? String(v);
+    if (campo === "plano_conta_id")
+      return (planos.data ?? []).find((p) => p.id === v)?.nome ?? String(v);
+    if (campo === "conta_bancaria_id")
+      return (contas.data ?? []).find((c) => c.id === v)?.nome ?? String(v);
+    if (campo === "valor_total")
+      return Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    return String(v);
+  }
+
+  function calcularDiff(antes: LancamentoInput, depois: LancamentoInput): DiffItem[] {
+    const itens: DiffItem[] = [];
+    PROPAGAVEIS.forEach((campo) => {
+      const a = (antes as any)[campo] ?? null;
+      const b = (depois as any)[campo] ?? null;
+      if (String(a ?? "") === String(b ?? "")) return;
+      itens.push({
+        campo,
+        label: CAMPO_LABEL[campo as string] ?? String(campo),
+        de: exibirValor(campo as string, a),
+        para: exibirValor(campo as string, b),
+      });
+    });
+    return itens;
+  }
+
   async function salvar() {
-    // helper definido abaixo (calcularDiff)
     try {
       if (!referenciaPreenchida) {
         toast.error("Preencha pelo menos um campo de referência (Pasta, Venda, Imóvel ou Pessoa)");
