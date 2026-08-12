@@ -18,11 +18,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus, Pencil, Trash2, ShieldAlert } from "lucide-react";
 import {
-  useVeiculos, useDeleteVeiculo, useGerarEncargosVeiculo, useVeiculosDocumentosAtivos, Veiculo,
-} from "@/hooks/useDespesasVeiculos";
-import { VeiculoDialog } from "@/components/despesas/VeiculoDialog";
-import { CalendarClock } from "lucide-react";
-import {
   usePessoas, useDeletePessoa, Pessoa, PAPEIS_PESSOA, PapelPessoa, labelPapel,
 } from "@/hooks/useDespesasPessoas";
 import { PessoaDialog } from "@/components/despesas/PessoaDialog";
@@ -238,7 +233,6 @@ export default function DespesasCadastros() {
           <TabsTrigger value="planos">Planos de conta</TabsTrigger>
           <TabsTrigger value="contas">Contas bancárias</TabsTrigger>
           <TabsTrigger value="pessoas">Pessoas</TabsTrigger>
-          <TabsTrigger value="veiculos">Veículos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="centros" className="mt-4">
@@ -256,215 +250,11 @@ export default function DespesasCadastros() {
         <TabsContent value="pessoas" className="mt-4">
           <PessoasTab canEdit={canEdit} canDelete={canDelete} />
         </TabsContent>
-        <TabsContent value="veiculos" className="mt-4">
-          <VeiculosTab canEdit={canEdit} canDelete={canDelete} />
-        </TabsContent>
       </Tabs>
     </div>
   );
 }
 
-function VeiculosTab({ canEdit, canDelete }: { canEdit: boolean; canDelete: boolean }) {
-  const { data: veiculos = [], isLoading } = useVeiculos();
-  const { data: docsPorVeiculo = {} } = useVeiculosDocumentosAtivos();
-  const delMut = useDeleteVeiculo();
-  const gerarMut = useGerarEncargosVeiculo();
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<Veiculo | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<Veiculo | null>(null);
-  const [confirmGerar, setConfirmGerar] = useState<Veiculo | null>(null);
-  const [ano, setAno] = useState<number>(new Date().getFullYear());
-
-  const docsDoGerar = confirmGerar ? (docsPorVeiculo[confirmGerar.id] ?? []) : [];
-  const totalEstimado = docsDoGerar.reduce((s, d) => s + Number(d.valor ?? 0), 0);
-  const parcelasEstimadas = docsDoGerar.reduce((s, d) => s + Number(d.parcelas ?? 1), 0);
-  const fmtMoeda = (v: number) =>
-    v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
-  async function gerar() {
-    if (!confirmGerar) return;
-    const qtdDocs = docsDoGerar.length;
-    try {
-      const n = await gerarMut.mutateAsync({ veiculoId: confirmGerar.id, ano });
-      if (n > 0) {
-        toast.success(`${n} lançamento(s) gerado(s) para ${ano}`);
-      } else if (qtdDocs === 0) {
-        toast.warning(
-          "Este veículo não possui documentos ativos. Cadastre IPVA, seguro etc. na aba Documentos do veículo.",
-        );
-      } else {
-        toast.info(`Nenhum lançamento novo: os encargos de ${ano} já foram gerados.`);
-      }
-      setConfirmGerar(null);
-    } catch (e: any) {
-      const msg = /centro de custo/i.test(e?.message ?? "")
-        ? "Defina o centro de custo do veículo antes de gerar encargos."
-        : (e?.message ?? "Erro");
-      toast.error(msg);
-    }
-  }
-
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle>Veículos</CardTitle>
-          <CardDescription>Frota, motorista, documentos (IPVA, seguro etc) e baixa por venda.</CardDescription>
-        </div>
-        {canEdit && (
-          <Button size="sm" onClick={() => { setEditing(null); setDialogOpen(true); }}>
-            <Plus className="h-4 w-4 mr-2" />Novo veículo
-          </Button>
-        )}
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground">Carregando…</p>
-        ) : veiculos.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhum veículo cadastrado.</p>
-        ) : (
-          <Table>
-            <TableHeader><TableRow>
-              <TableHead>Modelo</TableHead>
-              <TableHead>Placa</TableHead>
-              <TableHead>Motorista</TableHead>
-              <TableHead>Centro</TableHead>
-              <TableHead>Documentos ativos</TableHead>
-              <TableHead>Situação</TableHead>
-              <TableHead className="text-right w-40">Ações</TableHead>
-            </TableRow></TableHeader>
-            <TableBody>
-              {veiculos.map((v) => (
-                <TableRow key={v.id}>
-                  <TableCell className="font-medium">{v.modelo}</TableCell>
-                  <TableCell>{v.placa ?? "—"}</TableCell>
-                  <TableCell>{v.motorista?.nome ?? "—"}</TableCell>
-                  <TableCell>{v.centro_custo?.nome ?? "—"}</TableCell>
-                  <TableCell>
-                    {(docsPorVeiculo[v.id]?.length ?? 0) === 0 ? (
-                      <span className="text-muted-foreground">Nenhum</span>
-                    ) : (
-                      <Badge variant="secondary">{docsPorVeiculo[v.id].length}</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>{v.data_venda ? "Vendido" : "Ativo"}</TableCell>
-                  <TableCell className="text-right space-x-1">
-                    {canEdit && !v.data_venda && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        title={v.centro_custo_id ? "Gerar encargos" : "Defina o centro de custo para gerar encargos"}
-                        disabled={!v.centro_custo_id}
-                        onClick={() => { setConfirmGerar(v); setAno(new Date().getFullYear()); }}
-                      >
-                        <CalendarClock className="h-4 w-4" />
-                      </Button>
-                    )}
-                    {canEdit && (
-                      <Button size="icon" variant="ghost" onClick={() => { setEditing(v); setDialogOpen(true); }}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    )}
-                    {canDelete && (
-                      <Button size="icon" variant="ghost" onClick={() => setConfirmDelete(v)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-
-      <VeiculoDialog open={dialogOpen} onOpenChange={setDialogOpen} editing={editing} />
-
-      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Desativar veículo?</AlertDialogTitle>
-            <AlertDialogDescription>
-              O veículo <b>{confirmDelete?.modelo}</b> será marcado como inativo.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={(e) => {
-                e.preventDefault();
-                if (confirmDelete) delMut.mutate(confirmDelete.id, {
-                  onSuccess: () => { toast.success("Veículo desativado"); setConfirmDelete(null); },
-                  onError: (err: any) => toast.error(err?.message ?? "Erro"),
-                });
-              }}
-            >Desativar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={!!confirmGerar} onOpenChange={(o) => !o && setConfirmGerar(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Gerar encargos do veículo</AlertDialogTitle>
-            <AlertDialogDescription>
-              Cria lançamentos parcelados no calendário para <b>{confirmGerar?.modelo}</b>, a partir dos
-              documentos ativos cadastrados na aba <b>Documentos</b> do veículo.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-2 space-y-2">
-            <Label>Ano</Label>
-            <Input type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} />
-          </div>
-          {docsDoGerar.length === 0 ? (
-            <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-              Este veículo não possui documentos ativos — nada seria gerado. Abra o veículo e cadastre
-              IPVA, licenciamento, seguro etc. na aba <b>Documentos</b>.
-            </div>
-          ) : (
-            <div className="rounded-md border p-3 space-y-2 max-h-56 overflow-y-auto">
-              <p className="text-sm font-medium">
-                {docsDoGerar.length} documento(s) ativo(s) · {parcelasEstimadas} parcela(s) · total estimado {fmtMoeda(totalEstimado)}
-              </p>
-              <ul className="text-sm text-muted-foreground space-y-1">
-                {docsDoGerar.map((d) => (
-                  <li key={d.id}>
-                    <span className="uppercase">{d.tipo}</span> — {fmtMoeda(Number(d.valor ?? 0))} em {d.parcelas}x ·
-                    1º venc. {new Date(d.vencimento_primeira_parcela + "T00:00:00").toLocaleDateString("pt-BR")}
-                  </li>
-                ))}
-              </ul>
-              <p className="text-xs text-muted-foreground">
-                Lançamentos já existentes para {ano} não são duplicados.
-              </p>
-            </div>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            {docsDoGerar.length === 0 ? (
-              <AlertDialogAction
-                onClick={(e) => {
-                  e.preventDefault();
-                  const v = confirmGerar;
-                  setConfirmGerar(null);
-                  setEditing(v);
-                  setDialogOpen(true);
-                }}
-              >
-                Cadastrar documentos
-              </AlertDialogAction>
-            ) : (
-              <AlertDialogAction onClick={(e) => { e.preventDefault(); gerar(); }} disabled={gerarMut.isPending}>
-                {gerarMut.isPending ? "Gerando…" : "Gerar"}
-              </AlertDialogAction>
-            )}
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </Card>
-  );
-}
 
 function PessoasTab({ canEdit, canDelete }: { canEdit: boolean; canDelete: boolean }) {
   const [busca, setBusca] = useState("");
