@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Calendar, User, Building2, AlertTriangle, DollarSign, Layers, Send } from "lucide-react";
-import { format, parseISO, addDays } from "date-fns";
+import { format, parseISO, addDays, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -109,6 +109,46 @@ export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialo
   const { v1: vendaQ1, v2: vendaQ2 } = getVendaPorPeriodo();
   const ajustarOficial = !isFlexivel && !ferias.gozo_diferente;
 
+  // Gozo real gravado nos campos planos (usado inclusive em cadastro padrão com venda)
+  const gozoReal = (periodo: 1 | 2): { inicio: string; fim: string } | null => {
+    const ini = periodo === 1 ? ferias.gozo_quinzena1_inicio : ferias.gozo_quinzena2_inicio;
+    const fim = periodo === 1 ? ferias.gozo_quinzena1_fim : ferias.gozo_quinzena2_fim;
+    if (!ini || !fim) return null;
+    return { inicio: ini, fim };
+  };
+
+  const diasEntre = (ini: string, fim: string) => {
+    try {
+      return Math.max(0, differenceInDays(parseISO(fim), parseISO(ini)) + 1);
+    } catch {
+      return 0;
+    }
+  };
+
+  // Faixas vendidas = o que sobra do período oficial fora do gozo real
+  const faixasVendidas = (
+    oficialIni: string | null,
+    oficialFim: string | null,
+    gozo: { inicio: string; fim: string } | null,
+  ): string[] => {
+    if (!oficialIni || !oficialFim || !gozo) return [];
+    try {
+      const oi = parseISO(oficialIni);
+      const of = parseISO(oficialFim);
+      const gi = parseISO(gozo.inicio);
+      const gf = parseISO(gozo.fim);
+      const out: string[] = [];
+      if (gi > oi) out.push(`${formatDate(oficialIni)} a ${format(addDays(gi, -1), "dd/MM/yyyy", { locale: ptBR })}`);
+      if (gf < of) out.push(`${format(addDays(gf, 1), "dd/MM/yyyy", { locale: ptBR })} a ${formatDate(oficialFim)}`);
+      return out;
+    } catch {
+      return [];
+    }
+  };
+
+  const gozoRealQ1 = !isFlexivel ? gozoReal(1) : null;
+  const gozoRealQ2 = !isFlexivel ? gozoReal(2) : null;
+
   // Group flexible periods by referencia_periodo
   const periodosByRef = gozoPeriodos.reduce((acc: Record<string, any[]>, p: any) => {
     const key = p.referencia_periodo ? String(p.referencia_periodo) : "livre";
@@ -119,15 +159,15 @@ export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
             Detalhes das Férias
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto min-h-0 flex-1 pr-1">
           {/* Header Info */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -157,16 +197,33 @@ export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialo
                 <p className="text-sm">
                   {formatDate(ferias.quinzena1_inicio)} a {formatDate(ferias.quinzena1_fim)}
                 </p>
-                {ajustarOficial && vendaQ1 > 0 && vendaQ1 < 15 && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Gozo: {renderPeriodoAjustado(ferias.quinzena1_inicio, ferias.quinzena1_fim, vendaQ1)}
-                  </p>
-                )}
-                {vendaQ1 >= 15 && (
-                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs mt-1">Vendido (15 dias)</Badge>
-                )}
-                {vendaQ1 > 0 && vendaQ1 < 15 && (
-                  <p className="text-xs text-primary mt-0.5">Vendido: {vendaQ1} dias</p>
+                {gozoRealQ1 ? (
+                  <>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Gozo: {formatDate(gozoRealQ1.inicio)} a {formatDate(gozoRealQ1.fim)} ({diasEntre(gozoRealQ1.inicio, gozoRealQ1.fim)} dias)
+                    </p>
+                    {vendaQ1 > 0 && (
+                      <p className="text-xs text-primary mt-0.5">
+                        Vendidos: {vendaQ1} dias
+                        {faixasVendidas(ferias.quinzena1_inicio, ferias.quinzena1_fim, gozoRealQ1).length > 0 &&
+                          ` — ${faixasVendidas(ferias.quinzena1_inicio, ferias.quinzena1_fim, gozoRealQ1).join(" e ")}`}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {ajustarOficial && vendaQ1 > 0 && vendaQ1 < 15 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Gozo: {renderPeriodoAjustado(ferias.quinzena1_inicio, ferias.quinzena1_fim, vendaQ1)}
+                      </p>
+                    )}
+                    {vendaQ1 >= 15 && (
+                      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs mt-1">Vendido (15 dias)</Badge>
+                    )}
+                    {vendaQ1 > 0 && vendaQ1 < 15 && (
+                      <p className="text-xs text-primary mt-0.5">Vendido: {vendaQ1} dias</p>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -181,16 +238,33 @@ export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialo
                     <p className="text-sm">
                       {formatDate(ferias.quinzena2_inicio)} a {formatDate(ferias.quinzena2_fim)}
                     </p>
-                    {ajustarOficial && vendaQ2 > 0 && vendaQ2 < 15 && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Gozo: {renderPeriodoAjustado(ferias.quinzena2_inicio, ferias.quinzena2_fim, vendaQ2)}
-                      </p>
-                    )}
-                    {vendaQ2 >= 15 && (
-                      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs mt-1">Vendido (15 dias)</Badge>
-                    )}
-                    {vendaQ2 > 0 && vendaQ2 < 15 && (
-                      <p className="text-xs text-primary mt-0.5">Vendido: {vendaQ2} dias</p>
+                    {gozoRealQ2 ? (
+                      <>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Gozo: {formatDate(gozoRealQ2.inicio)} a {formatDate(gozoRealQ2.fim)} ({diasEntre(gozoRealQ2.inicio, gozoRealQ2.fim)} dias)
+                        </p>
+                        {vendaQ2 > 0 && (
+                          <p className="text-xs text-primary mt-0.5">
+                            Vendidos: {vendaQ2} dias
+                            {faixasVendidas(ferias.quinzena2_inicio, ferias.quinzena2_fim, gozoRealQ2).length > 0 &&
+                              ` — ${faixasVendidas(ferias.quinzena2_inicio, ferias.quinzena2_fim, gozoRealQ2).join(" e ")}`}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {ajustarOficial && vendaQ2 > 0 && vendaQ2 < 15 && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Gozo: {renderPeriodoAjustado(ferias.quinzena2_inicio, ferias.quinzena2_fim, vendaQ2)}
+                          </p>
+                        )}
+                        {vendaQ2 >= 15 && (
+                          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs mt-1">Vendido (15 dias)</Badge>
+                        )}
+                        {vendaQ2 > 0 && vendaQ2 < 15 && (
+                          <p className="text-xs text-primary mt-0.5">Vendido: {vendaQ2} dias</p>
+                        )}
+                      </>
                     )}
                   </>
                 ) : (

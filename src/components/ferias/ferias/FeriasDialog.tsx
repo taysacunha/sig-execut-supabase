@@ -526,7 +526,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       const hasFlexible = !!ferias.gozo_flexivel;
       const hasVenda = ferias.vender_dias && (ferias.dias_vendidos || 0) > 0;
       const hasGozo = ferias.gozo_diferente;
-      const inferredIsExcecao = !!(ferias.is_excecao || hasFlexible || hasVenda || hasGozo);
+      // Respeita o que foi salvo: venda padrão (<= 10 dias) não é exceção.
+      const inferredIsExcecao = !!(ferias.is_excecao || hasFlexible);
       let opcao: "nenhum" | "vender" | "gozo_diferente" = "nenhum";
       if (hasVenda) opcao = "vender";
       else if (hasGozo) opcao = "gozo_diferente";
@@ -645,7 +646,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           })));
         } else {
           // No gozo_periodos found — use flags from the main record
-          const hasException = !!(ferias.is_excecao || ferias.gozo_flexivel || ferias.vender_dias || ferias.gozo_diferente);
+          const hasException = !!(ferias.is_excecao || ferias.gozo_flexivel);
           form.setValue("is_excecao", hasException);
           const inferredOpcao = ferias.vender_dias ? "vender" : ferias.gozo_diferente ? "gozo_diferente" : "nenhum";
           form.setValue("opcao_adicional", inferredOpcao);
@@ -733,6 +734,37 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
 
   // Check conflicts
   const checkConflicts = async (data: FeriasFormData) => {
+    // Intervalos de ausência REAIS de um registro existente.
+    // Prioriza sub-períodos flexíveis; depois as datas de gozo gravadas
+    // (existem também em venda padrão); por último o período oficial.
+    const intervalosAusencia = (
+      reg: any,
+      gozoRows?: { data_inicio: string; data_fim: string }[],
+    ): { start: Date; end: Date }[] => {
+      const out: { start: Date; end: Date }[] = [];
+      if (gozoRows && gozoRows.length > 0) {
+        for (const gp of gozoRows) out.push({ start: parseISO(gp.data_inicio), end: parseISO(gp.data_fim) });
+        return out;
+      }
+      const vend1 = reg.dias_vendidos_q1 ?? (reg.quinzena_venda === 1 ? reg.dias_vendidos : 0) ?? 0;
+      const vend2 = reg.dias_vendidos_q2 ?? (reg.quinzena_venda === 2 ? reg.dias_vendidos : 0) ?? 0;
+
+      // 1º período
+      if (reg.gozo_quinzena1_inicio && reg.gozo_quinzena1_fim) {
+        out.push({ start: parseISO(reg.gozo_quinzena1_inicio), end: parseISO(reg.gozo_quinzena1_fim) });
+      } else if (vend1 < 15 && reg.quinzena1_inicio && reg.quinzena1_fim) {
+        out.push({ start: parseISO(reg.quinzena1_inicio), end: parseISO(reg.quinzena1_fim) });
+      }
+
+      // 2º período
+      if (reg.gozo_quinzena2_inicio && reg.gozo_quinzena2_fim) {
+        out.push({ start: parseISO(reg.gozo_quinzena2_inicio), end: parseISO(reg.gozo_quinzena2_fim) });
+      } else if (vend2 < 15 && reg.quinzena2_inicio && reg.quinzena2_fim) {
+        out.push({ start: parseISO(reg.quinzena2_inicio), end: parseISO(reg.quinzena2_fim) });
+      }
+      return out;
+    };
+
     if (!data.colaborador_id) return;
     setCheckingConflicts(true);
     const foundConflicts: ConflictInfo[] = [];
@@ -842,22 +874,10 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             if (ferias && ef.id === ferias.id) continue;
 
             // Extract real absence intervals for existing vacation
-            const efIntervals: { start: Date; end: Date }[] = [];
-            if (ef.gozo_flexivel && gozoPeriodosMap[ef.id]?.length > 0) {
-              for (const gp of gozoPeriodosMap[ef.id]) {
-                efIntervals.push({ start: parseISO(gp.data_inicio), end: parseISO(gp.data_fim) });
-              }
-            } else if (ef.gozo_diferente && ef.gozo_quinzena1_inicio) {
-              efIntervals.push({ start: parseISO(ef.gozo_quinzena1_inicio), end: parseISO(ef.gozo_quinzena1_fim) });
-              if (ef.gozo_quinzena2_inicio) {
-                efIntervals.push({ start: parseISO(ef.gozo_quinzena2_inicio), end: parseISO(ef.gozo_quinzena2_fim) });
-              }
-            } else {
-              efIntervals.push({ start: parseISO(ef.quinzena1_inicio), end: parseISO(ef.quinzena1_fim) });
-              if (ef.quinzena2_inicio) {
-                efIntervals.push({ start: parseISO(ef.quinzena2_inicio), end: parseISO(ef.quinzena2_fim) });
-              }
-            }
+            const efIntervals = intervalosAusencia(
+              ef,
+              ef.gozo_flexivel ? gozoPeriodosMap[ef.id] : undefined,
+            );
 
             // Check overlap between new and existing intervals
             let overlap = false;
@@ -941,22 +961,10 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
               if (ferias && rf.id === ferias.id) continue;
 
               // Extract real intervals for related vacation
-              const rfIntervals: { start: Date; end: Date }[] = [];
-              if (rf.gozo_flexivel && relGozoMap[rf.id]?.length > 0) {
-                for (const gp of relGozoMap[rf.id]) {
-                  rfIntervals.push({ start: parseISO(gp.data_inicio), end: parseISO(gp.data_fim) });
-                }
-              } else if (rf.gozo_diferente && rf.gozo_quinzena1_inicio) {
-                rfIntervals.push({ start: parseISO(rf.gozo_quinzena1_inicio), end: parseISO(rf.gozo_quinzena1_fim) });
-                if (rf.gozo_quinzena2_inicio) {
-                  rfIntervals.push({ start: parseISO(rf.gozo_quinzena2_inicio), end: parseISO(rf.gozo_quinzena2_fim) });
-                }
-              } else {
-                rfIntervals.push({ start: parseISO(rf.quinzena1_inicio), end: parseISO(rf.quinzena1_fim) });
-                if (rf.quinzena2_inicio) {
-                  rfIntervals.push({ start: parseISO(rf.quinzena2_inicio), end: parseISO(rf.quinzena2_fim) });
-                }
-              }
+              const rfIntervals = intervalosAusencia(
+                rf,
+                rf.gozo_flexivel ? relGozoMap[rf.id] : undefined,
+              );
 
               // Family: conflict when NO overlap (they want to coincide)
               let hasOverlap = false;
@@ -1478,8 +1486,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
             {isEditing ? "Editar Férias" : "Nova Férias"}
@@ -1487,17 +1495,18 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         </DialogHeader>
 
         {isEditing && ferias?.enviado_contador && (
-          <Alert variant="destructive" className="border-orange-500/50 bg-orange-500/10">
+          <Alert variant="destructive" className="shrink-0 border-orange-500/50 bg-orange-500/10 py-2">
             <ShieldAlert className="h-4 w-4" />
-            <AlertTitle>Férias já enviada ao contador</AlertTitle>
-            <AlertDescription>
-              Este registro foi encaminhado ao contador{ferias.enviado_contador_em ? ` em ${format(parseISO(ferias.enviado_contador_em), "dd/MM/yyyy", { locale: ptBR })}` : ""}. Alterações aqui ficarão apenas no sistema interno — comunique o contador separadamente se necessário.
+            <AlertTitle className="text-sm mb-0.5">Férias já enviada ao contador</AlertTitle>
+            <AlertDescription className="text-sm leading-relaxed">
+              Enviada ao contador{ferias.enviado_contador_em ? ` em ${format(parseISO(ferias.enviado_contador_em), "dd/MM/yyyy", { locale: ptBR })}` : ""}. Alterações aqui ficam só no sistema interno.
             </AlertDescription>
           </Alert>
         )}
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col min-h-0 flex-1">
+            <div className="space-y-6 overflow-y-auto min-h-0 flex-1 pr-1">
 
             {/* SEÇÃO 1: Tipo de Cadastro */}
             <div className="space-y-3">
@@ -2042,8 +2051,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                 </Alert>
               </>
             )}
+            </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t">
+            <div className="shrink-0 flex justify-end gap-3 pt-4 mt-4 border-t bg-background">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
               <Button type="submit" disabled={mutation.isPending || !!gozoDateError}>
                 {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
