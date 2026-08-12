@@ -2043,8 +2043,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                 </Alert>
               </>
             )}
+            </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t">
+            <div className="shrink-0 flex justify-end gap-3 pt-4 mt-4 border-t bg-background">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
               <Button type="submit" disabled={mutation.isPending || !!gozoDateError}>
                 {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
