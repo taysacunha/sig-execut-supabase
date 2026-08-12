@@ -197,16 +197,33 @@ export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialo
                 <p className="text-sm">
                   {formatDate(ferias.quinzena1_inicio)} a {formatDate(ferias.quinzena1_fim)}
                 </p>
-                {ajustarOficial && vendaQ1 > 0 && vendaQ1 < 15 && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Gozo: {renderPeriodoAjustado(ferias.quinzena1_inicio, ferias.quinzena1_fim, vendaQ1)}
-                  </p>
-                )}
-                {vendaQ1 >= 15 && (
-                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs mt-1">Vendido (15 dias)</Badge>
-                )}
-                {vendaQ1 > 0 && vendaQ1 < 15 && (
-                  <p className="text-xs text-primary mt-0.5">Vendido: {vendaQ1} dias</p>
+                {gozoRealQ1 ? (
+                  <>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Gozo: {formatDate(gozoRealQ1.inicio)} a {formatDate(gozoRealQ1.fim)} ({diasEntre(gozoRealQ1.inicio, gozoRealQ1.fim)} dias)
+                    </p>
+                    {vendaQ1 > 0 && (
+                      <p className="text-xs text-primary mt-0.5">
+                        Vendidos: {vendaQ1} dias
+                        {faixasVendidas(ferias.quinzena1_inicio, ferias.quinzena1_fim, gozoRealQ1).length > 0 &&
+                          ` — ${faixasVendidas(ferias.quinzena1_inicio, ferias.quinzena1_fim, gozoRealQ1).join(" e ")}`}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {ajustarOficial && vendaQ1 > 0 && vendaQ1 < 15 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Gozo: {renderPeriodoAjustado(ferias.quinzena1_inicio, ferias.quinzena1_fim, vendaQ1)}
+                      </p>
+                    )}
+                    {vendaQ1 >= 15 && (
+                      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs mt-1">Vendido (15 dias)</Badge>
+                    )}
+                    {vendaQ1 > 0 && vendaQ1 < 15 && (
+                      <p className="text-xs text-primary mt-0.5">Vendido: {vendaQ1} dias</p>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -221,16 +238,33 @@ export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialo
                     <p className="text-sm">
                       {formatDate(ferias.quinzena2_inicio)} a {formatDate(ferias.quinzena2_fim)}
                     </p>
-                    {ajustarOficial && vendaQ2 > 0 && vendaQ2 < 15 && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Gozo: {renderPeriodoAjustado(ferias.quinzena2_inicio, ferias.quinzena2_fim, vendaQ2)}
-                      </p>
-                    )}
-                    {vendaQ2 >= 15 && (
-                      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs mt-1">Vendido (15 dias)</Badge>
-                    )}
-                    {vendaQ2 > 0 && vendaQ2 < 15 && (
-                      <p className="text-xs text-primary mt-0.5">Vendido: {vendaQ2} dias</p>
+                    {gozoRealQ2 ? (
+                      <>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Gozo: {formatDate(gozoRealQ2.inicio)} a {formatDate(gozoRealQ2.fim)} ({diasEntre(gozoRealQ2.inicio, gozoRealQ2.fim)} dias)
+                        </p>
+                        {vendaQ2 > 0 && (
+                          <p className="text-xs text-primary mt-0.5">
+                            Vendidos: {vendaQ2} dias
+                            {faixasVendidas(ferias.quinzena2_inicio, ferias.quinzena2_fim, gozoRealQ2).length > 0 &&
+                              ` — ${faixasVendidas(ferias.quinzena2_inicio, ferias.quinzena2_fim, gozoRealQ2).join(" e ")}`}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {ajustarOficial && vendaQ2 > 0 && vendaQ2 < 15 && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Gozo: {renderPeriodoAjustado(ferias.quinzena2_inicio, ferias.quinzena2_fim, vendaQ2)}
+                          </p>
+                        )}
+                        {vendaQ2 >= 15 && (
+                          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs mt-1">Vendido (15 dias)</Badge>
+                        )}
+                        {vendaQ2 > 0 && vendaQ2 < 15 && (
+                          <p className="text-xs text-primary mt-0.5">Vendido: {vendaQ2} dias</p>
+                        )}
+                      </>
                     )}
                   </>
                 ) : (
