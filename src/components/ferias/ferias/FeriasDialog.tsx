@@ -734,6 +734,37 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
 
   // Check conflicts
   const checkConflicts = async (data: FeriasFormData) => {
+    // Intervalos de ausência REAIS de um registro existente.
+    // Prioriza sub-períodos flexíveis; depois as datas de gozo gravadas
+    // (existem também em venda padrão); por último o período oficial.
+    const intervalosAusencia = (
+      reg: any,
+      gozoRows?: { data_inicio: string; data_fim: string }[],
+    ): { start: Date; end: Date }[] => {
+      const out: { start: Date; end: Date }[] = [];
+      if (gozoRows && gozoRows.length > 0) {
+        for (const gp of gozoRows) out.push({ start: parseISO(gp.data_inicio), end: parseISO(gp.data_fim) });
+        return out;
+      }
+      const vend1 = reg.dias_vendidos_q1 ?? (reg.quinzena_venda === 1 ? reg.dias_vendidos : 0) ?? 0;
+      const vend2 = reg.dias_vendidos_q2 ?? (reg.quinzena_venda === 2 ? reg.dias_vendidos : 0) ?? 0;
+
+      // 1º período
+      if (reg.gozo_quinzena1_inicio && reg.gozo_quinzena1_fim) {
+        out.push({ start: parseISO(reg.gozo_quinzena1_inicio), end: parseISO(reg.gozo_quinzena1_fim) });
+      } else if (vend1 < 15 && reg.quinzena1_inicio && reg.quinzena1_fim) {
+        out.push({ start: parseISO(reg.quinzena1_inicio), end: parseISO(reg.quinzena1_fim) });
+      }
+
+      // 2º período
+      if (reg.gozo_quinzena2_inicio && reg.gozo_quinzena2_fim) {
+        out.push({ start: parseISO(reg.gozo_quinzena2_inicio), end: parseISO(reg.gozo_quinzena2_fim) });
+      } else if (vend2 < 15 && reg.quinzena2_inicio && reg.quinzena2_fim) {
+        out.push({ start: parseISO(reg.quinzena2_inicio), end: parseISO(reg.quinzena2_fim) });
+      }
+      return out;
+    };
+
     if (!data.colaborador_id) return;
     setCheckingConflicts(true);
     const foundConflicts: ConflictInfo[] = [];
