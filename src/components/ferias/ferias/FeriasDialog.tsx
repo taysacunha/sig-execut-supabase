@@ -1481,6 +1481,10 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   }, [afastamentos, buildNewVacationIntervals, q1Inicio, q1Fim, q2Inicio, q2Fim, opcaoAdicional, diasVendidos, quinzenaVendaEfetiva, gozoVendaInicio, gozoVendaFim, form]);
 
   const onSubmit = (data: FeriasFormData) => {
+    if (!q2Cancelado && !data.quinzena2_inicio) {
+      toast.error('Informe o 2º período ou use "Cancelar 2º período" com motivo e justificativa.');
+      return;
+    }
     const validation = validateVacation(data);
     if (validation.requiresException && !data.is_excecao) {
       const motivoLabel: Record<string, string> = {
