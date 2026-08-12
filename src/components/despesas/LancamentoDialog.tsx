@@ -618,6 +618,25 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <PropagarRecorrenciaDialog
+        open={propagarOpen}
+        onOpenChange={setPropagarOpen}
+        serieId={editing?.serie_recorrencia_id ?? null}
+        dataVencimento={editing?.data_vencimento ?? null}
+        diff={diff}
+        patch={patchPropagar}
+        onAtualizarSerie={async (patch) => {
+          if (!editing?.serie_recorrencia_id) return;
+          const { serie_recorrencia_id } = editing;
+          const recPatch: any = { ...patch };
+          await saveRecMut.mutateAsync({
+            id: serie_recorrencia_id,
+            input: recPatch,
+          });
+        }}
+        onDone={() => onOpenChange(false)}
+      />
     </Dialog>
   );
 }
