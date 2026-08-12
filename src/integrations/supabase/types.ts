@@ -3089,6 +3089,11 @@ export type Database = {
           origem: string | null
           periodo_aquisitivo_fim: string | null
           periodo_aquisitivo_inicio: string | null
+          q2_cancelado: boolean
+          q2_cancelado_em: string | null
+          q2_cancelado_por: string | null
+          q2_cancelamento_justificativa: string | null
+          q2_cancelamento_motivo: string | null
           quinzena_venda: number | null
           quinzena1_fim: string
           quinzena1_inicio: string
@@ -3125,6 +3130,11 @@ export type Database = {
           origem?: string | null
           periodo_aquisitivo_fim?: string | null
           periodo_aquisitivo_inicio?: string | null
+          q2_cancelado?: boolean
+          q2_cancelado_em?: string | null
+          q2_cancelado_por?: string | null
+          q2_cancelamento_justificativa?: string | null
+          q2_cancelamento_motivo?: string | null
           quinzena_venda?: number | null
           quinzena1_fim: string
           quinzena1_inicio: string
@@ -3161,6 +3171,11 @@ export type Database = {
           origem?: string | null
           periodo_aquisitivo_fim?: string | null
           periodo_aquisitivo_inicio?: string | null
+          q2_cancelado?: boolean
+          q2_cancelado_em?: string | null
+          q2_cancelado_por?: string | null
+          q2_cancelamento_justificativa?: string | null
+          q2_cancelamento_motivo?: string | null
           quinzena_venda?: number | null
           quinzena1_fim?: string
           quinzena1_inicio?: string
