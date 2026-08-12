@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -27,6 +27,11 @@ import {
   useSaveRecorrencia,
 } from "@/hooks/useDespesasRecorrencias";
 import { useDespesasValues } from "@/contexts/DespesasValuesContext";
+import { useTableControls } from "@/hooks/useTableControls";
+import { SortableHeader, TablePagination, TableSearch } from "@/components/vendas/TableControls";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 
 const TIPO_LABEL: Record<string, string> = {
   mensal: "Mensal",
@@ -34,6 +39,16 @@ const TIPO_LABEL: Record<string, string> = {
   fixa_meses: "Meses fixos",
   intercalada: "Intercalada",
 };
+
+type RecorrenciaRow = Recorrencia & {
+  empresa_nome: string;
+  centro_nome: string;
+  frequencia_label: string;
+  status_label: string;
+  valor_num: number;
+};
+
+const ALL = "__all__";
 
 export default function DespesasRecorrencias() {
   const { data = [], isLoading } = useRecorrencias();
@@ -46,6 +61,71 @@ export default function DespesasRecorrencias() {
   const [renewDate, setRenewDate] = useState<string>("");
   const [renewOpen, setRenewOpen] = useState<boolean>(false);
   const [renewSemFim, setRenewSemFim] = useState<boolean>(false);
+  const [fTipo, setFTipo] = useState<string>(ALL);
+  const [fCentro, setFCentro] = useState<string>(ALL);
+  const [fEmpresa, setFEmpresa] = useState<string>(ALL);
+  const [fStatus, setFStatus] = useState<string>(ALL);
+  const [fDe, setFDe] = useState<string>("");
+  const [fAte, setFAte] = useState<string>("");
+
+  const rows: RecorrenciaRow[] = useMemo(
+    () =>
+      data.map((r) => ({
+        ...r,
+        empresa_nome: r.pessoa?.nome ?? "—",
+        centro_nome: r.centro_custo?.nome ?? "—",
+        frequencia_label: TIPO_LABEL[r.tipo] ?? r.tipo,
+        status_label: r.ativo ? "Ativa" : "Pausada",
+        valor_num: r.valor_total ?? 0,
+      })),
+    [data]
+  );
+
+  const centros = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.centro_nome))).filter((n) => n !== "—").sort(),
+    [rows]
+  );
+  const empresas = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.empresa_nome))).filter((n) => n !== "—").sort(),
+    [rows]
+  );
+
+  const filtered = useMemo(
+    () =>
+      rows.filter((r) => {
+        if (fTipo !== ALL && r.tipo !== fTipo) return false;
+        if (fCentro !== ALL && r.centro_nome !== fCentro) return false;
+        if (fEmpresa !== ALL && r.empresa_nome !== fEmpresa) return false;
+        if (fStatus !== ALL && String(r.ativo) !== fStatus) return false;
+        if (fDe && r.data_inicio < fDe) return false;
+        if (fAte && r.data_inicio > fAte) return false;
+        return true;
+      }),
+    [rows, fTipo, fCentro, fEmpresa, fStatus, fDe, fAte]
+  );
+
+  const hasFilters =
+    fTipo !== ALL || fCentro !== ALL || fEmpresa !== ALL || fStatus !== ALL || !!fDe || !!fAte;
+
+  const {
+    searchTerm, setSearchTerm, currentPage, setCurrentPage, itemsPerPage,
+    setItemsPerPage, sortField, sortDirection, setSorting, filteredData, paginatedData, totalPages,
+  } = useTableControls<RecorrenciaRow>({
+    data: filtered,
+    searchField: ["descricao", "empresa_nome", "centro_nome", "frequencia_label", "status_label"],
+    defaultItemsPerPage: 25,
+  });
+
+  function limparFiltros() {
+    setFTipo(ALL);
+    setFCentro(ALL);
+    setFEmpresa(ALL);
+    setFStatus(ALL);
+    setFDe("");
+    setFAte("");
+    setSearchTerm("");
+    setCurrentPage(1);
+  }
 
   function abrirRenovar(r: Recorrencia) {
     setToRenew(r);
@@ -179,22 +259,93 @@ export default function DespesasRecorrencias() {
               Nenhuma série cadastrada.
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <TableSearch
+                  value={searchTerm}
+                  onChange={setSearchTerm}
+                  placeholder="Buscar por descrição, empresa, centro…"
+                />
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Frequência</Label>
+                  <Select value={fTipo} onValueChange={(v) => { setFTipo(v); setCurrentPage(1); }}>
+                    <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Todas</SelectItem>
+                      {Object.entries(TIPO_LABEL).map(([k, v]) => (
+                        <SelectItem key={k} value={k}>{v}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Centro de custo</Label>
+                  <Select value={fCentro} onValueChange={(v) => { setFCentro(v); setCurrentPage(1); }}>
+                    <SelectTrigger className="w-[170px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Todos</SelectItem>
+                      {centros.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Empresa</Label>
+                  <Select value={fEmpresa} onValueChange={(v) => { setFEmpresa(v); setCurrentPage(1); }}>
+                    <SelectTrigger className="w-[170px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Todas</SelectItem>
+                      {empresas.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Status</Label>
+                  <Select value={fStatus} onValueChange={(v) => { setFStatus(v); setCurrentPage(1); }}>
+                    <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Todos</SelectItem>
+                      <SelectItem value="true">Ativa</SelectItem>
+                      <SelectItem value="false">Pausada</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Início de</Label>
+                  <Input type="date" className="w-[150px]" value={fDe}
+                    onChange={(e) => { setFDe(e.target.value); setCurrentPage(1); }} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Início até</Label>
+                  <Input type="date" className="w-[150px]" value={fAte}
+                    onChange={(e) => { setFAte(e.target.value); setCurrentPage(1); }} />
+                </div>
+                {(hasFilters || searchTerm) && (
+                  <Button variant="ghost" size="sm" onClick={limparFiltros}>Limpar filtros</Button>
+                )}
+              </div>
+
+              {filteredData.length === 0 ? (
+                <div className="text-sm text-muted-foreground py-8 text-center">
+                  Nenhuma série encontrada com os filtros aplicados.
+                </div>
+              ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Frequência</TableHead>
-                    <TableHead>Valor</TableHead>
-                    <TableHead>Centro</TableHead>
-                    <TableHead>Início</TableHead>
-                    <TableHead>Última geração até</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead><SortableHeader label="Descrição" field="descricao" currentField={sortField as string} direction={sortDirection} onSort={(f) => setSorting(f as keyof RecorrenciaRow)} /></TableHead>
+                    <TableHead><SortableHeader label="Frequência" field="frequencia_label" currentField={sortField as string} direction={sortDirection} onSort={(f) => setSorting(f as keyof RecorrenciaRow)} /></TableHead>
+                    <TableHead><SortableHeader label="Valor" field="valor_num" currentField={sortField as string} direction={sortDirection} onSort={(f) => setSorting(f as keyof RecorrenciaRow)} /></TableHead>
+                    <TableHead><SortableHeader label="Centro" field="centro_nome" currentField={sortField as string} direction={sortDirection} onSort={(f) => setSorting(f as keyof RecorrenciaRow)} /></TableHead>
+                    <TableHead><SortableHeader label="Empresa" field="empresa_nome" currentField={sortField as string} direction={sortDirection} onSort={(f) => setSorting(f as keyof RecorrenciaRow)} /></TableHead>
+                    <TableHead><SortableHeader label="Início" field="data_inicio" currentField={sortField as string} direction={sortDirection} onSort={(f) => setSorting(f as keyof RecorrenciaRow)} /></TableHead>
+                    <TableHead><SortableHeader label="Última geração até" field="ultima_geracao_ate" currentField={sortField as string} direction={sortDirection} onSort={(f) => setSorting(f as keyof RecorrenciaRow)} /></TableHead>
+                    <TableHead><SortableHeader label="Status" field="status_label" currentField={sortField as string} direction={sortDirection} onSort={(f) => setSorting(f as keyof RecorrenciaRow)} /></TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.map((r) => (
+                  {paginatedData.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell className="font-medium">{r.descricao}</TableCell>
                       <TableCell>{TIPO_LABEL[r.tipo] ?? r.tipo}</TableCell>
@@ -206,6 +357,7 @@ export default function DespesasRecorrencias() {
                           : "R$ ******"}
                       </TableCell>
                       <TableCell>{r.centro_custo?.nome ?? "—"}</TableCell>
+                      <TableCell>{r.empresa_nome}</TableCell>
                       <TableCell>
                         {format(new Date(r.data_inicio + "T00:00:00"), "dd/MM/yyyy", { locale: ptBR })}
                       </TableCell>
@@ -248,6 +400,19 @@ export default function DespesasRecorrencias() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
+              )}
+
+              {filteredData.length > 0 && (
+                <TablePagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                  onItemsPerPageChange={setItemsPerPage}
+                  totalItems={filteredData.length}
+                />
+              )}
             </div>
           )}
         </CardContent>
