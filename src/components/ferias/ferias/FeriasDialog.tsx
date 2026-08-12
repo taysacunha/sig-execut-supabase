@@ -874,22 +874,10 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             if (ferias && ef.id === ferias.id) continue;
 
             // Extract real absence intervals for existing vacation
-            const efIntervals: { start: Date; end: Date }[] = [];
-            if (ef.gozo_flexivel && gozoPeriodosMap[ef.id]?.length > 0) {
-              for (const gp of gozoPeriodosMap[ef.id]) {
-                efIntervals.push({ start: parseISO(gp.data_inicio), end: parseISO(gp.data_fim) });
-              }
-            } else if (ef.gozo_diferente && ef.gozo_quinzena1_inicio) {
-              efIntervals.push({ start: parseISO(ef.gozo_quinzena1_inicio), end: parseISO(ef.gozo_quinzena1_fim) });
-              if (ef.gozo_quinzena2_inicio) {
-                efIntervals.push({ start: parseISO(ef.gozo_quinzena2_inicio), end: parseISO(ef.gozo_quinzena2_fim) });
-              }
-            } else {
-              efIntervals.push({ start: parseISO(ef.quinzena1_inicio), end: parseISO(ef.quinzena1_fim) });
-              if (ef.quinzena2_inicio) {
-                efIntervals.push({ start: parseISO(ef.quinzena2_inicio), end: parseISO(ef.quinzena2_fim) });
-              }
-            }
+            const efIntervals = intervalosAusencia(
+              ef,
+              ef.gozo_flexivel ? gozoPeriodosMap[ef.id] : undefined,
+            );
 
             // Check overlap between new and existing intervals
             let overlap = false;
@@ -973,22 +961,10 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
               if (ferias && rf.id === ferias.id) continue;
 
               // Extract real intervals for related vacation
-              const rfIntervals: { start: Date; end: Date }[] = [];
-              if (rf.gozo_flexivel && relGozoMap[rf.id]?.length > 0) {
-                for (const gp of relGozoMap[rf.id]) {
-                  rfIntervals.push({ start: parseISO(gp.data_inicio), end: parseISO(gp.data_fim) });
-                }
-              } else if (rf.gozo_diferente && rf.gozo_quinzena1_inicio) {
-                rfIntervals.push({ start: parseISO(rf.gozo_quinzena1_inicio), end: parseISO(rf.gozo_quinzena1_fim) });
-                if (rf.gozo_quinzena2_inicio) {
-                  rfIntervals.push({ start: parseISO(rf.gozo_quinzena2_inicio), end: parseISO(rf.gozo_quinzena2_fim) });
-                }
-              } else {
-                rfIntervals.push({ start: parseISO(rf.quinzena1_inicio), end: parseISO(rf.quinzena1_fim) });
-                if (rf.quinzena2_inicio) {
-                  rfIntervals.push({ start: parseISO(rf.quinzena2_inicio), end: parseISO(rf.quinzena2_fim) });
-                }
-              }
+              const rfIntervals = intervalosAusencia(
+                rf,
+                rf.gozo_flexivel ? relGozoMap[rf.id] : undefined,
+              );
 
               // Family: conflict when NO overlap (they want to coincide)
               let hasOverlap = false;
