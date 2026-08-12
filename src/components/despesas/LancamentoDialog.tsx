@@ -291,6 +291,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
