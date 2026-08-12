@@ -619,8 +619,9 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
           </Button>
         </DialogFooter>
       </DialogContent>
+    </Dialog>
 
-      <PropagarRecorrenciaDialog
+    <PropagarRecorrenciaDialog
         open={propagarOpen}
         onOpenChange={setPropagarOpen}
         serieId={editing?.serie_recorrencia_id ?? null}
@@ -638,6 +639,6 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
         }}
         onDone={() => onOpenChange(false)}
       />
-    </Dialog>
+    </>
   );
 }
