@@ -1436,6 +1436,10 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       errors.push("Férias em janeiro ou dezembro no 1º período requerem exceção");
     }
 
+    if (!q2Cancelado && !data.quinzena2_inicio) {
+      errors.push("Informe o 2º período ou cancele-o com justificativa");
+    }
+
     if (data.quinzena2_inicio) {
       const q2Start = parseISO(data.quinzena2_inicio);
       const q2Month = q2Start.getMonth() + 1;
