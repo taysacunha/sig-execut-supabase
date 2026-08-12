@@ -16,7 +16,7 @@ import {
   useVeiculos, useDeleteVeiculo, useGerarEncargosVeiculo, useVeiculosDocumentosAtivos, Veiculo,
 } from "@/hooks/useDespesasVeiculos";
 import { VeiculoDialog } from "@/components/despesas/VeiculoDialog";
-import { DespesasValuesScope, MaskedValue } from "@/contexts/DespesasValuesContext";
+import { useDespesasValues } from "@/contexts/DespesasValuesContext";
 
 export default function DespesasVeiculos() {
   const { podeVer, podeEditar, podeExcluir } = useDespesasPermissions();
@@ -49,7 +49,8 @@ export default function DespesasVeiculos() {
   const docsDoGerar = confirmGerar ? (docsPorVeiculo[confirmGerar.id] ?? []) : [];
   const totalEstimado = docsDoGerar.reduce((s, d) => s + Number(d.valor ?? 0), 0);
   const parcelasEstimadas = docsDoGerar.reduce((s, d) => s + Number(d.parcelas ?? 1), 0);
-  const fmtMoeda = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const { formatValue } = useDespesasValues();
+  const fmtMoeda = (v: number) => formatValue(v);
 
   async function gerar() {
     if (!confirmGerar) return;
@@ -213,7 +214,6 @@ export default function DespesasVeiculos() {
               documentos ativos cadastrados na aba <b>Documentos</b> do veículo.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <DespesasValuesScope>
             <div className="py-2 space-y-2">
               <Label>Ano</Label>
               <Input type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} />
@@ -227,12 +227,12 @@ export default function DespesasVeiculos() {
               <div className="rounded-md border p-3 space-y-2 max-h-56 overflow-y-auto">
                 <p className="text-sm font-medium">
                   {docsDoGerar.length} documento(s) ativo(s) · {parcelasEstimadas} parcela(s) · total estimado{" "}
-                  <MaskedValue value={totalEstimado} />
+                  {fmtMoeda(totalEstimado)}
                 </p>
                 <ul className="text-sm text-muted-foreground space-y-1">
                   {docsDoGerar.map((d) => (
                     <li key={d.id}>
-                      <span className="uppercase">{d.tipo}</span> — <MaskedValue value={Number(d.valor ?? 0)} /> em {d.parcelas}x ·
+                      <span className="uppercase">{d.tipo}</span> — {fmtMoeda(Number(d.valor ?? 0))} em {d.parcelas}x ·
                       1º venc. {new Date(d.vencimento_primeira_parcela + "T00:00:00").toLocaleDateString("pt-BR")}
                     </li>
                   ))}
@@ -242,7 +242,6 @@ export default function DespesasVeiculos() {
                 </p>
               </div>
             )}
-          </DespesasValuesScope>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             {docsDoGerar.length === 0 ? (
