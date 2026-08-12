@@ -1051,14 +1051,30 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     }
   };
 
-  const watchedFields = form.watch(["colaborador_id", "quinzena1_inicio", "quinzena1_fim", "quinzena2_inicio", "quinzena2_fim"]);
+  const watchedFields = form.watch([
+    "colaborador_id",
+    "quinzena1_inicio",
+    "quinzena1_fim",
+    "quinzena2_inicio",
+    "quinzena2_fim",
+    "opcao_adicional",
+    "dias_vendidos",
+    "quinzena_venda",
+    "gozo_venda_inicio",
+    "gozo_venda_fim",
+    "gozo_quinzena1_inicio",
+    "gozo_quinzena1_fim",
+    "gozo_quinzena2_inicio",
+    "gozo_quinzena2_fim",
+    "is_excecao",
+  ]);
   
   useEffect(() => {
     if (!open) {
       setConflicts([]);
       return;
     }
-    // Aguarda hidratação do form antes de verificar.
+    // Recalcula sempre que datas/opções mudarem (debounce para não disparar a cada tecla).
     const t = setTimeout(() => {
       const values = form.getValues();
       if (values.colaborador_id && values.quinzena1_inicio && values.quinzena1_fim) {
@@ -1066,10 +1082,10 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       } else {
         setConflicts([]);
       }
-    }, 100);
+    }, 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, ferias?.id]);
+  }, [open, ferias?.id, JSON.stringify(watchedFields), JSON.stringify(excPeriodos)]);
 
   // Fetch all ferias for selected collaborator to calculate period balances
   const { data: colabAllFerias = [] } = useQuery({
