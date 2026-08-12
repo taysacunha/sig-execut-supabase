@@ -526,7 +526,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       const hasFlexible = !!ferias.gozo_flexivel;
       const hasVenda = ferias.vender_dias && (ferias.dias_vendidos || 0) > 0;
       const hasGozo = ferias.gozo_diferente;
-      const inferredIsExcecao = !!(ferias.is_excecao || hasFlexible || hasVenda || hasGozo);
+      // Respeita o que foi salvo: venda padrão (<= 10 dias) não é exceção.
+      const inferredIsExcecao = !!(ferias.is_excecao || hasFlexible);
       let opcao: "nenhum" | "vender" | "gozo_diferente" = "nenhum";
       if (hasVenda) opcao = "vender";
       else if (hasGozo) opcao = "gozo_diferente";
