@@ -341,6 +341,21 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     setQ2CancJustificativa("");
   };
 
+  const q2CanceladoBanner = (
+    <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 space-y-1">
+      <p className="text-sm font-medium text-destructive flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4" />
+        2º período cancelado — {Q2_MOTIVOS[q2CancMotivo] || q2CancMotivo || "Motivo não informado"}
+      </p>
+      {q2CancJustificativa && (
+        <p className="text-xs text-muted-foreground">{q2CancJustificativa}</p>
+      )}
+      <p className="text-xs text-muted-foreground">
+        O colaborador não gozará este período. As demais regras do cadastro permanecem padrão.
+      </p>
+    </div>
+  );
+
   // Reseta quando o dialog fecha
   useEffect(() => {
     if (!open) {
