@@ -2206,6 +2206,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     </Dialog>
 
     <Dialog open={correcaoDialogOpen} onOpenChange={setCorrecaoDialogOpen}>
+      {null}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
