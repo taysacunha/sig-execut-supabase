@@ -159,15 +159,15 @@ export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
             Detalhes das Férias
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto min-h-0 flex-1 pr-1">
           {/* Header Info */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
