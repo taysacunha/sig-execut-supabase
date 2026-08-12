@@ -646,7 +646,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           })));
         } else {
           // No gozo_periodos found — use flags from the main record
-          const hasException = !!(ferias.is_excecao || ferias.gozo_flexivel || ferias.vender_dias || ferias.gozo_diferente);
+          const hasException = !!(ferias.is_excecao || ferias.gozo_flexivel);
           form.setValue("is_excecao", hasException);
           const inferredOpcao = ferias.vender_dias ? "vender" : ferias.gozo_diferente ? "gozo_diferente" : "nenhum";
           form.setValue("opcao_adicional", inferredOpcao);
