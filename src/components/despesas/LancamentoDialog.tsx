@@ -21,13 +21,14 @@ import { getYearOptions } from "@/lib/dateUtils";
 import {
   Lancamento, LancamentoInput, LancamentoTipo, useDespesasLookups,
   useSaveLancamento, useLancamentoCredenciais, useSaveLancamentoCredenciais,
-  LancamentoCredenciais,
+  LancamentoCredenciais, PROPAGAVEIS,
 } from "@/hooks/useDespesasLancamentos";
 import {
   RecorrenciaBlock, RecorrenciaFormState,
 } from "./RecorrenciaBlock";
 import { useSaveRecorrencia } from "@/hooks/useDespesasRecorrencias";
 import { DuplicidadeAlert } from "./DuplicidadeAlert";
+import { PropagarRecorrenciaDialog, DiffItem } from "./PropagarRecorrenciaDialog";
 
 interface Props {
   open: boolean;
@@ -67,6 +68,10 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
   const [form, setForm] = useState<LancamentoInput>(emptyForm());
   const [credenciais, setCredenciais] = useState<LancamentoCredenciais>({});
   const [imovelPopoverOpen, setImovelPopoverOpen] = useState(false);
+  const [snapshot, setSnapshot] = useState<LancamentoInput | null>(null);
+  const [propagarOpen, setPropagarOpen] = useState(false);
+  const [diff, setDiff] = useState<DiffItem[]>([]);
+  const [patchPropagar, setPatchPropagar] = useState<Partial<LancamentoInput>>({});
   const canEditCredenciais = !credQuery.isError; // sem permissão → RLS bloqueia leitura
   const MESES_LABELS = [
     "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
@@ -91,7 +96,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
   useEffect(() => {
     if (!open) return;
     if (editing) {
-      setForm({
+      const inicial: LancamentoInput = {
         tipo: editing.tipo,
         descricao: editing.descricao,
         documento_numero: editing.documento_numero,
@@ -110,7 +115,9 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
         data_vencimento: editing.data_vencimento,
         valor_total: editing.valor_total == null ? null : Number(editing.valor_total),
         observacao: editing.observacao,
-      });
+      };
+      setForm(inicial);
+      setSnapshot(inicial);
       setRec({
         ativa: false,
         tipo: "mensal",
@@ -122,6 +129,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
     } else {
       setForm(emptyForm());
       setCredenciais({});
+      setSnapshot(null);
       setRec({
         ativa: false,
         tipo: "mensal",
