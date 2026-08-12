@@ -161,6 +161,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
     referenciaPreenchida;
 
   async function salvar() {
+    // helper definido abaixo (calcularDiff)
     try {
       if (!referenciaPreenchida) {
         toast.error("Preencha pelo menos um campo de referência (Pasta, Venda, Imóvel ou Pessoa)");
