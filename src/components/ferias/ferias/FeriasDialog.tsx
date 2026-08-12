@@ -296,6 +296,66 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const [correcaoDialogMotivo, setCorrecaoDialogMotivo] = useState("");
   const [correcaoDialogConfirmado, setCorrecaoDialogConfirmado] = useState(false);
 
+  // ===== Cancelamento do 2º período (ex.: desligamento) =====
+  // Não transforma o cadastro em exceção — as regras/datas seguem como padrão.
+  const [q2Cancelado, setQ2Cancelado] = useState(false);
+  const [q2CancMotivo, setQ2CancMotivo] = useState("");
+  const [q2CancJustificativa, setQ2CancJustificativa] = useState("");
+  const [q2CancDialogOpen, setQ2CancDialogOpen] = useState(false);
+  const [q2CancDialogMotivo, setQ2CancDialogMotivo] = useState("desligamento");
+  const [q2CancDialogJustificativa, setQ2CancDialogJustificativa] = useState("");
+
+  const Q2_MOTIVOS: Record<string, string> = {
+    desligamento: "Desligamento",
+    aviso_previo: "Aviso prévio",
+    outro: "Outro",
+  };
+
+  const confirmarCancelamentoQ2 = () => {
+    if (q2CancDialogJustificativa.trim().length < 5) {
+      toast.error("Informe a justificativa do cancelamento.");
+      return;
+    }
+    setQ2Cancelado(true);
+    setQ2CancMotivo(q2CancDialogMotivo);
+    setQ2CancJustificativa(q2CancDialogJustificativa.trim());
+    form.setValue("quinzena2_inicio", "");
+    form.setValue("quinzena2_fim", "");
+    form.setValue("gozo_quinzena2_inicio", "");
+    form.setValue("gozo_quinzena2_fim", "");
+    form.setValue("gozo_venda_q2_inicio", "");
+    form.setValue("gozo_venda_q2_fim", "");
+    if (form.getValues("quinzena_venda") === 2 && form.getValues("opcao_adicional") === "vender") {
+      form.setValue("gozo_venda_inicio", "");
+      form.setValue("gozo_venda_fim", "");
+      form.setValue("dias_vendidos", 0);
+      form.setValue("opcao_adicional", "nenhum");
+      toast.warning("A venda estava vinculada ao 2º período e foi removida.");
+    }
+    setQ2CancDialogOpen(false);
+  };
+
+  const reativarQ2 = () => {
+    setQ2Cancelado(false);
+    setQ2CancMotivo("");
+    setQ2CancJustificativa("");
+  };
+
+  const q2CanceladoBanner = (
+    <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 space-y-1">
+      <p className="text-sm font-medium text-destructive flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4" />
+        2º período cancelado — {Q2_MOTIVOS[q2CancMotivo] || q2CancMotivo || "Motivo não informado"}
+      </p>
+      {q2CancJustificativa && (
+        <p className="text-xs text-muted-foreground">{q2CancJustificativa}</p>
+      )}
+      <p className="text-xs text-muted-foreground">
+        O colaborador não gozará este período. As demais regras do cadastro permanecem padrão.
+      </p>
+    </div>
+  );
+
   // Reseta quando o dialog fecha
   useEffect(() => {
     if (!open) {
@@ -591,6 +651,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     }
     setConflicts([]);
     setGozoDateError(null);
+    setQ2Cancelado(!!ferias?.q2_cancelado);
+    setQ2CancMotivo(ferias?.q2_cancelamento_motivo || "");
+    setQ2CancJustificativa(ferias?.q2_cancelamento_justificativa || "");
+    setQ2CancDialogMotivo(ferias?.q2_cancelamento_motivo || "desligamento");
+    setQ2CancDialogJustificativa(ferias?.q2_cancelamento_justificativa || "");
     if (!ferias) {
       setExcecaoTipo(null);
       setExcDistribuicaoTipo("");
@@ -1001,14 +1066,30 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     }
   };
 
-  const watchedFields = form.watch(["colaborador_id", "quinzena1_inicio", "quinzena1_fim", "quinzena2_inicio", "quinzena2_fim"]);
+  const watchedFields = form.watch([
+    "colaborador_id",
+    "quinzena1_inicio",
+    "quinzena1_fim",
+    "quinzena2_inicio",
+    "quinzena2_fim",
+    "opcao_adicional",
+    "dias_vendidos",
+    "quinzena_venda",
+    "gozo_venda_inicio",
+    "gozo_venda_fim",
+    "gozo_quinzena1_inicio",
+    "gozo_quinzena1_fim",
+    "gozo_quinzena2_inicio",
+    "gozo_quinzena2_fim",
+    "is_excecao",
+  ]);
   
   useEffect(() => {
     if (!open) {
       setConflicts([]);
       return;
     }
-    // Aguarda hidratação do form antes de verificar.
+    // Recalcula sempre que datas/opções mudarem (debounce para não disparar a cada tecla).
     const t = setTimeout(() => {
       const values = form.getValues();
       if (values.colaborador_id && values.quinzena1_inicio && values.quinzena1_fim) {
@@ -1016,10 +1097,10 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       } else {
         setConflicts([]);
       }
-    }, 100);
+    }, 400);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, ferias?.id]);
+  }, [open, ferias?.id, JSON.stringify(watchedFields), JSON.stringify(excPeriodos)]);
 
   // Fetch all ferias for selected collaborator to calculate period balances
   const { data: colabAllFerias = [] } = useQuery({
@@ -1282,13 +1363,18 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         colaborador_id: data.colaborador_id,
         quinzena1_inicio: data.quinzena1_inicio,
         quinzena1_fim: data.quinzena1_fim,
-        quinzena2_inicio: data.quinzena2_inicio || null,
-        quinzena2_fim: data.quinzena2_fim || null,
+        quinzena2_inicio: q2Cancelado ? null : (data.quinzena2_inicio || null),
+        quinzena2_fim: q2Cancelado ? null : (data.quinzena2_fim || null),
+        q2_cancelado: q2Cancelado,
+        q2_cancelamento_motivo: q2Cancelado ? q2CancMotivo : null,
+        q2_cancelamento_justificativa: q2Cancelado ? q2CancJustificativa : null,
+        q2_cancelado_em: q2Cancelado ? (ferias?.q2_cancelado ? ferias.q2_cancelado_em : new Date().toISOString()) : null,
+        q2_cancelado_por: q2Cancelado ? (ferias?.q2_cancelado ? ferias.q2_cancelado_por : (await supabase.auth.getUser()).data.user?.id ?? null) : null,
         gozo_diferente: gozoDiferente,
         gozo_quinzena1_inicio: gozoQ1Inicio,
         gozo_quinzena1_fim: gozoQ1Fim,
-        gozo_quinzena2_inicio: gozoQ2Inicio,
-        gozo_quinzena2_fim: gozoQ2Fim,
+        gozo_quinzena2_inicio: q2Cancelado ? null : gozoQ2Inicio,
+        gozo_quinzena2_fim: q2Cancelado ? null : gozoQ2Fim,
         vender_dias: venderDias,
         dias_vendidos: venderDias ? diasVend : null,
         quinzena_venda: venderDias ? quinzenaVendaVal : null,
@@ -1365,6 +1451,10 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       errors.push("Férias em janeiro ou dezembro no 1º período requerem exceção");
     }
 
+    if (!q2Cancelado && !data.quinzena2_inicio) {
+      errors.push("Informe o 2º período ou cancele-o com justificativa");
+    }
+
     if (data.quinzena2_inicio) {
       const q2Start = parseISO(data.quinzena2_inicio);
       const q2Month = q2Start.getMonth() + 1;
@@ -1406,6 +1496,10 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   }, [afastamentos, buildNewVacationIntervals, q1Inicio, q1Fim, q2Inicio, q2Fim, opcaoAdicional, diasVendidos, quinzenaVendaEfetiva, gozoVendaInicio, gozoVendaFim, form]);
 
   const onSubmit = (data: FeriasFormData) => {
+    if (!q2Cancelado && !data.quinzena2_inicio) {
+      toast.error('Informe o 2º período ou use "Cancelar 2º período" com motivo e justificativa.');
+      return;
+    }
     const validation = validateVacation(data);
     if (validation.requiresException && !data.is_excecao) {
       const motivoLabel: Record<string, string> = {
@@ -1457,9 +1551,29 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       : (data.opcao_adicional === "vender" ? (q1BloqueadoParaVenda ? 2 : (data.quinzena_venda || 1)) : null);
     const qvAntes = ferias?.quinzena_venda ?? null;
     const deveAuditar = permitirCorrecaoQV && finalQV !== qvAntes;
+    const q2CanceladoAntes = !!ferias?.q2_cancelado;
+    const q2MudouCancelamento = isEditing && q2CanceladoAntes !== q2Cancelado;
 
     mutation.mutate(data, {
       onSuccess: async () => {
+        if (q2MudouCancelamento && ferias?.id) {
+          try {
+            await (supabase as any).rpc("registrar_evento_ferias", {
+              p_record_id: ferias.id,
+              p_action: q2Cancelado ? "CANCELAMENTO_PERIODO_2" : "REATIVACAO_PERIODO_2",
+              p_payload: {
+                motivo: q2Cancelado ? q2CancMotivo : null,
+                justificativa: q2Cancelado ? q2CancJustificativa : null,
+                periodo_anterior: q2Cancelado
+                  ? { inicio: ferias.quinzena2_inicio, fim: ferias.quinzena2_fim }
+                  : null,
+                registrado_em: new Date().toISOString(),
+              },
+            });
+          } catch (e) {
+            console.error("Falha ao registrar auditoria do 2º período:", e);
+          }
+        }
         if (deveAuditar && ferias?.id) {
           try {
             await (supabase as any).rpc("registrar_evento_ferias", {
@@ -1729,7 +1843,19 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                       </CardContent>
                     </Card>
                     <Card>
-                      <CardHeader className="pb-3"><CardTitle className="text-sm">2º Período (15 dias)</CardTitle></CardHeader>
+                      <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+                        <CardTitle className="text-sm">2º Período (15 dias)</CardTitle>
+                        {!ferias?.enviado_contador_q2 && (
+                          q2Cancelado ? (
+                            <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={reativarQ2}>Reativar 2º período</Button>
+                          ) : (
+                            <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => setQ2CancDialogOpen(true)}>Cancelar 2º período</Button>
+                          )
+                        )}
+                      </CardHeader>
+                      {q2Cancelado ? (
+                        <CardContent>{q2CanceladoBanner}</CardContent>
+                      ) : (
                       <CardContent className="grid grid-cols-2 gap-4">
                         <FormField control={form.control} name="quinzena2_inicio" render={({ field }) => (
                           <FormItem>
@@ -1756,6 +1882,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                           {q2Inicio && q2Fim && <p className="text-xs text-muted-foreground mt-1">15 dias a partir de {formatDateBR(q2Inicio)}</p>}
                         </FormItem>
                       </CardContent>
+                      )}
                     </Card>
 
                     {/* Período da venda (informação obrigatória para o relatório do contador) */}
@@ -1835,7 +1962,19 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                     </CardContent>
                   </Card>
                   <Card>
-                    <CardHeader className="pb-3"><CardTitle className="text-sm">2º Período (15 dias)</CardTitle></CardHeader>
+                    <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+                      <CardTitle className="text-sm">2º Período (15 dias)</CardTitle>
+                      {!ferias?.enviado_contador_q2 && (
+                        q2Cancelado ? (
+                          <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={reativarQ2}>Reativar 2º período</Button>
+                        ) : (
+                          <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => setQ2CancDialogOpen(true)}>Cancelar 2º período</Button>
+                        )
+                      )}
+                    </CardHeader>
+                    {q2Cancelado ? (
+                      <CardContent>{q2CanceladoBanner}</CardContent>
+                    ) : (
                     <CardContent className="grid grid-cols-2 gap-4">
                        <FormField control={form.control} name="quinzena2_inicio" render={({ field }) => (
                          <FormItem><FormLabel>Data de Início *</FormLabel><FormControl><Input type="date" min="1990-01-01" max="2100-12-31" {...field} /></FormControl><FormMessage /></FormItem>
@@ -1846,6 +1985,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                         {q2Inicio && q2Fim && <p className="text-xs text-muted-foreground mt-1">15 dias a partir de {formatDateBR(q2Inicio)}</p>}
                       </FormItem>
                     </CardContent>
+                    )}
                   </Card>
                 </>
               )}
@@ -2062,6 +2202,47 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             </div>
           </form>
         </Form>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={q2CancDialogOpen} onOpenChange={setQ2CancDialogOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            Cancelar o 2º período
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            As datas do 2º período serão removidas deste cadastro. O restante das férias
+            continua como <strong>Padrão</strong> — isso não marca a férias como exceção.
+          </p>
+          <div className="space-y-2">
+            <Label className="text-sm">Motivo</Label>
+            <Select value={q2CancDialogMotivo} onValueChange={setQ2CancDialogMotivo}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="desligamento">Desligamento</SelectItem>
+                <SelectItem value="aviso_previo">Aviso prévio</SelectItem>
+                <SelectItem value="outro">Outro</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm">Justificativa</Label>
+            <Textarea
+              value={q2CancDialogJustificativa}
+              onChange={(e) => setQ2CancDialogJustificativa(e.target.value)}
+              placeholder="Ex.: colaboradora desligada, não gozará o 2º período."
+              rows={3}
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setQ2CancDialogOpen(false)}>Voltar</Button>
+            <Button type="button" variant="destructive" onClick={confirmarCancelamentoQ2}>Confirmar cancelamento</Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
 

@@ -267,6 +267,20 @@ export function FeriasViewDialog({ open, onOpenChange, ferias }: FeriasViewDialo
                       </>
                     )}
                   </>
+                ) : ferias.q2_cancelado ? (
+                  <>
+                    <p className="text-sm font-medium text-destructive">
+                      Cancelado — {({ desligamento: "Desligamento", aviso_previo: "Aviso prévio", outro: "Outro" } as Record<string, string>)[ferias.q2_cancelamento_motivo] || ferias.q2_cancelamento_motivo || "Motivo não informado"}
+                    </p>
+                    {ferias.q2_cancelamento_justificativa && (
+                      <p className="text-xs text-muted-foreground mt-1">{ferias.q2_cancelamento_justificativa}</p>
+                    )}
+                    {ferias.q2_cancelado_em && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Cancelado em {formatDate(String(ferias.q2_cancelado_em).slice(0, 10))}
+                      </p>
+                    )}
+                  </>
                 ) : (
                   <p className="text-sm text-amber-600 italic">Ainda não definido</p>
                 )}
