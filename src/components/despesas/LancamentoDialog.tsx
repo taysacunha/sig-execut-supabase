@@ -216,6 +216,22 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
       } else {
         toast.success(editing ? "Lançamento atualizado" : "Lançamento criado");
       }
+
+      // Editando uma parcela de uma série: oferecer propagar às próximas.
+      if (editing?.serie_recorrencia_id && snapshot) {
+        const itens = calcularDiff(snapshot, payload);
+        if (itens.length) {
+          const patch: Partial<LancamentoInput> = {};
+          itens.forEach((d) => {
+            (patch as any)[d.campo] = (payload as any)[d.campo];
+          });
+          setDiff(itens);
+          setPatchPropagar(patch);
+          setPropagarOpen(true);
+          return;
+        }
+      }
+
       onOpenChange(false);
     } catch (e: any) {
       toast.error(e?.message ?? "Erro ao salvar lançamento");
