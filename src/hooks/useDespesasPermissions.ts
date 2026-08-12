@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
-export type DespesasAba = "calendario" | "imoveis" | "bens" | "repasses" | "cadastros";
+export type DespesasAba = "calendario" | "imoveis" | "bens" | "veiculos" | "repasses" | "cadastros";
 export type DespesasNivel = "sem_acesso" | "view" | "edit" | "delete";
 
 export interface DespesasAbaPermissao {
