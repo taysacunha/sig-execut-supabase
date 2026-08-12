@@ -2205,8 +2205,48 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       </DialogContent>
     </Dialog>
 
+    <Dialog open={q2CancDialogOpen} onOpenChange={setQ2CancDialogOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            Cancelar o 2º período
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            As datas do 2º período serão removidas deste cadastro. O restante das férias
+            continua como <strong>Padrão</strong> — isso não marca a férias como exceção.
+          </p>
+          <div className="space-y-2">
+            <Label className="text-sm">Motivo</Label>
+            <Select value={q2CancDialogMotivo} onValueChange={setQ2CancDialogMotivo}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="desligamento">Desligamento</SelectItem>
+                <SelectItem value="aviso_previo">Aviso prévio</SelectItem>
+                <SelectItem value="outro">Outro</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm">Justificativa</Label>
+            <Textarea
+              value={q2CancDialogJustificativa}
+              onChange={(e) => setQ2CancDialogJustificativa(e.target.value)}
+              placeholder="Ex.: colaboradora desligada, não gozará o 2º período."
+              rows={3}
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setQ2CancDialogOpen(false)}>Voltar</Button>
+            <Button type="button" variant="destructive" onClick={confirmarCancelamentoQ2}>Confirmar cancelamento</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+
     <Dialog open={correcaoDialogOpen} onOpenChange={setCorrecaoDialogOpen}>
-      {null}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
