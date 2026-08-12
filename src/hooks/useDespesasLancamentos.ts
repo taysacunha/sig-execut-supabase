@@ -244,6 +244,92 @@ export function useDeleteLancamento() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Propagação de alterações para parcelas futuras de uma série de recorrência
+// ---------------------------------------------------------------------------
+
+export interface ParcelaFutura {
+  id: string;
+  descricao: string;
+  data_vencimento: string;
+  valor_total: number | null;
+  status: LancamentoStatus;
+}
+
+export const PROPAGAVEIS: (keyof LancamentoInput)[] = [
+  "descricao",
+  "documento_numero",
+  "pessoa_id",
+  "imovel_id",
+  "referencia_numero_pasta",
+  "referencia_numero_venda",
+  "centro_custo_id",
+  "categoria_id",
+  "plano_conta_id",
+  "conta_bancaria_id",
+  "valor_total",
+  "observacao",
+];
+
+export const STATUS_NAO_PROPAGAVEL: LancamentoStatus[] = [
+  "pago",
+  "pago_parcial",
+  "cancelado",
+  "quitado",
+];
+
+export function useParcelasFuturasSerie(
+  serieId: string | null,
+  dataVencimento: string | null,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: [LANC_KEY, "serie-futuras", serieId, dataVencimento],
+    enabled: !!serieId && !!dataVencimento && enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("despesas_lancamentos" as any)
+        .select("id, descricao, data_vencimento, valor_total, status")
+        .eq("serie_recorrencia_id", serieId)
+        .gt("data_vencimento", dataVencimento)
+        .order("data_vencimento", { ascending: true })
+        .limit(500);
+      if (error) throw error;
+      return (data ?? []) as unknown as ParcelaFutura[];
+    },
+  });
+}
+
+export function usePropagarAlteracoes() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ ids, patch }: { ids: string[]; patch: Partial<LancamentoInput> }) => {
+      if (!ids.length) return 0;
+      const { error } = await supabase
+        .from("despesas_lancamentos" as any)
+        .update(patch as any)
+        .in("id", ids);
+      if (error) throw error;
+      return ids.length;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [LANC_KEY] });
+      qc.invalidateQueries({ queryKey: ["despesas-recorrencias"] });
+    },
+  });
+}
+
+function _unusedDeleteLancamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("despesas_lancamentos" as any).delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: [LANC_KEY] }),
+  });
+}
+
 export function useCancelLancamento() {
   const qc = useQueryClient();
   return useMutation({
