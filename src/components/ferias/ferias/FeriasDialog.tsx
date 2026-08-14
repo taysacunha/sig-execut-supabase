@@ -51,6 +51,8 @@ import { format, parseISO, addDays, addYears, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
+import { diffFerias, type FeriasDiffResult } from "@/lib/feriasDiff";
+import { ConfirmarAlteracoesFeriasDialog } from "./ConfirmarAlteracoesFeriasDialog";
 
 // Aceita data vazia OU com ano entre 1990 e 2100 (evita erro de digitação tipo "0225")
 const isReasonableDate = (s: string | undefined | null) => {
