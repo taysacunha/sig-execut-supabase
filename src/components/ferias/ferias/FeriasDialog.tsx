@@ -1568,6 +1568,21 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         }
       }
     }
+    // Em edição: exigir confirmação explícita mostrando "antes → depois".
+    if (isEditing && ferias) {
+      const { payload } = buildPayloadCore(data);
+      const diff = diffFerias(ferias, payload, originalPeriodos, payload.gozo_flexivel ? excPeriodos : []);
+      if (diff.rows.length > 0 || diff.periodosMudaram) {
+        setPendingData(data);
+        setPendingDiff(diff);
+        setConfirmOpen(true);
+        return;
+      }
+    }
+    executeSave(data);
+  };
+
+  const executeSave = (data: FeriasFormData) => {
     // Se houve correção histórica de período da venda, registrar auditoria após salvar.
     const finalQV = data.is_excecao
       ? (excDistribuicaoTipo === "1" ? 1 : excDistribuicaoTipo === "2" ? 2 : (q1BloqueadoParaVenda ? 2 : (excQuinzenaVenda || 1)))
@@ -1576,9 +1591,33 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     const deveAuditar = permitirCorrecaoQV && finalQV !== qvAntes;
     const q2CanceladoAntes = !!ferias?.q2_cancelado;
     const q2MudouCancelamento = isEditing && q2CanceladoAntes !== q2Cancelado;
+    const diffParaAuditoria = isEditing ? pendingDiff : null;
 
     mutation.mutate(data, {
       onSuccess: async () => {
+        setConfirmOpen(false);
+        setPendingData(null);
+        if (diffParaAuditoria && ferias?.id) {
+          try {
+            await (supabase as any).rpc("registrar_evento_ferias", {
+              p_record_id: ferias.id,
+              p_action: "ALTERACAO_FERIAS",
+              p_payload: {
+                alteracoes: diffParaAuditoria.rows.map((r) => ({
+                  campo: r.label,
+                  antes: r.antes,
+                  depois: r.depois,
+                })),
+                periodos_gozo: diffParaAuditoria.periodosMudaram
+                  ? { antes: diffParaAuditoria.periodosAntes, depois: diffParaAuditoria.periodosDepois }
+                  : null,
+                confirmado_em: new Date().toISOString(),
+              },
+            });
+          } catch (e) {
+            console.error("Falha ao registrar auditoria da alteração:", e);
+          }
+        }
         if (q2MudouCancelamento && ferias?.id) {
           try {
             await (supabase as any).rpc("registrar_evento_ferias", {
