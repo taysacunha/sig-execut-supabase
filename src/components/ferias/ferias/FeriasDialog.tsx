@@ -1368,8 +1368,6 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         q2_cancelado: q2Cancelado,
         q2_cancelamento_motivo: q2Cancelado ? q2CancMotivo : null,
         q2_cancelamento_justificativa: q2Cancelado ? q2CancJustificativa : null,
-        q2_cancelado_em: q2Cancelado ? (ferias?.q2_cancelado ? ferias.q2_cancelado_em : new Date().toISOString()) : null,
-        q2_cancelado_por: q2Cancelado ? (ferias?.q2_cancelado ? ferias.q2_cancelado_por : (await supabase.auth.getUser()).data.user?.id ?? null) : null,
         gozo_diferente: gozoDiferente,
         gozo_quinzena1_inicio: gozoQ1Inicio,
         gozo_quinzena1_fim: gozoQ1Fim,
@@ -1389,6 +1387,20 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         gozo_flexivel: gozoFlexivel,
         distribuicao_tipo: distribuicaoTipoVal,
       };
+
+      return { payload, gozoFlexivel };
+  };
+
+  // Save mutation
+  const mutation = useMutation({
+    mutationFn: async (data: FeriasFormData) => {
+      const { payload, gozoFlexivel } = buildPayloadCore(data);
+      payload.q2_cancelado_em = q2Cancelado
+        ? (ferias?.q2_cancelado ? ferias.q2_cancelado_em : new Date().toISOString())
+        : null;
+      payload.q2_cancelado_por = q2Cancelado
+        ? (ferias?.q2_cancelado ? ferias.q2_cancelado_por : (await supabase.auth.getUser()).data.user?.id ?? null)
+        : null;
 
       let feriasId: string;
       if (isEditing) {
