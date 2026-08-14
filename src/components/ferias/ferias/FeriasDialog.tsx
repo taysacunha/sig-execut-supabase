@@ -120,6 +120,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const [excDistribuicaoTipo, setExcDistribuicaoTipo] = useState("");
   const [excDiasVendidos, setExcDiasVendidos] = useState(0);
   const [excPeriodos, setExcPeriodos] = useState<GozoPeriodo[]>([]);
+  // Snapshot dos períodos de gozo como estão salvos no banco (para o diff de confirmação)
+  const [originalPeriodos, setOriginalPeriodos] = useState<GozoPeriodo[]>([]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingData, setPendingData] = useState<FeriasFormData | null>(null);
+  const [pendingDiff, setPendingDiff] = useState<FeriasDiffResult | null>(null);
   const [excHydrating, setExcHydrating] = useState(false);
   // Período (1 ou 2) ao qual os dias vendidos serão atribuídos no relatório do contador
   // (necessário em modo exceção quando a distribuição é "ambos" ou "livre").
