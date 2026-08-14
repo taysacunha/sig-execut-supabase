@@ -1230,9 +1230,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     try { return format(parseISO(dateStr), "dd/MM/yyyy", { locale: ptBR }); } catch { return dateStr; }
   };
 
-  // Save mutation
-  const mutation = useMutation({
-    mutationFn: async (data: FeriasFormData) => {
+  // Monta o payload (função pura em relação ao formulário/estado atual),
+  // para que o diff "antes → depois" possa ser calculado antes de salvar.
+  const buildPayloadCore = (data: FeriasFormData) => {
       let gozoQ1Inicio = null;
       let gozoQ1Fim = null;
       let gozoQ2Inicio = null;
