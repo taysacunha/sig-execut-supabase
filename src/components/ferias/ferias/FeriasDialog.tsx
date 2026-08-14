@@ -668,6 +668,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       setExcDistribuicaoTipo("");
       setExcDiasVendidos(0);
       setExcPeriodos([]);
+      setOriginalPeriodos([]);
       setExcQuinzenaVenda(1);
       setExcHydrating(false);
     } else {
@@ -708,15 +709,18 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           setExcDistribuicaoTipo(inferredDist);
           setExcDiasVendidos(ferias.dias_vendidos || 0);
           setExcQuinzenaVenda(ferias.quinzena_venda || (inferredDist === "2" ? 2 : 1));
-          setExcPeriodos(loaded.map((p: any) => ({
+          const hidratados = loaded.map((p: any) => ({
             id: p.id || crypto.randomUUID(),
             referencia_periodo: p.referencia_periodo,
             dias: p.dias,
             data_inicio: p.data_inicio,
             data_fim: p.data_fim,
             tipo: (p.tipo === "gozo_diferente" ? "gozo_diferente" : "vender") as "vender" | "gozo_diferente",
-          })));
+          }));
+          setExcPeriodos(hidratados);
+          setOriginalPeriodos(hidratados);
         } else {
+          setOriginalPeriodos([]);
           // No gozo_periodos found — use flags from the main record
           const hasException = !!(ferias.is_excecao || ferias.gozo_flexivel);
           form.setValue("is_excecao", hasException);
