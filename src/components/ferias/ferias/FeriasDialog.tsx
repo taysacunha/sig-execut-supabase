@@ -51,6 +51,8 @@ import { format, parseISO, addDays, addYears, differenceInDays } from "date-fns"
 import { ptBR } from "date-fns/locale";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
+import { diffFerias, type FeriasDiffResult } from "@/lib/feriasDiff";
+import { ConfirmarAlteracoesFeriasDialog } from "./ConfirmarAlteracoesFeriasDialog";
 
 // Aceita data vazia OU com ano entre 1990 e 2100 (evita erro de digitação tipo "0225")
 const isReasonableDate = (s: string | undefined | null) => {
@@ -120,6 +122,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const [excDistribuicaoTipo, setExcDistribuicaoTipo] = useState("");
   const [excDiasVendidos, setExcDiasVendidos] = useState(0);
   const [excPeriodos, setExcPeriodos] = useState<GozoPeriodo[]>([]);
+  // Snapshot dos períodos de gozo como estão salvos no banco (para o diff de confirmação)
+  const [originalPeriodos, setOriginalPeriodos] = useState<GozoPeriodo[]>([]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingData, setPendingData] = useState<FeriasFormData | null>(null);
+  const [pendingDiff, setPendingDiff] = useState<FeriasDiffResult | null>(null);
   const [excHydrating, setExcHydrating] = useState(false);
   // Período (1 ou 2) ao qual os dias vendidos serão atribuídos no relatório do contador
   // (necessário em modo exceção quando a distribuição é "ambos" ou "livre").
@@ -661,6 +668,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       setExcDistribuicaoTipo("");
       setExcDiasVendidos(0);
       setExcPeriodos([]);
+      setOriginalPeriodos([]);
       setExcQuinzenaVenda(1);
       setExcHydrating(false);
     } else {
@@ -701,15 +709,18 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           setExcDistribuicaoTipo(inferredDist);
           setExcDiasVendidos(ferias.dias_vendidos || 0);
           setExcQuinzenaVenda(ferias.quinzena_venda || (inferredDist === "2" ? 2 : 1));
-          setExcPeriodos(loaded.map((p: any) => ({
+          const hidratados = loaded.map((p: any) => ({
             id: p.id || crypto.randomUUID(),
             referencia_periodo: p.referencia_periodo,
             dias: p.dias,
             data_inicio: p.data_inicio,
             data_fim: p.data_fim,
             tipo: (p.tipo === "gozo_diferente" ? "gozo_diferente" : "vender") as "vender" | "gozo_diferente",
-          })));
+          }));
+          setExcPeriodos(hidratados);
+          setOriginalPeriodos(hidratados);
         } else {
+          setOriginalPeriodos([]);
           // No gozo_periodos found — use flags from the main record
           const hasException = !!(ferias.is_excecao || ferias.gozo_flexivel);
           form.setValue("is_excecao", hasException);
@@ -1230,9 +1241,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     try { return format(parseISO(dateStr), "dd/MM/yyyy", { locale: ptBR }); } catch { return dateStr; }
   };
 
-  // Save mutation
-  const mutation = useMutation({
-    mutationFn: async (data: FeriasFormData) => {
+  // Monta o payload (função pura em relação ao formulário/estado atual),
+  // para que o diff "antes → depois" possa ser calculado antes de salvar.
+  const buildPayloadCore = (data: FeriasFormData) => {
       let gozoQ1Inicio = null;
       let gozoQ1Fim = null;
       let gozoQ2Inicio = null;
@@ -1368,8 +1379,6 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         q2_cancelado: q2Cancelado,
         q2_cancelamento_motivo: q2Cancelado ? q2CancMotivo : null,
         q2_cancelamento_justificativa: q2Cancelado ? q2CancJustificativa : null,
-        q2_cancelado_em: q2Cancelado ? (ferias?.q2_cancelado ? ferias.q2_cancelado_em : new Date().toISOString()) : null,
-        q2_cancelado_por: q2Cancelado ? (ferias?.q2_cancelado ? ferias.q2_cancelado_por : (await supabase.auth.getUser()).data.user?.id ?? null) : null,
         gozo_diferente: gozoDiferente,
         gozo_quinzena1_inicio: gozoQ1Inicio,
         gozo_quinzena1_fim: gozoQ1Fim,
@@ -1389,6 +1398,20 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         gozo_flexivel: gozoFlexivel,
         distribuicao_tipo: distribuicaoTipoVal,
       };
+
+      return { payload, gozoFlexivel };
+  };
+
+  // Save mutation
+  const mutation = useMutation({
+    mutationFn: async (data: FeriasFormData) => {
+      const { payload, gozoFlexivel } = buildPayloadCore(data);
+      payload.q2_cancelado_em = q2Cancelado
+        ? (ferias?.q2_cancelado ? ferias.q2_cancelado_em : new Date().toISOString())
+        : null;
+      payload.q2_cancelado_por = q2Cancelado
+        ? (ferias?.q2_cancelado ? ferias.q2_cancelado_por : (await supabase.auth.getUser()).data.user?.id ?? null)
+        : null;
 
       let feriasId: string;
       if (isEditing) {
@@ -1545,6 +1568,21 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         }
       }
     }
+    // Em edição: exigir confirmação explícita mostrando "antes → depois".
+    if (isEditing && ferias) {
+      const { payload } = buildPayloadCore(data);
+      const diff = diffFerias(ferias, payload, originalPeriodos, payload.gozo_flexivel ? excPeriodos : []);
+      if (diff.rows.length > 0 || diff.periodosMudaram) {
+        setPendingData(data);
+        setPendingDiff(diff);
+        setConfirmOpen(true);
+        return;
+      }
+    }
+    executeSave(data);
+  };
+
+  const executeSave = (data: FeriasFormData) => {
     // Se houve correção histórica de período da venda, registrar auditoria após salvar.
     const finalQV = data.is_excecao
       ? (excDistribuicaoTipo === "1" ? 1 : excDistribuicaoTipo === "2" ? 2 : (q1BloqueadoParaVenda ? 2 : (excQuinzenaVenda || 1)))
@@ -1553,9 +1591,33 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     const deveAuditar = permitirCorrecaoQV && finalQV !== qvAntes;
     const q2CanceladoAntes = !!ferias?.q2_cancelado;
     const q2MudouCancelamento = isEditing && q2CanceladoAntes !== q2Cancelado;
+    const diffParaAuditoria = isEditing ? pendingDiff : null;
 
     mutation.mutate(data, {
       onSuccess: async () => {
+        setConfirmOpen(false);
+        setPendingData(null);
+        if (diffParaAuditoria && ferias?.id) {
+          try {
+            await (supabase as any).rpc("registrar_evento_ferias", {
+              p_record_id: ferias.id,
+              p_action: "ALTERACAO_FERIAS",
+              p_payload: {
+                alteracoes: diffParaAuditoria.rows.map((r) => ({
+                  campo: r.label,
+                  antes: r.antes,
+                  depois: r.depois,
+                })),
+                periodos_gozo: diffParaAuditoria.periodosMudaram
+                  ? { antes: diffParaAuditoria.periodosAntes, depois: diffParaAuditoria.periodosDepois }
+                  : null,
+                confirmado_em: new Date().toISOString(),
+              },
+            });
+          } catch (e) {
+            console.error("Falha ao registrar auditoria da alteração:", e);
+          }
+        }
         if (q2MudouCancelamento && ferias?.id) {
           try {
             await (supabase as any).rpc("registrar_evento_ferias", {
@@ -2298,6 +2360,23 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         </div>
       </DialogContent>
     </Dialog>
+
+    <ConfirmarAlteracoesFeriasDialog
+      open={confirmOpen}
+      onOpenChange={(o) => {
+        setConfirmOpen(o);
+        if (!o) {
+          setPendingData(null);
+          setPendingDiff(null);
+        }
+      }}
+      diff={pendingDiff}
+      colaboradorNome={selectedColab?.nome}
+      isSaving={mutation.isPending}
+      onConfirm={() => {
+        if (pendingData) executeSave(pendingData);
+      }}
+    />
     </>
   );
 }
