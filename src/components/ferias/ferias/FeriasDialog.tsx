@@ -2360,6 +2360,23 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         </div>
       </DialogContent>
     </Dialog>
+
+    <ConfirmarAlteracoesFeriasDialog
+      open={confirmOpen}
+      onOpenChange={(o) => {
+        setConfirmOpen(o);
+        if (!o) {
+          setPendingData(null);
+          setPendingDiff(null);
+        }
+      }}
+      diff={pendingDiff}
+      colaboradorNome={selectedColab?.nome}
+      isSaving={mutation.isPending}
+      onConfirm={() => {
+        if (pendingData) executeSave(pendingData);
+      }}
+    />
     </>
   );
 }
