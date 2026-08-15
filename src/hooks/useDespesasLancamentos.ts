@@ -41,6 +41,7 @@ export interface Lancamento {
   documento_numero: string | null;
   pessoa_id: string | null;
   imovel_id: string | null;
+  veiculo_id: string | null;
   referencia_tipo: DespesaReferenciaTipo | null;
   referencia_numero: string | null;
   referencia_numero_pasta: string | null;
@@ -75,6 +76,9 @@ export interface LancamentoFiltros {
   pessoaId?: string;
   categoriaId?: string;
   imovelId?: string;
+  veiculoId?: string;
+  /** Somente lançamentos vinculados a algum veículo. */
+  somenteVeiculos?: boolean;
   referenciaNumeroPasta?: string;
   referenciaNumeroVenda?: string;
   dataInicio?: string;
@@ -107,6 +111,8 @@ export function useLancamentos(filtros: LancamentoFiltros) {
       if (filtros.pessoaId) query = query.eq("pessoa_id", filtros.pessoaId);
       if (filtros.categoriaId) query = query.eq("categoria_id", filtros.categoriaId);
       if (filtros.imovelId) query = query.eq("imovel_id", filtros.imovelId);
+      if (filtros.veiculoId) query = query.eq("veiculo_id", filtros.veiculoId);
+      if (filtros.somenteVeiculos) query = query.not("veiculo_id", "is", null);
       if (filtros.referenciaNumeroPasta?.trim()) {
         query = query.ilike("referencia_numero_pasta", `%${filtros.referenciaNumeroPasta.trim()}%`);
       }

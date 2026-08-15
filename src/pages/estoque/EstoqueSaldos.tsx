@@ -165,9 +165,10 @@ function SaldosTable({
 export default function EstoqueSaldos() {
   const queryClient = useQueryClient();
   const { canEdit, user } = useSystemAccess();
-  const { isSuperAdmin, isAdmin } = useUserRole();
+  const { isSuperAdmin, isAdmin, isSupervisor } = useUserRole();
   const isAdminOrSuper = isSuperAdmin || isAdmin;
-  const canEditEstoque = canEdit("estoque") && isAdminOrSuper;
+  // Supervisor também dá entrada/ajuste/transferência de saldos (RLS alinhada).
+  const canEditEstoque = canEdit("estoque") && (isAdminOrSuper || isSupervisor);
 
   const [entradaDialog, setEntradaDialog] = useState(false);
   const [ajusteDialog, setAjusteDialog] = useState(false);
