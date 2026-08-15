@@ -1,51 +1,60 @@
-# Botão "+ Entrada" ainda invisível para supervisor
+# "+ Entrada" invisível para supervisor — o que o diagnóstico mostrou
 
-## O que já está no código
-
-`src/pages/estoque/EstoqueSaldos.tsx` (linha 171) já libera supervisor:
+O SQL confirmou o cenário ideal para a Taysa: `role = supervisor` e `system_access.estoque = view_edit`.
+E o código já libera esse caso em `src/pages/estoque/EstoqueSaldos.tsx` (linha 171):
 
 ```text
 canEditEstoque = canEdit("estoque") && (isAdminOrSuper || isSupervisor)
 ```
 
-Ou seja, o gate de perfil não é mais o bloqueio. Restam três candidatos, e não consigo confirmar qual é sem olhar o banco (o acesso direto ao Postgres não está disponível nesta sessão):
+Logo, nem o perfil nem a permissão são o bloqueio. Sobram duas explicações, e não consigo separá-las daqui
+(este projeto usa Supabase próprio, então não tenho como abrir a página autenticada em teste):
 
-1. O usuário tem acesso ao Estoque como **"Somente visualizar"** — então `canEdit("estoque")` é `false` e o botão continua oculto, independente do perfil.
-2. O perfil efetivo retornado por `get_user_role` não é `supervisor` (por exemplo continua `collaborator` ou ficou sem linha em `user_roles`).
-3. As permissões ficam em cache no React Query por 5 minutos com `refetchOnMount: false`; se o perfil/permissão foi alterado com a sessão aberta, a tela só reflete depois de recarregar.
+1. **A versão testada é a publicada.** A liberação do supervisor entrou no código mas o app em
+   `sig-execut.lovable.app` só passa a ter essa regra depois de publicar de novo. No preview ela já vale.
+2. **Cache de permissões no navegador.** `useSystemAccess` guarda as permissões por 5 minutos com
+   `refetchOnMount: false` e `refetchOnWindowFocus: false`. Se a permissão do Estoque foi alterada com a
+   sessão aberta, a tela continua usando o valor antigo até um recarregamento completo.
 
-## Passo 1 — Diagnóstico (rodar no SQL Editor do Supabase)
+## Verificação rápida (sem código)
 
-```sql
-select p.name, ur.role, sa.system_name, sa.permission_type
-from public.user_profiles p
-left join public.user_roles ur on ur.user_id = p.user_id
-left join public.system_access sa on sa.user_id = p.user_id and sa.system_name = 'estoque'
-where p.name ilike '%ruan%';
-```
+Abrir `/estoque/saldos` **no preview**, com Ctrl+Shift+R (recarga forte). Se o botão aparecer ali, a causa é
+a nº 1 e basta publicar. Se não aparecer nem no preview, seguimos para as correções abaixo.
 
-(A tabela `user_profiles` usa `user_id` e `name` — não `id`/`full_name`; era isso que gerava o erro `column p.full_name does not exist`.)
+## Correções propostas
 
-O resultado diz qual dos três casos é. Se vier `view_only`, basta trocar para "Ver e editar" na página de Usuários — sem mudança de código.
+1. **Permissões sempre frescas ao entrar na página**
+   `src/hooks/useSystemAccess.ts`: trocar `refetchOnMount: false` por `refetchOnMount: "always"` e manter um
+   `staleTime` curto (30s). Assim, mudança de perfil/permissão reflete ao navegar, sem precisar sair e entrar.
 
-## Passo 2 — Correções de código (independentes do diagnóstico)
+2. **Invalidar o cache quando o admin muda perfil ou acessos**
+   `src/pages/UserManagement.tsx`: após salvar perfil (`set_user_role`) ou acessos de sistema, invalidar as
+   queries `["system-access"]` para que a alteração valha imediatamente para quem está logado no mesmo browser.
 
-- **Invalidar o cache de permissões ao trocar perfil/acesso:** em `src/pages/UserManagement.tsx`, após salvar perfil ou acessos, invalidar a query `["system-access", userId]`; e em `src/hooks/useSystemAccess.ts` reduzir o efeito do cache trocando `refetchOnMount: false` por `refetchOnMount: "always"`, mantendo `staleTime`. Assim a mudança aparece sem precisar sair e entrar de novo.
-- **Feedback em vez de sumiço silencioso:** quando o usuário tem acesso ao Estoque mas sem edição (ou sem perfil suficiente), exibir na página de Saldos um aviso curto explicando por que as ações não estão disponíveis, em vez de simplesmente esconder os botões.
+3. **Explicar em vez de esconder**
+   `src/pages/estoque/EstoqueSaldos.tsx`: quando o usuário tem acesso ao Estoque mas `canEditEstoque` é falso,
+   mostrar uma faixa curta ("Seu acesso ao Estoque é somente leitura" / "Perfil sem permissão de movimentação")
+   em vez de simplesmente omitir os botões. Isso evita esse tipo de investigação no futuro.
 
-## Passo 3 — Confirmar o lado do banco
+4. **Painel de diagnóstico do próprio usuário (opcional)**
+   Em `src/pages/Profile.tsx`, listar perfil efetivo e permissão por sistema, direto das mesmas fontes que a UI
+   usa. Fica fácil comparar com o banco em 5 segundos.
 
-A migration `db/migrations/20260815120000_estoque_saldos_supervisor.sql` precisa ter sido executada. Verificação:
+## Lado do banco
+
+Confirmar que `db/migrations/20260815120000_estoque_saldos_supervisor.sql` foi executada — senão o botão
+aparece, mas a gravação falha por RLS:
 
 ```sql
 select polname, polcmd from pg_policy
 where polrelid = 'public.estoque_saldos'::regclass;
 ```
 
-Devem aparecer as políticas "Gestao estoque can insert/update/delete estoque_saldos". Se não aparecerem, o botão até apareceria, mas o INSERT falharia por RLS — então rode a migration.
+Devem constar "Gestao estoque can insert/update/delete estoque_saldos".
 
 ## Arquivos afetados
 
 - `src/hooks/useSystemAccess.ts`
 - `src/pages/UserManagement.tsx`
 - `src/pages/estoque/EstoqueSaldos.tsx`
+- `src/pages/Profile.tsx` (item opcional)
