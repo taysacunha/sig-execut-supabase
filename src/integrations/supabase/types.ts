@@ -1049,6 +1049,7 @@ export type Database = {
           updated_at: string
           valor_pago: number
           valor_total: number | null
+          veiculo_id: string | null
         }
         Insert: {
           categoria_id?: string | null
@@ -1079,6 +1080,7 @@ export type Database = {
           updated_at?: string
           valor_pago?: number
           valor_total?: number | null
+          veiculo_id?: string | null
         }
         Update: {
           categoria_id?: string | null
@@ -1109,6 +1111,7 @@ export type Database = {
           updated_at?: string
           valor_pago?: number
           valor_total?: number | null
+          veiculo_id?: string | null
         }
         Relationships: [
           {
@@ -1165,6 +1168,13 @@ export type Database = {
             columns: ["subcategoria_id"]
             isOneToOne: false
             referencedRelation: "despesas_subcategorias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_lancamentos_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_veiculos"
             referencedColumns: ["id"]
           },
         ]
@@ -1399,6 +1409,7 @@ export type Database = {
           ultima_geracao_ate: string | null
           updated_at: string
           valor_total: number | null
+          veiculo_id: string | null
         }
         Insert: {
           ativo?: boolean
@@ -1430,6 +1441,7 @@ export type Database = {
           ultima_geracao_ate?: string | null
           updated_at?: string
           valor_total?: number | null
+          veiculo_id?: string | null
         }
         Update: {
           ativo?: boolean
@@ -1461,6 +1473,7 @@ export type Database = {
           ultima_geracao_ate?: string | null
           updated_at?: string
           valor_total?: number | null
+          veiculo_id?: string | null
         }
         Relationships: [
           {
@@ -1510,6 +1523,13 @@ export type Database = {
             columns: ["subcategoria_id"]
             isOneToOne: false
             referencedRelation: "despesas_subcategorias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_recorrencias_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_veiculos"
             referencedColumns: ["id"]
           },
         ]
