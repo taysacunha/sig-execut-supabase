@@ -17,12 +17,14 @@ Ou seja, o gate de perfil não é mais o bloqueio. Restam três candidatos, e n�
 ## Passo 1 — Diagnóstico (rodar no SQL Editor do Supabase)
 
 ```sql
-select p.full_name, ur.role, sa.system_name, sa.permission_type
+select p.name, ur.role, sa.system_name, sa.permission_type
 from public.user_profiles p
-left join public.user_roles ur on ur.user_id = p.id
-left join public.system_access sa on sa.user_id = p.id and sa.system_name = 'estoque'
-where p.full_name ilike '%ruan%';
+left join public.user_roles ur on ur.user_id = p.user_id
+left join public.system_access sa on sa.user_id = p.user_id and sa.system_name = 'estoque'
+where p.name ilike '%ruan%';
 ```
+
+(A tabela `user_profiles` usa `user_id` e `name` — não `id`/`full_name`; era isso que gerava o erro `column p.full_name does not exist`.)
 
 O resultado diz qual dos três casos é. Se vier `view_only`, basta trocar para "Ver e editar" na página de Usuários — sem mudança de código.
 
