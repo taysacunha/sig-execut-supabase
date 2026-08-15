@@ -38,8 +38,8 @@ export interface Recorrencia {
 
 export type RecorrenciaInput = Omit<
   Recorrencia,
-  "id" | "created_at" | "updated_at" | "ultima_geracao_ate" | "centro_custo" | "pessoa"
->;
+  "id" | "created_at" | "updated_at" | "ultima_geracao_ate" | "centro_custo" | "pessoa" | "veiculo_id"
+> & { veiculo_id?: string | null };
 
 export const REC_KEY = "despesas-recorrencias";
 
