@@ -179,6 +179,7 @@ export interface LancamentoInput {
   documento_numero?: string | null;
   pessoa_id?: string | null;
   imovel_id?: string | null;
+  veiculo_id?: string | null;
   referencia_tipo?: DespesaReferenciaTipo | null;
   referencia_numero?: string | null;
   referencia_numero_pasta?: string | null;
