@@ -24,6 +24,7 @@ export interface Recorrencia {
   conta_bancaria_id: string | null;
   pessoa_id: string | null;
   imovel_id: string | null;
+  veiculo_id: string | null;
   referencia_tipo: DespesaReferenciaTipo | null;
   referencia_numero: string | null;
   referencia_numero_pasta: string | null;
@@ -37,8 +38,8 @@ export interface Recorrencia {
 
 export type RecorrenciaInput = Omit<
   Recorrencia,
-  "id" | "created_at" | "updated_at" | "ultima_geracao_ate" | "centro_custo" | "pessoa"
->;
+  "id" | "created_at" | "updated_at" | "ultima_geracao_ate" | "centro_custo" | "pessoa" | "veiculo_id"
+> & { veiculo_id?: string | null };
 
 export const REC_KEY = "despesas-recorrencias";
 

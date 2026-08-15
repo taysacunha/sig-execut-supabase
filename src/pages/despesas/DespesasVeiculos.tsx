@@ -12,6 +12,9 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Plus, Pencil, Trash2, ShieldAlert, CalendarClock, Search } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { VeiculosCalendario } from "@/components/despesas/veiculos/VeiculosCalendario";
+import { VeiculosRecorrencias } from "@/components/despesas/veiculos/VeiculosRecorrencias";
 import {
   useVeiculos, useDeleteVeiculo, useGerarEncargosVeiculo, useVeiculosDocumentosAtivos, Veiculo,
 } from "@/hooks/useDespesasVeiculos";
@@ -103,6 +106,14 @@ export default function DespesasVeiculos() {
         )}
       </div>
 
+      <Tabs defaultValue="frota" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="frota">Veículos</TabsTrigger>
+          <TabsTrigger value="calendario">Calendário</TabsTrigger>
+          <TabsTrigger value="recorrencias">Recorrências</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="frota">
       <Card>
         <CardHeader className="pb-3">
           <div className="relative max-w-sm">
@@ -178,6 +189,16 @@ export default function DespesasVeiculos() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="calendario">
+          <VeiculosCalendario veiculos={veiculos} canEdit={canEdit} />
+        </TabsContent>
+
+        <TabsContent value="recorrencias">
+          <VeiculosRecorrencias veiculos={veiculos} canEdit={canEdit} />
+        </TabsContent>
+      </Tabs>
 
       <VeiculoDialog open={dialogOpen} onOpenChange={setDialogOpen} editing={editing} />
 
