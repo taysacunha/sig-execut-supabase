@@ -82,14 +82,30 @@ export default function EstoqueMovimentacoes() {
   });
 
   const { data: movimentacoes = [], isLoading } = useQuery({
-    queryKey: ["estoque-movimentacoes"],
+    queryKey: ["estoque-movimentacoes", periodo],
     queryFn: async () => {
-      const { data, error } = await fromEstoque("estoque_movimentacoes")
+      let query = fromEstoque("estoque_movimentacoes")
         .select("*")
-        .order("created_at", { ascending: false })
-        .limit(500);
+        .order("created_at", { ascending: false });
+      if (periodo !== "all") {
+        const dias = Number(periodo);
+        const desde = new Date();
+        desde.setDate(desde.getDate() - dias);
+        query = query.gte("created_at", desde.toISOString());
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return data as unknown as Movimentacao[];
+    },
+  });
+
+  const { data: solicitacoes = [] } = useQuery({
+    queryKey: ["estoque-solicitacoes-nomes"],
+    queryFn: async () => {
+      const { data, error } = await fromEstoque("estoque_solicitacoes")
+        .select("id, solicitante_nome, solicitante_user_id");
+      if (error) throw error;
+      return data as unknown as { id: string; solicitante_nome: string; solicitante_user_id: string }[];
     },
   });
 
@@ -105,6 +121,15 @@ export default function EstoqueMovimentacoes() {
     if (!id) return "—";
     return profiles.find((p) => p.user_id === id)?.name || "—";
   };
+  const getSolicitanteNome = (solicitacaoId: string | null) => {
+    if (!solicitacaoId) return "—";
+    const sol = solicitacoes.find((s) => s.id === solicitacaoId);
+    if (!sol) return "—";
+    const nome = sol.solicitante_nome || "";
+    if (nome && !nome.includes("@")) return nome;
+    const perfil = profiles.find((p) => p.user_id === sol.solicitante_user_id)?.name;
+    return perfil && perfil.trim().length > 0 ? perfil : nome || "—";
+  };
 
   // Enrich data for table controls
   const enriched = movimentacoes
@@ -115,6 +140,9 @@ export default function EstoqueMovimentacoes() {
       tipo_label: TIPO_LABELS[m.tipo] || m.tipo,
       responsavel_nome: getUserName(m.responsavel_user_id),
       recebedor_nome: getUserName(m.recebido_por_user_id),
+      solicitante_nome: getSolicitanteNome(m.solicitacao_id),
+      origem_nome: getLocalNome(m.local_origem_id),
+      destino_nome: getLocalNome(m.local_destino_id),
     }));
 
   const {
@@ -123,7 +151,7 @@ export default function EstoqueMovimentacoes() {
     paginatedData, filteredData, totalPages,
   } = useTableControls({
     data: enriched,
-    searchField: ["material_nome", "observacoes"],
+    searchField: ["material_nome", "observacoes", "solicitante_nome", "responsavel_nome", "recebedor_nome", "origem_nome", "destino_nome", "tipo_label"],
     defaultItemsPerPage: 25,
   });
 
