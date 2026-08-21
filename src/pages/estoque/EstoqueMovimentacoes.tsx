@@ -246,6 +246,9 @@ export default function EstoqueMovimentacoes() {
                     </TableHead>
                     <TableHead>Origem</TableHead>
                     <TableHead>Destino</TableHead>
+                    <TableHead>
+                      <SortableHeader label="Solicitante" field="solicitante_nome" currentField={sortField as string} direction={sortDirection} onSort={setSorting as any} />
+                    </TableHead>
                     <TableHead>Responsável</TableHead>
                     <TableHead>Recebedor</TableHead>
                     <TableHead>Observações</TableHead>
