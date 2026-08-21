@@ -883,6 +883,34 @@ export default function EstoqueSolicitacoes() {
                   </TableBody>
                 </Table>
               </div>
+
+              <div>
+                <Label className="text-sm">Movimentações de estoque</Label>
+                {viewMovimentacoes.length === 0 ? (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Nenhuma movimentação registrada — esta solicitação ainda não foi separada, então o saldo do estoque não foi baixado.
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Data</TableHead>
+                        <TableHead>Material</TableHead>
+                        <TableHead className="text-right">Qtd</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {viewMovimentacoes.map((mv: any) => (
+                        <TableRow key={mv.id}>
+                          <TableCell>{new Date(mv.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                          <TableCell>{todosMateriais.find((m) => m.id === mv.material_id)?.nome || "—"}</TableCell>
+                          <TableCell className="text-right">{mv.quantidade}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
             </div>
           )}
         </DialogContent>
