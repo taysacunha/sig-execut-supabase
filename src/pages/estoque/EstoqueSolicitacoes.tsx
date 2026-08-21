@@ -543,6 +543,15 @@ export default function EstoqueSolicitacoes() {
   // Marcar como Entregue (separada -> entregue)
   const entregarMutation = useMutation({
     mutationFn: async (sol: Solicitacao) => {
+      // Bloqueia entrega sem separação: sem movimentação o saldo não foi baixado
+      const { count } = await (fromEstoque("estoque_movimentacoes") as any)
+        .select("id", { count: "exact", head: true })
+        .eq("solicitacao_id", sol.id);
+      if (!count || count === 0) {
+        throw new Error(
+          "Esta solicitação não possui movimentação de estoque. Use a ação \"Separar\" antes de entregar, para que a baixa de saldo seja registrada.",
+        );
+      }
       const { error } = await fromEstoque("estoque_solicitacoes")
         .update({ status: "entregue" } as any)
         .eq("id", sol.id);
