@@ -33,6 +33,17 @@ order by s.created_at desc;
 
 Se `movimentacoes = 0` e o status não for `separada`/`entregue` via separação, está confirmada a hipótese 1.
 
+Esse foi o retorno do SQL:  
+| id                                   | solicitante_nome                       | status   | created_at                    | quantidade_solicitada | quantidade_atendida | material                  | movimentacoes |
+
+| ------------------------------------ | -------------------------------------- | -------- | ----------------------------- | --------------------- | ------------------- | ------------------------- | ------------- |
+
+| 1f1b98e2-1ccf-403e-9457-f368651c5d4f | Erika Weruska Gonzaga Fernandes Cirilo | entregue | 2026-08-15 11:42:27.416506+00 | 4                     | 4                   | Resma A4                  | 0             |
+
+| f8852371-4ce9-4328-8cbb-c9e67305be76 | Rejane de Araujo Santos Ferreira       | entregue | 2026-08-14 11:30:56.684169+00 | 4                     | 4                   | Copo descataveis - 180 ml | 0             |
+
+| f8852371-4ce9-4328-8cbb-c9e67305be76 | Rejane de Araujo Santos Ferreira       | entregue | 2026-08-14 11:30:56.684169+00 | 1                     | 1                   | Garrafão de água 20 L     | 0             |
+
 ## Passo 2 — Ajustes na página de Movimentações
 
 - Adicionar coluna **Solicitante** (via `solicitacao_id` → `estoque_solicitacoes.solicitante_nome`, com resolução por `user_profiles` quando o nome estiver salvo como e-mail).
