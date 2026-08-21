@@ -44,6 +44,7 @@ const TIPO_COLORS: Record<string, string> = {
 
 export default function EstoqueMovimentacoes() {
   const [filterTipo, setFilterTipo] = useState<string>("all");
+  const [periodo, setPeriodo] = useState<string>("90");
 
   const { data: materiais = [] } = useQuery({
     queryKey: ["estoque-materiais-all"],
@@ -82,14 +83,30 @@ export default function EstoqueMovimentacoes() {
   });
 
   const { data: movimentacoes = [], isLoading } = useQuery({
-    queryKey: ["estoque-movimentacoes"],
+    queryKey: ["estoque-movimentacoes", periodo],
     queryFn: async () => {
-      const { data, error } = await fromEstoque("estoque_movimentacoes")
+      let query = fromEstoque("estoque_movimentacoes")
         .select("*")
-        .order("created_at", { ascending: false })
-        .limit(500);
+        .order("created_at", { ascending: false });
+      if (periodo !== "all") {
+        const dias = Number(periodo);
+        const desde = new Date();
+        desde.setDate(desde.getDate() - dias);
+        query = query.gte("created_at", desde.toISOString());
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return data as unknown as Movimentacao[];
+    },
+  });
+
+  const { data: solicitacoes = [] } = useQuery({
+    queryKey: ["estoque-solicitacoes-nomes"],
+    queryFn: async () => {
+      const { data, error } = await fromEstoque("estoque_solicitacoes")
+        .select("id, solicitante_nome, solicitante_user_id");
+      if (error) throw error;
+      return data as unknown as { id: string; solicitante_nome: string; solicitante_user_id: string }[];
     },
   });
 
@@ -105,6 +122,15 @@ export default function EstoqueMovimentacoes() {
     if (!id) return "—";
     return profiles.find((p) => p.user_id === id)?.name || "—";
   };
+  const getSolicitanteNome = (solicitacaoId: string | null) => {
+    if (!solicitacaoId) return "—";
+    const sol = solicitacoes.find((s) => s.id === solicitacaoId);
+    if (!sol) return "—";
+    const nome = sol.solicitante_nome || "";
+    if (nome && !nome.includes("@")) return nome;
+    const perfil = profiles.find((p) => p.user_id === sol.solicitante_user_id)?.name;
+    return perfil && perfil.trim().length > 0 ? perfil : nome || "—";
+  };
 
   // Enrich data for table controls
   const enriched = movimentacoes
@@ -115,6 +141,9 @@ export default function EstoqueMovimentacoes() {
       tipo_label: TIPO_LABELS[m.tipo] || m.tipo,
       responsavel_nome: getUserName(m.responsavel_user_id),
       recebedor_nome: getUserName(m.recebido_por_user_id),
+      solicitante_nome: getSolicitanteNome(m.solicitacao_id),
+      origem_nome: getLocalNome(m.local_origem_id),
+      destino_nome: getLocalNome(m.local_destino_id),
     }));
 
   const {
@@ -123,7 +152,7 @@ export default function EstoqueMovimentacoes() {
     paginatedData, filteredData, totalPages,
   } = useTableControls({
     data: enriched,
-    searchField: ["material_nome", "observacoes"],
+    searchField: ["material_nome", "observacoes", "solicitante_nome", "responsavel_nome", "recebedor_nome", "origem_nome", "destino_nome", "tipo_label"],
     defaultItemsPerPage: 25,
   });
 
@@ -133,8 +162,9 @@ export default function EstoqueMovimentacoes() {
       Tipo: m.tipo_label,
       Material: m.material_nome,
       Quantidade: m.quantidade,
-      Origem: getLocalNome(m.local_origem_id),
-      Destino: getLocalNome(m.local_destino_id),
+      Origem: m.origem_nome,
+      Destino: m.destino_nome,
+      Solicitante: m.solicitante_nome,
       Responsável: m.responsavel_nome,
       Recebedor: m.recebedor_nome,
       "Recebido em": m.recebido_em ? new Date(m.recebido_em).toLocaleString("pt-BR") : "—",
@@ -161,7 +191,7 @@ export default function EstoqueMovimentacoes() {
       <Card>
         <CardContent className="pt-4">
           <div className="flex flex-col sm:flex-row gap-3">
-            <TableSearch value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por material ou observação..." />
+            <TableSearch value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por material, solicitante, responsável, local ou observação..." />
             <Select value={filterTipo} onValueChange={setFilterTipo}>
               <SelectTrigger className="sm:max-w-[180px]">
                 <SelectValue />
@@ -171,6 +201,17 @@ export default function EstoqueMovimentacoes() {
                 {Object.entries(TIPO_LABELS).map(([k, v]) => (
                   <SelectItem key={k} value={k}>{v}</SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+            <Select value={periodo} onValueChange={setPeriodo}>
+              <SelectTrigger className="sm:max-w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="30">Últimos 30 dias</SelectItem>
+                <SelectItem value="90">Últimos 90 dias</SelectItem>
+                <SelectItem value="365">Último ano</SelectItem>
+                <SelectItem value="all">Todo o histórico</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -205,6 +246,9 @@ export default function EstoqueMovimentacoes() {
                     </TableHead>
                     <TableHead>Origem</TableHead>
                     <TableHead>Destino</TableHead>
+                    <TableHead>
+                      <SortableHeader label="Solicitante" field="solicitante_nome" currentField={sortField as string} direction={sortDirection} onSort={setSorting as any} />
+                    </TableHead>
                     <TableHead>Responsável</TableHead>
                     <TableHead>Recebedor</TableHead>
                     <TableHead>Observações</TableHead>
@@ -226,8 +270,9 @@ export default function EstoqueMovimentacoes() {
                       </TableCell>
                       <TableCell className="font-medium">{mov.material_nome}</TableCell>
                       <TableCell className="text-right font-mono">{mov.quantidade}</TableCell>
-                      <TableCell className="text-sm">{getLocalNome(mov.local_origem_id)}</TableCell>
-                      <TableCell className="text-sm">{getLocalNome(mov.local_destino_id)}</TableCell>
+                      <TableCell className="text-sm">{mov.origem_nome}</TableCell>
+                      <TableCell className="text-sm">{mov.destino_nome}</TableCell>
+                      <TableCell className="text-sm">{mov.solicitante_nome}</TableCell>
                       <TableCell className="text-sm">{mov.responsavel_nome}</TableCell>
                       <TableCell className="text-sm">
                         {mov.recebedor_nome}

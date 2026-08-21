@@ -299,6 +299,20 @@ export default function EstoqueSolicitacoes() {
     enabled: !!viewDialog?.id,
   });
 
+  // Movimentações geradas pela solicitação (só existem após a etapa "Separar")
+  const { data: viewMovimentacoes = [] } = useQuery({
+    queryKey: ["estoque-solicitacao-movimentacoes", viewDialog?.id],
+    enabled: !!viewDialog?.id,
+    queryFn: async () => {
+      const { data, error } = await fromEstoque("estoque_movimentacoes")
+        .select("id, material_id, tipo, quantidade, created_at")
+        .eq("solicitacao_id", viewDialog!.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data as any[]) || [];
+    },
+  });
+
   const createMutation = useMutation({
     mutationFn: async () => {
       if (!user?.id) throw new Error("Usuário não autenticado");
@@ -529,6 +543,15 @@ export default function EstoqueSolicitacoes() {
   // Marcar como Entregue (separada -> entregue)
   const entregarMutation = useMutation({
     mutationFn: async (sol: Solicitacao) => {
+      // Bloqueia entrega sem separação: sem movimentação o saldo não foi baixado
+      const { count } = await (fromEstoque("estoque_movimentacoes") as any)
+        .select("id", { count: "exact", head: true })
+        .eq("solicitacao_id", sol.id);
+      if (!count || count === 0) {
+        throw new Error(
+          "Esta solicitação não possui movimentação de estoque. Use a ação \"Separar\" antes de entregar, para que a baixa de saldo seja registrada.",
+        );
+      }
       const { error } = await fromEstoque("estoque_solicitacoes")
         .update({ status: "entregue" } as any)
         .eq("id", sol.id);
@@ -545,7 +568,7 @@ export default function EstoqueSolicitacoes() {
       queryClient.invalidateQueries({ queryKey: ["estoque-solicitacoes"] });
       toast.success("Marcada como entregue!");
     },
-    onError: () => toast.error("Erro ao marcar como entregue"),
+    onError: (err: any) => toast.error(err?.message || "Erro ao marcar como entregue"),
   });
 
   // Confirmar recebimento (somente solicitante): preenche recebido_por/recebido_em
@@ -868,6 +891,34 @@ export default function EstoqueSolicitacoes() {
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+
+              <div>
+                <Label className="text-sm">Movimentações de estoque</Label>
+                {viewMovimentacoes.length === 0 ? (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Nenhuma movimentação registrada — esta solicitação ainda não foi separada, então o saldo do estoque não foi baixado.
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Data</TableHead>
+                        <TableHead>Material</TableHead>
+                        <TableHead className="text-right">Qtd</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {viewMovimentacoes.map((mv: any) => (
+                        <TableRow key={mv.id}>
+                          <TableCell>{new Date(mv.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                          <TableCell>{todosMateriais.find((m) => m.id === mv.material_id)?.nome || "—"}</TableCell>
+                          <TableCell className="text-right">{mv.quantidade}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </div>
             </div>
           )}
