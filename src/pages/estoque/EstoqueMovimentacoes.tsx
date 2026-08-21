@@ -44,6 +44,7 @@ const TIPO_COLORS: Record<string, string> = {
 
 export default function EstoqueMovimentacoes() {
   const [filterTipo, setFilterTipo] = useState<string>("all");
+  const [periodo, setPeriodo] = useState<string>("90");
 
   const { data: materiais = [] } = useQuery({
     queryKey: ["estoque-materiais-all"],
