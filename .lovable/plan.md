@@ -1,60 +1,51 @@
-# "+ Entrada" invisível para supervisor — o que o diagnóstico mostrou
+# Entender e corrigir: solicitações que não aparecem em Movimentações
 
-O SQL confirmou o cenário ideal para a Taysa: `role = supervisor` e `system_access.estoque = view_edit`.
-E o código já libera esse caso em `src/pages/estoque/EstoqueSaldos.tsx` (linha 171):
+## Como as duas páginas se relacionam hoje (verificado no código)
 
-```text
-canEditEstoque = canEdit("estoque") && (isAdminOrSuper || isSupervisor)
-```
+- **Solicitações** grava apenas em `estoque_solicitacoes` + `estoque_solicitacao_itens`. Criar, aprovar, entregar e confirmar recebimento **não geram nenhuma linha** em `estoque_movimentacoes`.
+- **Movimentação de saída só nasce em um ponto**: quando o gestor executa a ação **Separar** (status `aprovada` → `separada`). Só aí o sistema baixa o saldo e insere a movimentação com `tipo = saida`, ligada à solicitação.
+- Na tabela de Movimentações, a coluna **Responsável** é quem *separou* (o gestor), não quem solicitou. O nome do solicitante só aparece dentro do texto de **Observações** ("Separação para solicitação de X").
+- A busca da página de Movimentações procura **apenas** em `material_nome` e `observacoes`, e a lista carrega somente as **500 movimentações mais recentes**.
 
-Logo, nem o perfil nem a permissão são o bloqueio. Sobram duas explicações, e não consigo separá-las daqui
-(este projeto usa Supabase próprio, então não tenho como abrir a página autenticada em teste):
+## Por que a solicitação da Érika (Resma A4, 15/08) não aparece
 
-1. **A versão testada é a publicada.** A liberação do supervisor entrou no código mas o app em
-   `sig-execut.lovable.app` só passa a ter essa regra depois de publicar de novo. No preview ela já vale.
-2. **Cache de permissões no navegador.** `useSystemAccess` guarda as permissões por 5 minutos com
-   `refetchOnMount: false` e `refetchOnWindowFocus: false`. Se a permissão do Estoque foi alterada com a
-   sessão aberta, a tela continua usando o valor antigo até um recarregamento completo.
+Duas explicações possíveis, ambas coerentes com o código acima:
 
-## Verificação rápida (sem código)
+1. **A solicitação dela nunca foi separada** — ficou em `pendente`/`aprovada`, ou foi entregue "por fora" e apenas marcada como entregue. Sem a etapa Separar, não existe movimentação. É a hipótese mais provável, e explica por que só aparecem os pedidos de Ruan, Diego e Rejane (os que passaram pelo fluxo completo).
+2. **A movimentação existe mas caiu fora do recorte** — o limite de 500 registros mais recentes pode ter cortado 15/08.
 
-Abrir `/estoque/saldos` **no preview**, com Ctrl+Shift+R (recarga forte). Se o botão aparecer ali, a causa é
-a nº 1 e basta publicar. Se não aparecer nem no preview, seguimos para as correções abaixo.
+Nada indica filtro por usuário: a RLS de `estoque_movimentacoes` libera leitura para todo usuário com acesso ao módulo estoque, sem distinção de solicitante.
 
-## Correções propostas
+## Passo 1 — Confirmar a causa
 
-1. **Permissões sempre frescas ao entrar na página**
-   `src/hooks/useSystemAccess.ts`: trocar `refetchOnMount: false` por `refetchOnMount: "always"` e manter um
-   `staleTime` curto (30s). Assim, mudança de perfil/permissão reflete ao navegar, sem precisar sair e entrar.
-
-2. **Invalidar o cache quando o admin muda perfil ou acessos**
-   `src/pages/UserManagement.tsx`: após salvar perfil (`set_user_role`) ou acessos de sistema, invalidar as
-   queries `["system-access"]` para que a alteração valha imediatamente para quem está logado no mesmo browser.
-
-3. **Explicar em vez de esconder**
-   `src/pages/estoque/EstoqueSaldos.tsx`: quando o usuário tem acesso ao Estoque mas `canEditEstoque` é falso,
-   mostrar uma faixa curta ("Seu acesso ao Estoque é somente leitura" / "Perfil sem permissão de movimentação")
-   em vez de simplesmente omitir os botões. Isso evita esse tipo de investigação no futuro.
-
-4. **Painel de diagnóstico do próprio usuário (opcional)**
-   Em `src/pages/Profile.tsx`, listar perfil efetivo e permissão por sistema, direto das mesmas fontes que a UI
-   usa. Fica fácil comparar com o banco em 5 segundos.
-
-## Lado do banco
-
-Confirmar que `db/migrations/20260815120000_estoque_saldos_supervisor.sql` foi executada — senão o botão
-aparece, mas a gravação falha por RLS:
+Rodar no SQL Editor:
 
 ```sql
-select polname, polcmd from pg_policy
-where polrelid = 'public.estoque_saldos'::regclass;
+select s.id, s.solicitante_nome, s.status, s.created_at,
+       i.quantidade_solicitada, i.quantidade_atendida, m.nome as material,
+       (select count(*) from estoque_movimentacoes mv where mv.solicitacao_id = s.id) as movimentacoes
+from estoque_solicitacoes s
+join estoque_solicitacao_itens i on i.solicitacao_id = s.id
+join estoque_materiais m on m.id = i.material_id
+where s.created_at::date between '2026-08-14' and '2026-08-16'
+order by s.created_at desc;
 ```
 
-Devem constar "Gestao estoque can insert/update/delete estoque_saldos".
+Se `movimentacoes = 0` e o status não for `separada`/`entregue` via separação, está confirmada a hipótese 1.
 
-## Arquivos afetados
+## Passo 2 — Ajustes na página de Movimentações
 
-- `src/hooks/useSystemAccess.ts`
-- `src/pages/UserManagement.tsx`
-- `src/pages/estoque/EstoqueSaldos.tsx`
-- `src/pages/Profile.tsx` (item opcional)
+- Adicionar coluna **Solicitante** (via `solicitacao_id` → `estoque_solicitacoes.solicitante_nome`, com resolução por `user_profiles` quando o nome estiver salvo como e-mail).
+- Incluir solicitante, local de origem/destino e responsável no campo de busca (sem acento).
+- Trocar o `limit(500)` por filtro de período (padrão: últimos 90 dias) com opção "todo o histórico", para nada sumir silenciosamente.
+
+## Passo 3 — Tornar o vínculo visível na página de Solicitações
+
+- No diálogo de detalhes da solicitação, mostrar as movimentações geradas por ela (ou o aviso "Nenhuma movimentação registrada — esta solicitação ainda não foi separada").
+- Impedir marcar como **Entregue** uma solicitação que nunca foi separada, ou exibir alerta de que o saldo não foi baixado.
+
+## Detalhes técnicos
+
+- `src/pages/estoque/EstoqueMovimentacoes.tsx`: nova query de solicitações, enriquecimento das linhas, colunas/busca/filtro de período.
+- `src/pages/estoque/EstoqueSolicitacoes.tsx`: bloco de movimentações no diálogo de visualização e guarda na ação Entregue.
+- Sem alterações de banco de dados nem de RLS.
