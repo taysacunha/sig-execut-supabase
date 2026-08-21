@@ -568,7 +568,7 @@ export default function EstoqueSolicitacoes() {
       queryClient.invalidateQueries({ queryKey: ["estoque-solicitacoes"] });
       toast.success("Marcada como entregue!");
     },
-    onError: () => toast.error("Erro ao marcar como entregue"),
+    onError: (err: any) => toast.error(err?.message || "Erro ao marcar como entregue"),
   });
 
   // Confirmar recebimento (somente solicitante): preenche recebido_por/recebido_em
