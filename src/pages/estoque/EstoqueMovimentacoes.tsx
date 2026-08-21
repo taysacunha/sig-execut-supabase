@@ -162,8 +162,9 @@ export default function EstoqueMovimentacoes() {
       Tipo: m.tipo_label,
       Material: m.material_nome,
       Quantidade: m.quantidade,
-      Origem: getLocalNome(m.local_origem_id),
-      Destino: getLocalNome(m.local_destino_id),
+      Origem: m.origem_nome,
+      Destino: m.destino_nome,
+      Solicitante: m.solicitante_nome,
       Responsável: m.responsavel_nome,
       Recebedor: m.recebedor_nome,
       "Recebido em": m.recebido_em ? new Date(m.recebido_em).toLocaleString("pt-BR") : "—",
@@ -190,7 +191,7 @@ export default function EstoqueMovimentacoes() {
       <Card>
         <CardContent className="pt-4">
           <div className="flex flex-col sm:flex-row gap-3">
-            <TableSearch value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por material ou observação..." />
+            <TableSearch value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por material, solicitante, responsável, local ou observação..." />
             <Select value={filterTipo} onValueChange={setFilterTipo}>
               <SelectTrigger className="sm:max-w-[180px]">
                 <SelectValue />
@@ -200,6 +201,17 @@ export default function EstoqueMovimentacoes() {
                 {Object.entries(TIPO_LABELS).map(([k, v]) => (
                   <SelectItem key={k} value={k}>{v}</SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+            <Select value={periodo} onValueChange={setPeriodo}>
+              <SelectTrigger className="sm:max-w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="30">Últimos 30 dias</SelectItem>
+                <SelectItem value="90">Últimos 90 dias</SelectItem>
+                <SelectItem value="365">Último ano</SelectItem>
+                <SelectItem value="all">Todo o histórico</SelectItem>
               </SelectContent>
             </Select>
           </div>
