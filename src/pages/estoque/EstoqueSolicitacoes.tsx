@@ -299,6 +299,20 @@ export default function EstoqueSolicitacoes() {
     enabled: !!viewDialog?.id,
   });
 
+  // Movimentações geradas pela solicitação (só existem após a etapa "Separar")
+  const { data: viewMovimentacoes = [] } = useQuery({
+    queryKey: ["estoque-solicitacao-movimentacoes", viewDialog?.id],
+    enabled: !!viewDialog?.id,
+    queryFn: async () => {
+      const { data, error } = await fromEstoque("estoque_movimentacoes")
+        .select("id, material_id, tipo, quantidade, created_at")
+        .eq("solicitacao_id", viewDialog!.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data as any[]) || [];
+    },
+  });
+
   const createMutation = useMutation({
     mutationFn: async () => {
       if (!user?.id) throw new Error("Usuário não autenticado");
