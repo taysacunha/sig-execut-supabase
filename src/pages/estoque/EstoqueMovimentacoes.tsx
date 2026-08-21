@@ -270,8 +270,9 @@ export default function EstoqueMovimentacoes() {
                       </TableCell>
                       <TableCell className="font-medium">{mov.material_nome}</TableCell>
                       <TableCell className="text-right font-mono">{mov.quantidade}</TableCell>
-                      <TableCell className="text-sm">{getLocalNome(mov.local_origem_id)}</TableCell>
-                      <TableCell className="text-sm">{getLocalNome(mov.local_destino_id)}</TableCell>
+                      <TableCell className="text-sm">{mov.origem_nome}</TableCell>
+                      <TableCell className="text-sm">{mov.destino_nome}</TableCell>
+                      <TableCell className="text-sm">{mov.solicitante_nome}</TableCell>
                       <TableCell className="text-sm">{mov.responsavel_nome}</TableCell>
                       <TableCell className="text-sm">
                         {mov.recebedor_nome}
