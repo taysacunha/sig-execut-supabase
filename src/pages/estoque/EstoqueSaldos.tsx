@@ -167,8 +167,9 @@ export default function EstoqueSaldos() {
   const { canEdit, user } = useSystemAccess();
   const { isSuperAdmin, isAdmin, isSupervisor } = useUserRole();
   const isAdminOrSuper = isSuperAdmin || isAdmin;
-  // Supervisor também dá entrada/ajuste/transferência de saldos (RLS alinhada).
-  const canEditEstoque = canEdit("estoque") && (isAdminOrSuper || isSupervisor);
+  // Movimentação de saldos depende apenas da permissão de edição no sistema Estoque (RLS alinhada).
+  const canEditEstoque = canEdit("estoque");
+
 
   const [entradaDialog, setEntradaDialog] = useState(false);
   const [ajusteDialog, setAjusteDialog] = useState(false);
