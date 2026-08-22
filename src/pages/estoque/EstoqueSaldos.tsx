@@ -165,8 +165,6 @@ function SaldosTable({
 export default function EstoqueSaldos() {
   const queryClient = useQueryClient();
   const { canEdit, user } = useSystemAccess();
-  const { isSuperAdmin, isAdmin, isSupervisor } = useUserRole();
-  const isAdminOrSuper = isSuperAdmin || isAdmin;
   // Movimentação de saldos depende apenas da permissão de edição no sistema Estoque (RLS alinhada).
   const canEditEstoque = canEdit("estoque");
 
