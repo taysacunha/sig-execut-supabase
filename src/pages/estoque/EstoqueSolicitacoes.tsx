@@ -550,13 +550,11 @@ export default function EstoqueSolicitacoes() {
   // Marcar como Entregue (separada -> entregue)
   const entregarMutation = useMutation({
     mutationFn: async (sol: Solicitacao) => {
-      // Bloqueia entrega sem separação: sem movimentação o saldo não foi baixado
-      const { count } = await (fromEstoque("estoque_movimentacoes") as any)
-        .select("id", { count: "exact", head: true })
-        .eq("solicitacao_id", sol.id);
-      if (!count || count === 0) {
+      // Só permite entregar se a solicitação já estiver separada.
+      // A baixa de saldo ocorre na etapa "Separar"; o status separada é o gatilho de liberação.
+      if (sol.status !== "separada") {
         throw new Error(
-          "Esta solicitação não possui movimentação de estoque. Use a ação \"Separar\" antes de entregar, para que a baixa de saldo seja registrada.",
+          "Apenas solicitações com status \"Separada\" podem ser entregues. Use a ação \"Separar\" primeiro.",
         );
       }
       const { error } = await fromEstoque("estoque_solicitacoes")
