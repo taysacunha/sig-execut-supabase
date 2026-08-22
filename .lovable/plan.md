@@ -7,11 +7,9 @@ Na última rodada de ajustes (para liberar o Ruan como Supervisor), as permissõ
 - **Banco (RLS)** — a migration `20260815120000_estoque_saldos_supervisor.sql` substituiu as políticas antigas de `estoque_saldos` e `estoque_movimentacoes` (que aceitavam qualquer usuário com edição no sistema estoque) por políticas que exigem **admin, super_admin ou supervisor** + edição em estoque.
 - **Tela** — em `src/pages/estoque/EstoqueSaldos.tsx` os botões passaram a depender de `canEdit("estoque") && (isAdmin || isSuperAdmin || isSupervisor)`.
 
-Ou seja: quem tem permissão de edição em Estoque mas **não** é admin/supervisor (caso da Rejane, que é gestora operacional do estoque) perdeu os botões **+ Entrada**, **Ajuste**, **Saída** e a confirmação dessas movimentações.
+Ou seja: quem tem permissão de edição em Estoque mas **não** é admin/supervisor perdeu os botões **+ Entrada**, **Ajuste** e **Saída**. É o caso da Rejane, que atua como apoio (perfil operacional, não administrativo) e é quem opera as movimentações no dia a dia.
 
-Observação: ainda não consegui confirmar no banco qual é exatamente o perfil da Rejane (a consulta ao banco está bloqueada por preferência de aprovação). O primeiro passo do plano é confirmar isso antes de aplicar a correção.
-
-## Passo 1 — Confirmar o perfil da Rejane
+## Passo 1 — Confirmar o vínculo dela como gestora de estoque
 
 ```sql
 select up.name, up.email, ur.role, sa.permission_type,
@@ -21,6 +19,9 @@ left join user_roles ur on ur.user_id = up.user_id
 left join system_access sa on sa.user_id = up.user_id and sa.system_name = 'estoque'
 where up.name ilike '%rejane%';
 ```
+
+Se `e_gestor_estoque` for falso, cadastrá-la como gestora da unidade dela na tela **Gestores** — assim ela ganha acesso sem precisar virar administradora nem supervisora.
+
 
 ## Passo 2 — Ampliar a regra de quem pode movimentar estoque
 
