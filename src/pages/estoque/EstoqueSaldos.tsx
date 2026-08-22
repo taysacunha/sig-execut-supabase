@@ -15,7 +15,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSystemAccess } from "@/hooks/useSystemAccess";
-import { useUserRole } from "@/hooks/useUserRole";
 import { useTableControls } from "@/hooks/useTableControls";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
 import { verificarEstoqueBaixo } from "@/hooks/useEstoqueNotificacoes";
