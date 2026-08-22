@@ -478,32 +478,38 @@ export default function EstoqueSolicitacoes() {
 
       for (const it of validos) {
         // Re-checa saldo atual
-        const { data: saldo } = await fromEstoque("estoque_saldos")
+        const { data: saldo, error: saldoErr } = await fromEstoque("estoque_saldos")
           .select("id, quantidade")
           .eq("material_id", it.material_id)
           .eq("local_armazenamento_id", it.local_armazenamento_id)
           .maybeSingle();
+        if (saldoErr) throw saldoErr;
         const saldoAtual = (saldo as any)?.quantidade || 0;
         if (saldoAtual < it.quantidade_atendida) {
           throw new Error(`Saldo insuficiente para ${it.material_nome} (disponível: ${saldoAtual})`);
         }
         const novoSaldo = saldoAtual - it.quantidade_atendida;
         if (novoSaldo === 0) {
-          await fromEstoque("estoque_saldos").delete().eq("id", (saldo as any).id);
+          const { error: deleteErr } = await fromEstoque("estoque_saldos").delete().eq("id", (saldo as any).id);
+          if (deleteErr) throw deleteErr;
         } else {
-          await fromEstoque("estoque_saldos").update({ quantidade: novoSaldo } as any).eq("id", (saldo as any).id);
+          const { error: updateSaldoErr } = await fromEstoque("estoque_saldos")
+            .update({ quantidade: novoSaldo } as any)
+            .eq("id", (saldo as any).id);
+          if (updateSaldoErr) throw updateSaldoErr;
         }
 
         // Atualiza item da solicitação
-        await fromEstoque("estoque_solicitacao_itens")
+        const { error: updateItemErr } = await fromEstoque("estoque_solicitacao_itens")
           .update({
             quantidade_atendida: it.quantidade_atendida,
             local_armazenamento_id: it.local_armazenamento_id,
           } as any)
           .eq("id", it.id);
+        if (updateItemErr) throw updateItemErr;
 
         // Cria movimentação de saída
-        await fromEstoque("estoque_movimentacoes").insert({
+        const { error: movErr } = await fromEstoque("estoque_movimentacoes").insert({
           material_id: it.material_id,
           tipo: "saida",
           quantidade: it.quantidade_atendida,
@@ -512,6 +518,7 @@ export default function EstoqueSolicitacoes() {
           responsavel_user_id: user?.id,
           observacoes: `Separação para solicitação de ${separarSol.solicitante_nome}`,
         } as any);
+        if (movErr) throw movErr;
         await verificarEstoqueBaixo(it.material_id, it.local_armazenamento_id);
       }
 
@@ -543,13 +550,11 @@ export default function EstoqueSolicitacoes() {
   // Marcar como Entregue (separada -> entregue)
   const entregarMutation = useMutation({
     mutationFn: async (sol: Solicitacao) => {
-      // Bloqueia entrega sem separação: sem movimentação o saldo não foi baixado
-      const { count } = await (fromEstoque("estoque_movimentacoes") as any)
-        .select("id", { count: "exact", head: true })
-        .eq("solicitacao_id", sol.id);
-      if (!count || count === 0) {
+      // Só permite entregar se a solicitação já estiver separada.
+      // A baixa de saldo ocorre na etapa "Separar"; o status separada é o gatilho de liberação.
+      if (sol.status !== "separada") {
         throw new Error(
-          "Esta solicitação não possui movimentação de estoque. Use a ação \"Separar\" antes de entregar, para que a baixa de saldo seja registrada.",
+          "Apenas solicitações com status \"Separada\" podem ser entregues. Use a ação \"Separar\" primeiro.",
         );
       }
       const { error } = await fromEstoque("estoque_solicitacoes")
@@ -897,7 +902,9 @@ export default function EstoqueSolicitacoes() {
                 <Label className="text-sm">Movimentações de estoque</Label>
                 {viewMovimentacoes.length === 0 ? (
                   <p className="text-sm text-muted-foreground mt-1">
-                    Nenhuma movimentação registrada — esta solicitação ainda não foi separada, então o saldo do estoque não foi baixado.
+                    {viewDialog.status === "separada"
+                      ? "Nenhuma movimentação de saída vinculada a esta solicitação. O status está como separado, mas a baixa de saldo não foi registrada no momento."
+                      : "Nenhuma movimentação registrada — esta solicitação ainda não foi separada, então o saldo do estoque não foi baixado."}
                   </p>
                 ) : (
                   <Table>
