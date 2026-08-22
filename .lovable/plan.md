@@ -9,46 +9,40 @@ Na última rodada de ajustes (para liberar o Ruan como Supervisor), as permissõ
 
 Ou seja: quem tem permissão de edição em Estoque mas **não** é admin/supervisor perdeu os botões **+ Entrada**, **Ajuste** e **Saída**. É o caso da Rejane, que atua como apoio (perfil operacional, não administrativo) e é quem opera as movimentações no dia a dia.
 
-## Passo 1 — Confirmar o vínculo dela como gestora de estoque
+## Esclarecendo: cadastrar em "Gestores" não abre páginas administrativas
 
-```sql
-select up.name, up.email, ur.role, sa.permission_type,
-       exists (select 1 from estoque_gestores g where g.user_id = up.user_id) as e_gestor_estoque
-from user_profiles up
-left join user_roles ur on ur.user_id = up.user_id
-left join system_access sa on sa.user_id = up.user_id and sa.system_name = 'estoque'
-where up.name ilike '%rejane%';
-```
+Verificado no código (`src/components/EstoqueSidebar.tsx`): os itens **Gestores e Usuários**, **Usuários** e **Auditoria** só aparecem para quem tem perfil **super_admin ou admin**. O cadastro na tabela `estoque_gestores` é apenas um vínculo operacional (gestor de estoque de uma unidade, usado para notificações e fluxo de solicitações) — ele **não** muda o perfil da Rejane nem libera essas telas. Ela continuaria vendo exatamente o mesmo menu de hoje.
 
-Se `e_gestor_estoque` for falso, cadastrá-la como gestora da unidade dela na tela **Gestores** — assim ela ganha acesso sem precisar virar administradora nem supervisora.
+Ainda assim, para não depender desse cadastro, a correção principal é outra: devolver a permissão pelo critério que ela já tinha antes.
 
+## Passo 1 — Restaurar a regra anterior, sem tirar o que o Ruan ganhou
 
-## Passo 2 — Ampliar a regra de quem pode movimentar estoque
+Antes da mudança, quem tinha **permissão de edição no sistema Estoque** (`system_access = view_edit`) podia movimentar saldos — era esse o caso da Rejane (perfil apoio/colaborador). A migration nova estreitou isso para admin/supervisor.
 
-Trocar o critério "admin ou supervisor" por um critério que também inclua **gestores de estoque** (usuários cadastrados em `estoque_gestores`), mantendo a exigência de permissão de edição no sistema estoque:
+Nova migration recriando as políticas de `INSERT`/`UPDATE`/`DELETE` de `estoque_saldos` e `estoque_movimentacoes` com o critério:
 
 ```text
-pode movimentar = can_edit_system(uid,'estoque')
-                  AND ( admin OR super_admin OR supervisor OR gestor de estoque )
+pode movimentar = can_edit_system(uid, 'estoque')
 ```
 
-- Nova função `public.is_gestor_estoque(uid)` (SECURITY DEFINER, STABLE) que verifica presença em `estoque_gestores`.
-- Nova migration recriando as políticas de `INSERT`/`UPDATE`/`DELETE` de `estoque_saldos` e `estoque_movimentacoes` com essa condição — sem tirar nada do que o Ruan (supervisor) ganhou.
+Ou seja: volta a valer a permissão por sistema (concedida individualmente na tela de Usuários), que continua cobrindo o Ruan (supervisor com edição) e a Rejane, e continua barrando quem só tem "somente visualizar" ou nenhum acesso ao módulo.
 
-Se o Passo 1 mostrar que a Rejane **não** está em `estoque_gestores`, a alternativa é cadastrá-la como gestora da unidade dela (tela Gestores) — sem afrouxar a regra para todos os colaboradores.
 
-## Passo 3 — Alinhar a tela
 
-Em `EstoqueSaldos.tsx`, criar o mesmo critério no frontend (incluindo "é gestor de estoque", via consulta a `estoque_gestores` do usuário logado) para que os botões **+ Entrada**, **Ajuste** e **Saída** voltem a aparecer para ela — evitando o caso de o banco permitir e a tela esconder.
+## Passo 2 — Alinhar a tela
 
-## Passo 4 — Validar
+Em `EstoqueSaldos.tsx`, remover a exigência extra de perfil: os botões **+ Entrada**, **Ajuste** e **Saída** voltam a depender apenas de `canEdit("estoque")`, igual ao banco — assim ela vê e consegue salvar.
 
-- Rejane: abrir Saldos, registrar uma entrada e um ajuste, confirmar que salva sem erro de permissão.
+## Passo 3 — Validar
+
+- Rejane: abrir Saldos, registrar entrada, ajuste e saída, confirmar que salva sem erro de permissão.
 - Ruan (supervisor) e admins: continuar funcionando como hoje.
-- Colaborador comum sem edição: continuar sem os botões.
+- Usuário com "somente visualizar" em Estoque: continuar sem os botões.
+- Menu da Rejane: continua sem Gestores/Usuários/Auditoria (nada muda de perfil).
 
 ## Detalhes técnicos
 
-- Migration nova em `db/migrations/` (não editar a `20260815120000`), com `DROP POLICY IF EXISTS` + `CREATE POLICY` para as seis políticas afetadas.
-- Frontend: hook simples `useIsGestorEstoque()` (React Query) usado em `EstoqueSaldos.tsx`.
+- Migration nova em `db/migrations/` (sem editar a `20260815120000`), com `DROP POLICY IF EXISTS` + `CREATE POLICY` para as seis políticas de `estoque_saldos` e `estoque_movimentacoes`, usando apenas `public.can_edit_system(auth.uid(), 'estoque')`.
+- Frontend: `EstoqueSaldos.tsx` volta a usar `canEditEstoque = canEdit("estoque")`.
+
 - A trava recente de "não marcar como Entregue sem Separar" permanece — ela não bloqueia entrada/ajuste/saída; se a Rejane também estiver esbarrando nela, avise que trato num passo à parte.
