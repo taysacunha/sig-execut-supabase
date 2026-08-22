@@ -902,7 +902,9 @@ export default function EstoqueSolicitacoes() {
                 <Label className="text-sm">Movimentações de estoque</Label>
                 {viewMovimentacoes.length === 0 ? (
                   <p className="text-sm text-muted-foreground mt-1">
-                    Nenhuma movimentação registrada — esta solicitação ainda não foi separada, então o saldo do estoque não foi baixado.
+                    {viewDialog.status === "separada"
+                      ? "Nenhuma movimentação de saída vinculada a esta solicitação. O status está como separado, mas a baixa de saldo não foi registrada no momento."
+                      : "Nenhuma movimentação registrada — esta solicitação ainda não foi separada, então o saldo do estoque não foi baixado."}
                   </p>
                 ) : (
                   <Table>
