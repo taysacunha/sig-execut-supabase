@@ -1,13 +1,14 @@
-# Entregar bloqueado: liberar por status e acabar com a falha silenciosa na separação
+# Liberar "Entregar" para solicitações já separadas e evitar falha silenciosa
 
 ## O que já está confirmado
 
-- **As políticas do banco estão corretas.** O `pg_policies` mostra `estoque_saldos` e `estoque_movimentacoes` com insert/update/delete liberados por `can_edit_system(auth.uid(), 'estoque')`. Nada a rodar de novo no SQL Editor — a migration `20260822120000` já está aplicada.
-- **Mesmo assim, todas as solicitações com status `separada` têm 0 movimentações**, inclusive as de hoje (11:10, 11:34, 13:06). Elas foram separadas **antes** de você aplicar a migration, quando a regra antiga (`20260815120000`, só admin/supervisor) ainda recusava a gravação para a Rejane.
-- A recusa não apareceu na tela porque o código de separação **não checa o erro** de cada gravação. O Supabase não lança exceção quando o banco recusa por RLS — devolve `{ error }`, que está sendo ignorado em `separarMutation`. Por isso o status virou `separada`, o toast disse "baixa de saldo registrada", e nada foi gravado.
-- A mensagem ao clicar em **Entregar** é só a consequência: a trava exige movimentação vinculada, e esses pedidos não têm.
+- **As políticas do banco estão corretas.** O `pg_policies` mostra `estoque_saldos` e `estoque_movimentacoes` com insert/update/delete liberados por `can_edit_system(auth.uid(), 'estoque')`. Não é preciso rodar a migration de novo.
+- **Os pedidos novos já funcionam**, como você disse. A migration de permissão já está em vigor.
+- **Os pedidos antigos ficaram inconsistentes:** foram marcados como `separada` sem ter gravada a movimentação de saída, porque a Rejane foi recusada pela RLS anterior e o código de separação não exibia o erro. Por isso hoje existem 8 pedidos com `status = 'separada'` e `movs = 0`.
 
-Você mencionou que "os novos pedidos estão dando certo" — coerente: depois da migration, a gravação passou a ser aceita.
+## Causa real
+
+A ação **Separar** grava o status, mas não checa o erro das gravações anteriores (saldo, item e movimentação). Se alguma falhar, o status vira `separada` mesmo assim. A ação **Entregar** depois exige uma movimentação vinculada, e como ela não existe, bloqueia.
 
 ## Passo 1 — Liberar a entrega pelo status
 
@@ -17,9 +18,12 @@ Trocar o critério da trava em `entregarMutation` (`src/pages/estoque/EstoqueSol
 bloquear entrega  =  status da solicitação NÃO é "separada"
 ```
 
-Pedidos em `pendente`/`aprovada` continuam bloqueados com a orientação de usar **Separar** primeiro. Os já marcados como `separada` — os 8 da lista — passam a poder ser entregues normalmente, que é o comportamento que você espera.
+- Pedidos em `pendente` ou `aprovada` continuam bloqueados com orientação de usar **Separar** primeiro.
+- Pedidos já em `separada` — novos e os 8 antigos — passam a poder ser entregues.
 
-## Passo 2 — Nunca mais falhar em silêncio
+**Resultado:** a mensagem de erro que a Rejane está vendo some para sempre. Novos pedidos e os antigos já marcados como separados passam a permitir entrega.
+
+## Passo 2 — Nunca mais falhar em silêncio na separação
 
 Em `separarMutation`, verificar o `error` de **todas** as gravações e abortar antes de mudar o status:
 
@@ -27,15 +31,29 @@ Em `separarMutation`, verificar o `error` de **todas** as gravações e abortar 
 - `update` em `estoque_solicitacao_itens` (quantidade atendida e local)
 - `insert` em `estoque_movimentacoes` (saída)
 
-Se qualquer uma falhar, o fluxo para com a mensagem real do banco e o pedido **não** fica como "Separada". Mesma checagem nas demais ações que gravam (aprovar, entregar, confirmar recebimento).
+Se qualquer uma falhar, o fluxo para com a mensagem real do banco e o pedido **não** fica como "Separada".
 
-## Passo 3 — Ajustar o aviso no diálogo de detalhes
+Aplicar a mesma checagem nas demais ações que gravam no banco (aprovar, entregar, confirmar recebimento), para padronizar o tratamento de erro.
 
-Quando o pedido estiver `separada` sem movimentação vinculada, trocar o texto atual (que afirma que o pedido "ainda não foi separado") por um aviso neutro: separação registrada sem movimentação vinculada — a baixa de saldo não consta para este pedido.
+## Passo 3 — Ajustar o aviso no diálogo de detalhes (só para os antigos)
 
-## Passo 4 — Regularizar o saldo dos 8 pedidos
+A mensagem de "Nenhuma movimentação registrada" só aparecerá nos 8 pedidos antigos. Para novos pedidos, depois do Passo 2, a movimentação será gravada normalmente, então o aviso não aparece.
 
-Como a baixa não foi gravada, o saldo em tela está maior que o físico desses itens. Levantamento:
+Para os antigos, trocar o texto atual (que afirma que o pedido "ainda não foi separado") por algo neutro:
+
+> "Nenhuma movimentação de saída vinculada a esta solicitação. O status está como separado, mas a baixa de saldo não foi registrada no momento."
+
+Assim ninguém pensa que o pedido ainda precisa ser separado.
+
+## Passo 4 — Corrigir os 8 pedidos antigos (opcional, recomendado)
+
+Como a baixa de saldo não foi gravada para os antigos, o estoque em tela está maior que o real. Se quiser regularizar, posso montar um script que:
+
+- Leia os itens de `estoque_solicitacao_itens` para cada um dos 8 pedidos;
+- Insira a movimentação de saída faltante em `estoque_movimentacoes`;
+- Desconte a quantidade do saldo correspondente em `estoque_saldos`.
+
+Antes de rodar, você pode validar as quantidades com:
 
 ```sql
 select s.id, s.solicitante_nome, s.created_at, m.nome as material,
@@ -49,18 +67,19 @@ where s.status in ('separada','entregue')
 order by s.created_at desc;
 ```
 
-Com esse retorno, dá para regularizar de duas formas — me diga qual prefere depois de ver a lista:
-
-a) **Manual**: ajustar cada material pela tela de **Saldos** (ação Ajuste), o que já deixa a movimentação registrada com histórico.
-b) **Em lote**: script que insere as movimentações de saída faltantes e desconta os saldos correspondentes, usando `quantidade_atendida` e `local_armazenamento_id` de cada item.
+Se preferir, também dá para ajustar manualmente pela tela de **Saldos** em vez de rodar um script.
 
 ## Passo 5 — Validar
 
-- Rejane abre um pedido antigo com status **Separada** → **Entregar** funciona.
+- Rejane abre um pedido antigo com status **Separada** → **Entregar** funciona sem erro.
 - Novo pedido: Aprovar → Separar → confere que a movimentação aparece em Movimentações e o saldo baixa → Entregar.
 - Um pedido em **Aprovada** continua sem permitir entrega direta.
 
 ## Detalhes técnicos
 
-- Só frontend: `src/pages/estoque/EstoqueSolicitacoes.tsx` — trava de entrega por `sol.status`, checagem de `error` em todas as escritas das mutations, texto condicional no bloco de movimentações do diálogo.
-- Sem alterações de banco nem de RLS (as políticas já estão como deveriam).
+- Alterações apenas no frontend: `src/pages/estoque/EstoqueSolicitacoes.tsx`.
+  - Regra de entrega por `sol.status === "separada"`.
+  - Verificação de `error` em todas as escritas de `separarMutation` e demais mutations.
+  - Texto condicional no bloco de movimentações do diálogo de visualização.
+- Sem alterações de banco nem de RLS (as políticas já estão corretas).
+- Script de regularização dos 8 pedidos é feito apenas se você quiser corrigir o saldo histórico.
