@@ -478,32 +478,38 @@ export default function EstoqueSolicitacoes() {
 
       for (const it of validos) {
         // Re-checa saldo atual
-        const { data: saldo } = await fromEstoque("estoque_saldos")
+        const { data: saldo, error: saldoErr } = await fromEstoque("estoque_saldos")
           .select("id, quantidade")
           .eq("material_id", it.material_id)
           .eq("local_armazenamento_id", it.local_armazenamento_id)
           .maybeSingle();
+        if (saldoErr) throw saldoErr;
         const saldoAtual = (saldo as any)?.quantidade || 0;
         if (saldoAtual < it.quantidade_atendida) {
           throw new Error(`Saldo insuficiente para ${it.material_nome} (disponível: ${saldoAtual})`);
         }
         const novoSaldo = saldoAtual - it.quantidade_atendida;
         if (novoSaldo === 0) {
-          await fromEstoque("estoque_saldos").delete().eq("id", (saldo as any).id);
+          const { error: deleteErr } = await fromEstoque("estoque_saldos").delete().eq("id", (saldo as any).id);
+          if (deleteErr) throw deleteErr;
         } else {
-          await fromEstoque("estoque_saldos").update({ quantidade: novoSaldo } as any).eq("id", (saldo as any).id);
+          const { error: updateSaldoErr } = await fromEstoque("estoque_saldos")
+            .update({ quantidade: novoSaldo } as any)
+            .eq("id", (saldo as any).id);
+          if (updateSaldoErr) throw updateSaldoErr;
         }
 
         // Atualiza item da solicitação
-        await fromEstoque("estoque_solicitacao_itens")
+        const { error: updateItemErr } = await fromEstoque("estoque_solicitacao_itens")
           .update({
             quantidade_atendida: it.quantidade_atendida,
             local_armazenamento_id: it.local_armazenamento_id,
           } as any)
           .eq("id", it.id);
+        if (updateItemErr) throw updateItemErr;
 
         // Cria movimentação de saída
-        await fromEstoque("estoque_movimentacoes").insert({
+        const { error: movErr } = await fromEstoque("estoque_movimentacoes").insert({
           material_id: it.material_id,
           tipo: "saida",
           quantidade: it.quantidade_atendida,
@@ -512,6 +518,7 @@ export default function EstoqueSolicitacoes() {
           responsavel_user_id: user?.id,
           observacoes: `Separação para solicitação de ${separarSol.solicitante_nome}`,
         } as any);
+        if (movErr) throw movErr;
         await verificarEstoqueBaixo(it.material_id, it.local_armazenamento_id);
       }
 
