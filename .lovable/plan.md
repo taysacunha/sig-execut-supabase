@@ -29,18 +29,20 @@ Ou seja: volta a valer a permissão por sistema (concedida individualmente na te
 
 
 
-## Passo 3 — Alinhar a tela
+## Passo 2 — Alinhar a tela
 
-Em `EstoqueSaldos.tsx`, criar o mesmo critério no frontend (incluindo "é gestor de estoque", via consulta a `estoque_gestores` do usuário logado) para que os botões **+ Entrada**, **Ajuste** e **Saída** voltem a aparecer para ela — evitando o caso de o banco permitir e a tela esconder.
+Em `EstoqueSaldos.tsx`, remover a exigência extra de perfil: os botões **+ Entrada**, **Ajuste** e **Saída** voltam a depender apenas de `canEdit("estoque")`, igual ao banco — assim ela vê e consegue salvar.
 
-## Passo 4 — Validar
+## Passo 3 — Validar
 
-- Rejane: abrir Saldos, registrar uma entrada e um ajuste, confirmar que salva sem erro de permissão.
+- Rejane: abrir Saldos, registrar entrada, ajuste e saída, confirmar que salva sem erro de permissão.
 - Ruan (supervisor) e admins: continuar funcionando como hoje.
-- Colaborador comum sem edição: continuar sem os botões.
+- Usuário com "somente visualizar" em Estoque: continuar sem os botões.
+- Menu da Rejane: continua sem Gestores/Usuários/Auditoria (nada muda de perfil).
 
 ## Detalhes técnicos
 
-- Migration nova em `db/migrations/` (não editar a `20260815120000`), com `DROP POLICY IF EXISTS` + `CREATE POLICY` para as seis políticas afetadas.
-- Frontend: hook simples `useIsGestorEstoque()` (React Query) usado em `EstoqueSaldos.tsx`.
+- Migration nova em `db/migrations/` (sem editar a `20260815120000`), com `DROP POLICY IF EXISTS` + `CREATE POLICY` para as seis políticas de `estoque_saldos` e `estoque_movimentacoes`, usando apenas `public.can_edit_system(auth.uid(), 'estoque')`.
+- Frontend: `EstoqueSaldos.tsx` volta a usar `canEditEstoque = canEdit("estoque")`.
+
 - A trava recente de "não marcar como Entregue sem Separar" permanece — ela não bloqueia entrada/ajuste/saída; se a Rejane também estiver esbarrando nela, avise que trato num passo à parte.
