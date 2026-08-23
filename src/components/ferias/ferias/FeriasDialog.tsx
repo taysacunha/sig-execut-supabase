@@ -1269,13 +1269,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         if (excecaoTipo === "vender") {
           venderDias = true;
           diasVend = excDiasVendidos;
-          // Período da venda para o contador:
-          // - se distribuição é "1" ou "2", usa o próprio (consistente com o gozo)
-          // - se "ambos" ou "livre", usa o seletor explícito do gestor
-          quinzenaVendaVal =
-            excDistribuicaoTipo === "1" ? 1
-            : excDistribuicaoTipo === "2" ? 2
-            : (q1BloqueadoParaVenda ? 2 : (excQuinzenaVenda || 1));
+          // Período da venda para o contador: respeita a escolha explícita do
+          // gestor no seletor. A distribuição do gozo interno não deve sobrescrever
+          // essa informação, pois o contador precisa saber em qual quinzena a
+          // venda foi registrada oficialmente.
+          quinzenaVendaVal = q1BloqueadoParaVenda ? 2 : (excQuinzenaVenda || 1);
           if (excPeriodos.length > 0) {
             const p1 = excPeriodos.filter(p => p.referencia_periodo === 1);
             const p2 = excPeriodos.filter(p => p.referencia_periodo === 2);
