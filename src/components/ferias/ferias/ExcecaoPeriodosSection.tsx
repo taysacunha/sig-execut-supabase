@@ -650,7 +650,7 @@ export function ExcecaoPeriodosSection({
               <CardContent className="pt-4 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Dias totais do período aquisitivo:</span>
-                  <span className="font-semibold">30 dias</span>
+                  <span className="font-semibold">{diasDisponiveis} dias</span>
                 </div>
                 <div className="flex justify-between text-sm text-destructive">
                   <span>Dias vendidos:</span>
