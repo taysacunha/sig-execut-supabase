@@ -459,43 +459,49 @@ export function ExcecaoPeriodosSection({
   return (
     <div className="space-y-4">
       {/* Toggle buttons */}
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          variant={excecaoTipo === "vender" ? "default" : "outline"}
-          size="sm"
-          onClick={() => {
-            const novo = excecaoTipo === "vender" ? null : "vender";
-            // Limpar somente quando o usuário trocar de modo de fato.
-            if (novo !== excecaoTipo) {
-              onDistribuicaoTipoChange("");
-              onPeriodosChange([]);
-              if (novo === null) onDiasVendidosChange(0);
-            }
-            onExcecaoTipoChange(novo);
-          }}
-        >
-          <DollarSign className="h-4 w-4 mr-1" />
-          Vender dias de férias
-        </Button>
-        <Button
-          type="button"
-          variant={excecaoTipo === "gozo_diferente" ? "default" : "outline"}
-          size="sm"
-          onClick={() => {
-            const novo = excecaoTipo === "gozo_diferente" ? null : "gozo_diferente";
-            if (novo !== excecaoTipo) {
-              onDistribuicaoTipoChange("");
-              onPeriodosChange([]);
-              onDiasVendidosChange(0);
-            }
-            onExcecaoTipoChange(novo);
-          }}
-        >
-          <CalendarClock className="h-4 w-4 mr-1" />
-          Gozo em datas diferentes
-        </Button>
-      </div>
+      {!hideTipoToggle && (
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant={excecaoTipo === "vender" ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              const novo = excecaoTipo === "vender" ? null : "vender";
+              // Limpar somente quando o usuário trocar de modo de fato.
+              if (novo !== excecaoTipo) {
+                onDistribuicaoTipoChange("");
+                onPeriodosChange([]);
+                if (novo === null) onDiasVendidosChange(0);
+              }
+              onExcecaoTipoChange(novo);
+            }}
+          >
+            <DollarSign className="h-4 w-4 mr-1" />
+            Vender dias de férias
+          </Button>
+          <Button
+            type="button"
+            variant={excecaoTipo === "gozo_diferente" ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              const novo = excecaoTipo === "gozo_diferente" ? null : "gozo_diferente";
+              if (novo !== excecaoTipo) {
+                onDistribuicaoTipoChange("");
+                onPeriodosChange([]);
+                onDiasVendidosChange(0);
+              }
+              onExcecaoTipoChange(novo);
+            }}
+          >
+            <CalendarClock className="h-4 w-4 mr-1" />
+            Gozo em datas diferentes
+          </Button>
+        </div>
+      )}
+
+      {hideTipoToggle && title && (
+        <p className="text-sm font-medium">{title}</p>
+      )}
 
       {/* Official periods reference */}
       {(excecaoTipo === "vender" || excecaoTipo === "gozo_diferente") && q1Inicio && q1Fim && (
