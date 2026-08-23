@@ -814,6 +814,30 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     setTimeout(() => { isResettingRef.current = false; }, 0);
   }, [ferias, open]);
 
+  // No modo padrão, quando o gestor escolhe "Vender dias de férias", ativa
+  // o formulário estruturado (excecaoTipo=vender) sem marcar o registro como
+  // exceção formal. Isso permite usar o mesmo componente de sub-períodos.
+  useEffect(() => {
+    if (isResettingRef.current) return;
+    const isExcecao = form.watch("is_excecao");
+    const opcao = form.watch("opcao_adicional");
+    if (opcao === "vender" && !isExcecao && excecaoTipo !== "vender") {
+      setExcecaoTipo("vender");
+      const dv = form.getValues("dias_vendidos") || 0;
+      const qv = form.getValues("quinzena_venda") || 1;
+      setExcDiasVendidos(dv);
+      setExcQuinzenaVenda(qv);
+      setExcDistribuicaoTipo(dv > 0 && dv <= 10 ? String(qv) : "1");
+    }
+    if (opcao !== "vender" && excecaoTipo === "vender" && !isExcecao) {
+      setExcecaoTipo(null);
+      setExcDistribuicaoTipo("");
+      setExcDiasVendidos(0);
+      setExcQuinzenaVenda(1);
+      setExcPeriodos([]);
+    }
+  }, [form.watch("opcao_adicional"), form.watch("is_excecao"), excecaoTipo]);
+
   // Check conflicts
   const checkConflicts = async (data: FeriasFormData) => {
     // Intervalos de ausência REAIS de um registro existente.
