@@ -371,7 +371,15 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     }
   }, [open]);
 
-  const q1BloqueadoParaVenda = q1JaGozada && !permitirCorrecaoQV;
+  // Uma correção histórica já persistida deve ser preservada ao reabrir o
+  // cadastro. O bloqueio existe para impedir uma NOVA troca de Q2 para Q1,
+  // não para ocultar ou desfazer um Q1 que já está registrado no banco.
+  const q1HistoricoJaRegistrado = isEditing
+    && ferias?.vender_dias === true
+    && ferias?.quinzena_venda === 1;
+  const q1BloqueadoParaVenda = q1JaGozada
+    && !permitirCorrecaoQV
+    && !q1HistoricoJaRegistrado;
 
   const isVenda = opcaoAdicional === "vender";
   const isGozoDiferente = opcaoAdicional === "gozo_diferente";
@@ -1465,14 +1473,22 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         : null;
 
       let feriasId: string;
+      let savedFerias: any;
       if (isEditing) {
-        const { error } = await supabase.from("ferias_ferias").update(payload).eq("id", ferias.id);
+        const { data: updated, error } = await supabase
+          .from("ferias_ferias")
+          .update(payload)
+          .eq("id", ferias.id)
+          .select()
+          .single();
         if (error) throw error;
         feriasId = ferias.id;
+        savedFerias = updated;
       } else {
-        const { data: inserted, error } = await supabase.from("ferias_ferias").insert(payload).select("id").single();
+        const { data: inserted, error } = await supabase.from("ferias_ferias").insert(payload).select().single();
         if (error) throw error;
         feriasId = inserted.id;
+        savedFerias = inserted;
       }
 
       if (gozoFlexivel && excPeriodos.length > 0) {
@@ -1496,13 +1512,22 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       } else if (isEditing) {
         await supabase.from("ferias_gozo_periodos" as any).delete().eq("ferias_id", feriasId);
       }
+
+      return savedFerias;
     },
-    onSuccess: () => {
+    onSuccess: async (savedFerias) => {
       toast.success(isEditing ? "Férias atualizada com sucesso!" : "Férias cadastrada com sucesso!");
+      queryClient.setQueriesData<any[]>({ queryKey: ["ferias-ferias"] }, (current) => {
+        if (!current || !savedFerias) return current;
+        return current.map((item) => item.id === savedFerias.id
+          ? { ...item, ...savedFerias, colaborador: item.colaborador }
+          : item);
+      });
       queryClient.invalidateQueries({ queryKey: ["ferias-colaboradores-com-ferias"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-dashboard-proximas"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-dashboard-ferias-mes"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-dashboard-alertas"] });
+      await queryClient.invalidateQueries({ queryKey: ["ferias-ferias"] });
       onSuccess();
     },
     onError: (error) => {
@@ -2016,13 +2041,18 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {(!q1JaGozada || permitirCorrecaoQV) && <SelectItem value="1">1º Período</SelectItem>}
+                            {(!q1JaGozada || permitirCorrecaoQV || q1HistoricoJaRegistrado) && <SelectItem value="1">1º Período</SelectItem>}
                             <SelectItem value="2">2º Período</SelectItem>
                           </SelectContent>
                         </Select>
                         {q1JaGozada && (
                           <div className="flex items-center gap-2 pt-1">
-                            {!permitirCorrecaoQV ? (
+                            {q1HistoricoJaRegistrado && !permitirCorrecaoQV ? (
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <FileCheck className="h-3.5 w-3.5" />
+                                Período histórico registrado
+                              </div>
+                            ) : !permitirCorrecaoQV ? (
                               <Button
                                 type="button"
                                 size="sm"
