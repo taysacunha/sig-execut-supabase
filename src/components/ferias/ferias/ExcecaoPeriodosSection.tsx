@@ -40,6 +40,15 @@ interface ExcecaoPeriodosSectionProps {
   /** True quando o 1º período oficial já foi gozado (status terminal e datas inalteradas).
    *  Quando true: limita disponibilidade a 15 dias e oculta opções "1º Período" e "Ambos". */
   q1JaGozada?: boolean;
+  /** Esconde os botões de alternância entre Vender/Gozo diferente. Útil quando a seção
+   *  é renderizada dentro de um fluxo já selecionado (ex.: venda padrão). */
+  hideTipoToggle?: boolean;
+  /** Se false, remove a opção "Livre" do modo vender. Padrão: true. */
+  allowLivre?: boolean;
+  /** Total de dias disponíveis para venda/gozo. Padrão: 30. */
+  diasDisponiveis?: number;
+  /** Título customizado do card (quando hideTipoToggle=true). */
+  title?: string;
 }
 
 const formatDateBR = (dateStr: string) => {
