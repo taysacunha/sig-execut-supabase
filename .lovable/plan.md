@@ -24,12 +24,16 @@ Hoje existem duas experiências diferentes:
 - **Gozo em datas diferentes (exceção):** escolhe 1º / 2º / ambos / livre e adiciona quantos sub-períodos quiser, com dias e datas por linha e contador de "dias restantes".
 - **Vender dias de férias:** só campos fixos de data de início, sem poder fragmentar o gozo.
 
-**Ajuste:** unificar. Ao marcar "Vender dias de férias":
+**Ajuste: reaproveitar a mesma estrutura de períodos só na parte de "Vender dias de férias".**
+
+> **Importante:** "Gozo em datas diferentes" continua existindo como opção separada. Não será removido.
+
+Ao marcar **"Vender dias de férias"**, o formulário terá:
 
 1. Campo **Quantidade de dias a vender (1–30)**.
-2. Em seguida, a mesma estrutura de distribuição do gozo: **1º período / 2º período / ambos**, com botão "Adicionar período", dias e datas por linha.
+2. Escolha da distribuição do gozo restante: **1º período / 2º período / ambos**, com botão "Adicionar período", dias e datas por linha.
 3. Os dias distribuíveis são exatamente os que **sobraram** após a venda (total do período aquisitivo − dias vendidos), respeitando o teto de 15 dias por período oficial.
-4. Continua existindo o seletor "Período da venda (enviado ao contador)", que é o dado do relatório do contador — separado da distribuição interna do gozo.
+4. Continua existindo o seletor **"Período da venda (enviado ao contador)"**, que é o dado do relatório do contador — separado da distribuição interna do gozo.
 
 Sobre a sua observação: **concordo** — a opção **"livre" sai** da venda. Distribuição livre significa datas sem vínculo com 1º/2º período, e a venda precisa saber de qual período os dias foram vendidos (é o que vai ao contador). "Livre" permanece disponível apenas em "Gozo em datas diferentes".
 
