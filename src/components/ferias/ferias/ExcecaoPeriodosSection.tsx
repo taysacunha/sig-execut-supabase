@@ -582,87 +582,49 @@ export function ExcecaoPeriodosSection({
                 )}
               </div>
 
-              {/* 1º ou 2º Período: single period (ignora linhas paralelas de gozo_diferente) */}
-              {(distribuicaoTipo === "1" || distribuicaoTipo === "2") && venderPeriodos.length === 1 && (
-                <Card className="border-primary/20 bg-primary/5">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm text-primary">
-                      Gozo no {distribuicaoTipo === "1" ? "1º" : "2º"} período — {diasGozo} dias
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-xs">Data de Início</Label>
-                      <Input
-                        type="date"
-                        value={venderPeriodos[0].data_inicio}
-                        onChange={(e) => {
-                          const targetId = venderPeriodos[0].id;
-                          const next = periodos.map(x => x.id === targetId
-                            ? { ...x, data_inicio: e.target.value, data_fim: calcEndDate(e.target.value, diasGozo) }
-                            : x);
-                          onPeriodosChange(next);
-                        }}
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Data de Fim (auto)</Label>
-                      <Input type="date" value={venderPeriodos[0].data_fim} readOnly className="mt-1 bg-muted cursor-not-allowed" />
-                    </div>
-                  </CardContent>
-                </Card>
+              {/* 1º ou 2º Período: dynamic sub-periods */}
+              {(distribuicaoTipo === "1" || distribuicaoTipo === "2") && (
+                <SubPeriodosList
+                  periodos={venderPeriodos}
+                  onChange={(updated) => {
+                    onPeriodosChange([...updated, ...gozoDiferentePeriodos]);
+                  }}
+                  totalDias={diasGozo}
+                  referenciaPeriodo={distribuicaoTipo === "1" ? 1 : 2}
+                  label={`Gozo no ${distribuicaoTipo === "1" ? "1º" : "2º"} período — ${diasGozo} dias`}
+                />
               )}
 
-              {/* Ambos: two periods with auto-balance */}
-              {distribuicaoTipo === "ambos" && venderPeriodos.length === 2 && (
-                <div className="space-y-3">
-                  {venderPeriodos.map((p, idx) => (
-                    <Card key={p.id} className="border-primary/20 bg-primary/5">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm text-primary">
-                          {idx === 0 ? "1º" : "2º"} Período
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <div className="grid grid-cols-3 gap-3">
-                          <div>
-                            <Label className="text-xs">Dias</Label>
-                            <Input
-                              type="number"
-                              min={0}
-                              max={diasGozo}
-                              value={p.dias}
-                              onChange={(e) => handleAmbosVendaDiasChange(
-                                p.referencia_periodo as 1 | 2,
-                                Math.min(diasGozo, Math.max(0, parseInt(e.target.value) || 0))
-                              )}
-                              className="mt-1"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs">Data de Início</Label>
-                            <Input
-                              type="date"
-                              value={p.data_inicio}
-                              onChange={(e) => {
-                                const targetId = p.id;
-                                const next = periodos.map(x => x.id === targetId
-                                  ? { ...x, data_inicio: e.target.value, data_fim: calcEndDate(e.target.value, p.dias) }
-                                  : x);
-                                onPeriodosChange(next);
-                              }}
-                              className="mt-1"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs">Data de Fim (auto)</Label>
-                            <Input type="date" value={p.data_fim} readOnly className="mt-1 bg-muted cursor-not-allowed" />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+              {/* Ambos: dynamic sub-periods per reference */}
+              {distribuicaoTipo === "ambos" && (
+                <div className="space-y-4">
+                  {(() => {
+                    const { d1, d2 } = splitAmbos();
+                    return (
+                      <>
+                        <SubPeriodosList
+                          periodos={venderPeriodos.filter(p => p.referencia_periodo === 1)}
+                          onChange={(updated) => {
+                            const ref2 = venderPeriodos.filter(p => p.referencia_periodo === 2);
+                            onPeriodosChange([...updated, ...ref2, ...gozoDiferentePeriodos]);
+                          }}
+                          totalDias={d1}
+                          referenciaPeriodo={1}
+                          label={`1º Período — ${d1} dias`}
+                        />
+                        <SubPeriodosList
+                          periodos={venderPeriodos.filter(p => p.referencia_periodo === 2)}
+                          onChange={(updated) => {
+                            const ref1 = venderPeriodos.filter(p => p.referencia_periodo === 1);
+                            onPeriodosChange([...ref1, ...updated, ...gozoDiferentePeriodos]);
+                          }}
+                          totalDias={d2}
+                          referenciaPeriodo={2}
+                          label={`2º Período — ${d2} dias`}
+                        />
+                      </>
+                    );
+                  })()}
                 </div>
               )}
 
