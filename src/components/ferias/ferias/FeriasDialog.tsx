@@ -703,7 +703,12 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             else if (refs.includes(2)) inferredDist = "2";
           }
 
-          form.setValue("is_excecao", true);
+          // Venda padrão (≤10 dias vendidos) com gozo_flexível deve continuar
+          // abrindo no modo padrão, pois o gestor escolheu "Vender dias" sem
+          // ativar a exceção formal. Apenas venda >10 ou gozo_diferente ficam
+          // permanentemente como exceção.
+          const isVenderPadrao = inferredTipo === "vender" && (ferias.dias_vendidos || 0) <= 10;
+          form.setValue("is_excecao", !isVenderPadrao);
           form.setValue("opcao_adicional", inferredTipo || "nenhum");
           setExcecaoTipo(inferredTipo);
           setExcDistribuicaoTipo(inferredDist);
