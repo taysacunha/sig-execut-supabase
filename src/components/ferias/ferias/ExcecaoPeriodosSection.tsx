@@ -421,7 +421,7 @@ export function ExcecaoPeriodosSection({
           { id: genId(), dias: d1, data_inicio: "", data_fim: "", referencia_periodo: 1 },
           { id: genId(), dias: d2, data_inicio: "", data_fim: "", referencia_periodo: 2 },
         ]);
-      } else if (distribuicaoTipo === "livre") {
+      } else if (distribuicaoTipo === "livre" && allowLivre) {
         onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 0 }]);
       }
     } else if (excecaoTipo === "gozo_diferente") {
