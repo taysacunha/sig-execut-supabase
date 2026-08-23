@@ -1583,7 +1583,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const executeSave = (data: FeriasFormData) => {
     // Se houve correção histórica de período da venda, registrar auditoria após salvar.
     const finalQV = data.is_excecao
-      ? (excDistribuicaoTipo === "1" ? 1 : excDistribuicaoTipo === "2" ? 2 : (q1BloqueadoParaVenda ? 2 : (excQuinzenaVenda || 1)))
+      ? (q1BloqueadoParaVenda ? 2 : (excQuinzenaVenda || 1))
       : (data.opcao_adicional === "vender" ? (q1BloqueadoParaVenda ? 2 : (data.quinzena_venda || 1)) : null);
     const qvAntes = ferias?.quinzena_venda ?? null;
     const deveAuditar = permitirCorrecaoQV && finalQV !== qvAntes;
