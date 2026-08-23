@@ -181,6 +181,10 @@ export function ExcecaoPeriodosSection({
   q2Fim,
   isHydrating = false,
   q1JaGozada = false,
+  hideTipoToggle = false,
+  allowLivre = true,
+  diasDisponiveis: diasDisponiveisProp,
+  title,
 }: ExcecaoPeriodosSectionProps) {
   // Gozo interno é livre para editar os 30 dias completos, mesmo que o
   // 1º período oficial já tenha sido enviado ao contador / já tenha sido
