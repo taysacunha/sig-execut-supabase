@@ -841,6 +841,17 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     }
   }, [form.watch("opcao_adicional"), form.watch("is_excecao"), excecaoTipo]);
 
+  // Mantém os campos legados do formulário sincronizados com o estado
+  // estruturado de venda, para que cálculos de diff e fallback continuem
+  // consistentes.
+  useEffect(() => {
+    if (isResettingRef.current) return;
+    if (excecaoTipo === "vender") {
+      form.setValue("quinzena_venda", excQuinzenaVenda);
+      form.setValue("dias_vendidos", excDiasVendidos);
+    }
+  }, [excecaoTipo, excQuinzenaVenda, excDiasVendidos]);
+
   // Check conflicts
   const checkConflicts = async (data: FeriasFormData) => {
     // Intervalos de ausência REAIS de um registro existente.
