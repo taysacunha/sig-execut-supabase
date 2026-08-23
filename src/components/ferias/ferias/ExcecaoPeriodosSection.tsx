@@ -228,24 +228,12 @@ export function ExcecaoPeriodosSection({
     }
   }, [diasDisponiveis, diasVendidos, isHydrating, onDiasVendidosChange]);
 
-  // Auto-balance for "ambos" in vender mode
-  const handleAmbosVendaDiasChange = useCallback((periodo: 1 | 2, dias: number) => {
-    const otherDias = diasGozo - dias;
-    const updated = periodos.map(p => {
-      if (p.referencia_periodo === periodo) {
-        const newP = { ...p, dias };
-        if (p.data_inicio) newP.data_fim = calcEndDate(p.data_inicio, dias);
-        return newP;
-      }
-      if (p.referencia_periodo === (periodo === 1 ? 2 : 1)) {
-        const newP = { ...p, dias: Math.max(0, otherDias) };
-        if (p.data_inicio) newP.data_fim = calcEndDate(p.data_inicio, Math.max(0, otherDias));
-        return newP;
-      }
-      return p;
-    });
-    onPeriodosChange(updated);
-  }, [diasGozo, periodos, onPeriodosChange]);
+  // Split helper for "ambos" in vender mode
+  const splitAmbos = useCallback(() => {
+    const d1 = Math.ceil(diasGozo / 2);
+    const d2 = diasGozo - d1;
+    return { d1, d2 };
+  }, [diasGozo]);
 
   // Initialize periods when distribuicaoTipo changes (skip during edit hydration).
   // IMPORTANT: nunca sobrescrever quando já existem períodos compatíveis com a
