@@ -1956,15 +1956,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                           Selecione em qual período aquisitivo os <strong>{Math.min(excDiasVendidos, 10)} dia{Math.min(excDiasVendidos, 10) !== 1 ? "s" : ""} vendidos</strong> serão alocados no relatório do contador.
                         </p>
                         <Select
-                          value={String(
-                            excDistribuicaoTipo === "1"
-                              ? 1
-                              : excDistribuicaoTipo === "2"
-                              ? 2
-                              : (q1BloqueadoParaVenda ? 2 : excQuinzenaVenda)
-                          )}
+                          value={String(q1BloqueadoParaVenda ? 2 : excQuinzenaVenda)}
                           onValueChange={(v) => setExcQuinzenaVenda(parseInt(v))}
-                          disabled={excDistribuicaoTipo === "1" || excDistribuicaoTipo === "2"}
                         >
                           <SelectTrigger className="max-w-[220px] bg-background">
                             <SelectValue />
@@ -1974,7 +1967,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                             <SelectItem value="2">2º Período</SelectItem>
                           </SelectContent>
                         </Select>
-                        {q1JaGozada && excDistribuicaoTipo !== "1" && excDistribuicaoTipo !== "2" && (
+                        {q1JaGozada && (
                           <div className="flex items-center gap-2 pt-1">
                             {!permitirCorrecaoQV ? (
                               <Button
@@ -1996,11 +1989,6 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                               </div>
                             )}
                           </div>
-                        )}
-                        {(excDistribuicaoTipo === "1" || excDistribuicaoTipo === "2") && (
-                          <p className="text-xs text-muted-foreground">
-                            Travado em <strong>{excDistribuicaoTipo}º Período</strong> pela distribuição escolhida no gozo interno.
-                          </p>
                         )}
                       </div>
                     )}
