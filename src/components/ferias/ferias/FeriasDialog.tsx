@@ -1336,9 +1336,10 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             gozoQ1Fim = livres[livres.length - 1].data_fim || null;
           }
         }
-        // Calcular dias vendidos explícitos por quinzena a partir do gozo cadastrado
-        // (tipo "vender"). Venda no período = 15 - dias_gozo_no_período.
-        {
+        // Calcular dias vendidos explícitos por quinzena.
+        if (data.is_excecao) {
+          // Exceção (>10 dias vendidos): a distribuição do gozo interno define
+          // quantos dias foram vendidos em cada quinzena.
           const venderRows = excPeriodos.filter(p => (p.tipo || "vender") === "vender");
           const gozo1 = venderRows.filter(p => p.referencia_periodo === 1).reduce((s, p) => s + (p.dias || 0), 0);
           const gozo2 = venderRows.filter(p => p.referencia_periodo === 2).reduce((s, p) => s + (p.dias || 0), 0);
@@ -1351,6 +1352,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             diasVendQ1 = v1;
             diasVendQ2 = v2;
           }
+        } else {
+          // Venda padrão (≤10 dias): a venda oficial fica toda na quinzena
+          // selecionada pelo gestor, independente de como o gozo foi distribuído.
+          diasVendQ1 = quinzenaVendaVal === 1 ? diasVend : 0;
+          diasVendQ2 = quinzenaVendaVal === 2 ? diasVend : 0;
         }
       } else if (data.is_excecao && excecaoTipo === "gozo_diferente") {
         gozoFlexivel = true;
