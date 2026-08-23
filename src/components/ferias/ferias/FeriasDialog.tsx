@@ -387,7 +387,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     const intervals: { start: Date; end: Date }[] = [];
     const shouldSkipConsumedQ1 = q1JaGozada;
 
-    if (data.is_excecao && excecaoTipo && excPeriodos.length > 0) {
+    // Venda estruturada (com sub-períodos): usada tanto na exceção quanto no
+    // modo padrão quando o gestor opta por distribuir o gozo.
+    if (excecaoTipo === "vender" && excPeriodos.length > 0) {
       for (const p of excPeriodos) {
         if (shouldSkipConsumedQ1 && p.referencia_periodo === 1) continue;
         if (p.data_inicio && p.data_fim) intervals.push({ start: parseISO(p.data_inicio), end: parseISO(p.data_fim) });
@@ -396,6 +398,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     }
 
     if (data.opcao_adicional === "vender" && (data.dias_vendidos || 0) > 0) {
+      // Fallback: venda padrão sem períodos estruturados.
       const vendaPeriodo = shouldSkipConsumedQ1 ? 2 : (data.quinzena_venda || 1);
       if (vendaPeriodo === 1) {
         if (data.gozo_venda_inicio && data.gozo_venda_fim) intervals.push({ start: parseISO(data.gozo_venda_inicio), end: parseISO(data.gozo_venda_fim) });
