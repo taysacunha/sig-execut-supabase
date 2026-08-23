@@ -276,7 +276,7 @@ export function ExcecaoPeriodosSection({
           { id: genId(), dias: d2, data_inicio: "", data_fim: "", referencia_periodo: 2, tipo: "vender" },
           ...keepParalelo,
         ]);
-      } else if (distribuicaoTipo === "livre") {
+      } else if (distribuicaoTipo === "livre" && allowLivre) {
         onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 0, tipo: "vender" }, ...keepParalelo]);
       }
     } else if (excecaoTipo === "gozo_diferente") {
