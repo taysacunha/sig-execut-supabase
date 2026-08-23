@@ -190,9 +190,9 @@ export function ExcecaoPeriodosSection({
   // 1º período oficial já tenha sido enviado ao contador / já tenha sido
   // gozado na prática. O card de "Enviado ao contador" continua protegido,
   // mas aqui o usuário pode redistribuir os 30 dias como quiser.
-  const diasDisponiveis: number = 30;
+  const diasDisponiveis: number = diasDisponiveisProp ?? 30;
   const diasGozo = Math.max(0, diasDisponiveis - diasVendidos);
-  const opcoesDistribuicao = ["1", "2", "ambos", "livre"];
+  const opcoesDistribuicao = allowLivre ? ["1", "2", "ambos", "livre"] : ["1", "2", "ambos"];
   const opcoesGozoDiferente = ["1", "2", "ambos"];
 
   // Quando o gozo restante (após venda) é maior que 15 dias, é impossível
