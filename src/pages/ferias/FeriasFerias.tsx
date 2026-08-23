@@ -1082,12 +1082,15 @@ export default function FeriasFerias() {
                                         <Clock className="h-3 w-3" />{num}º pendente
                                       </Badge>
                                     )}
-                                    {/* Sub-períodos flexíveis (gozo) */}
-                                    {subs.map((p: any) => (
-                                      <div key={p.id} className="text-xs text-muted-foreground">
-                                        Gozo: {formatPeriodo(p.data_inicio, p.data_fim)} ({p.dias}d)
-                                      </div>
-                                    ))}
+                                    {/* Sub-períodos flexíveis (gozo / venda) */}
+                                    {subs.map((p: any) => {
+                                      const label = p.tipo === "vender" ? "Gozo (venda)" : p.tipo === "gozo_diferente" ? "Gozo (datas dif.)" : "Gozo";
+                                      return (
+                                        <div key={p.id} className="text-xs text-muted-foreground">
+                                          {label}: {formatPeriodo(p.data_inicio, p.data_fim)} ({p.dias}d)
+                                        </div>
+                                      );
+                                    })}
                                     {/* Gozo em datas diferentes (legado) */}
                                     {isGozoDif && gozoDifIni && gozoDifFim && (
                                       <div className="text-xs text-muted-foreground">

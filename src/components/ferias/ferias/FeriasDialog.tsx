@@ -387,7 +387,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     const intervals: { start: Date; end: Date }[] = [];
     const shouldSkipConsumedQ1 = q1JaGozada;
 
-    if (data.is_excecao && excecaoTipo && excPeriodos.length > 0) {
+    // Venda estruturada (com sub-períodos): usada tanto na exceção quanto no
+    // modo padrão quando o gestor opta por distribuir o gozo.
+    if (excecaoTipo === "vender" && excPeriodos.length > 0) {
       for (const p of excPeriodos) {
         if (shouldSkipConsumedQ1 && p.referencia_periodo === 1) continue;
         if (p.data_inicio && p.data_fim) intervals.push({ start: parseISO(p.data_inicio), end: parseISO(p.data_fim) });
@@ -396,6 +398,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     }
 
     if (data.opcao_adicional === "vender" && (data.dias_vendidos || 0) > 0) {
+      // Fallback: venda padrão sem períodos estruturados.
       const vendaPeriodo = shouldSkipConsumedQ1 ? 2 : (data.quinzena_venda || 1);
       if (vendaPeriodo === 1) {
         if (data.gozo_venda_inicio && data.gozo_venda_fim) intervals.push({ start: parseISO(data.gozo_venda_inicio), end: parseISO(data.gozo_venda_fim) });
@@ -703,7 +706,12 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             else if (refs.includes(2)) inferredDist = "2";
           }
 
-          form.setValue("is_excecao", true);
+          // Venda padrão (≤10 dias vendidos) com gozo_flexível deve continuar
+          // abrindo no modo padrão, pois o gestor escolheu "Vender dias" sem
+          // ativar a exceção formal. Apenas venda >10 ou gozo_diferente ficam
+          // permanentemente como exceção.
+          const isVenderPadrao = inferredTipo === "vender" && (ferias.dias_vendidos || 0) <= 10;
+          form.setValue("is_excecao", !isVenderPadrao);
           form.setValue("opcao_adicional", inferredTipo || "nenhum");
           setExcecaoTipo(inferredTipo);
           setExcDistribuicaoTipo(inferredDist);
@@ -722,7 +730,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         } else {
           setOriginalPeriodos([]);
           // No gozo_periodos found — use flags from the main record
-          const hasException = !!(ferias.is_excecao || ferias.gozo_flexivel);
+          const isVenderPadrao = ferias.vender_dias && (ferias.dias_vendidos || 0) <= 10;
+          const hasException = !!(ferias.is_excecao || (ferias.gozo_flexivel && !isVenderPadrao));
           form.setValue("is_excecao", hasException);
           const inferredOpcao = ferias.vender_dias ? "vender" : ferias.gozo_diferente ? "gozo_diferente" : "nenhum";
           form.setValue("opcao_adicional", inferredOpcao);
@@ -807,6 +816,41 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     }
     setTimeout(() => { isResettingRef.current = false; }, 0);
   }, [ferias, open]);
+
+  // No modo padrão, quando o gestor escolhe "Vender dias de férias", ativa
+  // o formulário estruturado (excecaoTipo=vender) sem marcar o registro como
+  // exceção formal. Isso permite usar o mesmo componente de sub-períodos.
+  useEffect(() => {
+    if (isResettingRef.current) return;
+    const isExcecao = form.watch("is_excecao");
+    const opcao = form.watch("opcao_adicional");
+    if (opcao === "vender" && !isExcecao && excecaoTipo !== "vender") {
+      setExcecaoTipo("vender");
+      const dv = form.getValues("dias_vendidos") || 0;
+      const qv = form.getValues("quinzena_venda") || 1;
+      setExcDiasVendidos(dv);
+      setExcQuinzenaVenda(qv);
+      setExcDistribuicaoTipo(dv > 0 && dv <= 10 ? String(qv) : "1");
+    }
+    if (opcao !== "vender" && excecaoTipo === "vender" && !isExcecao) {
+      setExcecaoTipo(null);
+      setExcDistribuicaoTipo("");
+      setExcDiasVendidos(0);
+      setExcQuinzenaVenda(1);
+      setExcPeriodos([]);
+    }
+  }, [form.watch("opcao_adicional"), form.watch("is_excecao"), excecaoTipo]);
+
+  // Mantém os campos legados do formulário sincronizados com o estado
+  // estruturado de venda, para que cálculos de diff e fallback continuem
+  // consistentes.
+  useEffect(() => {
+    if (isResettingRef.current) return;
+    if (excecaoTipo === "vender") {
+      form.setValue("quinzena_venda", excQuinzenaVenda);
+      form.setValue("dias_vendidos", excDiasVendidos);
+    }
+  }, [excecaoTipo, excQuinzenaVenda, excDiasVendidos]);
 
   // Check conflicts
   const checkConflicts = async (data: FeriasFormData) => {
@@ -1262,57 +1306,23 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         try { return Math.max(0, differenceInDays(parseISO(fim), parseISO(ini)) + 1); } catch { return 0; }
       };
 
-      if (data.is_excecao && excecaoTipo) {
-        gozoFlexivel = true;
+      if (excecaoTipo === "vender") {
+        // Venda estruturada: usada tanto na exceção (>10 dias vendidos) quanto
+        // no modo padrão quando o gestor opta por distribuir o gozo em
+        // sub-períodos. O exc* state é a fonte única da verdade para vender.
+        gozoFlexivel = excPeriodos.length > 0;
         distribuicaoTipoVal = excDistribuicaoTipo || null;
-
-        if (excecaoTipo === "vender") {
-          venderDias = true;
-          diasVend = excDiasVendidos;
-          // Período da venda para o contador:
-          // - se distribuição é "1" ou "2", usa o próprio (consistente com o gozo)
-          // - se "ambos" ou "livre", usa o seletor explícito do gestor
-          quinzenaVendaVal =
-            excDistribuicaoTipo === "1" ? 1
-            : excDistribuicaoTipo === "2" ? 2
-            : (q1BloqueadoParaVenda ? 2 : (excQuinzenaVenda || 1));
-          if (excPeriodos.length > 0) {
-            const p1 = excPeriodos.filter(p => p.referencia_periodo === 1);
-            const p2 = excPeriodos.filter(p => p.referencia_periodo === 2);
-            const livres = excPeriodos.filter(p => p.referencia_periodo === 0);
-            if (p1.length > 0) {
-              gozoQ1Inicio = p1[0].data_inicio || null;
-              gozoQ1Fim = p1[p1.length - 1].data_fim || null;
-            }
-            if (p2.length > 0) {
-              gozoQ2Inicio = p2[0].data_inicio || null;
-              gozoQ2Fim = p2[p2.length - 1].data_fim || null;
-            }
-            if (livres.length > 0 && !gozoQ1Inicio && !gozoQ2Inicio) {
-              gozoQ1Inicio = livres[0].data_inicio || null;
-              gozoQ1Fim = livres[livres.length - 1].data_fim || null;
-            }
-          }
-          // Calcular dias vendidos explícitos por quinzena a partir do gozo cadastrado
-          // (tipo "vender"). Venda no período = 15 - dias_gozo_no_período.
-          {
-            const venderRows = excPeriodos.filter(p => (p.tipo || "vender") === "vender");
-            const gozo1 = venderRows.filter(p => p.referencia_periodo === 1).reduce((s, p) => s + (p.dias || 0), 0);
-            const gozo2 = venderRows.filter(p => p.referencia_periodo === 2).reduce((s, p) => s + (p.dias || 0), 0);
-            const hasRef1 = venderRows.some(p => p.referencia_periodo === 1);
-            const hasRef2 = venderRows.some(p => p.referencia_periodo === 2);
-            const v1 = hasRef1 ? Math.max(0, 15 - gozo1) : (excDistribuicaoTipo === "2" ? 15 : 0);
-            const v2 = hasRef2 ? Math.max(0, 15 - gozo2) : (excDistribuicaoTipo === "1" ? 15 : 0);
-            // Só grava se a soma bater (com tolerância 1) com o total declarado.
-            if (Math.abs((v1 + v2) - diasVend) <= 1) {
-              diasVendQ1 = v1;
-              diasVendQ2 = v2;
-            }
-          }
-        } else if (excecaoTipo === "gozo_diferente") {
-          gozoDiferente = true;
+        venderDias = true;
+        diasVend = excDiasVendidos;
+        // Período da venda para o contador: respeita a escolha explícita do
+        // gestor no seletor. A distribuição do gozo interno não deve sobrescrever
+        // essa informação, pois o contador precisa saber em qual quinzena a
+        // venda foi registrada oficialmente.
+        quinzenaVendaVal = q1BloqueadoParaVenda ? 2 : (excQuinzenaVenda || 1);
+        if (excPeriodos.length > 0) {
           const p1 = excPeriodos.filter(p => p.referencia_periodo === 1);
           const p2 = excPeriodos.filter(p => p.referencia_periodo === 2);
+          const livres = excPeriodos.filter(p => p.referencia_periodo === 0);
           if (p1.length > 0) {
             gozoQ1Inicio = p1[0].data_inicio || null;
             gozoQ1Fim = p1[p1.length - 1].data_fim || null;
@@ -1321,9 +1331,50 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             gozoQ2Inicio = p2[0].data_inicio || null;
             gozoQ2Fim = p2[p2.length - 1].data_fim || null;
           }
+          if (livres.length > 0 && !gozoQ1Inicio && !gozoQ2Inicio) {
+            gozoQ1Inicio = livres[0].data_inicio || null;
+            gozoQ1Fim = livres[livres.length - 1].data_fim || null;
+          }
+        }
+        // Calcular dias vendidos explícitos por quinzena.
+        if (data.is_excecao) {
+          // Exceção (>10 dias vendidos): a distribuição do gozo interno define
+          // quantos dias foram vendidos em cada quinzena.
+          const venderRows = excPeriodos.filter(p => (p.tipo || "vender") === "vender");
+          const gozo1 = venderRows.filter(p => p.referencia_periodo === 1).reduce((s, p) => s + (p.dias || 0), 0);
+          const gozo2 = venderRows.filter(p => p.referencia_periodo === 2).reduce((s, p) => s + (p.dias || 0), 0);
+          const hasRef1 = venderRows.some(p => p.referencia_periodo === 1);
+          const hasRef2 = venderRows.some(p => p.referencia_periodo === 2);
+          const v1 = hasRef1 ? Math.max(0, 15 - gozo1) : (excDistribuicaoTipo === "2" ? 15 : 0);
+          const v2 = hasRef2 ? Math.max(0, 15 - gozo2) : (excDistribuicaoTipo === "1" ? 15 : 0);
+          // Só grava se a soma bater (com tolerância 1) com o total declarado.
+          if (Math.abs((v1 + v2) - diasVend) <= 1) {
+            diasVendQ1 = v1;
+            diasVendQ2 = v2;
+          }
+        } else {
+          // Venda padrão (≤10 dias): a venda oficial fica toda na quinzena
+          // selecionada pelo gestor, independente de como o gozo foi distribuído.
+          diasVendQ1 = quinzenaVendaVal === 1 ? diasVend : 0;
+          diasVendQ2 = quinzenaVendaVal === 2 ? diasVend : 0;
+        }
+      } else if (data.is_excecao && excecaoTipo === "gozo_diferente") {
+        gozoFlexivel = true;
+        gozoDiferente = true;
+        const p1 = excPeriodos.filter(p => p.referencia_periodo === 1);
+        const p2 = excPeriodos.filter(p => p.referencia_periodo === 2);
+        if (p1.length > 0) {
+          gozoQ1Inicio = p1[0].data_inicio || null;
+          gozoQ1Fim = p1[p1.length - 1].data_fim || null;
+        }
+        if (p2.length > 0) {
+          gozoQ2Inicio = p2[0].data_inicio || null;
+          gozoQ2Fim = p2[p2.length - 1].data_fim || null;
         }
       } else {
         if (data.opcao_adicional === "vender" && (data.dias_vendidos || 0) > 0) {
+          // Fallback: venda padrão sem períodos estruturados (caso raro de
+          // registros legados ou estado temporário).
           venderDias = true;
           diasVend = data.dias_vendidos || 0;
           quinzenaVendaVal = q1BloqueadoParaVenda ? 2 : (data.quinzena_venda || 1);
@@ -1585,7 +1636,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const executeSave = (data: FeriasFormData) => {
     // Se houve correção histórica de período da venda, registrar auditoria após salvar.
     const finalQV = data.is_excecao
-      ? (excDistribuicaoTipo === "1" ? 1 : excDistribuicaoTipo === "2" ? 2 : (q1BloqueadoParaVenda ? 2 : (excQuinzenaVenda || 1)))
+      ? (q1BloqueadoParaVenda ? 2 : (excQuinzenaVenda || 1))
       : (data.opcao_adicional === "vender" ? (q1BloqueadoParaVenda ? 2 : (data.quinzena_venda || 1)) : null);
     const qvAntes = ferias?.quinzena_venda ?? null;
     const deveAuditar = permitirCorrecaoQV && finalQV !== qvAntes;
@@ -1958,15 +2009,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                           Selecione em qual período aquisitivo os <strong>{Math.min(excDiasVendidos, 10)} dia{Math.min(excDiasVendidos, 10) !== 1 ? "s" : ""} vendidos</strong> serão alocados no relatório do contador.
                         </p>
                         <Select
-                          value={String(
-                            excDistribuicaoTipo === "1"
-                              ? 1
-                              : excDistribuicaoTipo === "2"
-                              ? 2
-                              : (q1BloqueadoParaVenda ? 2 : excQuinzenaVenda)
-                          )}
+                          value={String(q1BloqueadoParaVenda ? 2 : excQuinzenaVenda)}
                           onValueChange={(v) => setExcQuinzenaVenda(parseInt(v))}
-                          disabled={excDistribuicaoTipo === "1" || excDistribuicaoTipo === "2"}
                         >
                           <SelectTrigger className="max-w-[220px] bg-background">
                             <SelectValue />
@@ -1976,7 +2020,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                             <SelectItem value="2">2º Período</SelectItem>
                           </SelectContent>
                         </Select>
-                        {q1JaGozada && excDistribuicaoTipo !== "1" && excDistribuicaoTipo !== "2" && (
+                        {q1JaGozada && (
                           <div className="flex items-center gap-2 pt-1">
                             {!permitirCorrecaoQV ? (
                               <Button
@@ -1998,11 +2042,6 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                               </div>
                             )}
                           </div>
-                        )}
-                        {(excDistribuicaoTipo === "1" || excDistribuicaoTipo === "2") && (
-                          <p className="text-xs text-muted-foreground">
-                            Travado em <strong>{excDistribuicaoTipo}º Período</strong> pela distribuição escolhida no gozo interno.
-                          </p>
                         )}
                       </div>
                     )}
@@ -2102,55 +2141,6 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
 
                 {isVendaPadrao && (
                   <div className="space-y-4 pl-7 border-l-2 border-primary/20">
-                    <FormField control={form.control} name="dias_vendidos" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Quantidade de dias a vender (máx. 10)</FormLabel>
-                        <FormControl>
-                          <Input type="number" min={1} max={10} {...field} value={field.value ?? 0}
-                            onChange={(e) => field.onChange(Math.min(10, Math.max(0, parseInt(e.target.value) || 0)))} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-
-                    <FormField control={form.control} name="quinzena_venda" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Período da venda</FormLabel>
-                        <Select onValueChange={(v) => { field.onChange(parseInt(v)); form.setValue("gozo_venda_inicio", ""); form.setValue("gozo_venda_fim", ""); setGozoDateError(null); }} value={String(field.value || 1)}>
-                          <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            {(!q1JaGozada || permitirCorrecaoQV) && <SelectItem value="1">1º Período</SelectItem>}
-                            <SelectItem value="2">2º Período</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-
-                    {q1JaGozada && (
-                      <div className="flex items-center gap-2">
-                        {!permitirCorrecaoQV ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs"
-                            onClick={() => { setCorrecaoDialogMotivo(""); setCorrecaoDialogConfirmado(false); setCorrecaoDialogOpen(true); }}
-                          >
-                            Corrigir período histórico
-                          </Button>
-                        ) : (
-                          <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
-                            <ShieldAlert className="h-3.5 w-3.5" />
-                            Correção histórica ativa — a mudança será auditada
-                            <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setPermitirCorrecaoQV(false); setMotivoCorrecaoQV(""); form.setValue("quinzena_venda", 2); }}>
-                              Cancelar
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
                     {q1JaGozada && (
                       <Alert className="border-amber-500/40 bg-amber-500/10">
                         <Info className="h-4 w-4" />
@@ -2161,51 +2151,36 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                       </Alert>
                     )}
 
-                    <Alert className="border-primary/30 bg-primary/5">
-                      <Info className="h-4 w-4 text-primary" />
-                      <AlertDescription className="text-sm">
-                        {q1JaGozada
-                          ? `No ${periodoVendaLabel} período, serão gozados ${diasGozoNoPeriodoVenda} dia${diasGozoNoPeriodoVenda !== 1 ? "s" : ""}.`
-                          : `O ${outroPeriodoLabel} período será gozado integralmente (15 dias). No ${periodoVendaLabel} período, serão gozados ${diasGozoNoPeriodoVenda} dia${diasGozoNoPeriodoVenda !== 1 ? "s" : ""}.`}
-                      </AlertDescription>
-                    </Alert>
-
-                    {diasGozoNoPeriodoVenda > 0 && (
-                      <Card className="border-primary/20 bg-primary/5">
-                        <CardHeader className="pb-2">
-                          <CardTitle className="text-sm text-primary">
-                            Gozo do {periodoVendaLabel} período — {diasGozoNoPeriodoVenda} dia{diasGozoNoPeriodoVenda !== 1 ? "s" : ""}
-                          </CardTitle>
-                          {((quinzenaVendaEfetiva === 1 && q1Inicio && q1Fim) || (quinzenaVendaEfetiva === 2 && q2Inicio && q2Fim)) && (
-                            <p className="text-xs text-muted-foreground">
-                              Período oficial: {formatDateBR(quinzenaVendaEfetiva === 1 ? q1Inicio : q2Inicio)} a {formatDateBR(quinzenaVendaEfetiva === 1 ? q1Fim : q2Fim)}
-                            </p>
-                          )}
-                        </CardHeader>
-                        <CardContent className="grid grid-cols-2 gap-4">
-                          <FormField control={form.control} name="gozo_venda_inicio" render={({ field }) => (
-                            <FormItem><FormLabel>Data de Início do Gozo</FormLabel><FormControl><Input type="date" min="1990-01-01" max="2100-12-31" {...field} /></FormControl><FormMessage /></FormItem>
-                          )} />
-                          <FormItem>
-                            <FormLabel>Data de Fim (automático)</FormLabel>
-                            <Input type="date" value={form.watch("gozo_venda_fim") || ""} readOnly className="bg-muted cursor-not-allowed" />
-                          </FormItem>
-                        </CardContent>
-                        {gozoDateError && (
-                          <div className="px-6 pb-4">
-                            <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertDescription className="text-sm">{gozoDateError}</AlertDescription></Alert>
-                          </div>
-                        )}
-                      </Card>
-                    )}
+                    <ExcecaoPeriodosSection
+                      excecaoTipo={excecaoTipo}
+                      onExcecaoTipoChange={() => {}}
+                      distribuicaoTipo={excDistribuicaoTipo}
+                      onDistribuicaoTipoChange={setExcDistribuicaoTipo}
+                      diasVendidos={form.watch("dias_vendidos") || 0}
+                      onDiasVendidosChange={(d) => {
+                        form.setValue("dias_vendidos", d);
+                        setExcDiasVendidos(d);
+                      }}
+                      periodos={excPeriodos}
+                      onPeriodosChange={setExcPeriodos}
+                      q1Inicio={q1Inicio}
+                      q1Fim={q1Fim}
+                      q2Inicio={q2Inicio}
+                      q2Fim={q2Fim}
+                      isHydrating={excHydrating}
+                      q1JaGozada={q1JaGozada}
+                      hideTipoToggle={true}
+                      allowLivre={false}
+                      diasDisponiveis={q1JaGozada ? 15 : 30}
+                      title="Vender dias de férias"
+                    />
 
                     <Card className="border-muted bg-muted/30">
                       <CardContent className="pt-4 space-y-2">
                         <div className="flex justify-between text-sm"><span>Dias totais do período aquisitivo:</span><span className="font-semibold">30 dias</span></div>
                         {q1JaGozada && <div className="flex justify-between text-sm text-muted-foreground"><span>Já gozados (1º período):</span><span className="font-semibold">-15 dias</span></div>}
                         {q1JaGozada && <div className="flex justify-between text-sm"><span>Disponíveis para ajuste:</span><span className="font-semibold">15 dias</span></div>}
-                        <div className="flex justify-between text-sm text-destructive"><span>Dias vendidos ({periodoVendaLabel} período):</span><span className="font-semibold">-{diasVendidos} dias</span></div>
-                        <div className="border-t pt-2 flex justify-between text-sm font-bold"><span>Dias de gozo:</span><span>{q1JaGozada ? `${diasGozo} dias` : `${diasGozo} dias (${outroPeriodoLabel}: 15 + ${periodoVendaLabel}: ${diasGozoNoPeriodoVenda})`}</span></div>
+                        <div className="border-t pt-2 flex justify-between text-sm font-bold"><span>Dias de gozo:</span><span>{diasGozo} dias</span></div>
                       </CardContent>
                     </Card>
                   </div>

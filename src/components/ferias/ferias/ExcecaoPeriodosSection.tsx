@@ -40,6 +40,15 @@ interface ExcecaoPeriodosSectionProps {
   /** True quando o 1º período oficial já foi gozado (status terminal e datas inalteradas).
    *  Quando true: limita disponibilidade a 15 dias e oculta opções "1º Período" e "Ambos". */
   q1JaGozada?: boolean;
+  /** Esconde os botões de alternância entre Vender/Gozo diferente. Útil quando a seção
+   *  é renderizada dentro de um fluxo já selecionado (ex.: venda padrão). */
+  hideTipoToggle?: boolean;
+  /** Se false, remove a opção "Livre" do modo vender. Padrão: true. */
+  allowLivre?: boolean;
+  /** Total de dias disponíveis para venda/gozo. Padrão: 30. */
+  diasDisponiveis?: number;
+  /** Título customizado do card (quando hideTipoToggle=true). */
+  title?: string;
 }
 
 const formatDateBR = (dateStr: string) => {
@@ -172,14 +181,18 @@ export function ExcecaoPeriodosSection({
   q2Fim,
   isHydrating = false,
   q1JaGozada = false,
+  hideTipoToggle = false,
+  allowLivre = true,
+  diasDisponiveis: diasDisponiveisProp,
+  title,
 }: ExcecaoPeriodosSectionProps) {
   // Gozo interno é livre para editar os 30 dias completos, mesmo que o
   // 1º período oficial já tenha sido enviado ao contador / já tenha sido
   // gozado na prática. O card de "Enviado ao contador" continua protegido,
   // mas aqui o usuário pode redistribuir os 30 dias como quiser.
-  const diasDisponiveis: number = 30;
+  const diasDisponiveis: number = diasDisponiveisProp ?? 30;
   const diasGozo = Math.max(0, diasDisponiveis - diasVendidos);
-  const opcoesDistribuicao = ["1", "2", "ambos", "livre"];
+  const opcoesDistribuicao = allowLivre ? ["1", "2", "ambos", "livre"] : ["1", "2", "ambos"];
   const opcoesGozoDiferente = ["1", "2", "ambos"];
 
   // Quando o gozo restante (após venda) é maior que 15 dias, é impossível
@@ -215,24 +228,12 @@ export function ExcecaoPeriodosSection({
     }
   }, [diasDisponiveis, diasVendidos, isHydrating, onDiasVendidosChange]);
 
-  // Auto-balance for "ambos" in vender mode
-  const handleAmbosVendaDiasChange = useCallback((periodo: 1 | 2, dias: number) => {
-    const otherDias = diasGozo - dias;
-    const updated = periodos.map(p => {
-      if (p.referencia_periodo === periodo) {
-        const newP = { ...p, dias };
-        if (p.data_inicio) newP.data_fim = calcEndDate(p.data_inicio, dias);
-        return newP;
-      }
-      if (p.referencia_periodo === (periodo === 1 ? 2 : 1)) {
-        const newP = { ...p, dias: Math.max(0, otherDias) };
-        if (p.data_inicio) newP.data_fim = calcEndDate(p.data_inicio, Math.max(0, otherDias));
-        return newP;
-      }
-      return p;
-    });
-    onPeriodosChange(updated);
-  }, [diasGozo, periodos, onPeriodosChange]);
+  // Split helper for "ambos" in vender mode
+  const splitAmbos = useCallback(() => {
+    const d1 = Math.ceil(diasGozo / 2);
+    const d2 = diasGozo - d1;
+    return { d1, d2 };
+  }, [diasGozo]);
 
   // Initialize periods when distribuicaoTipo changes (skip during edit hydration).
   // IMPORTANT: nunca sobrescrever quando já existem períodos compatíveis com a
@@ -275,7 +276,7 @@ export function ExcecaoPeriodosSection({
           { id: genId(), dias: d2, data_inicio: "", data_fim: "", referencia_periodo: 2, tipo: "vender" },
           ...keepParalelo,
         ]);
-      } else if (distribuicaoTipo === "livre") {
+      } else if (distribuicaoTipo === "livre" && allowLivre) {
         onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 0, tipo: "vender" }, ...keepParalelo]);
       }
     } else if (excecaoTipo === "gozo_diferente") {
@@ -420,7 +421,7 @@ export function ExcecaoPeriodosSection({
           { id: genId(), dias: d1, data_inicio: "", data_fim: "", referencia_periodo: 1 },
           { id: genId(), dias: d2, data_inicio: "", data_fim: "", referencia_periodo: 2 },
         ]);
-      } else if (distribuicaoTipo === "livre") {
+      } else if (distribuicaoTipo === "livre" && allowLivre) {
         onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 0 }]);
       }
     } else if (excecaoTipo === "gozo_diferente") {
@@ -446,43 +447,49 @@ export function ExcecaoPeriodosSection({
   return (
     <div className="space-y-4">
       {/* Toggle buttons */}
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          variant={excecaoTipo === "vender" ? "default" : "outline"}
-          size="sm"
-          onClick={() => {
-            const novo = excecaoTipo === "vender" ? null : "vender";
-            // Limpar somente quando o usuário trocar de modo de fato.
-            if (novo !== excecaoTipo) {
-              onDistribuicaoTipoChange("");
-              onPeriodosChange([]);
-              if (novo === null) onDiasVendidosChange(0);
-            }
-            onExcecaoTipoChange(novo);
-          }}
-        >
-          <DollarSign className="h-4 w-4 mr-1" />
-          Vender dias de férias
-        </Button>
-        <Button
-          type="button"
-          variant={excecaoTipo === "gozo_diferente" ? "default" : "outline"}
-          size="sm"
-          onClick={() => {
-            const novo = excecaoTipo === "gozo_diferente" ? null : "gozo_diferente";
-            if (novo !== excecaoTipo) {
-              onDistribuicaoTipoChange("");
-              onPeriodosChange([]);
-              onDiasVendidosChange(0);
-            }
-            onExcecaoTipoChange(novo);
-          }}
-        >
-          <CalendarClock className="h-4 w-4 mr-1" />
-          Gozo em datas diferentes
-        </Button>
-      </div>
+      {!hideTipoToggle && (
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant={excecaoTipo === "vender" ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              const novo = excecaoTipo === "vender" ? null : "vender";
+              // Limpar somente quando o usuário trocar de modo de fato.
+              if (novo !== excecaoTipo) {
+                onDistribuicaoTipoChange("");
+                onPeriodosChange([]);
+                if (novo === null) onDiasVendidosChange(0);
+              }
+              onExcecaoTipoChange(novo);
+            }}
+          >
+            <DollarSign className="h-4 w-4 mr-1" />
+            Vender dias de férias
+          </Button>
+          <Button
+            type="button"
+            variant={excecaoTipo === "gozo_diferente" ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              const novo = excecaoTipo === "gozo_diferente" ? null : "gozo_diferente";
+              if (novo !== excecaoTipo) {
+                onDistribuicaoTipoChange("");
+                onPeriodosChange([]);
+                onDiasVendidosChange(0);
+              }
+              onExcecaoTipoChange(novo);
+            }}
+          >
+            <CalendarClock className="h-4 w-4 mr-1" />
+            Gozo em datas diferentes
+          </Button>
+        </div>
+      )}
+
+      {hideTipoToggle && title && (
+        <p className="text-sm font-medium">{title}</p>
+      )}
 
       {/* Official periods reference */}
       {(excecaoTipo === "vender" || excecaoTipo === "gozo_diferente") && q1Inicio && q1Fim && (
@@ -563,99 +570,64 @@ export function ExcecaoPeriodosSection({
                 {singlePeriodInviavel && (
                   <Alert className="border-amber-500/40 bg-amber-500/10">
                     <Info className="h-4 w-4" />
-                    <AlertTitle className="text-sm">Apenas "Ambos" ou "Livre" disponíveis</AlertTitle>
+                    <AlertTitle className="text-sm">
+                      {allowLivre ? 'Apenas "Ambos" ou "Livre" disponíveis' : 'Apenas "Ambos" disponível'}
+                    </AlertTitle>
                     <AlertDescription className="text-xs">
                       Como o gozo é de <strong>{diasGozo} dias</strong> (acima de 15), não é possível
                       alocá-lo em um único período oficial — cada período comporta no máximo 15 dias.
-                      Use <strong>Ambos</strong> para dividir entre os dois períodos, ou <strong>Livre</strong>
-                      para usar datas fora dos períodos oficiais. Para liberar "1º" ou "2º", aumente os dias
+                      Use <strong>Ambos</strong> para dividir entre os dois períodos{allowLivre && (
+                        <>, ou <strong>Livre</strong> para usar datas fora dos períodos oficiais</>
+                      )}. Para liberar "1º" ou "2º", aumente os dias
                       vendidos até que sobrem no máximo 15 dias de gozo.
                     </AlertDescription>
                   </Alert>
                 )}
               </div>
 
-              {/* 1º ou 2º Período: single period (ignora linhas paralelas de gozo_diferente) */}
-              {(distribuicaoTipo === "1" || distribuicaoTipo === "2") && venderPeriodos.length === 1 && (
-                <Card className="border-primary/20 bg-primary/5">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm text-primary">
-                      Gozo no {distribuicaoTipo === "1" ? "1º" : "2º"} período — {diasGozo} dias
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-xs">Data de Início</Label>
-                      <Input
-                        type="date"
-                        value={venderPeriodos[0].data_inicio}
-                        onChange={(e) => {
-                          const targetId = venderPeriodos[0].id;
-                          const next = periodos.map(x => x.id === targetId
-                            ? { ...x, data_inicio: e.target.value, data_fim: calcEndDate(e.target.value, diasGozo) }
-                            : x);
-                          onPeriodosChange(next);
-                        }}
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Data de Fim (auto)</Label>
-                      <Input type="date" value={venderPeriodos[0].data_fim} readOnly className="mt-1 bg-muted cursor-not-allowed" />
-                    </div>
-                  </CardContent>
-                </Card>
+              {/* 1º ou 2º Período: dynamic sub-periods */}
+              {(distribuicaoTipo === "1" || distribuicaoTipo === "2") && (
+                <SubPeriodosList
+                  periodos={venderPeriodos}
+                  onChange={(updated) => {
+                    onPeriodosChange([...updated, ...gozoDiferentePeriodos]);
+                  }}
+                  totalDias={diasGozo}
+                  referenciaPeriodo={distribuicaoTipo === "1" ? 1 : 2}
+                  label={`Gozo no ${distribuicaoTipo === "1" ? "1º" : "2º"} período — ${diasGozo} dias`}
+                />
               )}
 
-              {/* Ambos: two periods with auto-balance */}
-              {distribuicaoTipo === "ambos" && venderPeriodos.length === 2 && (
-                <div className="space-y-3">
-                  {venderPeriodos.map((p, idx) => (
-                    <Card key={p.id} className="border-primary/20 bg-primary/5">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm text-primary">
-                          {idx === 0 ? "1º" : "2º"} Período
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <div className="grid grid-cols-3 gap-3">
-                          <div>
-                            <Label className="text-xs">Dias</Label>
-                            <Input
-                              type="number"
-                              min={0}
-                              max={diasGozo}
-                              value={p.dias}
-                              onChange={(e) => handleAmbosVendaDiasChange(
-                                p.referencia_periodo as 1 | 2,
-                                Math.min(diasGozo, Math.max(0, parseInt(e.target.value) || 0))
-                              )}
-                              className="mt-1"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs">Data de Início</Label>
-                            <Input
-                              type="date"
-                              value={p.data_inicio}
-                              onChange={(e) => {
-                                const targetId = p.id;
-                                const next = periodos.map(x => x.id === targetId
-                                  ? { ...x, data_inicio: e.target.value, data_fim: calcEndDate(e.target.value, p.dias) }
-                                  : x);
-                                onPeriodosChange(next);
-                              }}
-                              className="mt-1"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs">Data de Fim (auto)</Label>
-                            <Input type="date" value={p.data_fim} readOnly className="mt-1 bg-muted cursor-not-allowed" />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+              {/* Ambos: dynamic sub-periods per reference */}
+              {distribuicaoTipo === "ambos" && (
+                <div className="space-y-4">
+                  {(() => {
+                    const { d1, d2 } = splitAmbos();
+                    return (
+                      <>
+                        <SubPeriodosList
+                          periodos={venderPeriodos.filter(p => p.referencia_periodo === 1)}
+                          onChange={(updated) => {
+                            const ref2 = venderPeriodos.filter(p => p.referencia_periodo === 2);
+                            onPeriodosChange([...updated, ...ref2, ...gozoDiferentePeriodos]);
+                          }}
+                          totalDias={d1}
+                          referenciaPeriodo={1}
+                          label={`1º Período — ${d1} dias`}
+                        />
+                        <SubPeriodosList
+                          periodos={venderPeriodos.filter(p => p.referencia_periodo === 2)}
+                          onChange={(updated) => {
+                            const ref1 = venderPeriodos.filter(p => p.referencia_periodo === 1);
+                            onPeriodosChange([...ref1, ...updated, ...gozoDiferentePeriodos]);
+                          }}
+                          totalDias={d2}
+                          referenciaPeriodo={2}
+                          label={`2º Período — ${d2} dias`}
+                        />
+                      </>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -681,7 +653,7 @@ export function ExcecaoPeriodosSection({
               <CardContent className="pt-4 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Dias totais do período aquisitivo:</span>
-                  <span className="font-semibold">30 dias</span>
+                  <span className="font-semibold">{diasDisponiveis} dias</span>
                 </div>
                 <div className="flex justify-between text-sm text-destructive">
                   <span>Dias vendidos:</span>
