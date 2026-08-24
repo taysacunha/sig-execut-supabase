@@ -95,7 +95,7 @@ export function ReposicaoTab() {
   });
 
   const { data: saldos = [] } = useQuery({
-    queryKey: ["estoque-saldos"],
+    queryKey: ["estoque-saldos-reposicao"],
     refetchOnMount: "always" as const,
     queryFn: async () => {
       const { data, error } = await fromEstoque("estoque_saldos")
