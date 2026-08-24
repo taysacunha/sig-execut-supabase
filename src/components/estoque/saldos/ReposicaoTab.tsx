@@ -64,7 +64,6 @@ interface UnidadeRow {
 }
 
 export function ReposicaoTab() {
-  const [unidadeFiltro, setUnidadeFiltro] = useState("todas");
   const [categoriaFiltro, setCategoriaFiltro] = useState("todas");
   const [situacaoFiltro, setSituacaoFiltro] = useState("todas");
 
