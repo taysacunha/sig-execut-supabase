@@ -169,6 +169,7 @@ export default function EstoqueSaldos() {
   const canEditEstoque = canEdit("estoque");
 
 
+  const [activeTab, setActiveTab] = useState("todas");
   const [entradaDialog, setEntradaDialog] = useState(false);
   const [ajusteDialog, setAjusteDialog] = useState(false);
   const [transferenciaDialog, setTransferenciaDialog] = useState(false);
