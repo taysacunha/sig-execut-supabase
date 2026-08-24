@@ -332,15 +332,6 @@ export function ReposicaoTab() {
             onChange={setSearchTerm}
             placeholder="Buscar material, categoria ou local..."
           />
-          <Select value={unidadeFiltro} onValueChange={setUnidadeFiltro}>
-            <SelectTrigger className="w-[170px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todas">Todas as unidades</SelectItem>
-              {unidades.map((u) => (
-                <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Select value={categoriaFiltro} onValueChange={setCategoriaFiltro}>
             <SelectTrigger className="w-[170px]"><SelectValue /></SelectTrigger>
             <SelectContent>
