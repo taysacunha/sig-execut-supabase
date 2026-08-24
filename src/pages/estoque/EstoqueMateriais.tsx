@@ -29,6 +29,7 @@ interface Material {
   categoria: string | null;
   categoria_id: string | null;
   estoque_minimo: number;
+  estoque_maximo?: number | null;
   is_active: boolean;
   is_placa?: boolean | null;
   tipo_uso?: "venda" | "aluga" | null;
@@ -70,6 +71,7 @@ export default function EstoqueMateriais() {
     unidade_medida: "un",
     categoria_id: "",
     estoque_minimo: 0,
+    estoque_maximo: 0,
   });
 
   const { data: materiais = [], isLoading } = useQuery({
@@ -132,7 +134,8 @@ export default function EstoqueMateriais() {
         categoria_id: values.categoria_id || null,
         categoria: values.categoria_id ? (categorias.find((c) => c.id === values.categoria_id)?.nome || null) : null,
         estoque_minimo: values.estoque_minimo,
-      };
+        estoque_maximo: values.estoque_maximo,
+      } as any;
       if (values.id) {
         const { error } = await fromEstoque("estoque_materiais").update(payload).eq("id", values.id);
         if (error) throw error;
@@ -193,7 +196,7 @@ export default function EstoqueMateriais() {
   const closeDialog = () => {
     setDialogOpen(false);
     setEditingMaterial(null);
-    setForm({ nome: "", descricao: "", unidade_medida: "un", categoria_id: "", estoque_minimo: 0 });
+    setForm({ nome: "", descricao: "", unidade_medida: "un", categoria_id: "", estoque_minimo: 0, estoque_maximo: 0 });
   };
 
   const openEdit = (m: Material) => {
@@ -210,6 +213,7 @@ export default function EstoqueMateriais() {
       unidade_medida: m.unidade_medida,
       categoria_id: m.categoria_id || "",
       estoque_minimo: m.estoque_minimo,
+      estoque_maximo: m.estoque_maximo ?? 0,
     });
     setDialogOpen(true);
   };
@@ -218,6 +222,9 @@ export default function EstoqueMateriais() {
     if (!form.nome.trim()) return toast.error("Nome é obrigatório");
     if (form.nome.trim().toLowerCase().startsWith("placa")) {
       return toast.error('Materiais do tipo Placa devem ser cadastrados pelo botão "Nova Placa".');
+    }
+    if (form.estoque_maximo > 0 && form.estoque_maximo < form.estoque_minimo) {
+      return toast.error("O estoque máximo deve ser maior ou igual ao mínimo");
     }
     saveMutation.mutate({ ...form, id: editingMaterial?.id });
   };
@@ -253,6 +260,9 @@ export default function EstoqueMateriais() {
               <TableHead className="text-center">
                 <SortableHeader label="Estoque Mín." field="estoque_minimo" currentField={sortField as string} direction={sortDirection} onSort={setSorting as any} />
               </TableHead>
+              <TableHead className="text-center">
+                <SortableHeader label="Estoque Máx." field="estoque_maximo" currentField={sortField as string} direction={sortDirection} onSort={setSorting as any} />
+              </TableHead>
               {canEditEstoque && <TableHead className="text-right">Ações</TableHead>}
             </TableRow>
           </TableHeader>
@@ -263,6 +273,7 @@ export default function EstoqueMateriais() {
                 <TableCell>{categoriaNome(m.categoria_id, m.categoria)}</TableCell>
                 <TableCell>{unidadeLabel(m.unidade_medida)}</TableCell>
                 <TableCell className="text-center">{m.estoque_minimo}</TableCell>
+                <TableCell className="text-center">{m.estoque_maximo ? m.estoque_maximo : "—"}</TableCell>
                 {canEditEstoque && (
                   <TableCell className="text-right space-x-1">
                     {isInactiveTab ? (
@@ -337,6 +348,7 @@ export default function EstoqueMateriais() {
           tamanho_outro: editingPlaca.tamanho_outro ?? null,
           descricao: editingPlaca.descricao,
           estoque_minimo: editingPlaca.estoque_minimo,
+          estoque_maximo: editingPlaca.estoque_maximo ?? 0,
           categoria_id: editingPlaca.categoria_id,
         } : null}
       />
@@ -435,6 +447,18 @@ export default function EstoqueMateriais() {
                   onChange={(e) => setForm({ ...form, estoque_minimo: parseInt(e.target.value) || 0 })}
                 />
               </div>
+            </div>
+            <div>
+              <Label>Estoque Máximo</Label>
+              <Input
+                type="number"
+                min={0}
+                value={form.estoque_maximo}
+                onChange={(e) => setForm({ ...form, estoque_maximo: parseInt(e.target.value) || 0 })}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                0 = sem máximo definido. Materiais com máximo aparecem na aba "Reposição" em Saldos.
+              </p>
             </div>
             <div>
               <Label>Categoria</Label>
