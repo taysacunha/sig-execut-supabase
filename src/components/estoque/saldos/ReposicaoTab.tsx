@@ -27,7 +27,6 @@ export interface ReposicaoRow {
   falta: number;
   situacao: "abaixo_minimo" | "repor" | "completo";
   locaisTexto: string;
-  unidadeIds: string[];
 }
 
 const SITUACAO_LABEL: Record<ReposicaoRow["situacao"], string> = {
@@ -56,6 +55,7 @@ interface LocalRow {
   id: string;
   nome: string;
   unidade_id: string;
+  unidade_nome?: string;
 }
 
 interface UnidadeRow {
@@ -64,7 +64,6 @@ interface UnidadeRow {
 }
 
 export function ReposicaoTab() {
-  const [unidadeFiltro, setUnidadeFiltro] = useState("todas");
   const [categoriaFiltro, setCategoriaFiltro] = useState("todas");
   const [situacaoFiltro, setSituacaoFiltro] = useState("todas");
 
@@ -112,8 +111,12 @@ export function ReposicaoTab() {
       const { data, error } = await fromEstoque("estoque_locais_armazenamento")
         .select("id, nome, unidade_id");
       if (error) throw error;
-      return (data || []) as unknown as LocalRow[];
+      return (data || []).map((l: any) => ({
+        ...l,
+        unidade_nome: unidades.find((u) => u.id === l.unidade_id)?.nome || "—",
+      })) as unknown as LocalRow[];
     },
+    enabled: unidades.length > 0,
   });
 
   const categorias = useMemo(() => {
@@ -142,7 +145,11 @@ export function ReposicaoTab() {
         const detalhes = doMaterial
           .filter((s) => (s.quantidade || 0) !== 0)
           .map((s) => ({ local: localById.get(s.local_armazenamento_id), qtd: s.quantidade }))
-          .sort((a, b) => (a.local?.nome || "").localeCompare(b.local?.nome || ""));
+          .sort((a, b) => {
+            const ua = (a.local?.unidade_nome || "").localeCompare(b.local?.unidade_nome || "");
+            if (ua !== 0) return ua;
+            return (a.local?.nome || "").localeCompare(b.local?.nome || "");
+          });
 
         return {
           material_id: m.id,
@@ -155,23 +162,19 @@ export function ReposicaoTab() {
           falta,
           situacao,
           locaisTexto: detalhes.length
-            ? detalhes.map((d) => `${d.local?.nome || "Local"}: ${d.qtd}`).join(" · ")
+            ? detalhes.map((d) => `${d.local?.unidade_nome || "—"} - ${d.local?.nome || "Local"}: ${d.qtd}`).join(" · ")
             : "Sem saldo registrado em nenhum local",
-          unidadeIds: Array.from(
-            new Set(detalhes.map((d) => d.local?.unidade_id).filter(Boolean) as string[])
-          ),
         };
       });
   }, [materiais, saldos, locais]);
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
-      if (unidadeFiltro !== "todas" && !r.unidadeIds.includes(unidadeFiltro)) return false;
       if (categoriaFiltro !== "todas" && r.categoria !== categoriaFiltro) return false;
       if (situacaoFiltro !== "todas" && r.situacao !== situacaoFiltro) return false;
       return true;
     });
-  }, [rows, unidadeFiltro, categoriaFiltro, situacaoFiltro]);
+  }, [rows, categoriaFiltro, situacaoFiltro]);
 
   const controls = useTableControls({
     data: filtered,
@@ -186,11 +189,10 @@ export function ReposicaoTab() {
   } = controls;
 
   const temFiltro =
-    !!searchTerm || unidadeFiltro !== "todas" || categoriaFiltro !== "todas" || situacaoFiltro !== "todas";
+    !!searchTerm || categoriaFiltro !== "todas" || situacaoFiltro !== "todas";
 
   const limparFiltros = () => {
     setSearchTerm("");
-    setUnidadeFiltro("todas");
     setCategoriaFiltro("todas");
     setSituacaoFiltro("todas");
     setCurrentPage(1);
@@ -225,9 +227,6 @@ export function ReposicaoTab() {
     let y = 32;
 
     const filtrosTexto = [
-      unidadeFiltro !== "todas"
-        ? `Unidade: ${unidades.find((u) => u.id === unidadeFiltro)?.nome || "—"}`
-        : null,
       categoriaFiltro !== "todas" ? `Categoria: ${categoriaFiltro}` : null,
       situacaoFiltro !== "todas"
         ? `Situação: ${SITUACAO_LABEL[situacaoFiltro as ReposicaoRow["situacao"]]}`
@@ -333,15 +332,6 @@ export function ReposicaoTab() {
             onChange={setSearchTerm}
             placeholder="Buscar material, categoria ou local..."
           />
-          <Select value={unidadeFiltro} onValueChange={setUnidadeFiltro}>
-            <SelectTrigger className="w-[170px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todas">Todas as unidades</SelectItem>
-              {unidades.map((u) => (
-                <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Select value={categoriaFiltro} onValueChange={setCategoriaFiltro}>
             <SelectTrigger className="w-[170px]"><SelectValue /></SelectTrigger>
             <SelectContent>
