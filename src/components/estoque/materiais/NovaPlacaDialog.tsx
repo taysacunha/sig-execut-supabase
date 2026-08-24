@@ -184,6 +184,7 @@ export function NovaPlacaDialog({ open, onOpenChange, editingMaterial }: Props) 
       queryClient.invalidateQueries({ queryKey: ["estoque-materiais"] });
       queryClient.invalidateQueries({ queryKey: ["estoque-materiais-ativos"] });
       queryClient.invalidateQueries({ queryKey: ["estoque-materiais-placa"] });
+      queryClient.invalidateQueries({ queryKey: ["estoque-materiais-reposicao"] });
       queryClient.invalidateQueries({ queryKey: ["estoque-saldos"] });
       queryClient.invalidateQueries({ queryKey: ["estoque-saldos-placas"] });
       queryClient.invalidateQueries({ queryKey: ["estoque-saldos-check"] });

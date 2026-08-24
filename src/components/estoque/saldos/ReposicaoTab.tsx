@@ -83,6 +83,7 @@ export function ReposicaoTab() {
 
   const { data: materiais = [], isLoading } = useQuery({
     queryKey: ["estoque-materiais-reposicao"],
+    refetchOnMount: "always" as const,
     queryFn: async () => {
       const { data, error } = await fromEstoque("estoque_materiais")
         .select("id, nome, unidade_medida, categoria, categoria_id, estoque_minimo, estoque_maximo")
@@ -95,6 +96,7 @@ export function ReposicaoTab() {
 
   const { data: saldos = [] } = useQuery({
     queryKey: ["estoque-saldos"],
+    refetchOnMount: "always" as const,
     queryFn: async () => {
       const { data, error } = await fromEstoque("estoque_saldos")
         .select("material_id, local_armazenamento_id, quantidade");
@@ -105,6 +107,7 @@ export function ReposicaoTab() {
 
   const { data: locais = [] } = useQuery({
     queryKey: ["estoque-locais-ativos-reposicao"],
+    refetchOnMount: "always" as const,
     queryFn: async () => {
       const { data, error } = await fromEstoque("estoque_locais_armazenamento")
         .select("id, nome, unidade_id");

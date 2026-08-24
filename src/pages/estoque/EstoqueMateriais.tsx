@@ -146,6 +146,7 @@ export default function EstoqueMateriais() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["estoque-materiais"] });
+      queryClient.invalidateQueries({ queryKey: ["estoque-materiais-reposicao"] });
       toast.success(editingMaterial ? "Material atualizado!" : "Material cadastrado!");
       closeDialog();
     },
@@ -167,6 +168,7 @@ export default function EstoqueMateriais() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["estoque-materiais"] });
+      queryClient.invalidateQueries({ queryKey: ["estoque-materiais-reposicao"] });
       queryClient.invalidateQueries({ queryKey: ["estoque-saldos-check"] });
       toast.success("Status alterado!");
       setToggleConfirm(null);
@@ -186,6 +188,7 @@ export default function EstoqueMateriais() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["estoque-materiais"] });
+      queryClient.invalidateQueries({ queryKey: ["estoque-materiais-reposicao"] });
       queryClient.invalidateQueries({ queryKey: ["estoque-saldos-check"] });
       toast.success("Material excluído definitivamente!");
       setDeleteConfirm(null);
