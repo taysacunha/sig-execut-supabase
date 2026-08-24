@@ -19,6 +19,7 @@ import { useTableControls } from "@/hooks/useTableControls";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
 import { verificarEstoqueBaixo } from "@/hooks/useEstoqueNotificacoes";
 import { MaterialCombobox } from "@/components/estoque/MaterialCombobox";
+import { ReposicaoTab } from "@/components/estoque/saldos/ReposicaoTab";
 
 const fromEstoque = (table: string) => supabase.from(table as any);
 
@@ -531,12 +532,17 @@ export default function EstoqueSaldos() {
           <TabsList className="flex-wrap h-auto gap-1">
             <TabsTrigger value="todas">Todas ({saldosVisiveis.length})</TabsTrigger>
             <TabsTrigger value="por-material">Por material ({consolidadoPorMaterial.length})</TabsTrigger>
+            <TabsTrigger value="reposicao">Reposição</TabsTrigger>
             {activeUnidades.map((u) => (
               <TabsTrigger key={u.id} value={u.id}>
                 {u.nome} ({saldosByUnidade[u.id]?.length || 0})
               </TabsTrigger>
             ))}
           </TabsList>
+
+          <TabsContent value="reposicao">
+            <ReposicaoTab />
+          </TabsContent>
 
           <TabsContent value="todas">
             <Card>

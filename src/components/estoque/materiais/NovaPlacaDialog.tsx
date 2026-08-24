@@ -28,6 +28,7 @@ interface Props {
     tamanho_outro: string | null;
     descricao: string | null;
     estoque_minimo: number;
+    estoque_maximo?: number | null;
     categoria_id: string | null;
   } | null;
 }
@@ -70,6 +71,7 @@ export function NovaPlacaDialog({ open, onOpenChange, editingMaterial }: Props) 
   const [variante, setVariante] = useState("");
   const [categoriaId, setCategoriaId] = useState<string>("none");
   const [estoqueMinimo, setEstoqueMinimo] = useState(0);
+  const [estoqueMaximo, setEstoqueMaximo] = useState(0);
   const [obs, setObs] = useState("");
 
   useEffect(() => {
@@ -84,10 +86,11 @@ export function NovaPlacaDialog({ open, onOpenChange, editingMaterial }: Props) 
       setVariante(extractVariante(editingMaterial.nome, tu, tm, to));
       setCategoriaId(editingMaterial.categoria_id || "none");
       setEstoqueMinimo(editingMaterial.estoque_minimo ?? 0);
+      setEstoqueMaximo(editingMaterial.estoque_maximo ?? 0);
       setObs(editingMaterial.descricao || "");
     } else {
       setTipoUso("venda"); setTamanho("1x1"); setTamanhoOutro("");
-      setVariante(""); setCategoriaId("none"); setEstoqueMinimo(0); setObs("");
+      setVariante(""); setCategoriaId("none"); setEstoqueMinimo(0); setEstoqueMaximo(0); setObs("");
     }
   }, [open, editingMaterial]);
 
@@ -105,6 +108,7 @@ export function NovaPlacaDialog({ open, onOpenChange, editingMaterial }: Props) 
   const mutation = useMutation({
     mutationFn: async () => {
       if (tamanho === "outro" && !tamanhoOutro.trim()) throw new Error("Especifique o tamanho");
+      if (estoqueMaximo > 0 && estoqueMaximo < estoqueMinimo) throw new Error("O estoque máximo deve ser maior ou igual ao mínimo");
       const nome = buildNomePlaca(tipoUso, tamanho, tamanhoOutro, variante);
       const categoriaNome = categoriaId === "none"
         ? null
@@ -129,6 +133,7 @@ export function NovaPlacaDialog({ open, onOpenChange, editingMaterial }: Props) 
             categoria: categoriaNome,
             categoria_id: categoriaId === "none" ? null : categoriaId,
             estoque_minimo: estoqueMinimo,
+            estoque_maximo: estoqueMaximo,
             is_placa: true,
             tipo_uso: tipoUso,
             tamanho,
@@ -166,6 +171,7 @@ export function NovaPlacaDialog({ open, onOpenChange, editingMaterial }: Props) 
         categoria: categoriaNome,
         categoria_id: categoriaId === "none" ? null : categoriaId,
         estoque_minimo: estoqueMinimo,
+        estoque_maximo: estoqueMaximo,
         is_placa: true,
         is_active: true,
         tipo_uso: tipoUso,
@@ -274,14 +280,25 @@ export function NovaPlacaDialog({ open, onOpenChange, editingMaterial }: Props) 
             </p>
           </div>
 
-          <div className="space-y-2">
-            <Label>Estoque mínimo</Label>
-            <Input
-              type="number"
-              min={0}
-              value={estoqueMinimo}
-              onChange={(e) => setEstoqueMinimo(parseInt(e.target.value) || 0)}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Estoque mínimo</Label>
+              <Input
+                type="number"
+                min={0}
+                value={estoqueMinimo}
+                onChange={(e) => setEstoqueMinimo(parseInt(e.target.value) || 0)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Estoque máximo</Label>
+              <Input
+                type="number"
+                min={0}
+                value={estoqueMaximo}
+                onChange={(e) => setEstoqueMaximo(parseInt(e.target.value) || 0)}
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
