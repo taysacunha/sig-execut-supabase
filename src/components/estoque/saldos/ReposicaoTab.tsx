@@ -111,8 +111,12 @@ export function ReposicaoTab() {
       const { data, error } = await fromEstoque("estoque_locais_armazenamento")
         .select("id, nome, unidade_id");
       if (error) throw error;
-      return (data || []) as unknown as LocalRow[];
+      return (data || []).map((l: any) => ({
+        ...l,
+        unidade_nome: unidades.find((u) => u.id === l.unidade_id)?.nome || "—",
+      })) as unknown as LocalRow[];
     },
+    enabled: unidades.length > 0,
   });
 
   const categorias = useMemo(() => {
