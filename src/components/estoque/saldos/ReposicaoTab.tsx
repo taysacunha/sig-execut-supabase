@@ -55,6 +55,7 @@ interface LocalRow {
   id: string;
   nome: string;
   unidade_id: string;
+  unidade_nome?: string;
 }
 
 interface UnidadeRow {
