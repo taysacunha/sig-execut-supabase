@@ -227,9 +227,6 @@ export function ReposicaoTab() {
     let y = 32;
 
     const filtrosTexto = [
-      unidadeFiltro !== "todas"
-        ? `Unidade: ${unidades.find((u) => u.id === unidadeFiltro)?.nome || "—"}`
-        : null,
       categoriaFiltro !== "todas" ? `Categoria: ${categoriaFiltro}` : null,
       situacaoFiltro !== "todas"
         ? `Situação: ${SITUACAO_LABEL[situacaoFiltro as ReposicaoRow["situacao"]]}`
