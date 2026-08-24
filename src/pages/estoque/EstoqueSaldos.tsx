@@ -529,17 +529,24 @@ export default function EstoqueSaldos() {
           </CardContent>
         </Card>
       ) : (
-        <Tabs defaultValue="todas" className="space-y-4">
-          <TabsList className="flex-wrap h-auto gap-1 w-full justify-start">
-            <TabsTrigger value="todas">Todas ({saldosVisiveis.length})</TabsTrigger>
-            <TabsTrigger value="por-material">Por material ({consolidadoPorMaterial.length})</TabsTrigger>
-            {activeUnidades.map((u) => (
-              <TabsTrigger key={u.id} value={u.id}>
-                {u.nome} ({saldosByUnidade[u.id]?.length || 0})
-              </TabsTrigger>
-            ))}
-            <TabsTrigger value="reposicao" className="ml-auto">Reposição</TabsTrigger>
-          </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <TabsList className="flex-wrap h-auto gap-1">
+              <TabsTrigger value="todas">Todas ({saldosVisiveis.length})</TabsTrigger>
+              <TabsTrigger value="por-material">Por material ({consolidadoPorMaterial.length})</TabsTrigger>
+              {activeUnidades.map((u) => (
+                <TabsTrigger key={u.id} value={u.id}>
+                  {u.nome} ({saldosByUnidade[u.id]?.length || 0})
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            <Button
+              variant={activeTab === "reposicao" ? "default" : "outline"}
+              onClick={() => setActiveTab("reposicao")}
+            >
+              Reposição
+            </Button>
+          </div>
 
           <TabsContent value="reposicao">
             <ReposicaoTab />
