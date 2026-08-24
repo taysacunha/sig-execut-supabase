@@ -145,7 +145,11 @@ export function ReposicaoTab() {
         const detalhes = doMaterial
           .filter((s) => (s.quantidade || 0) !== 0)
           .map((s) => ({ local: localById.get(s.local_armazenamento_id), qtd: s.quantidade }))
-          .sort((a, b) => (a.local?.nome || "").localeCompare(b.local?.nome || ""));
+          .sort((a, b) => {
+            const ua = (a.local?.unidade_nome || "").localeCompare(b.local?.unidade_nome || "");
+            if (ua !== 0) return ua;
+            return (a.local?.nome || "").localeCompare(b.local?.nome || "");
+          });
 
         return {
           material_id: m.id,
@@ -158,11 +162,8 @@ export function ReposicaoTab() {
           falta,
           situacao,
           locaisTexto: detalhes.length
-            ? detalhes.map((d) => `${d.local?.nome || "Local"}: ${d.qtd}`).join(" · ")
+            ? detalhes.map((d) => `${d.local?.unidade_nome || "—"} - ${d.local?.nome || "Local"}: ${d.qtd}`).join(" · ")
             : "Sem saldo registrado em nenhum local",
-          unidadeIds: Array.from(
-            new Set(detalhes.map((d) => d.local?.unidade_id).filter(Boolean) as string[])
-          ),
         };
       });
   }, [materiais, saldos, locais]);
