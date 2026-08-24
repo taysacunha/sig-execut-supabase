@@ -2215,6 +2215,7 @@ export type Database = {
           categoria_id: string | null
           created_at: string | null
           descricao: string | null
+          estoque_maximo: number
           estoque_minimo: number | null
           id: string
           is_active: boolean | null
@@ -2231,6 +2232,7 @@ export type Database = {
           categoria_id?: string | null
           created_at?: string | null
           descricao?: string | null
+          estoque_maximo?: number
           estoque_minimo?: number | null
           id?: string
           is_active?: boolean | null
@@ -2247,6 +2249,7 @@ export type Database = {
           categoria_id?: string | null
           created_at?: string | null
           descricao?: string | null
+          estoque_maximo?: number
           estoque_minimo?: number | null
           id?: string
           is_active?: boolean | null
