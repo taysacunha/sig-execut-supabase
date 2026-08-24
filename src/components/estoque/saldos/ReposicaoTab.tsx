@@ -27,7 +27,6 @@ export interface ReposicaoRow {
   falta: number;
   situacao: "abaixo_minimo" | "repor" | "completo";
   locaisTexto: string;
-  unidadeIds: string[];
 }
 
 const SITUACAO_LABEL: Record<ReposicaoRow["situacao"], string> = {
