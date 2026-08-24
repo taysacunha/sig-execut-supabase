@@ -170,12 +170,11 @@ export function ReposicaoTab() {
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
-      if (unidadeFiltro !== "todas" && !r.unidadeIds.includes(unidadeFiltro)) return false;
       if (categoriaFiltro !== "todas" && r.categoria !== categoriaFiltro) return false;
       if (situacaoFiltro !== "todas" && r.situacao !== situacaoFiltro) return false;
       return true;
     });
-  }, [rows, unidadeFiltro, categoriaFiltro, situacaoFiltro]);
+  }, [rows, categoriaFiltro, situacaoFiltro]);
 
   const controls = useTableControls({
     data: filtered,
