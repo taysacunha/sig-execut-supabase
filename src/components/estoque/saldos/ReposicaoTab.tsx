@@ -189,11 +189,10 @@ export function ReposicaoTab() {
   } = controls;
 
   const temFiltro =
-    !!searchTerm || unidadeFiltro !== "todas" || categoriaFiltro !== "todas" || situacaoFiltro !== "todas";
+    !!searchTerm || categoriaFiltro !== "todas" || situacaoFiltro !== "todas";
 
   const limparFiltros = () => {
     setSearchTerm("");
-    setUnidadeFiltro("todas");
     setCategoriaFiltro("todas");
     setSituacaoFiltro("todas");
     setCurrentPage(1);
