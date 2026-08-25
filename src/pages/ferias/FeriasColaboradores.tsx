@@ -296,10 +296,20 @@ const FeriasColaboradores = () => {
         }
         const truncate = (s: string, max: number) =>
           s.length > max ? s.slice(0, max - 1) + "…" : s;
-        doc.text(truncate(c.nome || "-", 55), cols[0].x, y);
-        doc.text(truncate(c.ferias_setores?.nome || "-", 40), cols[1].x, y);
-        doc.text(truncate(c.ferias_cargos?.nome || "-", 35), cols[2].x, y);
+        doc.text(truncate(c.nome || "-", 48), cols[0].x, y);
+        doc.text(truncate(c.ferias_setores?.nome || "-", 34), cols[1].x, y);
+        doc.text(truncate(c.ferias_cargos?.nome || "-", 28), cols[2].x, y);
         doc.text(c.data_admissao ? formatDate(c.data_admissao) : "-", cols[3].x, y);
+        doc.text(c.data_demissao ? formatDate(c.data_demissao) : "-", cols[4].x, y);
+        doc.text(
+          c.status === "ativo"
+            ? "Ativo"
+            : c.motivo_inativacao === "desligamento" || c.data_demissao
+            ? "Desligado"
+            : "Inativo",
+          cols[5].x,
+          y,
+        );
         y += 6;
       });
 
