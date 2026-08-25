@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Building2, Briefcase, Users, Calendar, FileText, AlertTriangle } from "lucide-react";
 import { AfastamentosSection } from "./AfastamentosSection";
+import { VinculosSection } from "./VinculosSection";
 
 interface ColaboradorViewDialogProps {
   open: boolean;
