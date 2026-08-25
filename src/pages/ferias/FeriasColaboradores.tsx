@@ -448,6 +448,9 @@ const FeriasColaboradores = () => {
                       <TableCell>{colaborador.ferias_cargos?.nome || "-"}</TableCell>
                       <TableCell>{formatDate(colaborador.data_admissao)}</TableCell>
                       <TableCell>
+                        {colaborador.data_demissao ? formatDate(colaborador.data_demissao) : "-"}
+                      </TableCell>
+                      <TableCell>
                         {colaborador.familiar_id ? (
                           <Badge variant="outline" className="text-xs">
                             Sim
@@ -456,7 +459,11 @@ const FeriasColaboradores = () => {
                       </TableCell>
                       <TableCell>
                         <Badge variant={colaborador.status === "ativo" ? "default" : "secondary"}>
-                          {colaborador.status === "ativo" ? "Ativo" : "Inativo"}
+                          {colaborador.status === "ativo"
+                            ? "Ativo"
+                            : colaborador.motivo_inativacao === "desligamento" || colaborador.data_demissao
+                            ? "Desligado"
+                            : "Inativo (temporário)"}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -477,6 +484,25 @@ const FeriasColaboradores = () => {
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
+                          {colaborador.status === "ativo" ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setDesativarColaborador(colaborador)}
+                              title="Desativar / desligar"
+                            >
+                              <PowerOff className="h-4 w-4 text-destructive" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setReativarColaborador(colaborador)}
+                              title="Reativar"
+                            >
+                              <Power className="h-4 w-4 text-primary" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
