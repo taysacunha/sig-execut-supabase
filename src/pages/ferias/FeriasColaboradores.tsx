@@ -39,6 +39,9 @@ export interface Colaborador {
   cargo_id: string | null;
   equipe_id: string | null;
   status: string;
+  motivo_inativacao: string | null;
+  data_demissao: string | null;
+  observacao_inativacao: string | null;
   aviso_previo_inicio: string | null;
   aviso_previo_fim: string | null;
   familiar_id: string | null;
