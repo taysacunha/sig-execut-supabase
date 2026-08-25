@@ -172,12 +172,17 @@ const ColaboradorViewDialog = ({ open, onOpenChange, colaborador }: ColaboradorV
             </>
           )}
 
+          {/* Histórico de vínculos */}
+          <Separator />
+          <VinculosSection colaboradorId={colaborador.id} />
+
           {/* Afastamentos */}
           <Separator />
           <AfastamentosSection
             colaboradorId={colaborador.id}
             colaboradorNome={colaborador.nome}
           />
+
 
           {/* Observações */}
           {colaborador.observacoes && (
