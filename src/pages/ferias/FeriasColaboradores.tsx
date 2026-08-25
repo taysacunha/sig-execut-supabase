@@ -403,6 +403,7 @@ const FeriasColaboradores = () => {
                       onSort={(field) => setSorting(field as keyof Colaborador)}
                     />
                   </TableHead>
+                  <TableHead>Demissão</TableHead>
                   <TableHead>Familiar</TableHead>
                   <TableHead>
                     <SortableHeader
@@ -413,19 +414,19 @@ const FeriasColaboradores = () => {
                       onSort={(field) => setSorting(field as keyof Colaborador)}
                     />
                   </TableHead>
-                  <TableHead className="w-[100px]">Ações</TableHead>
+                  <TableHead className="w-[140px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={8} className="text-center py-8">
                       Carregando...
                     </TableCell>
                   </TableRow>
                 ) : paginatedData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       Nenhum colaborador encontrado
                     </TableCell>
                   </TableRow>
