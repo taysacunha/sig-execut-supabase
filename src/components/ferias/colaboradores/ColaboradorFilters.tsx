@@ -48,7 +48,9 @@ const ColaboradorFilters = ({
           <SelectContent>
             <SelectItem value="todos">Todos</SelectItem>
             <SelectItem value="ativo">Ativo</SelectItem>
-            <SelectItem value="inativo">Inativo</SelectItem>
+            <SelectItem value="desligado">Desligado</SelectItem>
+            <SelectItem value="temporario">Inativo (temporário)</SelectItem>
+            <SelectItem value="inativo">Inativo (todos)</SelectItem>
           </SelectContent>
         </Select>
       </div>
