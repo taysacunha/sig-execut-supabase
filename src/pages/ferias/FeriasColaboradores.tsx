@@ -263,10 +263,12 @@ const FeriasColaboradores = () => {
       y += 8;
       // Cabeçalho da tabela
       const cols = [
-        { label: "Nome", x: 14, w: 90 },
-        { label: "Setor", x: 104, w: 70 },
-        { label: "Cargo", x: 174, w: 60 },
-        { label: "Admissão", x: 234, w: 30 },
+        { label: "Nome", x: 14, w: 80 },
+        { label: "Setor", x: 94, w: 60 },
+        { label: "Cargo", x: 154, w: 50 },
+        { label: "Admissão", x: 204, w: 28 },
+        { label: "Demissão", x: 232, w: 28 },
+        { label: "Situação", x: 260, w: 25 },
       ];
       doc.setFillColor(230, 230, 230);
       doc.rect(14, y - 4, pageWidth - 28, 7, "F");
