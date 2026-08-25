@@ -58,6 +58,8 @@ const FeriasColaboradores = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingColaborador, setEditingColaborador] = useState<Colaborador | null>(null);
   const [viewingColaborador, setViewingColaborador] = useState<Colaborador | null>(null);
+  const [desativarColaborador, setDesativarColaborador] = useState<Colaborador | null>(null);
+  const [reativarColaborador, setReativarColaborador] = useState<Colaborador | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("todos");
