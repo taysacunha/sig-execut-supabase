@@ -555,6 +555,20 @@ const FeriasColaboradores = () => {
         colaborador={editingColaborador}
       />
 
+      <DesativarColaboradorDialog
+        open={!!desativarColaborador}
+        onOpenChange={(o) => !o && setDesativarColaborador(null)}
+        colaborador={desativarColaborador}
+      />
+
+      <ReativarColaboradorDialog
+        open={!!reativarColaborador}
+        onOpenChange={(o) => !o && setReativarColaborador(null)}
+        colaborador={reativarColaborador}
+      />
+
+
+
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
