@@ -169,7 +169,17 @@ const FeriasColaboradores = () => {
   // Apply additional filters before passing to useTableControls
   const preFilteredData = useMemo(() => {
     return colaboradores.filter((c) => {
-      const matchesStatus = statusFilter === "todos" || c.status === statusFilter;
+      const desligado = c.motivo_inativacao === "desligamento" || !!c.data_demissao;
+      const matchesStatus =
+        statusFilter === "todos"
+          ? true
+          : statusFilter === "ativo"
+          ? c.status === "ativo"
+          : statusFilter === "desligado"
+          ? c.status !== "ativo" && desligado
+          : statusFilter === "temporario"
+          ? c.status !== "ativo" && !desligado
+          : c.status === statusFilter;
       const matchesSetor = setorFilter === "todos" || c.setor_titular_id === setorFilter;
       const matchesUnidade = unidadeFilter === "todos" || c.unidade_id === unidadeFilter;
       return matchesStatus && matchesSetor && matchesUnidade;
