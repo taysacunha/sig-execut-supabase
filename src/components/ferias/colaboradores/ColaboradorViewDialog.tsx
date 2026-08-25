@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Building2, Briefcase, Users, Calendar, FileText, AlertTriangle } from "lucide-react";
 import { AfastamentosSection } from "./AfastamentosSection";
+import { VinculosSection } from "./VinculosSection";
 
 interface ColaboradorViewDialogProps {
   open: boolean;
@@ -80,10 +81,20 @@ const ColaboradorViewDialog = ({ open, onOpenChange, colaborador }: ColaboradorV
 
         <div className="space-y-4">
           {/* Status */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Badge variant={colaborador.status === "ativo" ? "default" : "secondary"}>
-              {colaborador.status === "ativo" ? "Ativo" : "Inativo"}
+              {colaborador.status === "ativo"
+                ? "Ativo"
+                : (colaborador as any).motivo_inativacao === "desligamento" ||
+                  (colaborador as any).data_demissao
+                ? "Desligado"
+                : "Inativo (temporário)"}
             </Badge>
+            {(colaborador as any).data_demissao && (
+              <Badge variant="outline">
+                Demissão: {formatDate((colaborador as any).data_demissao)}
+              </Badge>
+            )}
             {colaborador.aviso_previo_inicio && (
               <Badge variant="destructive" className="flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3" />
@@ -91,6 +102,11 @@ const ColaboradorViewDialog = ({ open, onOpenChange, colaborador }: ColaboradorV
               </Badge>
             )}
           </div>
+          {(colaborador as any).observacao_inativacao && (
+            <p className="text-xs text-muted-foreground">
+              Motivo da inativação: {(colaborador as any).observacao_inativacao}
+            </p>
+          )}
 
           <Separator />
 
@@ -156,12 +172,17 @@ const ColaboradorViewDialog = ({ open, onOpenChange, colaborador }: ColaboradorV
             </>
           )}
 
+          {/* Histórico de vínculos */}
+          <Separator />
+          <VinculosSection colaboradorId={colaborador.id} />
+
           {/* Afastamentos */}
           <Separator />
           <AfastamentosSection
             colaboradorId={colaborador.id}
             colaboradorNome={colaborador.nome}
           />
+
 
           {/* Observações */}
           {colaborador.observacoes && (

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, Filter, Users, Eye, AlertTriangle, FileDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Filter, Users, Eye, AlertTriangle, FileDown, Power, PowerOff } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -13,6 +13,8 @@ import jsPDF from "jspdf";
 import ColaboradorDialog from "@/components/ferias/colaboradores/ColaboradorDialog";
 import ColaboradorViewDialog from "@/components/ferias/colaboradores/ColaboradorViewDialog";
 import ColaboradorFilters from "@/components/ferias/colaboradores/ColaboradorFilters";
+import DesativarColaboradorDialog from "@/components/ferias/colaboradores/DesativarColaboradorDialog";
+import ReativarColaboradorDialog from "@/components/ferias/colaboradores/ReativarColaboradorDialog";
 import { AfastamentosPDFGenerator } from "@/components/ferias/colaboradores/AfastamentosPDFGenerator";
 import { TableSearch, TablePagination, SortableHeader } from "@/components/vendas/TableControls";
 import { useTableControls } from "@/hooks/useTableControls";
@@ -39,6 +41,9 @@ export interface Colaborador {
   cargo_id: string | null;
   equipe_id: string | null;
   status: string;
+  motivo_inativacao: string | null;
+  data_demissao: string | null;
+  observacao_inativacao: string | null;
   aviso_previo_inicio: string | null;
   aviso_previo_fim: string | null;
   familiar_id: string | null;
@@ -53,6 +58,8 @@ const FeriasColaboradores = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingColaborador, setEditingColaborador] = useState<Colaborador | null>(null);
   const [viewingColaborador, setViewingColaborador] = useState<Colaborador | null>(null);
+  const [desativarColaborador, setDesativarColaborador] = useState<Colaborador | null>(null);
+  const [reativarColaborador, setReativarColaborador] = useState<Colaborador | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("todos");
@@ -162,7 +169,17 @@ const FeriasColaboradores = () => {
   // Apply additional filters before passing to useTableControls
   const preFilteredData = useMemo(() => {
     return colaboradores.filter((c) => {
-      const matchesStatus = statusFilter === "todos" || c.status === statusFilter;
+      const desligado = c.motivo_inativacao === "desligamento" || !!c.data_demissao;
+      const matchesStatus =
+        statusFilter === "todos"
+          ? true
+          : statusFilter === "ativo"
+          ? c.status === "ativo"
+          : statusFilter === "desligado"
+          ? c.status !== "ativo" && desligado
+          : statusFilter === "temporario"
+          ? c.status !== "ativo" && !desligado
+          : c.status === statusFilter;
       const matchesSetor = setorFilter === "todos" || c.setor_titular_id === setorFilter;
       const matchesUnidade = unidadeFilter === "todos" || c.unidade_id === unidadeFilter;
       return matchesStatus && matchesSetor && matchesUnidade;
@@ -246,10 +263,12 @@ const FeriasColaboradores = () => {
       y += 8;
       // Cabeçalho da tabela
       const cols = [
-        { label: "Nome", x: 14, w: 90 },
-        { label: "Setor", x: 104, w: 70 },
-        { label: "Cargo", x: 174, w: 60 },
-        { label: "Admissão", x: 234, w: 30 },
+        { label: "Nome", x: 14, w: 80 },
+        { label: "Setor", x: 94, w: 60 },
+        { label: "Cargo", x: 154, w: 50 },
+        { label: "Admissão", x: 204, w: 28 },
+        { label: "Demissão", x: 232, w: 28 },
+        { label: "Situação", x: 260, w: 25 },
       ];
       doc.setFillColor(230, 230, 230);
       doc.rect(14, y - 4, pageWidth - 28, 7, "F");
@@ -277,10 +296,20 @@ const FeriasColaboradores = () => {
         }
         const truncate = (s: string, max: number) =>
           s.length > max ? s.slice(0, max - 1) + "…" : s;
-        doc.text(truncate(c.nome || "-", 55), cols[0].x, y);
-        doc.text(truncate(c.ferias_setores?.nome || "-", 40), cols[1].x, y);
-        doc.text(truncate(c.ferias_cargos?.nome || "-", 35), cols[2].x, y);
+        doc.text(truncate(c.nome || "-", 48), cols[0].x, y);
+        doc.text(truncate(c.ferias_setores?.nome || "-", 34), cols[1].x, y);
+        doc.text(truncate(c.ferias_cargos?.nome || "-", 28), cols[2].x, y);
         doc.text(c.data_admissao ? formatDate(c.data_admissao) : "-", cols[3].x, y);
+        doc.text(c.data_demissao ? formatDate(c.data_demissao) : "-", cols[4].x, y);
+        doc.text(
+          c.status === "ativo"
+            ? "Ativo"
+            : c.motivo_inativacao === "desligamento" || c.data_demissao
+            ? "Desligado"
+            : "Inativo",
+          cols[5].x,
+          y,
+        );
         y += 6;
       });
 
@@ -386,6 +415,7 @@ const FeriasColaboradores = () => {
                       onSort={(field) => setSorting(field as keyof Colaborador)}
                     />
                   </TableHead>
+                  <TableHead>Demissão</TableHead>
                   <TableHead>Familiar</TableHead>
                   <TableHead>
                     <SortableHeader
@@ -396,19 +426,19 @@ const FeriasColaboradores = () => {
                       onSort={(field) => setSorting(field as keyof Colaborador)}
                     />
                   </TableHead>
-                  <TableHead className="w-[100px]">Ações</TableHead>
+                  <TableHead className="w-[140px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={8} className="text-center py-8">
                       Carregando...
                     </TableCell>
                   </TableRow>
                 ) : paginatedData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       Nenhum colaborador encontrado
                     </TableCell>
                   </TableRow>
@@ -430,6 +460,9 @@ const FeriasColaboradores = () => {
                       <TableCell>{colaborador.ferias_cargos?.nome || "-"}</TableCell>
                       <TableCell>{formatDate(colaborador.data_admissao)}</TableCell>
                       <TableCell>
+                        {colaborador.data_demissao ? formatDate(colaborador.data_demissao) : "-"}
+                      </TableCell>
+                      <TableCell>
                         {colaborador.familiar_id ? (
                           <Badge variant="outline" className="text-xs">
                             Sim
@@ -438,7 +471,11 @@ const FeriasColaboradores = () => {
                       </TableCell>
                       <TableCell>
                         <Badge variant={colaborador.status === "ativo" ? "default" : "secondary"}>
-                          {colaborador.status === "ativo" ? "Ativo" : "Inativo"}
+                          {colaborador.status === "ativo"
+                            ? "Ativo"
+                            : colaborador.motivo_inativacao === "desligamento" || colaborador.data_demissao
+                            ? "Desligado"
+                            : "Inativo (temporário)"}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -459,6 +496,25 @@ const FeriasColaboradores = () => {
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
+                          {colaborador.status === "ativo" ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setDesativarColaborador(colaborador)}
+                              title="Desativar / desligar"
+                            >
+                              <PowerOff className="h-4 w-4 text-destructive" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setReativarColaborador(colaborador)}
+                              title="Reativar"
+                            >
+                              <Power className="h-4 w-4 text-primary" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -498,6 +554,20 @@ const FeriasColaboradores = () => {
         onOpenChange={handleCloseDialog}
         colaborador={editingColaborador}
       />
+
+      <DesativarColaboradorDialog
+        open={!!desativarColaborador}
+        onOpenChange={(o) => !o && setDesativarColaborador(null)}
+        colaborador={desativarColaborador}
+      />
+
+      <ReativarColaboradorDialog
+        open={!!reativarColaborador}
+        onOpenChange={(o) => !o && setReativarColaborador(null)}
+        colaborador={reativarColaborador}
+      />
+
+
 
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>

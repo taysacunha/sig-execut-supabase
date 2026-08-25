@@ -506,27 +506,17 @@ const ColaboradorDialog = ({ open, onOpenChange, colaborador }: ColaboradorDialo
                       )}
                     />
 
-                    <FormField
-                      control={form.control}
-                      name="status"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Status</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="ativo">Ativo</SelectItem>
-                              <SelectItem value="inativo">Inativo</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <FormItem>
+                      <FormLabel>Status</FormLabel>
+                      <div className="rounded-md border px-3 py-2 text-sm">
+                        {form.watch("status") === "ativo" ? "Ativo" : "Inativo"}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        O status é alterado pelas ações de desligamento/reativação na
+                        listagem de colaboradores, para manter o histórico de vínculos.
+                      </p>
+                    </FormItem>
+
                   </div>
                 </TabsContent>
 
