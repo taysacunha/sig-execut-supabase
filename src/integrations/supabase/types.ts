@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -2828,6 +2828,53 @@ export type Database = {
           },
         ]
       }
+      ferias_colaborador_vinculos: {
+        Row: {
+          colaborador_id: string
+          created_at: string
+          data_admissao: string
+          data_demissao: string | null
+          id: string
+          motivo: string | null
+          observacao: string | null
+          registrado_por: string | null
+          tipo_desligamento: string | null
+          updated_at: string
+        }
+        Insert: {
+          colaborador_id: string
+          created_at?: string
+          data_admissao: string
+          data_demissao?: string | null
+          id?: string
+          motivo?: string | null
+          observacao?: string | null
+          registrado_por?: string | null
+          tipo_desligamento?: string | null
+          updated_at?: string
+        }
+        Update: {
+          colaborador_id?: string
+          created_at?: string
+          data_admissao?: string
+          data_demissao?: string | null
+          id?: string
+          motivo?: string | null
+          observacao?: string | null
+          registrado_por?: string | null
+          tipo_desligamento?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ferias_colaborador_vinculos_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "ferias_colaboradores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ferias_colaboradores: {
         Row: {
           aviso_previo_fim: string | null
@@ -2835,12 +2882,15 @@ export type Database = {
           cargo_id: string | null
           created_at: string | null
           data_admissao: string
+          data_demissao: string | null
           data_nascimento: string
           equipe_id: string | null
           familiar_id: string | null
           id: string
+          motivo_inativacao: string | null
           nome: string
           nome_exibicao: string | null
+          observacao_inativacao: string | null
           observacoes: string | null
           setor_titular_id: string
           status: string | null
@@ -2853,12 +2903,15 @@ export type Database = {
           cargo_id?: string | null
           created_at?: string | null
           data_admissao: string
+          data_demissao?: string | null
           data_nascimento: string
           equipe_id?: string | null
           familiar_id?: string | null
           id?: string
+          motivo_inativacao?: string | null
           nome: string
           nome_exibicao?: string | null
+          observacao_inativacao?: string | null
           observacoes?: string | null
           setor_titular_id: string
           status?: string | null
@@ -2871,12 +2924,15 @@ export type Database = {
           cargo_id?: string | null
           created_at?: string | null
           data_admissao?: string
+          data_demissao?: string | null
           data_nascimento?: string
           equipe_id?: string | null
           familiar_id?: string | null
           id?: string
+          motivo_inativacao?: string | null
           nome?: string
           nome_exibicao?: string | null
+          observacao_inativacao?: string | null
           observacoes?: string | null
           setor_titular_id?: string
           status?: string | null
