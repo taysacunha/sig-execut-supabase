@@ -144,7 +144,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const [novoPorImovel, setNovoPorImovel] = useState<Record<string, NovoItem>>({});
   // Imóveis abertos manualmente na aba Itens (ainda sem lançamentos)
   const [imoveisExtras, setImoveisExtras] = useState<string[]>([]);
-  const [gruposAbertos, setGruposAbertos] = useState<string[]>([]);
+  const [gruposFechados, setGruposFechados] = useState<string[]>([]);
 
   useEffect(() => {
     setNovoBenef(benefVazio);
