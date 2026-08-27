@@ -150,7 +150,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     setNovoBenef(benefVazio);
     setNovoPorImovel({});
     setImoveisExtras([]);
-    setGruposAbertos([]);
+    setGruposFechados([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repasse?.id]);
 
