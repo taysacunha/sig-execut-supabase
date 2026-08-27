@@ -285,6 +285,52 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
   const origemLabel = (o: RepasseItemOrigem) => origens.find((x) => x.v === o)?.l ?? o;
 
+  // ----- Agrupamento dos itens por imóvel
+  type RepasseItem = NonNullable<Repasse["itens"]>[number];
+  const inquilinoDoImovel = (id: string | null) =>
+    id ? (inquilinos.data ?? []).find((i) => i.imovel_id === id)?.inquilino?.nome ?? null : null;
+
+  function agruparItens(itens: RepasseItem[], extras: string[] = []) {
+    const map = new Map<
+      string,
+      {
+        key: string; imovel_id: string | null; label: string; inquilino: string | null;
+        itens: RepasseItem[]; credito: number; debito: number;
+      }
+    >();
+    const get = (id: string | null) => {
+      const key = id ?? "__sem__";
+      let g = map.get(key);
+      if (!g) {
+        g = {
+          key,
+          imovel_id: id,
+          label: id ? imovelLabel(id) : "Sem imóvel",
+          inquilino: inquilinoDoImovel(id),
+          itens: [], credito: 0, debito: 0,
+        };
+        map.set(key, g);
+      }
+      return g;
+    };
+    for (const k of extras) get(k === "__sem__" ? null : k);
+    for (const it of itens) {
+      const g = get(it.imovel_id ?? null);
+      g.itens.push(it);
+      if (it.tipo === "credito") g.credito += Number(it.valor || 0);
+      else g.debito += Number(it.valor || 0);
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.key === "__sem__") return 1;
+      if (b.key === "__sem__") return -1;
+      return a.label.localeCompare(b.label);
+    });
+  }
+
+  const gruposItens = agruparItens(repasse?.itens ?? [], imoveisExtras);
+
+
+
   // Duplicidade: mesmo tipo + origem + imóvel dentro da competência (itens manuais)
   const itemDuplicadoDe = (
     dados: { tipo: RepasseItemTipo; origem: RepasseItemOrigem; imovel_id: string | null },
