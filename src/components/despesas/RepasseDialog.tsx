@@ -370,27 +370,39 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     } catch (e: any) { toast.error(e?.message ?? "Erro ao reabrir"); }
   }
 
-  async function adicionar() {
+  const chaveImovel = (id: string | null) => id ?? "__sem__";
+  const novoDe = (id: string | null): NovoItem =>
+    novoPorImovel[chaveImovel(id)] ?? novoItemVazio;
+  const setNovoDe = (id: string | null, patch: Partial<NovoItem>) =>
+    setNovoPorImovel((prev) => {
+      const k = chaveImovel(id);
+      return { ...prev, [k]: { ...(prev[k] ?? novoItemVazio), ...patch } };
+    });
+
+  async function adicionar(imovelId: string | null) {
     if (!repasse) return;
+    const novo = novoDe(imovelId);
     if (!novo.descricao.trim() || novo.valor <= 0) {
       toast.error("Preencha descrição e valor");
       return;
     }
-    const dup = itemDuplicadoDe(novo);
+    const dados = { ...novo, imovel_id: imovelId };
+    const dup = itemDuplicadoDe(dados);
     if (dup) {
       setItemDuplicado({
         id: dup.id,
         label: `${novo.tipo === "credito" ? "Crédito" : "Débito"} / ${origemLabel(novo.origem)}${
-          novo.imovel_id ? ` — ${imovelLabel(novo.imovel_id)}` : " — sem imóvel"
+          imovelId ? ` — ${imovelLabel(imovelId)}` : " — sem imóvel"
         }`,
       });
       return;
     }
     try {
-      await saveItem.mutateAsync({ repasse_id: repasse.id, ...novo } as any);
-      setNovo({ tipo: "credito", origem: "aluguel", descricao: "", valor: 0, imovel_id: null });
+      await saveItem.mutateAsync({ repasse_id: repasse.id, ...dados } as any);
+      setNovoPorImovel((prev) => ({ ...prev, [chaveImovel(imovelId)]: { ...novoItemVazio } }));
     } catch (e: any) { toast.error(e?.message ?? "Erro"); }
   }
+
 
   async function adicionarBenef() {
     if (!repasse || !conta) return;
