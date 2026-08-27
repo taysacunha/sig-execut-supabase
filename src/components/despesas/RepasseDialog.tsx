@@ -15,6 +15,9 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Accordion, AccordionContent, AccordionItem, AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
@@ -131,16 +134,26 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     observacao: "",
   };
   const [novoBenef, setNovoBenef] = useState(benefVazio);
-  const [novo, setNovo] = useState<{
-    tipo: RepasseItemTipo; origem: RepasseItemOrigem; descricao: string;
-    valor: number; imovel_id: string | null;
-  }>({ tipo: "credito", origem: "aluguel", descricao: "", valor: 0, imovel_id: null });
+  type NovoItem = {
+    tipo: RepasseItemTipo; origem: RepasseItemOrigem; descricao: string; valor: number;
+  };
+  const novoItemVazio: NovoItem = {
+    tipo: "credito", origem: "aluguel", descricao: "", valor: 0,
+  };
+  // Formulário de inclusão por imóvel (chave "__sem__" para itens sem imóvel)
+  const [novoPorImovel, setNovoPorImovel] = useState<Record<string, NovoItem>>({});
+  // Imóveis abertos manualmente na aba Itens (ainda sem lançamentos)
+  const [imoveisExtras, setImoveisExtras] = useState<string[]>([]);
+  const [gruposFechados, setGruposFechados] = useState<string[]>([]);
 
   useEffect(() => {
     setNovoBenef(benefVazio);
-    setNovo({ tipo: "credito", origem: "aluguel", descricao: "", valor: 0, imovel_id: null });
+    setNovoPorImovel({});
+    setImoveisExtras([]);
+    setGruposFechados([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repasse?.id]);
+
 
   const [confirmDelete, setConfirmDelete] = useState<
     { tipo: "item" | "benef"; id: string; label: string } | null
@@ -272,6 +285,52 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
 
   const origemLabel = (o: RepasseItemOrigem) => origens.find((x) => x.v === o)?.l ?? o;
 
+  // ----- Agrupamento dos itens por imóvel
+  type RepasseItem = NonNullable<Repasse["itens"]>[number];
+  const inquilinoDoImovel = (id: string | null) =>
+    id ? (inquilinos.data ?? []).find((i) => i.imovel_id === id)?.inquilino?.nome ?? null : null;
+
+  function agruparItens(itens: RepasseItem[], extras: string[] = []) {
+    const map = new Map<
+      string,
+      {
+        key: string; imovel_id: string | null; label: string; inquilino: string | null;
+        itens: RepasseItem[]; credito: number; debito: number;
+      }
+    >();
+    const get = (id: string | null) => {
+      const key = id ?? "__sem__";
+      let g = map.get(key);
+      if (!g) {
+        g = {
+          key,
+          imovel_id: id,
+          label: id ? imovelLabel(id) : "Sem imóvel",
+          inquilino: inquilinoDoImovel(id),
+          itens: [], credito: 0, debito: 0,
+        };
+        map.set(key, g);
+      }
+      return g;
+    };
+    for (const k of extras) get(k === "__sem__" ? null : k);
+    for (const it of itens) {
+      const g = get(it.imovel_id ?? null);
+      g.itens.push(it);
+      if (it.tipo === "credito") g.credito += Number(it.valor || 0);
+      else g.debito += Number(it.valor || 0);
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.key === "__sem__") return 1;
+      if (b.key === "__sem__") return -1;
+      return a.label.localeCompare(b.label);
+    });
+  }
+
+  const gruposItens = agruparItens(repasse?.itens ?? [], imoveisExtras);
+
+
+
   // Duplicidade: mesmo tipo + origem + imóvel dentro da competência (itens manuais)
   const itemDuplicadoDe = (
     dados: { tipo: RepasseItemTipo; origem: RepasseItemOrigem; imovel_id: string | null },
@@ -360,27 +419,39 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     } catch (e: any) { toast.error(e?.message ?? "Erro ao reabrir"); }
   }
 
-  async function adicionar() {
+  const chaveImovel = (id: string | null) => id ?? "__sem__";
+  const novoDe = (id: string | null): NovoItem =>
+    novoPorImovel[chaveImovel(id)] ?? novoItemVazio;
+  const setNovoDe = (id: string | null, patch: Partial<NovoItem>) =>
+    setNovoPorImovel((prev) => {
+      const k = chaveImovel(id);
+      return { ...prev, [k]: { ...(prev[k] ?? novoItemVazio), ...patch } };
+    });
+
+  async function adicionar(imovelId: string | null) {
     if (!repasse) return;
+    const novo = novoDe(imovelId);
     if (!novo.descricao.trim() || novo.valor <= 0) {
       toast.error("Preencha descrição e valor");
       return;
     }
-    const dup = itemDuplicadoDe(novo);
+    const dados = { ...novo, imovel_id: imovelId };
+    const dup = itemDuplicadoDe(dados);
     if (dup) {
       setItemDuplicado({
         id: dup.id,
         label: `${novo.tipo === "credito" ? "Crédito" : "Débito"} / ${origemLabel(novo.origem)}${
-          novo.imovel_id ? ` — ${imovelLabel(novo.imovel_id)}` : " — sem imóvel"
+          imovelId ? ` — ${imovelLabel(imovelId)}` : " — sem imóvel"
         }`,
       });
       return;
     }
     try {
-      await saveItem.mutateAsync({ repasse_id: repasse.id, ...novo } as any);
-      setNovo({ tipo: "credito", origem: "aluguel", descricao: "", valor: 0, imovel_id: null });
+      await saveItem.mutateAsync({ repasse_id: repasse.id, ...dados } as any);
+      setNovoPorImovel((prev) => ({ ...prev, [chaveImovel(imovelId)]: { ...novoItemVazio } }));
     } catch (e: any) { toast.error(e?.message ?? "Erro"); }
   }
+
 
   async function adicionarBenef() {
     if (!repasse || !conta) return;
@@ -1392,170 +1463,255 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                         {" "}· líquido {money(Number(c.valor_liquido))}
                       </span>
                     </div>
-                    <Table className="table-fixed">
-                      <TableHeader><TableRow>
-                        <TableHead className="w-28">Tipo</TableHead>
-                        <TableHead className="w-32">Origem</TableHead>
-                        <TableHead>Descrição</TableHead>
-                        <TableHead className="w-[24%]">Imóvel</TableHead>
-                        <TableHead className="text-right w-36">Valor</TableHead>
-                      </TableRow></TableHeader>
-                      <TableBody>
-                        {(c.itens ?? []).length === 0 ? (
-                          <TableRow><TableCell colSpan={5} className="text-sm text-muted-foreground">
-                            Sem itens nesta competência.
-                          </TableCell></TableRow>
-                        ) : (c.itens ?? []).map((it) => (
-                          <TableRow key={it.id}>
-                            <TableCell>{it.tipo === "credito" ? "Crédito" : "Débito"}</TableCell>
-                            <TableCell>{origens.find((o) => o.v === it.origem)?.l ?? it.origem}</TableCell>
-                            <TableCell className="break-words">{it.descricao}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground break-words">
-                              {imovelLabel(it.imovel_id)}
-                            </TableCell>
-                            <TableCell className={`text-right ${it.tipo === "debito" ? "text-destructive" : ""}`}>
-                              {it.tipo === "debito" ? "−" : ""}{money(Number(it.valor))}
-                            </TableCell>
-                          </TableRow>
+                    {(c.itens ?? []).length === 0 ? (
+                      <div className="text-sm text-muted-foreground">Sem itens nesta competência.</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {agruparItens(c.itens ?? []).map((g) => (
+                          <div key={g.key} className="border rounded-md">
+                            <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-muted/40 text-sm">
+                              <span className="font-medium">{g.label}</span>
+                              <span className="text-xs text-muted-foreground">
+                                créditos {money(g.credito)} · débitos {money(g.debito)} ·{" "}
+                                <span className="font-medium text-foreground">
+                                  saldo {money(g.credito - g.debito)}
+                                </span>
+                              </span>
+                            </div>
+                            <Table className="table-fixed">
+                              <TableHeader><TableRow>
+                                <TableHead className="w-28">Tipo</TableHead>
+                                <TableHead className="w-36">Origem</TableHead>
+                                <TableHead>Descrição</TableHead>
+                                <TableHead className="text-right w-36">Valor</TableHead>
+                              </TableRow></TableHeader>
+                              <TableBody>
+                                {g.itens.map((it) => (
+                                  <TableRow key={it.id}>
+                                    <TableCell>{it.tipo === "credito" ? "Crédito" : "Débito"}</TableCell>
+                                    <TableCell>{origemLabel(it.origem)}</TableCell>
+                                    <TableCell className="break-words">{it.descricao}</TableCell>
+                                    <TableCell className={`text-right ${it.tipo === "debito" ? "text-destructive" : ""}`}>
+                                      {it.tipo === "debito" ? "−" : ""}{money(Number(it.valor))}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
                         ))}
-                      </TableBody>
-                    </Table>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             ) : (
             <>
-            <Table className="table-fixed">
-              <TableHeader><TableRow>
-                <TableHead className="w-28">Tipo</TableHead>
-                <TableHead className="w-36">Origem</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead className="w-[22%]">Imóvel</TableHead>
-                <TableHead className="text-right w-36">Valor</TableHead>
-                <TableHead className="w-24" />
-              </TableRow></TableHeader>
-              <TableBody>
-                {(repasse.itens ?? []).map((it) => editItem?.id === it.id ? (
-                  <TableRow key={it.id}>
-                    <TableCell>
-                      <Select value={editItem.tipo} onValueChange={(v: RepasseItemTipo) => setEditItem({ ...editItem, tipo: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="credito">Crédito</SelectItem>
-                          <SelectItem value="debito">Débito</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell>
-                      <Select value={editItem.origem} onValueChange={(v: RepasseItemOrigem) => setEditItem({ ...editItem, origem: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>{origens.map(o => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell>
-                      <Input value={editItem.descricao}
-                        onChange={(e) => setEditItem({ ...editItem, descricao: e.target.value })} />
-                    </TableCell>
-                    <TableCell>
-                      <ComboboxSelect
-                        value={editItem.imovel_id}
-                        onChange={(v) => setEditItem({ ...editItem, imovel_id: v })}
-                        options={imovelOptions}
-                        placeholder="Sem imóvel"
-                        searchPlaceholder="Buscar imóvel…"
-                        allowClear
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input type="number" step="0.01" className="text-right"
-                        value={editItem.valor}
-                        onChange={(e) => setEditItem({ ...editItem, valor: Number(e.target.value) })} />
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <Button size="icon" variant="ghost" onClick={salvarItemEdit} disabled={saveItem.isPending} title="Salvar">
-                        <Check className="h-4 w-4 text-emerald-600" />
-                      </Button>
-                      <Button size="icon" variant="ghost" onClick={() => setEditItem(null)} title="Cancelar">
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  <TableRow key={it.id}>
-                    <TableCell>{it.tipo === "credito" ? "Crédito" : "Débito"}</TableCell>
-                    <TableCell>{origens.find((o) => o.v === it.origem)?.l ?? it.origem}</TableCell>
-                    <TableCell className="break-words">{it.descricao}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground break-words">
-                      {imovelLabel(it.imovel_id)}
-                    </TableCell>
-                    <TableCell className={`text-right ${it.tipo === "debito" ? "text-destructive" : ""}`}>
-                      {it.tipo === "debito" ? "−" : ""}{money(Number(it.valor))}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      {podeEditarItens && (
-                        <>
-                          <Button size="icon" variant="ghost" title="Editar"
-                            onClick={() => setEditItem({
-                              id: it.id, tipo: it.tipo, origem: it.origem,
-                              descricao: it.descricao, valor: Number(it.valor),
-                              imovel_id: it.imovel_id ?? null,
-                            })}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" title="Excluir"
-                            onClick={() => setConfirmDelete({ tipo: "item", id: it.id, label: it.descricao })}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-
-            {podeEditarItens && (
-              <div className="mt-3 grid gap-2 md:grid-cols-[130px_150px_1.4fr_1.4fr_170px] items-end">
-                <div className="space-y-1"><Label>Tipo</Label>
-                  <Select value={novo.tipo} onValueChange={(v: RepasseItemTipo) => setNovo({ ...novo, tipo: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="credito">Crédito</SelectItem>
-                      <SelectItem value="debito">Débito</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1"><Label>Origem</Label>
-                  <Select value={novo.origem} onValueChange={(v: RepasseItemOrigem) => setNovo({ ...novo, origem: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{origens.map(o => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1"><Label>Descrição</Label>
-                  <Input value={novo.descricao} onChange={(e) => setNovo({ ...novo, descricao: e.target.value })} />
-                </div>
-                <div className="space-y-1"><Label>Imóvel</Label>
-                  <ComboboxSelect
-                    value={novo.imovel_id}
-                    onChange={(v) => setNovo({ ...novo, imovel_id: v })}
-                    options={imovelOptions}
-                    placeholder="Sem imóvel"
-                    searchPlaceholder="Buscar imóvel…"
-                    allowClear
-                  />
-                </div>
-                <div className="space-y-1"><Label>Valor</Label>
-                  <div className="flex gap-2">
-                    <Input type="number" step="0.01" value={novo.valor}
-                      onChange={(e) => setNovo({ ...novo, valor: Number(e.target.value) })} />
-                    <Button size="icon" onClick={adicionar}><Plus className="h-4 w-4" /></Button>
+              {podeEditarItens && (
+                <div className="mb-3 flex flex-wrap items-end gap-2">
+                  <div className="space-y-1 min-w-[280px] flex-1 max-w-md">
+                    <Label>Adicionar imóvel</Label>
+                    <ComboboxSelect
+                      value={null}
+                      onChange={(v) => {
+                        if (!v) return;
+                        setImoveisExtras((prev) => (prev.includes(v) ? prev : [...prev, v]));
+                        setGruposFechados((prev) => prev.filter((k) => k !== v));
+                      }}
+                      options={imovelOptions.filter((o) => !gruposItens.some((g) => g.key === o.value))}
+                      placeholder="Selecione um imóvel para lançar"
+                      searchPlaceholder="Buscar imóvel…"
+                    />
                   </div>
+                  {!gruposItens.some((g) => g.key === "__sem__") && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setImoveisExtras((prev) => (prev.includes("__sem__") ? prev : [...prev, "__sem__"]));
+                        setGruposFechados((prev) => prev.filter((k) => k !== "__sem__"));
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />Lançamento sem imóvel
+                    </Button>
+                  )}
                 </div>
-              </div>
-            )}
+              )}
+
+              {gruposItens.length === 0 ? (
+                <div className="text-sm text-muted-foreground">
+                  Nenhum item lançado. Selecione um imóvel acima para começar.
+                </div>
+              ) : (
+                <Accordion
+                  type="multiple"
+                  value={gruposItens.map((g) => g.key).filter((k) => !gruposFechados.includes(k))}
+                  onValueChange={(abertos) =>
+                    setGruposFechados(
+                      gruposItens.map((g) => g.key).filter((k) => !abertos.includes(k)),
+                    )
+                  }
+                  className="space-y-2"
+                >
+                  {gruposItens.map((g) => (
+                    <AccordionItem key={g.key} value={g.key} className="border rounded-md px-3">
+                      <AccordionTrigger className="hover:no-underline">
+                        <div className="flex flex-1 flex-wrap items-center justify-between gap-2 pr-2 text-left">
+                          <div>
+                            <div className="font-medium">{g.label}</div>
+                            {g.inquilino && (
+                              <div className="text-xs text-muted-foreground font-normal">
+                                Inquilino: {g.inquilino}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground font-normal">
+                            {g.itens.length} {g.itens.length === 1 ? "item" : "itens"} · créditos{" "}
+                            {money(g.credito)} · débitos {money(g.debito)} ·{" "}
+                            <span className="font-semibold text-foreground">
+                              saldo {money(g.credito - g.debito)}
+                            </span>
+                          </div>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <Table className="table-fixed">
+                          <TableHeader><TableRow>
+                            <TableHead className="w-32">Tipo</TableHead>
+                            <TableHead className="w-40">Origem</TableHead>
+                            <TableHead>Descrição</TableHead>
+                            <TableHead className="text-right w-36">Valor</TableHead>
+                            <TableHead className="w-24" />
+                          </TableRow></TableHeader>
+                          <TableBody>
+                            {g.itens.length === 0 && (
+                              <TableRow><TableCell colSpan={5} className="text-sm text-muted-foreground">
+                                Nenhum lançamento para este imóvel ainda.
+                              </TableCell></TableRow>
+                            )}
+                            {g.itens.map((it) => editItem?.id === it.id ? (
+                              <TableRow key={it.id}>
+                                <TableCell>
+                                  <Select value={editItem.tipo} onValueChange={(v: RepasseItemTipo) => setEditItem({ ...editItem, tipo: v })}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="credito">Crédito</SelectItem>
+                                      <SelectItem value="debito">Débito</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </TableCell>
+                                <TableCell>
+                                  <Select value={editItem.origem} onValueChange={(v: RepasseItemOrigem) => setEditItem({ ...editItem, origem: v })}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>{origens.map(o => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
+                                  </Select>
+                                </TableCell>
+                                <TableCell className="space-y-1">
+                                  <Input value={editItem.descricao}
+                                    onChange={(e) => setEditItem({ ...editItem, descricao: e.target.value })} />
+                                  <ComboboxSelect
+                                    value={editItem.imovel_id}
+                                    onChange={(v) => setEditItem({ ...editItem, imovel_id: v })}
+                                    options={imovelOptions}
+                                    placeholder="Sem imóvel"
+                                    searchPlaceholder="Mover para outro imóvel…"
+                                    allowClear
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <Input type="number" step="0.01" className="text-right"
+                                    value={editItem.valor}
+                                    onChange={(e) => setEditItem({ ...editItem, valor: Number(e.target.value) })} />
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap align-top">
+                                  <Button size="icon" variant="ghost" onClick={salvarItemEdit} disabled={saveItem.isPending} title="Salvar">
+                                    <Check className="h-4 w-4 text-emerald-600" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" onClick={() => setEditItem(null)} title="Cancelar">
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              <TableRow key={it.id}>
+                                <TableCell>{it.tipo === "credito" ? "Crédito" : "Débito"}</TableCell>
+                                <TableCell>{origemLabel(it.origem)}</TableCell>
+                                <TableCell className="break-words">{it.descricao}</TableCell>
+                                <TableCell className={`text-right ${it.tipo === "debito" ? "text-destructive" : ""}`}>
+                                  {it.tipo === "debito" ? "−" : ""}{money(Number(it.valor))}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">
+                                  {podeEditarItens && (
+                                    <>
+                                      <Button size="icon" variant="ghost" title="Editar"
+                                        onClick={() => setEditItem({
+                                          id: it.id, tipo: it.tipo, origem: it.origem,
+                                          descricao: it.descricao, valor: Number(it.valor),
+                                          imovel_id: it.imovel_id ?? null,
+                                        })}>
+                                        <Pencil className="h-4 w-4" />
+                                      </Button>
+                                      <Button size="icon" variant="ghost" title="Excluir"
+                                        onClick={() => setConfirmDelete({ tipo: "item", id: it.id, label: it.descricao })}>
+                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                      </Button>
+                                    </>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+
+                        {podeEditarItens && (
+                          <div className="mt-3 grid gap-2 md:grid-cols-[140px_160px_1fr_190px] items-end">
+                            <div className="space-y-1"><Label>Tipo</Label>
+                              <Select value={novoDe(g.imovel_id).tipo}
+                                onValueChange={(v: RepasseItemTipo) => setNovoDe(g.imovel_id, { tipo: v })}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="credito">Crédito</SelectItem>
+                                  <SelectItem value="debito">Débito</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1"><Label>Origem</Label>
+                              <Select value={novoDe(g.imovel_id).origem}
+                                onValueChange={(v: RepasseItemOrigem) => setNovoDe(g.imovel_id, { origem: v })}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>{origens.map(o => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1"><Label>Descrição</Label>
+                              <Input
+                                id={`desc-${g.key}`}
+                                value={novoDe(g.imovel_id).descricao}
+                                onChange={(e) => setNovoDe(g.imovel_id, { descricao: e.target.value })}
+                                onKeyDown={(e) => { if (e.key === "Enter") adicionar(g.imovel_id); }}
+                              />
+                            </div>
+                            <div className="space-y-1"><Label>Valor</Label>
+                              <div className="flex gap-2">
+                                <Input type="number" step="0.01"
+                                  value={novoDe(g.imovel_id).valor}
+                                  onChange={(e) => setNovoDe(g.imovel_id, { valor: Number(e.target.value) })}
+                                  onKeyDown={(e) => { if (e.key === "Enter") adicionar(g.imovel_id); }}
+                                />
+                                <Button size="icon" onClick={() => adicionar(g.imovel_id)} title="Adicionar">
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              )}
             </>
             )}
           </TabsContent>
+
 
           {/* ------------------------------ IMÓVEIS */}
           <TabsContent value="imoveis" className="mt-3">
