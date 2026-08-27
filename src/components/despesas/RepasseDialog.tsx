@@ -131,16 +131,26 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     observacao: "",
   };
   const [novoBenef, setNovoBenef] = useState(benefVazio);
-  const [novo, setNovo] = useState<{
-    tipo: RepasseItemTipo; origem: RepasseItemOrigem; descricao: string;
-    valor: number; imovel_id: string | null;
-  }>({ tipo: "credito", origem: "aluguel", descricao: "", valor: 0, imovel_id: null });
+  type NovoItem = {
+    tipo: RepasseItemTipo; origem: RepasseItemOrigem; descricao: string; valor: number;
+  };
+  const novoItemVazio: NovoItem = {
+    tipo: "credito", origem: "aluguel", descricao: "", valor: 0,
+  };
+  // Formulário de inclusão por imóvel (chave "__sem__" para itens sem imóvel)
+  const [novoPorImovel, setNovoPorImovel] = useState<Record<string, NovoItem>>({});
+  // Imóveis abertos manualmente na aba Itens (ainda sem lançamentos)
+  const [imoveisExtras, setImoveisExtras] = useState<string[]>([]);
+  const [gruposAbertos, setGruposAbertos] = useState<string[]>([]);
 
   useEffect(() => {
     setNovoBenef(benefVazio);
-    setNovo({ tipo: "credito", origem: "aluguel", descricao: "", valor: 0, imovel_id: null });
+    setNovoPorImovel({});
+    setImoveisExtras([]);
+    setGruposAbertos([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repasse?.id]);
+
 
   const [confirmDelete, setConfirmDelete] = useState<
     { tipo: "item" | "benef"; id: string; label: string } | null
