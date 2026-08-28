@@ -158,6 +158,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const [confirmDelete, setConfirmDelete] = useState<
     { tipo: "item" | "benef"; id: string; label: string } | null
   >(null);
+  const [confirmDelGrupo, setConfirmDelGrupo] = useState<{
+    key: string; label: string; ids: string[]; credito: number; debito: number;
+  } | null>(null);
   const [confirmDelComp, setConfirmDelComp] = useState<Repasse | null>(null);
   const [expandido, setExpandido] = useState<string | null>(null);
   const pagVazio = { data: "", valor: 0, imovel_id: null as string | null, observacao: "" };
@@ -649,6 +652,29 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     } catch (e: any) { toast.error(e?.message ?? "Erro ao excluir"); }
   }
 
+  function removerGrupoLocal(key: string) {
+    setImoveisExtras((prev) => prev.filter((k) => k !== key));
+    setNovoPorImovel((prev) => {
+      const { [key]: _drop, ...resto } = prev;
+      return resto;
+    });
+    setGruposFechados((prev) => prev.filter((k) => k !== key));
+  }
+
+  async function confirmarExclusaoGrupo() {
+    if (!confirmDelGrupo) return;
+    try {
+      for (const id of confirmDelGrupo.ids) await delItem.mutateAsync(id);
+      removerGrupoLocal(confirmDelGrupo.key);
+      toast.success(
+        confirmDelGrupo.ids.length
+          ? `Imóvel removido — ${confirmDelGrupo.ids.length} lançamento(s) excluído(s)`
+          : "Imóvel removido",
+      );
+      setConfirmDelGrupo(null);
+    } catch (e: any) { toast.error(e?.message ?? "Erro ao remover imóvel"); }
+  }
+
   async function salvarItemEdit() {
     if (!repasse || !editItem) return;
     if (!editItem.descricao.trim() || editItem.valor <= 0) {
@@ -1026,12 +1052,12 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                         {money(Number(editBenef.valor))}
                       </TableCell>
                       <TableCell>
-                        <Input type="number" step="0.01" min={0} className="text-right w-full"
+                        <Input type="number" onWheel={(e) => e.currentTarget.blur()} step="0.01" min={0} className="text-right w-full"
                           placeholder="sem limite" value={editBenef.valor_limite}
                           onChange={(e) => setEditBenef({ ...editBenef, valor_limite: e.target.value })} />
                       </TableCell>
                       <TableCell>
-                        <Input type="number" step="0.01" min={0} className="text-right w-full"
+                        <Input type="number" onWheel={(e) => e.currentTarget.blur()} step="0.01" min={0} className="text-right w-full"
                           placeholder="opcional" value={editBenef.limite_anual}
                           onChange={(e) => setEditBenef({ ...editBenef, limite_anual: e.target.value })} />
                       </TableCell>
@@ -1206,7 +1232,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                                           onChange={(e) => setEditPag({ ...editPag, data: e.target.value })} />
                                       </TableCell>
                                       <TableCell>
-                                        <Input type="number" step="0.01" min={0} className="text-right"
+                                        <Input type="number" onWheel={(e) => e.currentTarget.blur()} step="0.01" min={0} className="text-right"
                                           value={editPag.valor}
                                           onChange={(e) => setEditPag({ ...editPag, valor: Number(e.target.value) })} />
                                       </TableCell>
@@ -1279,7 +1305,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                               </div>
                               <div className="space-y-1">
                                 <Label>Valor</Label>
-                                <Input type="number" step="0.01" min={0} className="text-right"
+                                <Input type="number" onWheel={(e) => e.currentTarget.blur()} step="0.01" min={0} className="text-right"
                                   value={novoPag.valor}
                                   onChange={(e) => setNovoPag({ ...novoPag, valor: Number(e.target.value) })} />
                               </div>
@@ -1346,13 +1372,13 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                 </div>
                 <div className="space-y-1">
                   <Label>Limite mês (teto)</Label>
-                  <Input type="number" step="0.01" min={0} className="text-right" placeholder="opcional"
+                  <Input type="number" onWheel={(e) => e.currentTarget.blur()} step="0.01" min={0} className="text-right" placeholder="opcional"
                     value={novoBenef.valor_limite}
                     onChange={(e) => setNovoBenef({ ...novoBenef, valor_limite: e.target.value })} />
                 </div>
                 <div className="space-y-1">
                   <Label>Limite ano {anoSelecionado}</Label>
-                  <Input type="number" step="0.01" min={0} className="text-right" placeholder="opcional"
+                  <Input type="number" onWheel={(e) => e.currentTarget.blur()} step="0.01" min={0} className="text-right" placeholder="opcional"
                     title={novoBenef.pessoa_id ? limiteInfoDe(novoBenef.pessoa_id) : ""}
                     value={novoBenef.limite_anual}
                     onChange={(e) => setNovoBenef({ ...novoBenef, limite_anual: e.target.value })} />
@@ -1554,25 +1580,46 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                 >
                   {gruposItens.map((g) => (
                     <AccordionItem key={g.key} value={g.key} className="border rounded-md px-3">
-                      <AccordionTrigger className="hover:no-underline">
-                        <div className="flex flex-1 flex-wrap items-center justify-between gap-2 pr-2 text-left">
-                          <div>
-                            <div className="font-medium">{g.label}</div>
-                            {g.inquilino && (
-                              <div className="text-xs text-muted-foreground font-normal">
-                                Inquilino: {g.inquilino}
-                              </div>
-                            )}
+                      <div className="flex items-center gap-1">
+                        <AccordionTrigger className="hover:no-underline flex-1">
+                          <div className="flex flex-1 flex-wrap items-center justify-between gap-2 pr-2 text-left">
+                            <div>
+                              <div className="font-medium">{g.label}</div>
+                              {g.inquilino && (
+                                <div className="text-xs text-muted-foreground font-normal">
+                                  Inquilino: {g.inquilino}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground font-normal">
+                              {g.itens.length} {g.itens.length === 1 ? "item" : "itens"} · créditos{" "}
+                              {money(g.credito)} · débitos {money(g.debito)} ·{" "}
+                              <span className="font-semibold text-foreground">
+                                saldo {money(g.credito - g.debito)}
+                              </span>
+                            </div>
                           </div>
-                          <div className="text-xs text-muted-foreground font-normal">
-                            {g.itens.length} {g.itens.length === 1 ? "item" : "itens"} · créditos{" "}
-                            {money(g.credito)} · débitos {money(g.debito)} ·{" "}
-                            <span className="font-semibold text-foreground">
-                              saldo {money(g.credito - g.debito)}
-                            </span>
-                          </div>
-                        </div>
-                      </AccordionTrigger>
+                        </AccordionTrigger>
+                        {podeEditarItens && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            title="Remover imóvel e seus lançamentos"
+                            onClick={() => {
+                              if (!g.itens.length) { removerGrupoLocal(g.key); return; }
+                              setConfirmDelGrupo({
+                                key: g.key,
+                                label: g.label,
+                                ids: g.itens.map((i) => i.id),
+                                credito: g.credito,
+                                debito: g.debito,
+                              });
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
                       <AccordionContent>
                         <Table className="table-fixed">
                           <TableHeader><TableRow>
@@ -1618,7 +1665,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                                   />
                                 </TableCell>
                                 <TableCell>
-                                  <Input type="number" step="0.01" className="text-right"
+                                  <Input type="number" onWheel={(e) => e.currentTarget.blur()} step="0.01" className="text-right"
                                     value={editItem.valor}
                                     onChange={(e) => setEditItem({ ...editItem, valor: Number(e.target.value) })} />
                                 </TableCell>
@@ -1691,7 +1738,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                             </div>
                             <div className="space-y-1"><Label>Valor</Label>
                               <div className="flex gap-2">
-                                <Input type="number" step="0.01"
+                                <Input type="number" onWheel={(e) => e.currentTarget.blur()} step="0.01"
                                   value={novoDe(g.imovel_id).valor}
                                   onChange={(e) => setNovoDe(g.imovel_id, { valor: Number(e.target.value) })}
                                   onKeyDown={(e) => { if (e.key === "Enter") adicionar(g.imovel_id); }}
@@ -1786,6 +1833,37 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
               disabled={delItem.isPending || delBenef.isPending}
             >
               Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!confirmDelGrupo} onOpenChange={(o) => !o && setConfirmDelGrupo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover imóvel desta competência?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDelGrupo && (
+                <>
+                  <strong>{confirmDelGrupo.label}</strong> — todos os{" "}
+                  {confirmDelGrupo.ids.length} lançamento(s) deste imóvel serão apagados
+                  definitivamente (créditos {money(confirmDelGrupo.credito)}, débitos{" "}
+                  {money(confirmDelGrupo.debito)}). Os totais da competência serão recalculados:
+                  o saldo de {money(confirmDelGrupo.credito - confirmDelGrupo.debito)} deste
+                  imóvel deixará de compor o valor do repasse. O imóvel volta a ficar disponível
+                  no campo "Selecione um imóvel para lançar". Esta ação não pode ser desfeita.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => { e.preventDefault(); confirmarExclusaoGrupo(); }}
+              disabled={delItem.isPending}
+            >
+              Remover imóvel
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
