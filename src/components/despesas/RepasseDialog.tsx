@@ -1026,12 +1026,12 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                         {money(Number(editBenef.valor))}
                       </TableCell>
                       <TableCell>
-                        <Input type="number" step="0.01" min={0} className="text-right w-full"
+                        <Input type="number" onWheel={(e) => e.currentTarget.blur()} step="0.01" min={0} className="text-right w-full"
                           placeholder="sem limite" value={editBenef.valor_limite}
                           onChange={(e) => setEditBenef({ ...editBenef, valor_limite: e.target.value })} />
                       </TableCell>
                       <TableCell>
-                        <Input type="number" step="0.01" min={0} className="text-right w-full"
+                        <Input type="number" onWheel={(e) => e.currentTarget.blur()} step="0.01" min={0} className="text-right w-full"
                           placeholder="opcional" value={editBenef.limite_anual}
                           onChange={(e) => setEditBenef({ ...editBenef, limite_anual: e.target.value })} />
                       </TableCell>
@@ -1206,7 +1206,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                                           onChange={(e) => setEditPag({ ...editPag, data: e.target.value })} />
                                       </TableCell>
                                       <TableCell>
-                                        <Input type="number" step="0.01" min={0} className="text-right"
+                                        <Input type="number" onWheel={(e) => e.currentTarget.blur()} step="0.01" min={0} className="text-right"
                                           value={editPag.valor}
                                           onChange={(e) => setEditPag({ ...editPag, valor: Number(e.target.value) })} />
                                       </TableCell>
@@ -1279,7 +1279,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                               </div>
                               <div className="space-y-1">
                                 <Label>Valor</Label>
-                                <Input type="number" step="0.01" min={0} className="text-right"
+                                <Input type="number" onWheel={(e) => e.currentTarget.blur()} step="0.01" min={0} className="text-right"
                                   value={novoPag.valor}
                                   onChange={(e) => setNovoPag({ ...novoPag, valor: Number(e.target.value) })} />
                               </div>
@@ -1346,13 +1346,13 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                 </div>
                 <div className="space-y-1">
                   <Label>Limite mês (teto)</Label>
-                  <Input type="number" step="0.01" min={0} className="text-right" placeholder="opcional"
+                  <Input type="number" onWheel={(e) => e.currentTarget.blur()} step="0.01" min={0} className="text-right" placeholder="opcional"
                     value={novoBenef.valor_limite}
                     onChange={(e) => setNovoBenef({ ...novoBenef, valor_limite: e.target.value })} />
                 </div>
                 <div className="space-y-1">
                   <Label>Limite ano {anoSelecionado}</Label>
-                  <Input type="number" step="0.01" min={0} className="text-right" placeholder="opcional"
+                  <Input type="number" onWheel={(e) => e.currentTarget.blur()} step="0.01" min={0} className="text-right" placeholder="opcional"
                     title={novoBenef.pessoa_id ? limiteInfoDe(novoBenef.pessoa_id) : ""}
                     value={novoBenef.limite_anual}
                     onChange={(e) => setNovoBenef({ ...novoBenef, limite_anual: e.target.value })} />
@@ -1618,7 +1618,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                                   />
                                 </TableCell>
                                 <TableCell>
-                                  <Input type="number" step="0.01" className="text-right"
+                                  <Input type="number" onWheel={(e) => e.currentTarget.blur()} step="0.01" className="text-right"
                                     value={editItem.valor}
                                     onChange={(e) => setEditItem({ ...editItem, valor: Number(e.target.value) })} />
                                 </TableCell>
@@ -1691,7 +1691,7 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                             </div>
                             <div className="space-y-1"><Label>Valor</Label>
                               <div className="flex gap-2">
-                                <Input type="number" step="0.01"
+                                <Input type="number" onWheel={(e) => e.currentTarget.blur()} step="0.01"
                                   value={novoDe(g.imovel_id).valor}
                                   onChange={(e) => setNovoDe(g.imovel_id, { valor: Number(e.target.value) })}
                                   onKeyDown={(e) => { if (e.key === "Enter") adicionar(g.imovel_id); }}
