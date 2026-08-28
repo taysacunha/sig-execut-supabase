@@ -1580,25 +1580,46 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
                 >
                   {gruposItens.map((g) => (
                     <AccordionItem key={g.key} value={g.key} className="border rounded-md px-3">
-                      <AccordionTrigger className="hover:no-underline">
-                        <div className="flex flex-1 flex-wrap items-center justify-between gap-2 pr-2 text-left">
-                          <div>
-                            <div className="font-medium">{g.label}</div>
-                            {g.inquilino && (
-                              <div className="text-xs text-muted-foreground font-normal">
-                                Inquilino: {g.inquilino}
-                              </div>
-                            )}
+                      <div className="flex items-center gap-1">
+                        <AccordionTrigger className="hover:no-underline flex-1">
+                          <div className="flex flex-1 flex-wrap items-center justify-between gap-2 pr-2 text-left">
+                            <div>
+                              <div className="font-medium">{g.label}</div>
+                              {g.inquilino && (
+                                <div className="text-xs text-muted-foreground font-normal">
+                                  Inquilino: {g.inquilino}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground font-normal">
+                              {g.itens.length} {g.itens.length === 1 ? "item" : "itens"} · créditos{" "}
+                              {money(g.credito)} · débitos {money(g.debito)} ·{" "}
+                              <span className="font-semibold text-foreground">
+                                saldo {money(g.credito - g.debito)}
+                              </span>
+                            </div>
                           </div>
-                          <div className="text-xs text-muted-foreground font-normal">
-                            {g.itens.length} {g.itens.length === 1 ? "item" : "itens"} · créditos{" "}
-                            {money(g.credito)} · débitos {money(g.debito)} ·{" "}
-                            <span className="font-semibold text-foreground">
-                              saldo {money(g.credito - g.debito)}
-                            </span>
-                          </div>
-                        </div>
-                      </AccordionTrigger>
+                        </AccordionTrigger>
+                        {podeEditarItens && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            title="Remover imóvel e seus lançamentos"
+                            onClick={() => {
+                              if (!g.itens.length) { removerGrupoLocal(g.key); return; }
+                              setConfirmDelGrupo({
+                                key: g.key,
+                                label: g.label,
+                                ids: g.itens.map((i) => i.id),
+                                credito: g.credito,
+                                debito: g.debito,
+                              });
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
                       <AccordionContent>
                         <Table className="table-fixed">
                           <TableHeader><TableRow>
