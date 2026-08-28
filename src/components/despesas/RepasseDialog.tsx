@@ -158,6 +158,9 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
   const [confirmDelete, setConfirmDelete] = useState<
     { tipo: "item" | "benef"; id: string; label: string } | null
   >(null);
+  const [confirmDelGrupo, setConfirmDelGrupo] = useState<{
+    key: string; label: string; ids: string[]; credito: number; debito: number;
+  } | null>(null);
   const [confirmDelComp, setConfirmDelComp] = useState<Repasse | null>(null);
   const [expandido, setExpandido] = useState<string | null>(null);
   const pagVazio = { data: "", valor: 0, imovel_id: null as string | null, observacao: "" };
