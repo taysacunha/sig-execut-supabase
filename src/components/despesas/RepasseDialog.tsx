@@ -652,6 +652,29 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
     } catch (e: any) { toast.error(e?.message ?? "Erro ao excluir"); }
   }
 
+  function removerGrupoLocal(key: string) {
+    setImoveisExtras((prev) => prev.filter((k) => k !== key));
+    setNovoPorImovel((prev) => {
+      const { [key]: _drop, ...resto } = prev;
+      return resto;
+    });
+    setGruposFechados((prev) => prev.filter((k) => k !== key));
+  }
+
+  async function confirmarExclusaoGrupo() {
+    if (!confirmDelGrupo) return;
+    try {
+      for (const id of confirmDelGrupo.ids) await delItem.mutateAsync(id);
+      removerGrupoLocal(confirmDelGrupo.key);
+      toast.success(
+        confirmDelGrupo.ids.length
+          ? `Imóvel removido — ${confirmDelGrupo.ids.length} lançamento(s) excluído(s)`
+          : "Imóvel removido",
+      );
+      setConfirmDelGrupo(null);
+    } catch (e: any) { toast.error(e?.message ?? "Erro ao remover imóvel"); }
+  }
+
   async function salvarItemEdit() {
     if (!repasse || !editItem) return;
     if (!editItem.descricao.trim() || editItem.valor <= 0) {
