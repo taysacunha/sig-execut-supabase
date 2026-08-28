@@ -1838,6 +1838,37 @@ function RepasseDialogInner({ open, onOpenChange, conta }: Props) {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={!!confirmDelGrupo} onOpenChange={(o) => !o && setConfirmDelGrupo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover imóvel desta competência?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDelGrupo && (
+                <>
+                  <strong>{confirmDelGrupo.label}</strong> — todos os{" "}
+                  {confirmDelGrupo.ids.length} lançamento(s) deste imóvel serão apagados
+                  definitivamente (créditos {money(confirmDelGrupo.credito)}, débitos{" "}
+                  {money(confirmDelGrupo.debito)}). Os totais da competência serão recalculados:
+                  o saldo de {money(confirmDelGrupo.credito - confirmDelGrupo.debito)} deste
+                  imóvel deixará de compor o valor do repasse. O imóvel volta a ficar disponível
+                  no campo "Selecione um imóvel para lançar". Esta ação não pode ser desfeita.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => { e.preventDefault(); confirmarExclusaoGrupo(); }}
+              disabled={delItem.isPending}
+            >
+              Remover imóvel
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={!!confirmDelPag} onOpenChange={(o) => !o && setConfirmDelPag(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
