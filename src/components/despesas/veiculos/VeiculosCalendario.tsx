@@ -201,7 +201,7 @@ export function VeiculosCalendario({ veiculos, canEdit }: Props) {
         <Card>
           <CardContent className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
             <CalendarDays className="h-10 w-10 opacity-50" />
-            <p>Nenhuma despesa de veículo neste mês.</p>
+            <p>Nenhuma despesa de veículo {anual ? "neste ano" : "neste mês"}.</p>
           </CardContent>
         </Card>
       ) : (
