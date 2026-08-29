@@ -149,12 +149,21 @@ export function VeiculosCalendario({ veiculos, canEdit }: Props) {
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <div className="min-w-44 text-center font-semibold">
-                {MESES[mes]} / {ano}
+                {anual ? `Ano ${ano}` : `${MESES[mes]} / ${ano}`}
               </div>
               <Button size="icon" variant="outline" onClick={() => navegar(1)}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
+
+            <Select value={escopo} onValueChange={(v) => setEscopo(v as "mes" | "ano")}>
+              <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mes">Mês</SelectItem>
+                <SelectItem value="ano">Ano inteiro</SelectItem>
+              </SelectContent>
+            </Select>
+
 
             <Select value={veiculoId} onValueChange={setVeiculoId}>
               <SelectTrigger className="w-60"><SelectValue placeholder="Veículo" /></SelectTrigger>
