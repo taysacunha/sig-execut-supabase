@@ -1,3 +1,4 @@
+import { traduzirErroDespesas } from "@/lib/despesasErros";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useDespesasPermissions } from "@/hooks/useDespesasPermissions";
