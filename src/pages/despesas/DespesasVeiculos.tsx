@@ -1,3 +1,4 @@
+import { traduzirErroDespesas } from "@/lib/despesasErros";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useDespesasPermissions } from "@/hooks/useDespesasPermissions";
@@ -71,11 +72,9 @@ export default function DespesasVeiculos() {
       }
       setConfirmGerar(null);
     } catch (e: any) {
-      const msg = /centro de custo/i.test(e?.message ?? "")
-        ? "Defina o centro de custo do veículo antes de gerar encargos."
-        : (e?.message ?? "Erro");
-      toast.error(msg);
+      toast.error(traduzirErroDespesas(e));
     }
+
   }
 
   if (!canView) {

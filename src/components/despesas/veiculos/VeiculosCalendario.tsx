@@ -60,6 +60,7 @@ export function VeiculosCalendario({ veiculos, canEdit }: Props) {
   const [mes, setMes] = useState(hoje.getMonth()); // 0-11
   const [veiculoId, setVeiculoId] = useState<string>("todos");
   const [tipo, setTipo] = useState<string>("todos");
+  const [escopo, setEscopo] = useState<"mes" | "ano">("mes");
   const [pagar, setPagar] = useState<Lancamento | null>(null);
   const [estornar, setEstornar] = useState<Lancamento | null>(null);
   const [justificativa, setJustificativa] = useState("");
@@ -67,8 +68,9 @@ export function VeiculosCalendario({ veiculos, canEdit }: Props) {
   const { formatValue } = useDespesasValues();
   const estornoMut = useEstornarLancamento();
 
-  const inicio = new Date(ano, mes, 1);
-  const fim = new Date(ano, mes + 1, 0);
+  const anual = escopo === "ano";
+  const inicio = anual ? new Date(ano, 0, 1) : new Date(ano, mes, 1);
+  const fim = anual ? new Date(ano, 11, 31) : new Date(ano, mes + 1, 0);
   const iso = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
@@ -78,6 +80,7 @@ export function VeiculosCalendario({ veiculos, canEdit }: Props) {
     dataInicio: iso(inicio),
     dataFim: iso(fim),
   });
+
 
   const tipos = useMemo(
     () => Array.from(new Set(lancamentos.map(tipoEncargo))).sort(),
@@ -111,10 +114,15 @@ export function VeiculosCalendario({ veiculos, canEdit }: Props) {
   const totalPago = filtrados.reduce((s, l) => s + Number(l.valor_pago ?? 0), 0);
 
   function navegar(delta: number) {
+    if (anual) {
+      setAno((a) => a + delta);
+      return;
+    }
     const d = new Date(ano, mes + delta, 1);
     setAno(d.getFullYear());
     setMes(d.getMonth());
   }
+
 
   function confirmarEstorno() {
     if (!estornar) return;
@@ -141,12 +149,21 @@ export function VeiculosCalendario({ veiculos, canEdit }: Props) {
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <div className="min-w-44 text-center font-semibold">
-                {MESES[mes]} / {ano}
+                {anual ? `Ano ${ano}` : `${MESES[mes]} / ${ano}`}
               </div>
               <Button size="icon" variant="outline" onClick={() => navegar(1)}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
+
+            <Select value={escopo} onValueChange={(v) => setEscopo(v as "mes" | "ano")}>
+              <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mes">Mês</SelectItem>
+                <SelectItem value="ano">Ano inteiro</SelectItem>
+              </SelectContent>
+            </Select>
+
 
             <Select value={veiculoId} onValueChange={setVeiculoId}>
               <SelectTrigger className="w-60"><SelectValue placeholder="Veículo" /></SelectTrigger>
@@ -184,7 +201,7 @@ export function VeiculosCalendario({ veiculos, canEdit }: Props) {
         <Card>
           <CardContent className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
             <CalendarDays className="h-10 w-10 opacity-50" />
-            <p>Nenhuma despesa de veículo neste mês.</p>
+            <p>Nenhuma despesa de veículo {anual ? "neste ano" : "neste mês"}.</p>
           </CardContent>
         </Card>
       ) : (

@@ -1,3 +1,4 @@
+import { traduzirErroDespesas } from "@/lib/despesasErros";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,12 +58,8 @@ export function VeiculosRecorrencias({ veiculos, canEdit }: Props) {
           else toast.info(`Nenhum lançamento novo: os encargos de ${ano} já foram gerados.`);
           setConfirmGerar(null);
         },
-        onError: (e: any) =>
-          toast.error(
-            /centro de custo/i.test(e?.message ?? "")
-              ? "Defina o centro de custo do veículo antes de gerar encargos."
-              : (e?.message ?? "Erro"),
-          ),
+        onError: (e: any) => toast.error(traduzirErroDespesas(e)),
+
       },
     );
   }
