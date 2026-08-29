@@ -114,10 +114,15 @@ export function VeiculosCalendario({ veiculos, canEdit }: Props) {
   const totalPago = filtrados.reduce((s, l) => s + Number(l.valor_pago ?? 0), 0);
 
   function navegar(delta: number) {
+    if (anual) {
+      setAno((a) => a + delta);
+      return;
+    }
     const d = new Date(ano, mes + delta, 1);
     setAno(d.getFullYear());
     setMes(d.getMonth());
   }
+
 
   function confirmarEstorno() {
     if (!estornar) return;
