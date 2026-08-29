@@ -60,6 +60,7 @@ export function VeiculosCalendario({ veiculos, canEdit }: Props) {
   const [mes, setMes] = useState(hoje.getMonth()); // 0-11
   const [veiculoId, setVeiculoId] = useState<string>("todos");
   const [tipo, setTipo] = useState<string>("todos");
+  const [escopo, setEscopo] = useState<"mes" | "ano">("mes");
   const [pagar, setPagar] = useState<Lancamento | null>(null);
   const [estornar, setEstornar] = useState<Lancamento | null>(null);
   const [justificativa, setJustificativa] = useState("");
@@ -67,8 +68,9 @@ export function VeiculosCalendario({ veiculos, canEdit }: Props) {
   const { formatValue } = useDespesasValues();
   const estornoMut = useEstornarLancamento();
 
-  const inicio = new Date(ano, mes, 1);
-  const fim = new Date(ano, mes + 1, 0);
+  const anual = escopo === "ano";
+  const inicio = anual ? new Date(ano, 0, 1) : new Date(ano, mes, 1);
+  const fim = anual ? new Date(ano, 11, 31) : new Date(ano, mes + 1, 0);
   const iso = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
@@ -78,6 +80,7 @@ export function VeiculosCalendario({ veiculos, canEdit }: Props) {
     dataInicio: iso(inicio),
     dataFim: iso(fim),
   });
+
 
   const tipos = useMemo(
     () => Array.from(new Set(lancamentos.map(tipoEncargo))).sort(),
