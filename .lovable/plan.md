@@ -3,9 +3,10 @@
 ## O que muda
 
 ### 1. Acesso restrito a um único usuário
-- A página `/dev` (e `/dev/deploy-guide`) passa a ser liberada apenas para o e-mail `brunumorais@gmail.com`, não mais para todos os admins.
+- Apenas a página `/dev` passa a ser liberada somente para o e-mail `brunumorais@gmail.com`, não mais para todos os admins.
 - A restrição vale em dois níveis: na tela (bloqueio de acesso) e no banco (as regras de acesso das tabelas do registro passam a exigir esse e-mail).
 - Qualquer outro usuário, mesmo admin, vê a tela de "Acesso Restrito".
+- **A página `/dev/deploy-guide` não é tocada**: ela já é pública para qualquer usuário logado e continua assim — fica desvinculada da regra da `/dev`. Na `/dev` permanece apenas o botão que leva até ela.
 
 ### 2. Link no menu lateral
 - Um item "Registro Dev" aparece no menu lateral (e na tela de seleção de sistemas) **somente** quando o usuário logado é o e-mail autorizado. Para os demais, o item simplesmente não existe.
