@@ -30,7 +30,18 @@ Recursos da aba: agrupamento por mês, filtro por sistema e por período, totais
 ### 5. Registro automático das ações de desenvolvimento
 - Fica registrado como regra permanente do projeto: a cada ação minha que envolva desenvolvimento (nova funcionalidade, correção, ajuste, atualização), eu insiro um lançamento no histórico com data, sistema, título, descrição detalhada e horas estimadas de desenvolvimento.
 - Também atualizo o registro consolidado (aba por sistema) quando a ação criar ou alterar uma funcionalidade já listada.
+- **Exceção:** o desenvolvimento da própria página `/dev` (esta página de registro, suas abas, PDFs e regras de acesso) **não é lançado** no histórico. Só entram ações feitas *a partir* dela, ou seja, o desenvolvimento dos demais sistemas.
 - Essa regra é gravada na memória do projeto para valer em todas as sessões futuras.
+
+### 6. Execução por etapas com teto diário de créditos
+- Não existe um mecanismo que me faça pausar sozinho ao atingir um valor de créditos: o consumo é medido pela plataforma, não por mim, e não há limite de crédito configurado neste projeto hoje.
+- O que dá para fazer, e é o que proponho: você define um limite diário na área de Créditos/Uso do workspace (bloqueio ao atingir o valor), e eu executo o plano em etapas pequenas, uma por vez, parando ao fim de cada etapa e aguardando seu "seguir" no dia seguinte.
+- Divisão sugerida (uma etapa por dia):
+  1. Banco: tabela do histórico + regras de acesso por e-mail (inclui a `dev_tracker`).
+  2. Restrição de acesso da `/dev` por e-mail + link no menu lateral.
+  3. Aba Histórico (listagem, filtros, totais, adicionar/editar/excluir).
+  4. PDF do histórico + ocultação das colunas de valor quando o valor/hora for zero.
+  5. Regra de registro automático na memória do projeto + ajustes finais.
 
 ## Detalhes técnicos
 
