@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Home, Users, MapPin, Calendar, FileSearch, LogOut, UserCircle, Shield, Crown, Briefcase, User } from "lucide-react";
+import { Home, Users, MapPin, Calendar, FileSearch, LogOut, UserCircle, Shield, Crown, Briefcase, User, Code2 } from "lucide-react";
 import executLogo from "@/assets/execut-logo.jpg";
 import { NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
