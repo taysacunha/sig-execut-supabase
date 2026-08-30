@@ -5,6 +5,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useUserRole, AppRole } from "@/hooks/useUserRole";
+import { useIsDevOwner } from "@/hooks/useIsDevOwner";
 import {
   Sidebar,
   SidebarContent,
