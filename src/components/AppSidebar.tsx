@@ -166,6 +166,16 @@ export function AppSidebar() {
             <span className="font-medium">{userName}</span>
           </div>
         )}
+        {isDevOwner && (
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            onClick={() => navigate("/dev")}
+          >
+            <Code2 className="mr-2 h-4 w-4" />
+            Registro Dev
+          </Button>
+        )}
         <Button 
           variant="ghost" 
           className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" 
