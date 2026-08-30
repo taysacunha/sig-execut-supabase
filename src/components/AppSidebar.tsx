@@ -67,6 +67,7 @@ const roleColors: Partial<Record<AppRole, string>> = {
 export function AppSidebar() {
   const navigate = useNavigate();
   const { role, loading, hasAccess } = useUserRole();
+  const { isDevOwner } = useIsDevOwner();
   const [userName, setUserName] = useState<string | null>(null);
 
   useEffect(() => {
