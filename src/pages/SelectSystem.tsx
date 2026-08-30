@@ -213,17 +213,30 @@ const SelectSystem = () => {
         )}
 
         {/* Admin/Super Admin: User Management */}
-        {(role === "admin" || role === "super_admin") && (
-          <div className="mt-12 text-center">
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => navigate("/usuarios")}
-              className="gap-2"
-            >
-              <Users className="h-5 w-5" />
-              Gerenciar Usuários
-            </Button>
+        {((role === "admin" || role === "super_admin") || isDevOwner) && (
+          <div className="mt-12 flex flex-wrap items-center justify-center gap-3">
+            {(role === "admin" || role === "super_admin") && (
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => navigate("/usuarios")}
+                className="gap-2"
+              >
+                <Users className="h-5 w-5" />
+                Gerenciar Usuários
+              </Button>
+            )}
+            {isDevOwner && (
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => navigate("/dev")}
+                className="gap-2"
+              >
+                <Code2 className="h-5 w-5" />
+                Registro Dev
+              </Button>
+            )}
           </div>
         )}
       </main>
