@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useSystemAccess, SystemName } from "@/hooks/useSystemAccess";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useIsDevOwner } from "@/hooks/useIsDevOwner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, TrendingUp, Loader2, LogOut, Crown, Briefcase, User, Users, Palmtree, Package, Wallet, Code2 } from "lucide-react";
