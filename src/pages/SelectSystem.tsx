@@ -107,6 +107,7 @@ const SelectSystem = () => {
   const navigate = useNavigate();
   const { systems, loading: loadingSystems } = useSystemAccess();
   const { role, loading: loadingRole, user } = useUserRole();
+  const { isDevOwner } = useIsDevOwner();
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
