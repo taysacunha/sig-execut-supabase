@@ -1,9 +1,10 @@
 import { useNavigate } from "react-router-dom";
 import { useSystemAccess, SystemName } from "@/hooks/useSystemAccess";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useIsDevOwner } from "@/hooks/useIsDevOwner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, TrendingUp, Loader2, LogOut, Crown, Briefcase, User, Users, Palmtree, Package, Wallet } from "lucide-react";
+import { Calendar, TrendingUp, Loader2, LogOut, Crown, Briefcase, User, Users, Palmtree, Package, Wallet, Code2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -107,6 +108,7 @@ const SelectSystem = () => {
   const navigate = useNavigate();
   const { systems, loading: loadingSystems } = useSystemAccess();
   const { role, loading: loadingRole, user } = useUserRole();
+  const { isDevOwner } = useIsDevOwner();
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
@@ -213,17 +215,30 @@ const SelectSystem = () => {
         )}
 
         {/* Admin/Super Admin: User Management */}
-        {(role === "admin" || role === "super_admin") && (
-          <div className="mt-12 text-center">
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => navigate("/usuarios")}
-              className="gap-2"
-            >
-              <Users className="h-5 w-5" />
-              Gerenciar Usuários
-            </Button>
+        {((role === "admin" || role === "super_admin") || isDevOwner) && (
+          <div className="mt-12 flex flex-wrap items-center justify-center gap-3">
+            {(role === "admin" || role === "super_admin") && (
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => navigate("/usuarios")}
+                className="gap-2"
+              >
+                <Users className="h-5 w-5" />
+                Gerenciar Usuários
+              </Button>
+            )}
+            {isDevOwner && (
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => navigate("/dev")}
+                className="gap-2"
+              >
+                <Code2 className="h-5 w-5" />
+                Registro Dev
+              </Button>
+            )}
           </div>
         )}
       </main>

@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { Home, Users, MapPin, Calendar, FileSearch, LogOut, UserCircle, Shield, Crown, Briefcase, User } from "lucide-react";
+import { Home, Users, MapPin, Calendar, FileSearch, LogOut, UserCircle, Shield, Crown, Briefcase, User, Code2 } from "lucide-react";
 import executLogo from "@/assets/execut-logo.jpg";
 import { NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useUserRole, AppRole } from "@/hooks/useUserRole";
+import { useIsDevOwner } from "@/hooks/useIsDevOwner";
 import {
   Sidebar,
   SidebarContent,
@@ -67,6 +68,7 @@ const roleColors: Partial<Record<AppRole, string>> = {
 export function AppSidebar() {
   const navigate = useNavigate();
   const { role, loading, hasAccess } = useUserRole();
+  const { isDevOwner } = useIsDevOwner();
   const [userName, setUserName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -165,6 +167,16 @@ export function AppSidebar() {
           <div className="px-2 py-1 text-sm text-sidebar-foreground/70">
             <span className="font-medium">{userName}</span>
           </div>
+        )}
+        {isDevOwner && (
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            onClick={() => navigate("/dev")}
+          >
+            <Code2 className="mr-2 h-4 w-4" />
+            Registro Dev
+          </Button>
         )}
         <Button 
           variant="ghost" 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useUserRole } from "@/hooks/useUserRole";
+import { useIsDevOwner } from "@/hooks/useIsDevOwner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -95,7 +95,7 @@ const FeatureTable = ({ items, hourlyRate, onView, onEdit, onDelete, systemLabel
 };
 
 const DevTracker = () => {
-  const { role, loading: roleLoading, isAdmin } = useUserRole();
+  const { isDevOwner, loading: roleLoading, email } = useIsDevOwner();
   const [features, setFeatures] = useState<DevFeature[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -115,10 +115,10 @@ const DevTracker = () => {
 
   // Auto-load when role is resolved and user has access
   useEffect(() => {
-    if (!roleLoading && isAdmin) {
+    if (!roleLoading && isDevOwner) {
       loadFeatures();
     }
-  }, [roleLoading, isAdmin]);
+  }, [roleLoading, isDevOwner]);
 
   const loadFeatures = async () => {
     setLoading(true);
@@ -276,7 +276,7 @@ const DevTracker = () => {
   }
 
   // --- Access denied ---
-  if (!isAdmin) {
+  if (!isDevOwner) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Card className="w-full max-w-sm">
@@ -284,10 +284,10 @@ const DevTracker = () => {
             <ShieldAlert className="mx-auto h-10 w-10 text-destructive" />
             <p className="text-lg font-semibold text-foreground">Acesso Restrito</p>
             <p className="text-sm text-muted-foreground">
-              Esta página é acessível apenas para administradores (admin / super_admin).
+              Esta página é de uso exclusivo do responsável pelo desenvolvimento.
             </p>
             <p className="text-xs text-muted-foreground">
-              Sua role atual: <span className="font-medium">{role || "nenhuma"}</span>
+              Usuário atual: <span className="font-medium">{email || "não identificado"}</span>
             </p>
           </CardContent>
         </Card>
