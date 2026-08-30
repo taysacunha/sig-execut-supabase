@@ -95,7 +95,7 @@ const FeatureTable = ({ items, hourlyRate, onView, onEdit, onDelete, systemLabel
 };
 
 const DevTracker = () => {
-  const { role, loading: roleLoading, isAdmin } = useUserRole();
+  const { isDevOwner, loading: roleLoading, email } = useIsDevOwner();
   const [features, setFeatures] = useState<DevFeature[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
