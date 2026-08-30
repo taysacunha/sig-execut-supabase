@@ -276,7 +276,7 @@ const DevTracker = () => {
   }
 
   // --- Access denied ---
-  if (!isAdmin) {
+  if (!isDevOwner) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Card className="w-full max-w-sm">
@@ -284,10 +284,10 @@ const DevTracker = () => {
             <ShieldAlert className="mx-auto h-10 w-10 text-destructive" />
             <p className="text-lg font-semibold text-foreground">Acesso Restrito</p>
             <p className="text-sm text-muted-foreground">
-              Esta página é acessível apenas para administradores (admin / super_admin).
+              Esta página é de uso exclusivo do responsável pelo desenvolvimento.
             </p>
             <p className="text-xs text-muted-foreground">
-              Sua role atual: <span className="font-medium">{role || "nenhuma"}</span>
+              Usuário atual: <span className="font-medium">{email || "não identificado"}</span>
             </p>
           </CardContent>
         </Card>
