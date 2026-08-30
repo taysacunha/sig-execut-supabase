@@ -115,10 +115,10 @@ const DevTracker = () => {
 
   // Auto-load when role is resolved and user has access
   useEffect(() => {
-    if (!roleLoading && isAdmin) {
+    if (!roleLoading && isDevOwner) {
       loadFeatures();
     }
-  }, [roleLoading, isAdmin]);
+  }, [roleLoading, isDevOwner]);
 
   const loadFeatures = async () => {
     setLoading(true);
