@@ -13,6 +13,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { toast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, FileDown, Eye, DollarSign, ShieldAlert, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { DevHistoryTab } from "@/components/dev/DevHistoryTab";
 
 const SYSTEMS = [
   { value: "infraestrutura", label: "Login / Infraestrutura" },
