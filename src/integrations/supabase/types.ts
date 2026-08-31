@@ -2102,6 +2102,42 @@ export type Database = {
         }
         Relationships: []
       }
+      dev_tracker_log: {
+        Row: {
+          change_type: string
+          created_at: string
+          description: string | null
+          hours: number
+          id: string
+          occurred_on: string
+          system_name: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          change_type?: string
+          created_at?: string
+          description?: string | null
+          hours?: number
+          id?: string
+          occurred_on?: string
+          system_name: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          change_type?: string
+          created_at?: string
+          description?: string | null
+          hours?: number
+          id?: string
+          occurred_on?: string
+          system_name?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       estoque_categorias: {
         Row: {
           created_at: string
