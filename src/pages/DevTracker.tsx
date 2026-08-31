@@ -351,12 +351,6 @@ const DevTracker = () => {
             <Button variant="outline" size="sm" onClick={loadFeatures}>Tentar novamente</Button>
           </CardContent>
         </Card>
-      ) : features.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            Nenhuma funcionalidade registrada. Clique em "Adicionar" para começar.
-          </CardContent>
-        </Card>
       ) : (
         <>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -371,10 +365,23 @@ const DevTracker = () => {
                   </TabsTrigger>
                 );
               })}
+              <TabsTrigger value="historico">Histórico</TabsTrigger>
             </TabsList>
+
+            {/* Tab: Histórico cronológico */}
+            <TabsContent value="historico">
+              <DevHistoryTab systems={SYSTEMS} hourlyRate={hourlyRate} />
+            </TabsContent>
 
             {/* Tab: Todos - Accordion */}
             <TabsContent value="todos">
+              {features.length === 0 && (
+                <Card>
+                  <CardContent className="py-12 text-center text-muted-foreground">
+                    Nenhuma funcionalidade registrada. Clique em "Adicionar" para começar.
+                  </CardContent>
+                </Card>
+              )}
               <Accordion type="multiple" defaultValue={grouped.map((g) => g.value)}>
                 {grouped.map((group) => (
                   <AccordionItem key={group.value} value={group.value}>
