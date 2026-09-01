@@ -148,6 +148,75 @@ export function DevHistoryTab({ systems, hourlyRate }: Props) {
 
   const hasFilters = filterSystem !== "todos" || !!filterFrom || !!filterTo;
 
+  const handleExportPDF = async () => {
+    const { default: jsPDF } = await import("jspdf");
+    const doc = new jsPDF({ orientation: "landscape" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+
+    doc.setFontSize(16);
+    doc.text("Histórico de Desenvolvimento - SIG Execut", pageWidth / 2, 15, { align: "center" });
+    doc.setFontSize(9);
+    doc.text(
+      `Gerado em: ${new Date().toLocaleDateString("pt-BR")}${showValue ? ` | Valor/hora: ${formatCurrency(hourlyRate)}` : ""}`,
+      pageWidth / 2, 22, { align: "center" }
+    );
+
+    const hoursX = showValue ? 235 : 275;
+    let y = 32;
+
+    for (const [key, items] of groups) {
+      if (y > pageHeight - 40) { doc.addPage(); y = 15; }
+      const h = items.reduce((s, e) => s + Number(e.hours || 0), 0);
+
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(monthLabel(key), 14, y);
+      y += 7;
+
+      doc.setFontSize(8);
+      doc.text("Data", 14, y);
+      doc.text("Funcionalidade", 38, y);
+      doc.text("Descrição", 110, y);
+      doc.text("Horas", hoursX, y, { align: "right" });
+      if (showValue) doc.text("Valor (R$)", 280, y, { align: "right" });
+      y += 5;
+      doc.setFont("helvetica", "normal");
+
+      for (const e of items) {
+        if (y > pageHeight - 20) { doc.addPage(); y = 15; }
+        doc.text(formatDate(e.occurred_on), 14, y);
+        doc.text(e.title.substring(0, 38), 38, y);
+        doc.text((e.description || "").substring(0, showValue ? 60 : 80), 110, y);
+        doc.text(Number(e.hours).toFixed(1), hoursX, y, { align: "right" });
+        if (showValue) {
+          doc.text((Number(e.hours) * hourlyRate).toLocaleString("pt-BR", { minimumFractionDigits: 2 }), 280, y, { align: "right" });
+        }
+        y += 5;
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Subtotal do mês:", 14, y);
+      doc.text(h.toFixed(1), hoursX, y, { align: "right" });
+      if (showValue) {
+        doc.text((h * hourlyRate).toLocaleString("pt-BR", { minimumFractionDigits: 2 }), 280, y, { align: "right" });
+      }
+      y += 10;
+    }
+
+    if (y > pageHeight - 20) { doc.addPage(); y = 15; }
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("TOTAL GERAL:", 14, y);
+    doc.text(`${totalHours.toFixed(1)} horas`, hoursX, y, { align: "right" });
+    if (showValue) {
+      doc.text(`R$ ${(totalHours * hourlyRate).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, 280, y, { align: "right" });
+    }
+
+    doc.save("historico-desenvolvimento-sig-execut.pdf");
+  };
+
+
   return (
     <div className="space-y-4">
       {/* Filtros */}
