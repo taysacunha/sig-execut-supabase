@@ -14,7 +14,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Loader2, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, X, FileDown } from "lucide-react";
 import { useDevTrackerLog, DEV_CHANGE_TYPES, type DevLogEntry } from "@/hooks/useDevTrackerLog";
 
 interface Props {
@@ -246,7 +246,10 @@ export function DevHistoryTab({ systems, hourlyRate }: Props) {
             <X className="mr-1 h-4 w-4" />Limpar
           </Button>
         )}
-        <div className="ml-auto">
+        <div className="ml-auto flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={filtered.length === 0}>
+            <FileDown className="mr-2 h-4 w-4" />PDF do Histórico
+          </Button>
           <Button size="sm" onClick={openAdd}>
             <Plus className="mr-2 h-4 w-4" />Novo lançamento
           </Button>
