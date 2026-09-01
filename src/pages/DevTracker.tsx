@@ -210,11 +210,15 @@ const DevTracker = () => {
     const { default: jsPDF } = await import("jspdf");
     const doc = new jsPDF({ orientation: "landscape" });
     const pageWidth = doc.internal.pageSize.getWidth();
+    const showValue = hourlyRate > 0;
 
     doc.setFontSize(16);
     doc.text("Registro de Desenvolvimento - SIG Execut", pageWidth / 2, 15, { align: "center" });
     doc.setFontSize(9);
-    doc.text(`Gerado em: ${new Date().toLocaleDateString("pt-BR")} | Valor/hora: ${formatCurrency(hourlyRate)}`, pageWidth / 2, 22, { align: "center" });
+    doc.text(
+      `Gerado em: ${new Date().toLocaleDateString("pt-BR")}${showValue ? ` | Valor/hora: ${formatCurrency(hourlyRate)}` : ""}`,
+      pageWidth / 2, 22, { align: "center" }
+    );
 
     let y = 32;
     let grandTotalHours = 0;
@@ -237,8 +241,8 @@ const DevTracker = () => {
       doc.setFont("helvetica", "bold");
       doc.text("Funcionalidade", 14, y);
       doc.text("Descrição", 80, y);
-      doc.text("Horas", 200, y, { align: "right" });
-      doc.text("Valor (R$)", 270, y, { align: "right" });
+      doc.text("Horas", showValue ? 200 : 270, y, { align: "right" });
+      if (showValue) doc.text("Valor (R$)", 270, y, { align: "right" });
       y += 5;
       doc.setFont("helvetica", "normal");
 
@@ -246,26 +250,33 @@ const DevTracker = () => {
         if (y > doc.internal.pageSize.getHeight() - 20) { doc.addPage(); y = 15; }
         doc.text(item.feature_name.substring(0, 35), 14, y);
         doc.text((item.description || "").substring(0, 55), 80, y);
-        doc.text(item.hours.toFixed(1), 200, y, { align: "right" });
-        doc.text((item.hours * hourlyRate).toLocaleString("pt-BR", { minimumFractionDigits: 2 }), 270, y, { align: "right" });
+        doc.text(item.hours.toFixed(1), showValue ? 200 : 270, y, { align: "right" });
+        if (showValue) {
+          doc.text((item.hours * hourlyRate).toLocaleString("pt-BR", { minimumFractionDigits: 2 }), 270, y, { align: "right" });
+        }
         y += 5;
       }
 
       doc.setFont("helvetica", "bold");
       doc.text(`Subtotal ${sys.label}:`, 14, y);
-      doc.text(totalHours.toFixed(1), 200, y, { align: "right" });
-      doc.text((totalHours * hourlyRate).toLocaleString("pt-BR", { minimumFractionDigits: 2 }), 270, y, { align: "right" });
+      doc.text(totalHours.toFixed(1), showValue ? 200 : 270, y, { align: "right" });
+      if (showValue) {
+        doc.text((totalHours * hourlyRate).toLocaleString("pt-BR", { minimumFractionDigits: 2 }), 270, y, { align: "right" });
+      }
       y += 10;
     }
 
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
     doc.text("TOTAL GERAL:", 14, y);
-    doc.text(`${grandTotalHours.toFixed(1)} horas`, 200, y, { align: "right" });
-    doc.text(`R$ ${(grandTotalHours * hourlyRate).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, 270, y, { align: "right" });
+    doc.text(`${grandTotalHours.toFixed(1)} horas`, showValue ? 200 : 270, y, { align: "right" });
+    if (showValue) {
+      doc.text(`R$ ${(grandTotalHours * hourlyRate).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, 270, y, { align: "right" });
+    }
 
     doc.save("registro-desenvolvimento-sig-execut.pdf");
   };
+
 
   // --- Loading role ---
   if (roleLoading) {
