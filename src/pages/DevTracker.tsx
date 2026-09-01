@@ -21,6 +21,7 @@ const SYSTEMS = [
   { value: "vendas", label: "Sistema de Vendas" },
   { value: "ferias", label: "Sistema de Férias / Folgas" },
   { value: "estoque", label: "Sistema de Estoque" },
+  { value: "despesas", label: "Sistema de Gestão de Despesas" },
 ];
 
 interface DevFeature {
