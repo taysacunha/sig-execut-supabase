@@ -66,11 +66,6 @@ export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
 
   const showValue = hourlyRate > 0;
 
-  const integrityMismatch =
-    referenceTotal !== undefined &&
-    referenceTotal !== null &&
-    referenceTotal !== grandTotalHours;
-
   const filtered = useMemo(() => {
     return entries.filter((e) => {
       if (filterSystem !== "todos" && e.system_name !== filterSystem) return false;
