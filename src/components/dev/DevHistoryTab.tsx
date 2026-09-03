@@ -274,6 +274,19 @@ export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
         </div>
       </div>
 
+      {integrityMismatch && (
+        <Alert variant="destructive" className="border-destructive/50 bg-destructive/10">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Histórico incompleto</AlertTitle>
+          <AlertDescription>
+            O total do histórico cronológico ({grandTotalHours.toFixed(1)}h) não fecha com o acervo legado
+            ({referenceLoading ? "…" : `${referenceTotal!.toFixed(1)}h`}). Execute a migration
+            <code className="mx-1 rounded bg-muted px-1">dev_tracker_log_restore_additive.sql</code>
+            no SQL Editor do Supabase para restaurar as horas faltantes sem apagar registros existentes.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {filtered.length === 0 ? (
         <Card><CardContent className="py-10 text-center text-muted-foreground">
           Nenhum lançamento no histórico{hasFilters ? " para os filtros aplicados" : ""}.
