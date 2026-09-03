@@ -13,9 +13,11 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, X, FileDown } from "lucide-react";
+import { Plus, Pencil, Trash2, X, FileDown, AlertTriangle, Lock } from "lucide-react";
 import { useDevTrackerLog, DEV_CHANGE_TYPES, type DevLogEntry } from "@/hooks/useDevTrackerLog";
+import { useDevTrackerTotal } from "@/hooks/useDevTrackerTotal";
 
 interface Props {
   systems: { value: string; label: string }[];
