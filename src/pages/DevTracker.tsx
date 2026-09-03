@@ -210,7 +210,7 @@ export default function DevTracker() {
               <TabsTrigger value="historico">Histórico</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="historico"><DevHistoryTab systems={SYSTEMS} hourlyRate={hourlyRate} /></TabsContent>
+            <TabsContent value="historico"><DevHistoryTab systems={SYSTEMS} hourlyRate={hourlyRate} entries={entries} /></TabsContent>
             <TabsContent value="todos">
               {entries.length === 0 ? (
                 <Card><CardContent className="py-12 text-center text-muted-foreground">Nenhum lançamento registrado no histórico.</CardContent></Card>

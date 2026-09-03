@@ -5,6 +5,11 @@
 
 BEGIN;
 
+-- Remove somente os lançamentos técnicos gerados por este próprio script.
+-- Assim, a reexecução recalcula uma única diferença sem duplicar horas.
+DELETE FROM public.dev_tracker_log
+WHERE title = 'Reconciliação do acervo anterior';
+
 WITH consolidado AS (
   SELECT system_name, COALESCE(SUM(hours), 0)::numeric AS horas
   FROM public.dev_tracker
@@ -34,40 +39,7 @@ SELECT
   'atualizacao',
   d.horas_faltantes
 FROM diferencas d
-WHERE d.horas_faltantes > 0
-ON CONFLICT DO NOTHING;
-
--- Reexecução segura: atualiza o lançamento de reconciliação para a diferença atual,
--- sem somar novamente as mesmas horas.
-WITH consolidado AS (
-  SELECT system_name, COALESCE(SUM(hours), 0)::numeric AS horas
-  FROM public.dev_tracker
-  GROUP BY system_name
-),
-historico_sem_reconciliacao AS (
-  SELECT system_name, COALESCE(SUM(hours), 0)::numeric AS horas
-  FROM public.dev_tracker_log
-  WHERE title <> 'Reconciliação do acervo anterior'
-  GROUP BY system_name
-),
-diferencas AS (
-  SELECT
-    c.system_name,
-    GREATEST(c.horas - COALESCE(h.horas, 0), 0)::numeric AS horas_faltantes
-  FROM consolidado c
-  LEFT JOIN historico_sem_reconciliacao h USING (system_name)
-)
-UPDATE public.dev_tracker_log l
-SET
-  hours = d.horas_faltantes,
-  updated_at = now()
-FROM diferencas d
-WHERE l.system_name = d.system_name
-  AND l.title = 'Reconciliação do acervo anterior';
-
-DELETE FROM public.dev_tracker_log
-WHERE title = 'Reconciliação do acervo anterior'
-  AND hours <= 0;
+WHERE d.horas_faltantes > 0;
 
 COMMIT;
 
