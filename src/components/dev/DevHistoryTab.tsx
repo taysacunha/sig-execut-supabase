@@ -93,6 +93,10 @@ export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
     || !Number.isFinite(Number(entry.hours))
     || Number(entry.hours) < 0
   );
+  const integrityMismatch =
+    referenceTotal !== undefined &&
+    referenceTotal !== null &&
+    referenceTotal !== grandTotalHours;
 
   const systemLabel = (value: string) => systems.find((s) => s.value === value)?.label || value;
   const typeLabel = (value: string) => DEV_CHANGE_TYPES.find((t) => t.value === value)?.label || value;
