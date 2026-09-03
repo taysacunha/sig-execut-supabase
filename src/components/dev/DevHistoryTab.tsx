@@ -49,8 +49,12 @@ const emptyForm = {
   hours: "",
 };
 
+const isLegacyEntry = (entry: DevLogEntry) =>
+  entry.title?.startsWith("Recuperação do acervo legado");
+
 export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
   const { createEntry, updateEntry, deleteEntry } = useDevTrackerLog(false);
+  const { data: referenceTotal, isLoading: referenceLoading } = useDevTrackerTotal(true);
 
   const [filterSystem, setFilterSystem] = useState("todos");
   const [filterFrom, setFilterFrom] = useState("");
@@ -61,6 +65,11 @@ export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
   const [form, setForm] = useState(emptyForm);
 
   const showValue = hourlyRate > 0;
+
+  const integrityMismatch =
+    referenceTotal !== undefined &&
+    referenceTotal !== null &&
+    referenceTotal !== grandTotalHours;
 
   const filtered = useMemo(() => {
     return entries.filter((e) => {
