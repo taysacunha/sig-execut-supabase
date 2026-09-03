@@ -334,12 +334,20 @@ export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
                           )}
                           <TableCell>
                             <div className="flex gap-1">
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(e)} title="Editar">
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteTarget(e)} title="Excluir">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
+                              {isLegacyEntry(e) ? (
+                                <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Registro importado do acervo legado — não pode ser alterado">
+                                  <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                                </Button>
+                              ) : (
+                                <>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(e)} title="Editar">
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteTarget(e)} title="Excluir">
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
