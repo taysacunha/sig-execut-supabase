@@ -13,9 +13,11 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, X, FileDown } from "lucide-react";
+import { Plus, Pencil, Trash2, X, FileDown, AlertTriangle, Lock } from "lucide-react";
 import { useDevTrackerLog, DEV_CHANGE_TYPES, type DevLogEntry } from "@/hooks/useDevTrackerLog";
+import { useDevTrackerTotal } from "@/hooks/useDevTrackerTotal";
 
 interface Props {
   systems: { value: string; label: string }[];
@@ -47,8 +49,12 @@ const emptyForm = {
   hours: "",
 };
 
+const isLegacyEntry = (entry: DevLogEntry) =>
+  entry.title?.startsWith("Recuperação do acervo legado");
+
 export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
   const { createEntry, updateEntry, deleteEntry } = useDevTrackerLog(false);
+  const { data: referenceTotal, isLoading: referenceLoading } = useDevTrackerTotal(true);
 
   const [filterSystem, setFilterSystem] = useState("todos");
   const [filterFrom, setFilterFrom] = useState("");
@@ -87,6 +93,10 @@ export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
     || !Number.isFinite(Number(entry.hours))
     || Number(entry.hours) < 0
   );
+  const integrityMismatch =
+    referenceTotal !== undefined &&
+    referenceTotal !== null &&
+    referenceTotal !== grandTotalHours;
 
   const systemLabel = (value: string) => systems.find((s) => s.value === value)?.label || value;
   const typeLabel = (value: string) => DEV_CHANGE_TYPES.find((t) => t.value === value)?.label || value;
@@ -264,6 +274,19 @@ export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
         </div>
       </div>
 
+      {integrityMismatch && (
+        <Alert variant="destructive" className="border-destructive/50 bg-destructive/10">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Histórico incompleto</AlertTitle>
+          <AlertDescription>
+            O total do histórico cronológico ({grandTotalHours.toFixed(1)}h) não fecha com o acervo legado
+            ({referenceLoading ? "…" : `${referenceTotal!.toFixed(1)}h`}). Execute a migration
+            <code className="mx-1 rounded bg-muted px-1">dev_tracker_log_restore_additive.sql</code>
+            no SQL Editor do Supabase para restaurar as horas faltantes sem apagar registros existentes.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {filtered.length === 0 ? (
         <Card><CardContent className="py-10 text-center text-muted-foreground">
           Nenhum lançamento no histórico{hasFilters ? " para os filtros aplicados" : ""}.
@@ -311,12 +334,20 @@ export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
                           )}
                           <TableCell>
                             <div className="flex gap-1">
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(e)} title="Editar">
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteTarget(e)} title="Excluir">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
+                              {isLegacyEntry(e) ? (
+                                <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Registro importado do acervo legado — não pode ser alterado">
+                                  <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                                </Button>
+                              ) : (
+                                <>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(e)} title="Editar">
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteTarget(e)} title="Excluir">
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
