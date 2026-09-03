@@ -44,6 +44,13 @@
 - Testar criação e edição de um lançamento pela própria `/dev` e confirmar persistência no Supabase.
 - Validar os dois PDFs com o mesmo total de 1.195h.
 
+## Registro automático de novas funcionalidades e correções
+
+- Sim: a cada solicitação sua que envolva desenvolvimento (nova funcionalidade, correção, ajuste, atualização em qualquer sistema), eu insiro um lançamento em `dev_tracker_log` com data, sistema, título, descrição detalhada, tipo e horas estimadas.
+- O registro é feito manualmente por mim no final de cada entrega, não por trigger nem código mágico, mas passa a ser obrigatório e verificável.
+- Exceção permanente: o desenvolvimento da própria página `/dev` (suas abas, PDFs, regras de acesso e correções de integridade) não gera lançamento no histórico.
+- Essa regra será salva na memória do projeto para valer em todas as sessões futuras.
+
 ## Detalhes técnicos
 
 - A conexão continuará sendo diretamente com o Supabase externo já configurado; Lovable Cloud não será usado nem solicitado.
