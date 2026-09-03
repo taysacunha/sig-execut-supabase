@@ -14,12 +14,13 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Loader2, X, FileDown } from "lucide-react";
+import { Plus, Pencil, Trash2, X, FileDown } from "lucide-react";
 import { useDevTrackerLog, DEV_CHANGE_TYPES, type DevLogEntry } from "@/hooks/useDevTrackerLog";
 
 interface Props {
   systems: { value: string; label: string }[];
   hourlyRate: number;
+  entries: DevLogEntry[];
 }
 
 const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -46,8 +47,8 @@ const emptyForm = {
   hours: "",
 };
 
-export function DevHistoryTab({ systems, hourlyRate }: Props) {
-  const { entries, isLoading, error, createEntry, updateEntry, deleteEntry } = useDevTrackerLog();
+export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
+  const { createEntry, updateEntry, deleteEntry } = useDevTrackerLog(false);
 
   const [filterSystem, setFilterSystem] = useState("todos");
   const [filterFrom, setFilterFrom] = useState("");
@@ -79,6 +80,13 @@ export function DevHistoryTab({ systems, hourlyRate }: Props) {
   }, [filtered]);
 
   const totalHours = filtered.reduce((s, e) => s + Number(e.hours || 0), 0);
+  const grandTotalHours = entries.reduce((s, e) => s + Number(e.hours || 0), 0);
+  const hasInvalidEntries = entries.some((entry) =>
+    !systems.some((system) => system.value === entry.system_name)
+    || !entry.occurred_on
+    || !Number.isFinite(Number(entry.hours))
+    || Number(entry.hours) < 0
+  );
 
   const systemLabel = (value: string) => systems.find((s) => s.value === value)?.label || value;
   const typeLabel = (value: string) => DEV_CHANGE_TYPES.find((t) => t.value === value)?.label || value;
@@ -247,7 +255,7 @@ export function DevHistoryTab({ systems, hourlyRate }: Props) {
           </Button>
         )}
         <div className="ml-auto flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={filtered.length === 0}>
+          <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={filtered.length === 0 || hasInvalidEntries}>
             <FileDown className="mr-2 h-4 w-4" />PDF do Histórico
           </Button>
           <Button size="sm" onClick={openAdd}>
@@ -256,16 +264,7 @@ export function DevHistoryTab({ systems, hourlyRate }: Props) {
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" />
-          <span className="text-muted-foreground">Carregando histórico...</span>
-        </div>
-      ) : error ? (
-        <Card><CardContent className="py-10 text-center text-muted-foreground">
-          Erro ao carregar o histórico: {error.message}
-        </CardContent></Card>
-      ) : filtered.length === 0 ? (
+      {filtered.length === 0 ? (
         <Card><CardContent className="py-10 text-center text-muted-foreground">
           Nenhum lançamento no histórico{hasFilters ? " para os filtros aplicados" : ""}.
         </CardContent></Card>
@@ -341,13 +340,19 @@ export function DevHistoryTab({ systems, hourlyRate }: Props) {
 
           <Card className="border-primary/30 bg-primary/5">
             <CardContent className="py-4 flex flex-col sm:flex-row justify-between items-center gap-2">
-              <span className="text-lg font-bold">TOTAL DO HISTÓRICO</span>
+              <span className="text-lg font-bold">{hasFilters ? "TOTAL FILTRADO" : "TOTAL GERAL DO HISTÓRICO"}</span>
               <div className="flex gap-8 text-lg font-bold">
                 <span>{totalHours.toFixed(1)} horas</span>
                 {showValue && <span>{formatCurrency(totalHours * hourlyRate)}</span>}
               </div>
             </CardContent>
           </Card>
+          {hasFilters && (
+            <p className="text-right text-sm text-muted-foreground">
+              Total geral sem filtros: {grandTotalHours.toFixed(1)} horas
+              {showValue ? ` · ${formatCurrency(grandTotalHours * hourlyRate)}` : ""}
+            </p>
+          )}
         </div>
       )}
 
