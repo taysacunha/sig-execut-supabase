@@ -88,6 +88,7 @@ selecionados AS (
   SELECT
     c.system_name,
     c.feature_name,
+    c.hours,
     c.notes,
     c.legacy_key,
     LEAST(
