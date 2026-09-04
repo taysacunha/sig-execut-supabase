@@ -52,7 +52,7 @@ candidatos AS (
     d.system_name,
     d.feature_name,
     d.hours::numeric AS hours,
-    COALESCE(d.notes, d.description) AS notes,
+    d.description AS notes,
     d.system_name || '::' || d.feature_name AS legacy_key,
     SUM(d.hours::numeric) OVER (
       PARTITION BY d.system_name
