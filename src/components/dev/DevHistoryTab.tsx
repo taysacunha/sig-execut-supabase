@@ -50,7 +50,11 @@ const emptyForm = {
 };
 
 const isLegacyEntry = (entry: DevLogEntry) =>
-  entry.title?.startsWith("Recuperação do acervo legado");
+  entry.source === "legacy_item"
+  || entry.source === "legacy_reconciliation"
+  || Boolean(entry.legacy_key)
+  || entry.title?.startsWith("Recuperação do acervo legado");
+
 
 export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
   const { createEntry, updateEntry, deleteEntry } = useDevTrackerLog(false);
