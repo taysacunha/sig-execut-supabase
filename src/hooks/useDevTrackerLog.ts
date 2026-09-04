@@ -9,11 +9,17 @@ export interface DevLogEntry {
   description: string | null;
   change_type: string;
   hours: number;
+  source?: string | null;
+  legacy_key?: string | null;
   created_at?: string;
   updated_at?: string;
 }
 
-export type DevLogInput = Omit<DevLogEntry, "id" | "created_at" | "updated_at">;
+export type DevLogInput = Omit<
+  DevLogEntry,
+  "id" | "created_at" | "updated_at" | "source" | "legacy_key"
+>;
+
 
 export const DEV_CHANGE_TYPES = [
   { value: "novo", label: "Novo" },

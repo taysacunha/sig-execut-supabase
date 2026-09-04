@@ -50,7 +50,11 @@ const emptyForm = {
 };
 
 const isLegacyEntry = (entry: DevLogEntry) =>
-  entry.title?.startsWith("Recuperação do acervo legado");
+  entry.source === "legacy_item"
+  || entry.source === "legacy_reconciliation"
+  || Boolean(entry.legacy_key)
+  || entry.title?.startsWith("Recuperação do acervo legado");
+
 
 export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
   const { createEntry, updateEntry, deleteEntry } = useDevTrackerLog(false);
@@ -280,9 +284,11 @@ export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
           <AlertTitle>Histórico incompleto</AlertTitle>
           <AlertDescription>
             O total do histórico cronológico ({grandTotalHours.toFixed(1)}h) não fecha com o acervo legado
-            ({referenceLoading ? "…" : `${referenceTotal!.toFixed(1)}h`}). Execute a migration
-            <code className="mx-1 rounded bg-muted px-1">dev_tracker_log_restore_additive.sql</code>
-            no SQL Editor do Supabase para restaurar as horas faltantes sem apagar registros existentes.
+            ({referenceLoading ? "…" : `${referenceTotal!.toFixed(1)}h`}) — diferença de{" "}
+            {referenceLoading ? "…" : `${Math.abs(referenceTotal! - grandTotalHours).toFixed(1)}h`}. Execute o script
+            <code className="mx-1 rounded bg-muted px-1">dev_tracker_log_import_legacy.sql</code>
+            no SQL Editor do Supabase para importar o acervo item a item, sem apagar registros existentes.
+
           </AlertDescription>
         </Alert>
       )}
