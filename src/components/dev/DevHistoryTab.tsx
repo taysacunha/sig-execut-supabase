@@ -17,7 +17,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { toast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, X, FileDown, AlertTriangle, Lock } from "lucide-react";
 import { useDevTrackerLog, DEV_CHANGE_TYPES, type DevLogEntry } from "@/hooks/useDevTrackerLog";
-import { useDevTrackerTotal } from "@/hooks/useDevTrackerTotal";
+
 
 interface Props {
   systems: { value: string; label: string }[];
@@ -58,7 +58,7 @@ const isLegacyEntry = (entry: DevLogEntry) =>
 
 export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
   const { createEntry, updateEntry, deleteEntry } = useDevTrackerLog(false);
-  const { data: referenceTotal, isLoading: referenceLoading } = useDevTrackerTotal(true);
+
 
   const [filterSystem, setFilterSystem] = useState("todos");
   const [filterFrom, setFilterFrom] = useState("");
@@ -97,10 +97,21 @@ export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
     || !Number.isFinite(Number(entry.hours))
     || Number(entry.hours) < 0
   );
-  const integrityMismatch =
-    referenceTotal !== undefined &&
-    referenceTotal !== null &&
-    referenceTotal !== grandTotalHours;
+  const zeroEntries = useMemo(
+    () => entries.filter((e) => !(Number(e.hours) > 0)),
+    [entries]
+  );
+  const duplicateTitles = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const e of entries) {
+      const key = `${e.system_name}::${e.title}`;
+      seen.set(key, (seen.get(key) || 0) + 1);
+    }
+    return Array.from(seen.entries())
+      .filter(([, count]) => count > 1)
+      .map(([key]) => key.split("::")[1]);
+  }, [entries]);
+
 
   const systemLabel = (value: string) => systems.find((s) => s.value === value)?.label || value;
   const typeLabel = (value: string) => DEV_CHANGE_TYPES.find((t) => t.value === value)?.label || value;
@@ -129,14 +140,20 @@ export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
       toast({ title: "Preencha data, sistema e título", variant: "destructive" });
       return;
     }
+    const parsedHours = parseFloat(form.hours);
+    if (!Number.isFinite(parsedHours) || parsedHours <= 0) {
+      toast({ title: "Informe as horas dedicadas", description: "O valor precisa ser maior que zero.", variant: "destructive" });
+      return;
+    }
     const payload = {
       occurred_on: form.occurred_on,
       system_name: form.system_name,
       title: form.title.trim(),
       description: form.description.trim() || null,
       change_type: form.change_type,
-      hours: parseFloat(form.hours) || 0,
+      hours: parsedHours,
     };
+
     try {
       if (editing) {
         await updateEntry.mutateAsync({ id: editing.id, ...payload });
@@ -278,20 +295,27 @@ export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
         </div>
       </div>
 
-      {integrityMismatch && (
+      {(zeroEntries.length > 0 || duplicateTitles.length > 0) && (
         <Alert variant="destructive" className="border-destructive/50 bg-destructive/10">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Histórico incompleto</AlertTitle>
-          <AlertDescription>
-            O total do histórico cronológico ({grandTotalHours.toFixed(1)}h) não fecha com o acervo legado
-            ({referenceLoading ? "…" : `${referenceTotal!.toFixed(1)}h`}) — diferença de{" "}
-            {referenceLoading ? "…" : `${Math.abs(referenceTotal! - grandTotalHours).toFixed(1)}h`}. Execute o script
-            <code className="mx-1 rounded bg-muted px-1">dev_tracker_log_import_legacy.sql</code>
-            no SQL Editor do Supabase para importar o acervo item a item, sem apagar registros existentes.
-
+          <AlertTitle>Histórico com pendências</AlertTitle>
+          <AlertDescription className="space-y-1">
+            {zeroEntries.length > 0 && (
+              <p>
+                {zeroEntries.length} atividade(s) sem horas registradas — elas não contam para o total
+                de {grandTotalHours.toFixed(1)}h e precisam ser corrigidas.
+              </p>
+            )}
+            {duplicateTitles.length > 0 && (
+              <p>
+                {duplicateTitles.length} atividade(s) repetida(s): {duplicateTitles.slice(0, 5).join(", ")}
+                {duplicateTitles.length > 5 ? "…" : ""}.
+              </p>
+            )}
           </AlertDescription>
         </Alert>
       )}
+
 
       {filtered.length === 0 ? (
         <Card><CardContent className="py-10 text-center text-muted-foreground">
