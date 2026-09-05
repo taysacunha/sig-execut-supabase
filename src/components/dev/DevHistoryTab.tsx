@@ -17,7 +17,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { toast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, X, FileDown, AlertTriangle, Lock } from "lucide-react";
 import { useDevTrackerLog, DEV_CHANGE_TYPES, type DevLogEntry } from "@/hooks/useDevTrackerLog";
-import { useDevTrackerTotal } from "@/hooks/useDevTrackerTotal";
+
 
 interface Props {
   systems: { value: string; label: string }[];
@@ -58,7 +58,7 @@ const isLegacyEntry = (entry: DevLogEntry) =>
 
 export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
   const { createEntry, updateEntry, deleteEntry } = useDevTrackerLog(false);
-  const { data: referenceTotal, isLoading: referenceLoading } = useDevTrackerTotal(true);
+
 
   const [filterSystem, setFilterSystem] = useState("todos");
   const [filterFrom, setFilterFrom] = useState("");
@@ -97,10 +97,21 @@ export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
     || !Number.isFinite(Number(entry.hours))
     || Number(entry.hours) < 0
   );
-  const integrityMismatch =
-    referenceTotal !== undefined &&
-    referenceTotal !== null &&
-    referenceTotal !== grandTotalHours;
+  const zeroEntries = useMemo(
+    () => entries.filter((e) => !(Number(e.hours) > 0)),
+    [entries]
+  );
+  const duplicateTitles = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const e of entries) {
+      const key = `${e.system_name}::${e.title}`;
+      seen.set(key, (seen.get(key) || 0) + 1);
+    }
+    return Array.from(seen.entries())
+      .filter(([, count]) => count > 1)
+      .map(([key]) => key.split("::")[1]);
+  }, [entries]);
+
 
   const systemLabel = (value: string) => systems.find((s) => s.value === value)?.label || value;
   const typeLabel = (value: string) => DEV_CHANGE_TYPES.find((t) => t.value === value)?.label || value;
