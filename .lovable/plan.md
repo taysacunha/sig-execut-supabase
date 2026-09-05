@@ -2,84 +2,78 @@
 
 ## Sobre a "automatização"
 
-Nunca houve automatização. A regra salva no projeto diz que **eu** registro cada entrega no histórico ao final do trabalho — é uma rotina manual minha, não um gatilho no banco. Por isso lançamentos foram esquecidos e o total ficou incoerente. O item 5 abaixo troca isso por uma regra objetiva, sem prometer robô nenhum.
+Nunca houve automatização. A regra do projeto diz que **eu** registro cada entrega no histórico ao final do trabalho — rotina manual minha, não gatilho no banco. Por isso houve esquecimento. O passo 4 troca isso por algo cobrável.
 
-## Passo 1 — Você roda este SQL e cola o resultado aqui
+## O que os seus resultados provaram
 
-Somente leitura, não altera nada:
+- A importação **rodou e gravou**: o histórico tem 204 linhas, sendo 94 lançamentos seus (577h) e 110 vindos do acervo (618h).
+- O acervo original tem 110 atividades somando **1.195h**, nenhuma zerada.
+- Como o script foi obrigado a fechar exatamente em 1.195h, só coube 618h das 1.195h do acervo. Resultado: **58 atividades entraram com 0h** e outras entraram com horas cortadas pela metade.
+- Portanto **1.195 não é o total real** — é um teto imposto pelo script. O total verdadeiro é: 577h seus + 1.195h do acervo, menos o que estiver duplicado.
+- Já apareceram **7 títulos repetidos** (estoque, férias, infraestrutura, vendas), que precisam ser conferidos antes de somar.
 
-```sql
-SELECT 'RESUMO' AS bloco, jsonb_pretty(jsonb_build_object(
-  'dev_tracker_total',      (SELECT COALESCE(SUM(hours),0) FROM public.dev_tracker),
-  'dev_tracker_linhas',     (SELECT COUNT(*) FROM public.dev_tracker),
-  'dev_tracker_zeradas',    (SELECT COUNT(*) FROM public.dev_tracker WHERE COALESCE(hours,0)=0),
-  'log_total',              (SELECT COALESCE(SUM(hours),0) FROM public.dev_tracker_log),
-  'log_linhas',             (SELECT COUNT(*) FROM public.dev_tracker_log),
-  'log_zeradas',            (SELECT COUNT(*) FROM public.dev_tracker_log WHERE COALESCE(hours,0)=0),
-  'log_por_origem',         (SELECT jsonb_agg(x) FROM (
-        SELECT COALESCE(source,'(sem origem)') AS origem, COUNT(*) AS linhas,
-               COUNT(*) FILTER (WHERE COALESCE(hours,0)=0) AS zeradas,
-               SUM(hours) AS horas
-        FROM public.dev_tracker_log GROUP BY 1 ORDER BY 1) x),
-  'por_sistema',            (SELECT jsonb_agg(x) FROM (
-        SELECT COALESCE(t.system_name,l.system_name) AS sistema,
-               COALESCE(t.h,0) AS tracker_horas, COALESCE(l.h,0) AS log_horas
-        FROM (SELECT system_name, SUM(hours) h FROM public.dev_tracker GROUP BY 1) t
-        FULL JOIN (SELECT system_name, SUM(hours) h FROM public.dev_tracker_log GROUP BY 1) l
-          ON t.system_name = l.system_name ORDER BY 1) x)
-))::text AS dados;
-```
+## Passo 1 — Um último SQL de conferência
 
-E este segundo, com as linhas problemáticas:
+Só leitura. Mostra quanto cada atividade importada perdeu e separa as duplicatas:
 
 ```sql
-SELECT 'log' AS origem_tabela, id::text, occurred_on::text, system_name, title,
-       hours, COALESCE(source,'') AS source, COALESCE(legacy_key,'') AS legacy_key
-FROM public.dev_tracker_log
-WHERE COALESCE(hours,0) <= 0
-ORDER BY system_name, title;
+SELECT l.system_name, l.title,
+       l.hours AS horas_no_historico,
+       d.hours AS horas_no_acervo,
+       (d.hours - l.hours) AS horas_perdidas,
+       EXISTS (
+         SELECT 1 FROM public.dev_tracker_log m
+         WHERE m.source = 'manual'
+           AND m.system_name = l.system_name
+           AND m.title = l.title
+       ) AS ja_existe_lancamento_manual
+FROM public.dev_tracker_log l
+JOIN public.dev_tracker d ON 'dev_tracker:' || d.id::text = l.legacy_key
+WHERE l.source = 'legacy_item'
+ORDER BY ja_existe_lancamento_manual DESC, horas_perdidas DESC;
 ```
+
+Também o total que vai resultar da correção:
 
 ```sql
-SELECT system_name, title, COUNT(*) AS repeticoes, SUM(hours) AS horas
-FROM public.dev_tracker_log
-GROUP BY system_name, title
-HAVING COUNT(*) > 1
-ORDER BY repeticoes DESC, system_name;
+SELECT
+  (SELECT SUM(hours) FROM public.dev_tracker_log WHERE source = 'manual') AS manual,
+  (SELECT SUM(hours) FROM public.dev_tracker) AS acervo,
+  (SELECT COALESCE(SUM(d.hours),0)
+     FROM public.dev_tracker d
+     JOIN public.dev_tracker_log l ON l.legacy_key = 'dev_tracker:' || d.id::text
+    WHERE l.source = 'legacy_item'
+      AND EXISTS (SELECT 1 FROM public.dev_tracker_log m
+                  WHERE m.source='manual' AND m.system_name=l.system_name AND m.title=l.title)
+  ) AS duplicado_a_remover;
 ```
 
-## Passo 2 — Eu leio o resultado e monto a conciliação
+Total corrigido = manual + acervo − duplicado.
 
-Com os números reais na mão, eu te mostro numa lista curta:
-- quantas atividades estão zeradas e de onde vieram;
-- quais estão duplicadas;
-- qual é o total verdadeiro somando só atividades válidas.
+## Passo 2 — Correção final (uma migração só)
 
-Sem adotar 1.195h nem 1.381h antes disso.
+Depois que você colar esses dois resultados:
 
-## Passo 3 — Uma migração única de correção
+- Cada atividade importada volta a ter **as horas cheias do acervo**; nenhuma fica em 0h.
+- As atividades importadas que repetem um lançamento seu são **removidas** (some a cópia importada, o seu lançamento fica).
+- Nada seu é apagado, reduzido ou reescrito.
+- Sem teto artificial: o total passa a ser a soma real das atividades.
+- Transacional e idempotente: se o resultado não bater com a conta acima, nada é gravado.
 
-Depois da sua confirmação, um único script transacional que:
-- preenche as horas das atividades zeradas com o valor comprovado do acervo legado;
-- remove as duplicatas geradas pela importação anterior (só as marcadas como importação, nunca lançamentos seus);
-- valida o total antes de gravar e aborta se não bater com a conciliação aprovada;
-- é idempotente, pode rodar de novo sem duplicar.
+## Passo 3 — A tela para de esconder inconsistência
 
-Os scripts antigos de importação ficam marcados como inválidos.
-
-## Passo 4 — A tela para de esconder o problema
-
-- Nada de atividade com 0h aparecendo como trabalho normal.
-- Bloquear salvar lançamento com horas zeradas ou negativas.
-- Aviso na tela quando houver duplicidade ou horas faltando, com o número exato.
+- Nenhuma atividade com 0h contada como trabalho válido.
+- Não dá para salvar lançamento com horas zeradas ou negativas.
+- Aviso na tela com o número exato quando houver zerada ou título duplicado.
+- Some a comparação fixa com o acervo legado; o total do histórico passa a ser o único.
 - PDFs sempre iguais à tela.
 
-## Passo 5 — Como o registro passa a funcionar
+## Passo 4 — Registro daqui em diante
 
-- A cada entrega minha em qualquer sistema (fora da própria /dev), eu gravo o lançamento no mesmo momento da entrega, com horas maiores que zero, e confirmo na tela.
-- Se a gravação falhar, eu te aviso na hora em vez de dar a entrega por concluída.
-- Continua sendo rotina minha; a diferença é que a tela agora acusa quando algo ficou faltando, então dá para cobrar.
+- Gravo o lançamento no mesmo momento da entrega, com horas maiores que zero, e confirmo que salvou.
+- Se falhar, te aviso na hora em vez de dar a entrega por concluída.
+- A tela passa a acusar o que ficou faltando, então dá para cobrar.
 
 ## Observação
 
-`roadmap.md` será atualizado com estes passos assim que o plano for aprovado — em modo de planejamento só posso alterar o próprio plano.
+`roadmap.md` será atualizado com estes passos após a aprovação — em modo de planejamento só posso alterar o próprio plano.
