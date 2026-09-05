@@ -140,14 +140,20 @@ export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
       toast({ title: "Preencha data, sistema e título", variant: "destructive" });
       return;
     }
+    const parsedHours = parseFloat(form.hours);
+    if (!Number.isFinite(parsedHours) || parsedHours <= 0) {
+      toast({ title: "Informe as horas dedicadas", description: "O valor precisa ser maior que zero.", variant: "destructive" });
+      return;
+    }
     const payload = {
       occurred_on: form.occurred_on,
       system_name: form.system_name,
       title: form.title.trim(),
       description: form.description.trim() || null,
       change_type: form.change_type,
-      hours: parseFloat(form.hours) || 0,
+      hours: parsedHours,
     };
+
     try {
       if (editing) {
         await updateEntry.mutateAsync({ id: editing.id, ...payload });
