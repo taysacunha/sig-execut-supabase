@@ -2109,7 +2109,9 @@ export type Database = {
           description: string | null
           hours: number
           id: string
+          legacy_key: string | null
           occurred_on: string
+          source: string | null
           system_name: string
           title: string
           updated_at: string
@@ -2120,7 +2122,9 @@ export type Database = {
           description?: string | null
           hours?: number
           id?: string
+          legacy_key?: string | null
           occurred_on?: string
+          source?: string | null
           system_name: string
           title: string
           updated_at?: string
@@ -2131,7 +2135,9 @@ export type Database = {
           description?: string | null
           hours?: number
           id?: string
+          legacy_key?: string | null
           occurred_on?: string
+          source?: string | null
           system_name?: string
           title?: string
           updated_at?: string
