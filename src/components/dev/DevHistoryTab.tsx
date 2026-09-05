@@ -289,20 +289,27 @@ export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
         </div>
       </div>
 
-      {integrityMismatch && (
+      {(zeroEntries.length > 0 || duplicateTitles.length > 0) && (
         <Alert variant="destructive" className="border-destructive/50 bg-destructive/10">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Histórico incompleto</AlertTitle>
-          <AlertDescription>
-            O total do histórico cronológico ({grandTotalHours.toFixed(1)}h) não fecha com o acervo legado
-            ({referenceLoading ? "…" : `${referenceTotal!.toFixed(1)}h`}) — diferença de{" "}
-            {referenceLoading ? "…" : `${Math.abs(referenceTotal! - grandTotalHours).toFixed(1)}h`}. Execute o script
-            <code className="mx-1 rounded bg-muted px-1">dev_tracker_log_import_legacy.sql</code>
-            no SQL Editor do Supabase para importar o acervo item a item, sem apagar registros existentes.
-
+          <AlertTitle>Histórico com pendências</AlertTitle>
+          <AlertDescription className="space-y-1">
+            {zeroEntries.length > 0 && (
+              <p>
+                {zeroEntries.length} atividade(s) sem horas registradas — elas não contam para o total
+                de {grandTotalHours.toFixed(1)}h e precisam ser corrigidas.
+              </p>
+            )}
+            {duplicateTitles.length > 0 && (
+              <p>
+                {duplicateTitles.length} atividade(s) repetida(s): {duplicateTitles.slice(0, 5).join(", ")}
+                {duplicateTitles.length > 5 ? "…" : ""}.
+              </p>
+            )}
           </AlertDescription>
         </Alert>
       )}
+
 
       {filtered.length === 0 ? (
         <Card><CardContent className="py-10 text-center text-muted-foreground">
