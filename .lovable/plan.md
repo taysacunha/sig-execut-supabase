@@ -2,71 +2,77 @@
 
 ## Sobre a "automatização"
 
-Nunca houve automatização. A regra do projeto diz que **eu** registro cada entrega no histórico ao final do trabalho — rotina manual minha, não gatilho no banco. Por isso houve esquecimento. O passo 4 troca isso por algo cobrável.
+Nunca houve automatização. A regra do projeto diz que **eu** registro cada entrega ao final do trabalho — rotina manual minha, não gatilho no banco. Por isso houve esquecimento. O passo 4 troca isso por algo cobrável.
 
-## O que os seus resultados provaram
+## Diagnóstico fechado com os seus resultados
 
-- A importação **rodou e gravou**: o histórico tem 204 linhas, sendo 94 lançamentos seus (577h) e 110 vindos do acervo (618h).
-- O acervo original tem 110 atividades somando **1.195h**, nenhuma zerada.
-- Como o script foi obrigado a fechar exatamente em 1.195h, só coube 618h das 1.195h do acervo. Resultado: **58 atividades entraram com 0h** e outras entraram com horas cortadas pela metade.
-- Portanto **1.195 não é o total real** — é um teto imposto pelo script. O total verdadeiro é: 577h seus + 1.195h do acervo, menos o que estiver duplicado.
-- Já apareceram **7 títulos repetidos** (estoque, férias, infraestrutura, vendas), que precisam ser conferidos antes de somar.
+- A importação rodou, mas foi forçada a caber em 1.195h. Como os seus 577h já ocupavam parte do teto, só entraram 618h das 1.195h do acervo.
+- Resultado: **58 atividades ficaram com 0h** e "Relatórios e PDFs" ficou com 1h em vez de 16h.
+- **7 atividades do acervo repetem lançamentos seus**, somando 86h — não podem ser contadas duas vezes.
 
-## Passo 1 — Um último SQL de conferência
+**Total verdadeiro: 577 + 1.195 − 86 = 1.686 horas.**
 
-Só leitura. Mostra quanto cada atividade importada perdeu e separa as duplicatas:
+## Passo 1 — Rode este SQL de correção
+
+Transacional, idempotente, não toca nos seus lançamentos manuais:
 
 ```sql
-SELECT l.system_name, l.title,
-       l.hours AS horas_no_historico,
-       d.hours AS horas_no_acervo,
-       (d.hours - l.hours) AS horas_perdidas,
-       EXISTS (
-         SELECT 1 FROM public.dev_tracker_log m
-         WHERE m.source = 'manual'
-           AND m.system_name = l.system_name
-           AND m.title = l.title
-       ) AS ja_existe_lancamento_manual
-FROM public.dev_tracker_log l
-JOIN public.dev_tracker d ON 'dev_tracker:' || d.id::text = l.legacy_key
+BEGIN;
+
+-- 1. Remove as cópias importadas que repetem um lançamento seu
+DELETE FROM public.dev_tracker_log l
 WHERE l.source = 'legacy_item'
-ORDER BY ja_existe_lancamento_manual DESC, horas_perdidas DESC;
+  AND EXISTS (
+    SELECT 1 FROM public.dev_tracker_log m
+    WHERE m.source = 'manual'
+      AND m.system_name = l.system_name
+      AND m.title = l.title
+  );
+
+-- 2. Devolve as horas cheias do acervo às atividades importadas
+UPDATE public.dev_tracker_log l
+SET hours = d.hours,
+    description = regexp_replace(
+      COALESCE(l.description, ''),
+      ' \((item preservado sem horas adicionais na reconciliacao|saldo parcial do acervo legado)\)$',
+      ''
+    )
+FROM public.dev_tracker d
+WHERE l.source = 'legacy_item'
+  AND l.legacy_key = 'dev_tracker:' || d.id::text
+  AND l.hours IS DISTINCT FROM d.hours;
+
+-- 3. Validação: aborta se não fechar em 1686h e sem zeradas
+DO $$
+DECLARE t numeric; z int;
+BEGIN
+  SELECT COALESCE(SUM(hours),0), COUNT(*) FILTER (WHERE COALESCE(hours,0) <= 0)
+    INTO t, z FROM public.dev_tracker_log;
+  IF z > 0 THEN
+    RAISE EXCEPTION 'Ainda existem % atividades com 0h. Nada foi gravado.', z;
+  END IF;
+  IF t <> 1686 THEN
+    RAISE EXCEPTION 'Total ficou em % h, esperado 1686 h. Nada foi gravado.', t;
+  END IF;
+  RAISE NOTICE 'Historico corrigido: % h, sem atividades zeradas.', t;
+END $$;
+
+COMMIT;
 ```
 
-Também o total que vai resultar da correção:
+Se ele abortar, é porque algum número mudou — me traga a mensagem e eu ajusto sem chutar.
 
-```sql
-SELECT
-  (SELECT SUM(hours) FROM public.dev_tracker_log WHERE source = 'manual') AS manual,
-  (SELECT SUM(hours) FROM public.dev_tracker) AS acervo,
-  (SELECT COALESCE(SUM(d.hours),0)
-     FROM public.dev_tracker d
-     JOIN public.dev_tracker_log l ON l.legacy_key = 'dev_tracker:' || d.id::text
-    WHERE l.source = 'legacy_item'
-      AND EXISTS (SELECT 1 FROM public.dev_tracker_log m
-                  WHERE m.source='manual' AND m.system_name=l.system_name AND m.title=l.title)
-  ) AS duplicado_a_remover;
-```
+## Passo 2 — Ajustes na página /dev (feitos por mim depois que o SQL rodar)
 
-Total corrigido = manual + acervo − duplicado.
-
-## Passo 2 — Correção final (uma migração só)
-
-Depois que você colar esses dois resultados:
-
-- Cada atividade importada volta a ter **as horas cheias do acervo**; nenhuma fica em 0h.
-- As atividades importadas que repetem um lançamento seu são **removidas** (some a cópia importada, o seu lançamento fica).
-- Nada seu é apagado, reduzido ou reescrito.
-- Sem teto artificial: o total passa a ser a soma real das atividades.
-- Transacional e idempotente: se o resultado não bater com a conta acima, nada é gravado.
-
-## Passo 3 — A tela para de esconder inconsistência
-
-- Nenhuma atividade com 0h contada como trabalho válido.
-- Não dá para salvar lançamento com horas zeradas ou negativas.
-- Aviso na tela com o número exato quando houver zerada ou título duplicado.
-- Some a comparação fixa com o acervo legado; o total do histórico passa a ser o único.
+- Remover a comparação fixa com o acervo legado: o total do histórico passa a ser o único número oficial.
+- Bloquear salvar lançamento com horas zeradas ou negativas.
+- Aviso na tela, com número exato, se aparecer atividade zerada ou título duplicado.
 - PDFs sempre iguais à tela.
+
+## Passo 3 — Encerrar a fonte antiga
+
+- `dev_tracker` deixa de ser lido pela página; fica só como arquivo histórico.
+- Os scripts antigos de importação são marcados como inválidos para não voltarem a rodar.
 
 ## Passo 4 — Registro daqui em diante
 
