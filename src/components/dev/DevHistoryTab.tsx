@@ -202,7 +202,20 @@ export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
     );
 
     const hoursX = showValue ? 235 : 275;
+    const LINE_H = 4;
     let y = 32;
+
+    const printHeader = () => {
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.text("Data", 14, y);
+      doc.text("Funcionalidade", 38, y);
+      doc.text("Descrição", 110, y);
+      doc.text("Horas", hoursX, y, { align: "right" });
+      if (showValue) doc.text("Valor (R$)", 280, y, { align: "right" });
+      y += 5;
+      doc.setFont("helvetica", "normal");
+    };
 
     for (const [key, items] of groups) {
       if (y > pageHeight - 40) { doc.addPage(); y = 15; }
@@ -212,26 +225,22 @@ export function DevHistoryTab({ systems, hourlyRate, entries }: Props) {
       doc.setFont("helvetica", "bold");
       doc.text(monthLabel(key), 14, y);
       y += 7;
-
-      doc.setFontSize(8);
-      doc.text("Data", 14, y);
-      doc.text("Funcionalidade", 38, y);
-      doc.text("Descrição", 110, y);
-      doc.text("Horas", hoursX, y, { align: "right" });
-      if (showValue) doc.text("Valor (R$)", 280, y, { align: "right" });
-      y += 5;
-      doc.setFont("helvetica", "normal");
+      printHeader();
 
       for (const e of items) {
-        if (y > pageHeight - 20) { doc.addPage(); y = 15; }
+        doc.setFontSize(8);
+        const titleLines = doc.splitTextToSize(e.title, 69);
+        const descLines = e.description ? doc.splitTextToSize(e.description, hoursX - 120) : [""];
+        const rowH = Math.max(titleLines.length, descLines.length) * LINE_H + 1;
+        if (y + rowH > pageHeight - 15) { doc.addPage(); y = 15; printHeader(); }
         doc.text(formatDate(e.occurred_on), 14, y);
-        doc.text(e.title.substring(0, 38), 38, y);
-        doc.text((e.description || "").substring(0, showValue ? 60 : 80), 110, y);
+        doc.text(titleLines, 38, y);
+        doc.text(descLines, 110, y);
         doc.text(Number(e.hours).toFixed(1), hoursX, y, { align: "right" });
         if (showValue) {
           doc.text((Number(e.hours) * hourlyRate).toLocaleString("pt-BR", { minimumFractionDigits: 2 }), 280, y, { align: "right" });
         }
-        y += 5;
+        y += rowH;
       }
 
       doc.setFont("helvetica", "bold");
