@@ -109,12 +109,24 @@ export default function DevTracker() {
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const hoursX = showValue ? 235 : 275;
+    const LINE_H = 4;
     let y = 32;
 
     doc.setFontSize(16);
     doc.text("Registro de Desenvolvimento - SIG Execut", pageWidth / 2, 15, { align: "center" });
     doc.setFontSize(9);
     doc.text(`Gerado em: ${new Date().toLocaleDateString("pt-BR")}${showValue ? ` | Valor/hora: ${formatCurrency(hourlyRate)}` : ""}`, pageWidth / 2, 22, { align: "center" });
+
+    const printHeader = () => {
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.text("Funcionalidade / ação", 14, y);
+      doc.text("Descrição", 85, y);
+      doc.text("Horas", hoursX, y, { align: "right" });
+      if (showValue) doc.text("Valor (R$)", 280, y, { align: "right" });
+      y += 5;
+      doc.setFont("helvetica", "normal");
+    };
 
     for (const group of grouped) {
       if (y > pageHeight - 40) { doc.addPage(); y = 15; }
@@ -123,21 +135,19 @@ export default function DevTracker() {
       doc.setFont("helvetica", "bold");
       doc.text(group.label, 14, y);
       y += 7;
-      doc.setFontSize(8);
-      doc.text("Funcionalidade / ação", 14, y);
-      doc.text("Descrição", 85, y);
-      doc.text("Horas", hoursX, y, { align: "right" });
-      if (showValue) doc.text("Valor (R$)", 280, y, { align: "right" });
-      y += 5;
-      doc.setFont("helvetica", "normal");
+      printHeader();
 
       for (const item of group.items) {
-        if (y > pageHeight - 20) { doc.addPage(); y = 15; }
-        doc.text(item.title.substring(0, 38), 14, y);
-        doc.text((item.description || "").substring(0, showValue ? 65 : 85), 85, y);
+        doc.setFontSize(8);
+        const titleLines = doc.splitTextToSize(item.title, 68);
+        const descLines = item.description ? doc.splitTextToSize(item.description, hoursX - 95) : [""];
+        const rowH = Math.max(titleLines.length, descLines.length) * LINE_H + 1;
+        if (y + rowH > pageHeight - 15) { doc.addPage(); y = 15; printHeader(); }
+        doc.text(titleLines, 14, y);
+        doc.text(descLines, 85, y);
         doc.text(Number(item.hours).toFixed(1), hoursX, y, { align: "right" });
         if (showValue) doc.text((Number(item.hours) * hourlyRate).toLocaleString("pt-BR", { minimumFractionDigits: 2 }), 280, y, { align: "right" });
-        y += 5;
+        y += rowH;
       }
 
       doc.setFont("helvetica", "bold");
