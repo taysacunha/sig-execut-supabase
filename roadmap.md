@@ -11,3 +11,4 @@
 - [x] Alertar na tela sobre atividades zeradas e títulos duplicados.
 - [x] Marcar como inválidos os scripts antigos de importação/reconciliação.
 - [x] Documentar a regra de registro imediato de novas funcionalidades/correções no histórico.
+- [x] Ampliar o diálogo de novo lançamento e corrigir textos completos e rolagem dos seletores.
