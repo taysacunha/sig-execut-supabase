@@ -23,6 +23,8 @@ interface Props {
   allowClear?: boolean;
   disabled?: boolean;
   className?: string;
+  showFullText?: boolean;
+  wideContent?: boolean;
 }
 
 export function ComboboxSelect({
@@ -35,6 +37,8 @@ export function ComboboxSelect({
   allowClear = false,
   disabled = false,
   className,
+  showFullText = false,
+  wideContent = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value) ?? null;
@@ -48,18 +52,31 @@ export function ComboboxSelect({
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
-          className={cn("w-full justify-between font-normal", className)}
+          className={cn(
+            "w-full justify-between font-normal",
+            showFullText && "h-auto min-h-10 py-2 text-left",
+            className,
+          )}
         >
           {selected ? (
-            <span className="truncate">{selected.label}</span>
+            <span className={cn("min-w-0", showFullText ? "whitespace-normal break-words" : "truncate")}>
+              {selected.label}
+            </span>
           ) : (
-            <span className="text-muted-foreground truncate">{placeholder}</span>
+            <span className={cn("min-w-0 text-muted-foreground", showFullText ? "whitespace-normal" : "truncate")}>
+              {placeholder}
+            </span>
           )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="p-0 w-[--radix-popover-trigger-width]"
+        className={cn(
+          "p-0",
+          wideContent
+            ? "w-[min(32rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)]"
+            : "w-[--radix-popover-trigger-width]",
+        )}
         align="start"
         onWheel={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
@@ -95,14 +112,18 @@ export function ComboboxSelect({
                       onChange(opt.value);
                       setOpen(false);
                     }}
+                    className={cn(showFullText && "items-start py-2")}
                   >
                     <Check
                       className={cn(
-                        "mr-2 h-4 w-4",
+                        "mr-2 h-4 w-4 shrink-0",
+                        showFullText && "mt-0.5",
                         value === opt.value ? "opacity-100" : "opacity-0"
                       )}
                     />
-                    <span className="truncate">{opt.label}</span>
+                    <span className={cn("min-w-0", showFullText ? "whitespace-normal break-words" : "truncate")}>
+                      {opt.label}
+                    </span>
                   </CommandItem>
                 );
               })}

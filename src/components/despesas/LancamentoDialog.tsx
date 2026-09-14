@@ -293,7 +293,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-6xl">
         <DialogHeader>
           <DialogTitle>
             {editing ? "Editar lançamento" : "Novo lançamento"}
@@ -379,24 +379,34 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
                       variant="outline"
                       role="combobox"
                       aria-expanded={imovelPopoverOpen}
-                      className="w-full justify-between font-normal"
+                      className="h-auto min-h-10 w-full justify-between py-2 text-left font-normal"
                     >
                       {(() => {
                         const sel = (imoveis.data ?? []).find((i) => i.id === form.imovel_id);
                         if (!sel) return <span className="text-muted-foreground">Selecione o imóvel</span>;
-                        return <span className="truncate">{sel.codigo ? `${sel.codigo} — ` : ""}{sel.descricao}</span>;
+                        return (
+                          <span className="min-w-0 whitespace-normal break-words">
+                            {sel.codigo ? `${sel.codigo} — ` : ""}{sel.descricao}
+                            {sel.endereco ? ` — ${sel.endereco}` : ""}
+                          </span>
+                        );
                       })()}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                  <PopoverContent
+                    className="w-[min(40rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] p-0"
+                    align="start"
+                    onWheel={(e) => e.stopPropagation()}
+                    onTouchMove={(e) => e.stopPropagation()}
+                  >
                     <Command
                       filter={(value, search) => {
                         return value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0;
                       }}
                     >
                       <CommandInput placeholder="Buscar por código ou descrição…" />
-                      <CommandList>
+                      <CommandList className="max-h-72 overflow-y-auto overscroll-contain">
                         <CommandEmpty>Nenhum imóvel encontrado.</CommandEmpty>
                         <CommandGroup>
                           {form.imovel_id && (
@@ -420,15 +430,23 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
                                   setForm({ ...form, imovel_id: i.id });
                                   setImovelPopoverOpen(false);
                                 }}
+                              className="items-start py-2"
                               >
                                 <Check
                                   className={cn(
-                                    "mr-2 h-4 w-4",
+                                    "mr-2 mt-0.5 h-4 w-4 shrink-0",
                                     form.imovel_id === i.id ? "opacity-100" : "opacity-0"
                                   )}
                                 />
-                                <span className="truncate">
-                                  {i.codigo ? `${i.codigo} — ` : ""}{i.descricao}
+                                <span className="min-w-0 whitespace-normal break-words">
+                                  <span className="font-medium">
+                                    {i.codigo ? `${i.codigo} — ` : ""}{i.descricao}
+                                  </span>
+                                  {i.endereco && (
+                                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                                      {i.endereco}
+                                    </span>
+                                  )}
                                 </span>
                               </CommandItem>
                             );
@@ -449,6 +467,8 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
                   searchPlaceholder="Buscar pessoa…"
                   emptyText="Nenhuma pessoa encontrada."
                   allowClear
+                  showFullText
+                  wideContent
                 />
               </div>
             </div>
@@ -462,6 +482,8 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
               options={(centros.data ?? []).map((c) => ({ value: c.id, label: c.nome }))}
               placeholder="Selecione"
               searchPlaceholder="Buscar centro de custo…"
+              showFullText
+              wideContent
             />
           </div>
 
@@ -474,6 +496,8 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
               placeholder="Opcional"
               searchPlaceholder="Buscar categoria…"
               allowClear
+              showFullText
+              wideContent
             />
           </div>
 
@@ -486,6 +510,8 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
               placeholder="Opcional"
               searchPlaceholder="Buscar plano…"
               allowClear
+              showFullText
+              wideContent
             />
           </div>
 
@@ -498,6 +524,8 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
               placeholder="Opcional"
               searchPlaceholder="Buscar conta…"
               allowClear
+              showFullText
+              wideContent
             />
           </div>
 
