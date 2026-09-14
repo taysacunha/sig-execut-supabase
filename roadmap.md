@@ -12,3 +12,4 @@
 - [x] Marcar como inválidos os scripts antigos de importação/reconciliação.
 - [x] Documentar a regra de registro imediato de novas funcionalidades/correções no histórico.
 - [x] Ampliar o diálogo de novo lançamento e corrigir textos completos e rolagem dos seletores.
+- [x] Corrigir a folga lateral dos campos Tipo e Nº do documento no diálogo de lançamento.
