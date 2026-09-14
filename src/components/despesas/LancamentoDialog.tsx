@@ -300,14 +300,14 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid gap-4 py-2 md:grid-cols-2">
+        <div className="grid min-w-0 gap-4 py-2 pl-1 pr-3 md:grid-cols-2 [&>*]:min-w-0">
           <div className="space-y-2">
             <Label>Tipo</Label>
             <Select
               value={form.tipo}
               onValueChange={(v: LancamentoTipo) => setForm({ ...form, tipo: v })}
             >
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full min-w-0"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="a_pagar">Conta a Pagar</SelectItem>
                 <SelectItem value="a_receber">Conta a Receber</SelectItem>
@@ -318,6 +318,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
           <div className="space-y-2">
             <Label>Nº do documento</Label>
             <Input
+              className="min-w-0"
               value={form.documento_numero ?? ""}
               onChange={(e) => setForm({ ...form, documento_numero: e.target.value || null })}
               placeholder="NF, boleto, contrato…"
