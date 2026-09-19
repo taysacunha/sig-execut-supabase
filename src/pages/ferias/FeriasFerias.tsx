@@ -1640,7 +1640,7 @@ export default function FeriasFerias() {
       </Tabs>
 
       {/* ========== DIALOGS ========== */}
-      <FeriasDialog open={dialogOpen} onOpenChange={setDialogOpen} ferias={selectedFerias} anoReferencia={parseInt(anoFilter)} onSuccess={() => { queryClient.invalidateQueries({ queryKey: ["ferias-ferias"] }); queryClient.invalidateQueries({ queryKey: ["ferias-colaboradores-com-ferias"] }); setDialogOpen(false); }} />
+      <FeriasDialog open={dialogOpen} onOpenChange={setDialogOpen} ferias={selectedFerias} anoReferencia={parseInt(anoFilter)} onSuccess={() => { queryClient.invalidateQueries({ queryKey: ["ferias-ferias"] }); queryClient.invalidateQueries({ queryKey: ["ferias-gozo-periodos-table"] }); queryClient.invalidateQueries({ queryKey: ["ferias-colaboradores-com-ferias"] }); setSelectedFerias(null); setDialogOpen(false); }} />
       <FeriasViewDialog open={viewDialogOpen} onOpenChange={setViewDialogOpen} ferias={selectedFerias} />
       <GeradorFeriasDialog open={geradorDialogOpen} onOpenChange={setGeradorDialogOpen} anoReferencia={parseInt(anoFilter)} onSuccess={() => { queryClient.invalidateQueries({ queryKey: ["ferias-ferias"] }); queryClient.invalidateQueries({ queryKey: ["ferias-formularios"] }); }} />
       <ReducaoFeriasDialog open={reducaoDialogOpen} onOpenChange={setReducaoDialogOpen} ferias={reducaoFerias} colaboradorNome={reducaoFerias?.colaborador?.nome || ""} onSuccess={() => queryClient.invalidateQueries({ queryKey: ["ferias-ferias"] })} />
