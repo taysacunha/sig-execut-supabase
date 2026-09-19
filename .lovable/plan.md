@@ -2,9 +2,9 @@
 
 ## Diagnóstico confirmado no código
 
-1. **Campos vazios em Veículos:** a página carrega Motorista e Proprietário por `despesas_pessoas` e Centro de custo por `despesas_centros_custo`. As regras de leitura dessas tabelas auxiliares não incluem a permissão da aba **Veículos** (nem **Bens**, no caso de centros/pessoas). Assim, um usuário pode ver o veículo, mas receber vazios nos dados relacionados. Isso explica a diferença por perfil/permissões; a comparação exata entre STI e Taysa será feita no banco antes da alteração.
+1. **Campos vazios em Veículos:** a página carrega Motorista e Proprietário por `despesas_pessoas` e Centro de custo por `despesas_centros_custo`. As regras dessas tabelas auxiliares ainda dependem de outras abas e não reconhecem **Veículos**. Por isso, STI consegue abrir a página, mas os dados relacionados chegam vazios. Esse comportamento está incorreto: visualizar Veículos deve bastar para visualizar Motorista, Proprietário e Centro de custo dos veículos acessíveis, sem exigir acesso a Cadastros.
 2. **Recorrências de veículos fora do Calendário:** a função genérica que transforma recorrências em lançamentos ainda não copia `veiculo_id`. A recorrência fica vinculada ao veículo, mas o lançamento nasce sem esse vínculo; como o Calendário de Veículos mostra apenas lançamentos com `veiculo_id`, ele não aparece.
-3. **Centro “Apoio” ausente em Novo Bem:** a permissão da aba **Bens** e a permissão por centro de custo são controles separados. Além disso, a política da lista de centros não contempla a aba Bens. O resultado pode ser uma lista incompleta mesmo quando a pessoa acessa a página.
+3. **Centro “Apoio” ausente em Novo Bem:** a política da lista de centros não reconhece a aba **Bens**. Portanto, mesmo com Bens habilitado e o centro “Apoio” concedido na página de permissões, o seletor pode ficar incompleto.
 4. **Erro ao editar imóvel:** a tela oferece a situação `em_aquisicao`, mas a regra atual de `despesas_imoveis` aceita somente `alugado`, `vago`, `vendido` e `proprio_uso`. Salvar “Em aquisição” viola exatamente `despesas_imoveis_situacao_check`.
 
 ## Correção
@@ -15,10 +15,12 @@
    - Separar claramente diferença legítima de configuração de falha das regras.
 
 2. **Alinhar os dados auxiliares às páginas que dependem deles**
-   - Permitir leitura de pessoas para quem pode visualizar Veículos ou Bens, preservando a proteção dos dados pessoais e retornando somente os campos necessários na interface.
-   - Permitir que Veículos e Bens carreguem centros de custo, limitados aos centros explicitamente concedidos ao usuário.
+   - Fazer a permissão **Visualizar Veículos** liberar os nomes de Motorista e Proprietário e o nome do Centro de custo vinculados aos veículos acessíveis, independentemente de acesso a Cadastros.
+   - Fazer a permissão **Visualizar Bens** liberar os nomes necessários de Responsável/Fornecedor e os centros de custo concedidos ao usuário, independentemente de acesso a Cadastros.
+   - Preservar a proteção dos demais dados pessoais: as páginas consumirão somente identificador e nome nos seletores e relacionamentos.
+   - Restaurar nas regras de Veículos o filtro por centros de custo permitidos, removido acidentalmente quando Veículos ganhou permissão própria; assim, a permissão da aba define a função disponível e a permissão de centro define quais registros podem ser vistos.
    - Manter edição/exclusão desses cadastros restrita às permissões atuais; a mudança será somente na leitura necessária aos formulários e relacionamentos.
-   - Garantir que STI veja Motorista, Proprietário e Centro de custo dos veículos que já pode visualizar.
+   - Garantir que STI veja Motorista, Proprietário e Centro de custo sem receber acesso à página Cadastros.
 
 3. **Corrigir e reparar recorrências de veículos**
    - Atualizar `despesas_gerar_ocorrencias` para copiar `veiculo_id` da recorrência para cada lançamento gerado.
@@ -33,7 +35,7 @@
 
 5. **Validar os quatro cenários e registrar em `/dev`**
    - STI: campos relacionados preenchidos nos veículos permitidos.
-   - STI: centro “Apoio” disponível no novo bem somente se estiver concedido ao usuário; caso contrário, corrigir a concessão identificada na auditoria.
+   - STI: centro “Apoio” disponível no novo bem quando a concessão já registrada para ele for confirmada, sem exigir acesso a Cadastros.
    - Recorrências: lançamentos existentes reparados e novos lançamentos aparecendo no Calendário de Veículos.
    - Germana: imóvel salvo sem violar a regra de situação.
    - Registrar a correção completa no histórico de desenvolvimento.
