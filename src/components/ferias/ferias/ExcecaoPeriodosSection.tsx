@@ -210,15 +210,34 @@ export function ExcecaoPeriodosSection({
   // Removido: forçar distribuição para "2" quando Q1 já gozada. O gozo interno
   // permanece livre para distribuir entre 1º, 2º, ambos ou livre.
 
-  // Se o gozo é maior que 15 dias e o usuário (ou o estado carregado) está em
-  // "1" ou "2", forçar para "ambos" (única distribuição válida em períodos oficiais).
+  // Se o saldo deixa de caber em um único período, migra para "ambos" sem
+  // apagar o período já preenchido nem mover sua data para a outra referência.
   useEffect(() => {
     if (isHydrating) return;
     if (excecaoTipo !== "vender") return;
     if (singlePeriodInviavel && (distribuicaoTipo === "1" || distribuicaoTipo === "2")) {
+      const referenciaAtual = distribuicaoTipo === "1" ? 1 : 2;
+      const referenciaFaltante = referenciaAtual === 1 ? 2 : 1;
+      const keepParalelo = periodos.filter(p => p.tipo === "gozo_diferente");
+      const atuais = periodos.filter(p => p.tipo !== "gozo_diferente");
+      const existente = atuais.find(p => p.referencia_periodo === referenciaAtual);
+      const diasExistentes = Math.min(15, Math.max(0, existente?.dias || 0));
+      const diasFaltantes = diasGozo - diasExistentes;
+      const principal = existente
+        ? { ...existente, dias: diasExistentes, data_fim: existente.data_inicio ? calcEndDate(existente.data_inicio, diasExistentes) : "" }
+        : { id: genId(), dias: Math.min(15, diasGozo), data_inicio: "", data_fim: "", referencia_periodo: referenciaAtual, tipo: "vender" as const };
+      const complementar = {
+        id: genId(),
+        dias: Math.max(0, diasFaltantes),
+        data_inicio: "",
+        data_fim: "",
+        referencia_periodo: referenciaFaltante,
+        tipo: "vender" as const,
+      };
+      onPeriodosChange([principal, complementar, ...keepParalelo].filter(p => p.dias > 0));
       onDistribuicaoTipoChange("ambos");
     }
-  }, [singlePeriodInviavel, distribuicaoTipo, excecaoTipo, isHydrating, onDistribuicaoTipoChange]);
+  }, [singlePeriodInviavel, distribuicaoTipo, excecaoTipo, isHydrating, periodos, diasGozo, onDistribuicaoTipoChange, onPeriodosChange]);
 
   // Se diasVendidos exceder os disponíveis (ex.: q1JaGozada virou true), reduzir.
   useEffect(() => {
@@ -323,8 +342,8 @@ export function ExcecaoPeriodosSection({
       const ex1 = findRef(1);
       const ex2 = findRef(2);
       // Caso venha de "1" ou "2" / "livre": ex1/ex2 podem faltar.
-      const fallback1 = !ex1 ? (findRef(0) || firstWithDate) : undefined;
-      const fallback2 = !ex2 ? (findRef(0) ? undefined : undefined) : undefined;
+      const livre = findRef(0);
+      const fallback1 = !ex1 && livre ? livre : undefined;
       const i1 = ex1?.data_inicio || fallback1?.data_inicio || "";
       const i2 = ex2?.data_inicio || "";
       novosVender = [
@@ -385,58 +404,6 @@ export function ExcecaoPeriodosSection({
     onPeriodosChange(next);
     onDistribuicaoTipoChange(novo);
   }, [distribuicaoTipo, periodos, onPeriodosChange, onDistribuicaoTipoChange]);
-
-  // Reconciliação pós-hidratação: se distribuicaoTipo veio definido (ex.: forçado para "2"
-  // por q1JaGozada, ou herdado do registro) mas `periodos` está vazio ou tem referência
-  // inconsistente com a distribuição escolhida, gerar a estrutura inicial. Sem isso, os
-  // campos de data ficam ocultos até o usuário alternar manualmente a distribuição.
-  useEffect(() => {
-    if (isHydrating) return;
-    if (!excecaoTipo || !distribuicaoTipo) return;
-
-    const refsAtual = periodos.map(p => p.referencia_periodo);
-    const refEsperadaSingle =
-      distribuicaoTipo === "1" ? 1 :
-      distribuicaoTipo === "2" ? 2 :
-      distribuicaoTipo === "livre" ? 0 : null;
-
-    let inconsistente = false;
-    if (refEsperadaSingle !== null) {
-      inconsistente = periodos.length === 0 || !refsAtual.includes(refEsperadaSingle);
-    } else if (distribuicaoTipo === "ambos") {
-      inconsistente = periodos.length === 0 || !refsAtual.includes(1) || !refsAtual.includes(2);
-    }
-    if (!inconsistente) return;
-
-    if (excecaoTipo === "vender") {
-      if (diasGozo <= 0) return;
-      if (distribuicaoTipo === "1") {
-        onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 1 }]);
-      } else if (distribuicaoTipo === "2") {
-        onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 2 }]);
-      } else if (distribuicaoTipo === "ambos") {
-        const d1 = Math.ceil(diasGozo / 2);
-        const d2 = diasGozo - d1;
-        onPeriodosChange([
-          { id: genId(), dias: d1, data_inicio: "", data_fim: "", referencia_periodo: 1 },
-          { id: genId(), dias: d2, data_inicio: "", data_fim: "", referencia_periodo: 2 },
-        ]);
-      } else if (distribuicaoTipo === "livre" && allowLivre) {
-        onPeriodosChange([{ id: genId(), dias: diasGozo, data_inicio: "", data_fim: "", referencia_periodo: 0 }]);
-      }
-    } else if (excecaoTipo === "gozo_diferente") {
-      if (distribuicaoTipo === "1") {
-        onPeriodosChange([{ id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 1 }]);
-      } else if (distribuicaoTipo === "2") {
-        onPeriodosChange([{ id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 2 }]);
-      } else if (distribuicaoTipo === "ambos") {
-        onPeriodosChange([
-          { id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 1 },
-          { id: genId(), dias: 15, data_inicio: "", data_fim: "", referencia_periodo: 2 },
-        ]);
-      }
-    }
-  }, [isHydrating, excecaoTipo, distribuicaoTipo, periodos, diasGozo, onPeriodosChange]);
 
   // OBS: Removidos os efeitos automáticos que limpavam `distribuicaoTipo` e `periodos`
   // ao mudar `excecaoTipo` ou `diasVendidos`. Esses resets disparavam logo após a

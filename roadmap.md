@@ -13,3 +13,4 @@
 - [x] Documentar a regra de registro imediato de novas funcionalidades/correções no histórico.
 - [x] Ampliar o diálogo de novo lançamento e corrigir textos completos e rolagem dos seletores.
 - [x] Corrigir a folga lateral dos campos Tipo e Nº do documento no diálogo de lançamento.
+- [x] Corrigir a primeira gravação da venda de dias e preservar os períodos de gozo em Férias.

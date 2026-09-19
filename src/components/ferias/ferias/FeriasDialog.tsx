@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { ExcecaoPeriodosSection, type GozoPeriodo } from "./ExcecaoPeriodosSection";
+import { resolverVendaConsolidada } from "@/lib/feriasVenda";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -132,6 +133,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   // (necessário em modo exceção quando a distribuição é "ambos" ou "livre").
   const [excQuinzenaVenda, setExcQuinzenaVenda] = useState<number>(1);
   const [selectedPeriodoKey, setSelectedPeriodoKey] = useState<string>("");
+
+  const handleDiasVendidosChange = useCallback((dias: number) => {
+    setExcDiasVendidos(dias);
+    form.setValue("dias_vendidos", dias, { shouldDirty: true, shouldValidate: true });
+  }, [form]);
 
   const form = useForm<FeriasFormData>({
     resolver: zodResolver(feriasSchema),
@@ -1315,18 +1321,26 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       };
 
       if (excecaoTipo === "vender") {
+        const venda = resolverVendaConsolidada({
+          opcaoAdicional: data.opcao_adicional,
+          excecaoTipo,
+          diasVendidos: data.dias_vendidos,
+          quinzenaVenda: excQuinzenaVenda,
+          q1BloqueadoParaVenda,
+          isExcecao: data.is_excecao,
+        });
         // Venda estruturada: usada tanto na exceção (>10 dias vendidos) quanto
         // no modo padrão quando o gestor opta por distribuir o gozo em
         // sub-períodos. O exc* state é a fonte única da verdade para vender.
         gozoFlexivel = excPeriodos.length > 0;
         distribuicaoTipoVal = excDistribuicaoTipo || null;
-        venderDias = true;
-        diasVend = excDiasVendidos;
+        venderDias = venda.venderDias;
+        diasVend = venda.diasVendidos;
         // Período da venda para o contador: respeita a escolha explícita do
         // gestor no seletor. A distribuição do gozo interno não deve sobrescrever
         // essa informação, pois o contador precisa saber em qual quinzena a
         // venda foi registrada oficialmente.
-        quinzenaVendaVal = q1BloqueadoParaVenda ? 2 : (excQuinzenaVenda || 1);
+        quinzenaVendaVal = venda.quinzenaVenda;
         if (excPeriodos.length > 0) {
           const p1 = excPeriodos.filter(p => p.referencia_periodo === 1);
           const p2 = excPeriodos.filter(p => p.referencia_periodo === 2);
@@ -1363,8 +1377,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         } else {
           // Venda padrão (≤10 dias): a venda oficial fica toda na quinzena
           // selecionada pelo gestor, independente de como o gozo foi distribuído.
-          diasVendQ1 = quinzenaVendaVal === 1 ? diasVend : 0;
-          diasVendQ2 = quinzenaVendaVal === 2 ? diasVend : 0;
+          diasVendQ1 = venda.diasVendidosQ1;
+          diasVendQ2 = venda.diasVendidosQ2;
         }
       } else if (data.is_excecao && excecaoTipo === "gozo_diferente") {
         gozoFlexivel = true;
@@ -1527,6 +1541,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       queryClient.invalidateQueries({ queryKey: ["ferias-dashboard-proximas"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-dashboard-ferias-mes"] });
       queryClient.invalidateQueries({ queryKey: ["ferias-dashboard-alertas"] });
+      await queryClient.invalidateQueries({ queryKey: ["ferias-gozo-periodos-table"] });
       await queryClient.invalidateQueries({ queryKey: ["ferias-ferias"] });
       onSuccess();
     },
@@ -2143,7 +2158,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                   distribuicaoTipo={excDistribuicaoTipo}
                   onDistribuicaoTipoChange={setExcDistribuicaoTipo}
                   diasVendidos={excDiasVendidos}
-                  onDiasVendidosChange={setExcDiasVendidos}
+                  onDiasVendidosChange={handleDiasVendidosChange}
                   periodos={excPeriodos}
                   onPeriodosChange={setExcPeriodos}
                   q1Inicio={q1Inicio}
@@ -2187,10 +2202,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                       distribuicaoTipo={excDistribuicaoTipo}
                       onDistribuicaoTipoChange={setExcDistribuicaoTipo}
                       diasVendidos={form.watch("dias_vendidos") || 0}
-                      onDiasVendidosChange={(d) => {
-                        form.setValue("dias_vendidos", d);
-                        setExcDiasVendidos(d);
-                      }}
+                      onDiasVendidosChange={handleDiasVendidosChange}
                       periodos={excPeriodos}
                       onPeriodosChange={setExcPeriodos}
                       q1Inicio={q1Inicio}
