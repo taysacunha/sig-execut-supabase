@@ -134,11 +134,6 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const [excQuinzenaVenda, setExcQuinzenaVenda] = useState<number>(1);
   const [selectedPeriodoKey, setSelectedPeriodoKey] = useState<string>("");
 
-  const handleDiasVendidosChange = useCallback((dias: number) => {
-    setExcDiasVendidos(dias);
-    form.setValue("dias_vendidos", dias, { shouldDirty: true, shouldValidate: true });
-  }, [form]);
-
   const form = useForm<FeriasFormData>({
     resolver: zodResolver(feriasSchema),
     defaultValues: {
@@ -167,6 +162,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       excecao_justificativa: "",
     },
   });
+
+  const handleDiasVendidosChange = useCallback((dias: number) => {
+    setExcDiasVendidos(dias);
+    form.setValue("dias_vendidos", dias, { shouldDirty: true, shouldValidate: true });
+  }, [form]);
 
   const { data: colaboradores = [] } = useQuery({
     queryKey: ["ferias-colaboradores-select"],
