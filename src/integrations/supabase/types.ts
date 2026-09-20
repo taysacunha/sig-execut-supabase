@@ -5049,6 +5049,13 @@ export type Database = {
         Args: { p_end_date: string; p_start_date: string }
         Returns: Json
       }
+      despesas_centros_lookup: {
+        Args: never
+        Returns: {
+          id: string
+          nome: string
+        }[]
+      }
       despesas_centros_permitidos: {
         Args: { _user_id: string }
         Returns: string[]
@@ -5102,6 +5109,14 @@ export type Database = {
       despesas_nivel_aba: {
         Args: { _aba: string; _user_id: string }
         Returns: string
+      }
+      despesas_pessoas_lookup: {
+        Args: never
+        Returns: {
+          id: string
+          nome: string
+          tipo_pessoa: string
+        }[]
       }
       despesas_pode_editar_aba: {
         Args: { _aba: string; _user_id: string }
