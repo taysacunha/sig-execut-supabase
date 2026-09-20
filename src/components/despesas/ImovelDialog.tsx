@@ -34,6 +34,7 @@ import {
   ToggleValuesButton,
 } from "@/contexts/DespesasValuesContext";
 import { PessoaDialog } from "@/components/despesas/PessoaDialog";
+import { traduzirErroDespesas } from "@/lib/despesasErros";
 
 interface Props {
   open: boolean;
@@ -114,7 +115,7 @@ function ImovelDialogInner({ open, onOpenChange, editing }: Props) {
       setDupMotivo("");
       if (!editing) onOpenChange(false);
     } catch (e: any) {
-      toast.error(e?.message ?? "Erro ao salvar");
+      toast.error(traduzirErroDespesas(e));
     }
   }
 
