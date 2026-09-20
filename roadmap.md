@@ -14,3 +14,5 @@
 - [x] Ampliar o diálogo de novo lançamento e corrigir textos completos e rolagem dos seletores.
 - [x] Corrigir a folga lateral dos campos Tipo e Nº do documento no diálogo de lançamento.
 - [x] Corrigir a primeira gravação da venda de dias e preservar os períodos de gozo em Férias.
+- [ ] Corrigir permissões relacionadas de Veículos/Bens, vínculo das recorrências e situação “Em aquisição” dos imóveis (bloqueado: migração do banco recusada pela preferência de aprovação).
+- [ ] Reparar lançamentos antigos de recorrências de veículos sem vínculo e registrar esta correção em `/dev` (bloqueado: ferramentas do banco desabilitadas).

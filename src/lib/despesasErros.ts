@@ -5,6 +5,9 @@ export function traduzirErroDespesas(e: unknown): string {
   if (/despesas_lancamentos_referencia_ck|despesas_recorrencias_referencia_ck|referencia_ck/i.test(msg)) {
     return "O lançamento precisa de uma referência (pessoa, imóvel, pasta, venda ou veículo). Aplique a atualização do banco de dados de referência por veículo e tente novamente.";
   }
+  if (/despesas_imoveis_situacao_check/i.test(msg)) {
+    return "A situação selecionada para o imóvel ainda não está habilitada. Atualize a página e tente novamente.";
+  }
   if (/centro de custo/i.test(msg)) {
     return "Defina o centro de custo do veículo antes de gerar encargos.";
   }
