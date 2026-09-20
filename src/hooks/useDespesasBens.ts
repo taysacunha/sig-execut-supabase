@@ -85,13 +85,7 @@ export function useBens(filtros: BemFiltros = {}) {
     queryFn: async () => {
       let q = supabase
         .from("despesas_bens" as any)
-        .select(
-          `*,
-           responsavel:despesas_pessoas!despesas_bens_responsavel_id_fkey(nome),
-           fornecedor:despesas_pessoas!despesas_bens_fornecedor_id_fkey(nome),
-           centro_custo:despesas_centros_custo(nome),
-           pagamentos:despesas_bem_pagamentos(valor)`
-        )
+        .select("*, pagamentos:despesas_bem_pagamentos(valor)")
         .eq("is_active", true)
         .order("descricao");
       if (filtros.situacao && filtros.situacao !== "todos") q = q.eq("situacao", filtros.situacao);
@@ -101,9 +95,30 @@ export function useBens(filtros: BemFiltros = {}) {
       if (filtros.busca && filtros.busca.trim()) {
         q = q.ilike("descricao", `%${filtros.busca.trim()}%`);
       }
-      const { data, error } = await q.limit(1000);
-      if (error) throw error;
-      return (data ?? []) as unknown as Bem[];
+      const [bensRes, pessoasRes, centrosRes] = await Promise.all([
+        q.limit(1000),
+        supabase.rpc("despesas_pessoas_lookup" as any),
+        supabase.rpc("despesas_centros_lookup" as any),
+      ]);
+      if (bensRes.error) throw bensRes.error;
+      if (pessoasRes.error) throw pessoasRes.error;
+      if (centrosRes.error) throw centrosRes.error;
+
+      const pessoas = new Map(
+        ((pessoasRes.data ?? []) as unknown as { id: string; nome: string }[])
+          .map((p) => [p.id, { nome: p.nome }] as const),
+      );
+      const centros = new Map(
+        ((centrosRes.data ?? []) as unknown as { id: string; nome: string }[])
+          .map((c) => [c.id, { nome: c.nome }] as const),
+      );
+
+      return ((bensRes.data ?? []) as unknown as Bem[]).map((bem) => ({
+        ...bem,
+        responsavel: bem.responsavel_id ? pessoas.get(bem.responsavel_id) ?? null : null,
+        fornecedor: bem.fornecedor_id ? pessoas.get(bem.fornecedor_id) ?? null : null,
+        centro_custo: centros.get(bem.centro_custo_id) ?? null,
+      }));
     },
   });
 }

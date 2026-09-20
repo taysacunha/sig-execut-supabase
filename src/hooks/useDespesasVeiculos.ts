@@ -40,18 +40,30 @@ export function useVeiculos() {
   return useQuery({
     queryKey: [VEICULOS_KEY],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("despesas_veiculos" as any)
-        .select(
-          `*,
-           motorista:despesas_pessoas!despesas_veiculos_motorista_id_fkey(nome),
-           proprietario:despesas_pessoas!despesas_veiculos_proprietario_id_fkey(nome),
-           centro_custo:despesas_centros_custo(nome)`
-        )
-        .eq("is_active", true)
-        .order("modelo");
-      if (error) throw error;
-      return (data ?? []) as unknown as Veiculo[];
+      const [veiculosRes, pessoasRes, centrosRes] = await Promise.all([
+        supabase.from("despesas_veiculos" as any).select("*").eq("is_active", true).order("modelo"),
+        supabase.rpc("despesas_pessoas_lookup" as any),
+        supabase.rpc("despesas_centros_lookup" as any),
+      ]);
+      if (veiculosRes.error) throw veiculosRes.error;
+      if (pessoasRes.error) throw pessoasRes.error;
+      if (centrosRes.error) throw centrosRes.error;
+
+      const pessoas = new Map(
+        ((pessoasRes.data ?? []) as unknown as { id: string; nome: string }[])
+          .map((p) => [p.id, { nome: p.nome }] as const),
+      );
+      const centros = new Map(
+        ((centrosRes.data ?? []) as unknown as { id: string; nome: string }[])
+          .map((c) => [c.id, { nome: c.nome }] as const),
+      );
+
+      return ((veiculosRes.data ?? []) as unknown as Veiculo[]).map((veiculo) => ({
+        ...veiculo,
+        motorista: veiculo.motorista_id ? pessoas.get(veiculo.motorista_id) ?? null : null,
+        proprietario: veiculo.proprietario_id ? pessoas.get(veiculo.proprietario_id) ?? null : null,
+        centro_custo: veiculo.centro_custo_id ? centros.get(veiculo.centro_custo_id) ?? null : null,
+      }));
     },
   });
 }
