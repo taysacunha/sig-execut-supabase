@@ -5146,6 +5146,26 @@ export type Database = {
         Args: { _repasse_id: string }
         Returns: undefined
       }
+      despesas_veiculos_lookup: {
+        Args: never
+        Returns: {
+          centro_custo_id: string
+          centro_custo_nome: string
+          comprador_id: string
+          data_aquisicao: string
+          data_venda: string
+          id: string
+          is_active: boolean
+          modelo: string
+          motorista_id: string
+          motorista_nome: string
+          nota_fiscal: string
+          observacao: string
+          placa: string
+          proprietario_id: string
+          proprietario_nome: string
+        }[]
+      }
       get_broker_performance: {
         Args: { end_date: string; start_date: string }
         Returns: {
