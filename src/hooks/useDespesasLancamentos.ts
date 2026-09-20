@@ -517,11 +517,7 @@ export function useDespesasLookups() {
   const centros = useQuery({
     queryKey: ["desp-lookup", "centros"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("despesas_centros_custo" as any)
-        .select("id, nome")
-        .eq("is_active", true)
-        .order("nome");
+      const { data, error } = await supabase.rpc("despesas_centros_lookup" as any);
       if (error) throw error;
       return (data ?? []) as unknown as { id: string; nome: string }[];
     },
@@ -577,11 +573,7 @@ export function useDespesasLookups() {
   const pessoas = useQuery({
     queryKey: ["desp-lookup", "pessoas"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("despesas_pessoas" as any)
-        .select("id, nome, tipo_pessoa")
-        .eq("is_active", true)
-        .order("nome");
+      const { data, error } = await supabase.rpc("despesas_pessoas_lookup" as any);
       if (error) throw error;
       return (data ?? []) as unknown as { id: string; nome: string; tipo_pessoa: string }[];
     },
