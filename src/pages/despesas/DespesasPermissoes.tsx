@@ -510,6 +510,14 @@ export default function DespesasPermissoes() {
 
         {/* -------- Aba 2: Centros -------- */}
         <TabsContent value="centros" className="space-y-3">
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertTitle>Escopo dos centros</AlertTitle>
+            <AlertDescription>
+              Sem nenhum centro marcado, o usuário acessa todos os centros ativos somente nas abas permitidas.
+              Ao marcar um ou mais, o acesso fica restrito aos centros selecionados.
+            </AlertDescription>
+          </Alert>
           {centros.length === 0 ? (
             <Card><CardContent className="pt-6 text-sm text-muted-foreground">
               Cadastre centros de custo na aba Cadastros para poder atribuí-los aqui.
@@ -593,8 +601,8 @@ export default function DespesasPermissoes() {
                               ))}
                               <TableCell>
                                 {set.size === 0
-                                  ? <Badge variant="outline">Todos</Badge>
-                                  : <Badge>{set.size} centro(s)</Badge>}
+                                  ? <Badge variant="outline">Todos os centros ativos</Badge>
+                                  : <Badge>{set.size} centro(s) selecionado(s)</Badge>}
                               </TableCell>
                             </TableRow>
                           );

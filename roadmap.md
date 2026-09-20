@@ -16,3 +16,4 @@
 - [x] Corrigir a primeira gravação da venda de dias e preservar os períodos de gozo em Férias.
 - [x] Corrigir permissões relacionadas de Veículos/Bens, vínculo das recorrências e situação “Em aquisição” dos imóveis.
 - [x] Verificar lançamentos antigos de recorrências de veículos sem vínculo e registrar esta correção em `/dev` (nenhum lançamento antigo exigia reparo).
+- [x] Alinhar “nenhum centro marcado = todos” para Taysa, STI e demais usuários, preservando as permissões por aba.
