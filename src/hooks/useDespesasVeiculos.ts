@@ -34,7 +34,7 @@ export interface VeiculoDocumento {
   observacao: string | null;
 }
 
-export const VEICULOS_KEY = "despesas-veiculos-full";
+export const VEICULOS_KEY = "despesas-veiculos-full-v2";
 
 export function useVeiculos() {
   return useQuery({
