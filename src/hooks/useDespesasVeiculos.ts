@@ -182,11 +182,11 @@ export function useGerarEncargosVeiculo() {
   return useMutation({
     mutationFn: async ({ veiculoId, ano }: { veiculoId: string; ano: number }) => {
       const { data, error } = await supabase.rpc(
-        "despesas_gerar_encargos_veiculo" as any,
+        "despesas_gerar_encargos_veiculo_detalhado" as any,
         { _veiculo_id: veiculoId, _ano: ano } as any
       );
       if (error) throw error;
-      return data as number;
+      return data as unknown as { criados: number; existentes: number; sem_valor: number };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["despesas-lancamentos"] }),
   });

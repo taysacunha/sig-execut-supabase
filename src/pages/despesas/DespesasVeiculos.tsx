@@ -60,15 +60,18 @@ export default function DespesasVeiculos() {
     if (!confirmGerar) return;
     const qtdDocs = docsDoGerar.length;
     try {
-      const n = await gerarMut.mutateAsync({ veiculoId: confirmGerar.id, ano });
-      if (n > 0) {
-        toast.success(`${n} lançamento(s) gerado(s) para ${ano}`);
+       const resultado = await gerarMut.mutateAsync({ veiculoId: confirmGerar.id, ano });
+       if (resultado.criados > 0) {
+         const pendentes = resultado.sem_valor > 0 ? ` ${resultado.sem_valor} ficou(aram) com valor pendente.` : "";
+         toast.success(`${resultado.criados} lançamento(s) gerado(s) para ${ano}.${pendentes}`);
       } else if (qtdDocs === 0) {
         toast.warning(
           "Este veículo não possui documentos ativos. Cadastre IPVA, seguro etc. na aba Documentos do veículo.",
         );
-      } else {
-        toast.info(`Nenhum lançamento novo: os encargos de ${ano} já foram gerados.`);
+       } else if (resultado.existentes > 0) {
+         toast.info(`Nenhum lançamento novo: ${resultado.existentes} encargo(s) de ${ano} já existem.`);
+       } else {
+         toast.warning("Nenhum lançamento foi gerado. Revise os documentos ativos do veículo.");
       }
       setConfirmGerar(null);
     } catch (e: any) {

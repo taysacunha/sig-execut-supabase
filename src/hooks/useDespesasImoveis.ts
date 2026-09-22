@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type ImovelSituacao = "alugado" | "vago" | "vendido" | "proprio_uso" | "em_aquisicao";
 export type ImovelTipo = "comercial" | "residencial" | "terreno" | "outro";
+export type RipSituacao = "possui" | "nao_possui" | "nao_informado";
 export type EncargoTipo = "iptu" | "tcr" | "spu" | "condominio" | "outro";
 
 export interface Imovel {
@@ -19,6 +20,7 @@ export interface Imovel {
   uf: string | null;
   cep: string | null;
   matricula: string | null;
+  rip_situacao: RipSituacao;
   inscricao_municipal: string | null;
   area_total: number | null;
   proprietario_id: string | null;
@@ -69,6 +71,7 @@ export interface ImovelFiltros {
   centroCustoId?: string;
   proprietarioId?: string;
   busca?: string;
+  pendencia?: "alugado_sem_inquilino" | "sem_inscricao" | "rip_nao_informado";
 }
 
 export function useImoveis(filtros: ImovelFiltros = {}) {
@@ -90,8 +93,14 @@ export function useImoveis(filtros: ImovelFiltros = {}) {
       if (filtros.centroCustoId) q = q.eq("centro_custo_id", filtros.centroCustoId);
       if (filtros.proprietarioId) q = q.eq("proprietario_id", filtros.proprietarioId);
       if (filtros.busca && filtros.busca.trim()) {
-        q = q.ilike("descricao", `%${filtros.busca.trim()}%`);
+        const busca = filtros.busca.trim().replace(/[,()]/g, " ");
+        q = q.or(`descricao.ilike.%${busca}%,codigo.ilike.%${busca}%`);
       }
+      if (filtros.pendencia === "alugado_sem_inquilino") {
+        q = q.eq("situacao", "alugado").is("inquilino_id", null);
+      }
+      if (filtros.pendencia === "sem_inscricao") q = q.is("inscricao_municipal", null);
+      if (filtros.pendencia === "rip_nao_informado") q = q.eq("rip_situacao", "nao_informado");
       const { data, error } = await q.limit(1000);
       if (error) throw error;
       return (data ?? []) as unknown as Imovel[];

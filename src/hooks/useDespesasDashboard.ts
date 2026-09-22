@@ -157,6 +157,7 @@ export function useDespesasDashboard() {
       const { count: alugadosSemInquilino } = await supabase
         .from("despesas_imoveis" as any)
         .select("id", { count: "exact", head: true })
+        .eq("is_active", true)
         .eq("situacao", "alugado")
         .is("inquilino_id", null);
       if ((alugadosSemInquilino ?? 0) > 0) {
@@ -164,20 +165,35 @@ export function useDespesasDashboard() {
           key: "alugados_sem_inquilino",
           label: "Imóveis alugados sem inquilino vinculado",
           count: alugadosSemInquilino ?? 0,
-          url: "/despesas/imoveis",
+          url: "/despesas/imoveis?pendencia=alugado_sem_inquilino",
         });
       }
 
-      const { count: semRip } = await supabase
+      const { count: semInscricao } = await supabase
         .from("despesas_imoveis" as any)
         .select("id", { count: "exact", head: true })
-        .or("matricula.is.null,inscricao_municipal.is.null");
-      if ((semRip ?? 0) > 0) {
+        .eq("is_active", true)
+        .is("inscricao_municipal", null);
+      if ((semInscricao ?? 0) > 0) {
         checklist.push({
-          key: "sem_rip",
-          label: "Imóveis sem RIP ou inscrição municipal",
-          count: semRip ?? 0,
-          url: "/despesas/imoveis",
+          key: "sem_inscricao",
+          label: "Imóveis sem inscrição municipal",
+          count: semInscricao ?? 0,
+          url: "/despesas/imoveis?pendencia=sem_inscricao",
+        });
+      }
+
+      const { count: ripNaoInformado } = await supabase
+        .from("despesas_imoveis" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("is_active", true)
+        .eq("rip_situacao", "nao_informado");
+      if ((ripNaoInformado ?? 0) > 0) {
+        checklist.push({
+          key: "rip_nao_informado",
+          label: "Imóveis com situação do RIP não informada",
+          count: ripNaoInformado ?? 0,
+          url: "/despesas/imoveis?pendencia=rip_nao_informado",
         });
       }
 
