@@ -53,9 +53,12 @@ export function VeiculosRecorrencias({ veiculos, canEdit }: Props) {
     gerarMut.mutate(
       { veiculoId: confirmGerar.veiculo.id, ano },
       {
-        onSuccess: (n) => {
-          if (n > 0) toast.success(`${n} lançamento(s) gerado(s) para ${ano}`);
-          else toast.info(`Nenhum lançamento novo: os encargos de ${ano} já foram gerados.`);
+         onSuccess: (resultado) => {
+           if (resultado.criados > 0) {
+             const pendentes = resultado.sem_valor > 0 ? ` ${resultado.sem_valor} com valor pendente.` : "";
+             toast.success(`${resultado.criados} lançamento(s) gerado(s) para ${ano}.${pendentes}`);
+           } else if (resultado.existentes > 0) toast.info(`Nenhum lançamento novo: ${resultado.existentes} encargo(s) já existem.`);
+           else toast.warning("Nenhum lançamento foi gerado. Revise os documentos ativos do veículo.");
           setConfirmGerar(null);
         },
         onError: (e: any) => toast.error(traduzirErroDespesas(e)),

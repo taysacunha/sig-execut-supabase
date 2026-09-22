@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/table";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import {
-  Imovel, ImovelInput, ImovelSituacao, ImovelTipo,
+  Imovel, ImovelInput, ImovelSituacao, ImovelTipo, RipSituacao,
   useSaveImovel, useImovelEncargos, useSaveEncargo, useDeleteEncargo,
   useImovelHistorico, ImovelEncargo, EncargoTipo,
   buscarImoveisDuplicados, DuplicadoImovel,
@@ -72,7 +72,7 @@ function ImovelDialogInner({ open, onOpenChange, editing }: Props) {
     situacao: "vago",
     endereco: null, numero: null, complemento: null, bairro: null,
     cidade: null, uf: null, cep: null,
-    matricula: null, inscricao_municipal: null,
+    matricula: null, rip_situacao: "nao_informado", inscricao_municipal: null,
     area_total: null,
     proprietario_id: null, inquilino_id: null,
     centro_custo_id: "",
@@ -98,7 +98,8 @@ function ImovelDialogInner({ open, onOpenChange, editing }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editing]);
 
-  const podeSalvar = form.descricao.trim().length > 0 && !!form.centro_custo_id;
+  const podeSalvar = form.descricao.trim().length > 0 && !!form.centro_custo_id
+    && (form.rip_situacao !== "possui" || !!form.matricula?.trim());
 
   const pessoaLabel = (p: { nome: string; cpf_cnpj?: string | null }) =>
     p.cpf_cnpj ? `${p.nome} — ${p.cpf_cnpj}` : p.nome;
@@ -270,7 +271,20 @@ function ImovelDialogInner({ open, onOpenChange, editing }: Props) {
               <div className="space-y-2"><Label>Cidade</Label><Input value={form.cidade ?? ""} onChange={(e) => setForm({ ...form, cidade: e.target.value || null })} /></div>
               <div className="space-y-2"><Label>UF</Label><Input value={form.uf ?? ""} onChange={(e) => setForm({ ...form, uf: e.target.value || null })} maxLength={2} /></div>
               <div className="space-y-2"><Label>CEP</Label><Input value={form.cep ?? ""} onChange={(e) => setForm({ ...form, cep: e.target.value || null })} maxLength={10} /></div>
-              <div className="space-y-2"><Label>RIP</Label><Input value={form.matricula ?? ""} onChange={(e) => setForm({ ...form, matricula: e.target.value || null })} /></div>
+               <div className="space-y-2">
+                 <Label>Possui RIP?</Label>
+                 <Select value={form.rip_situacao} onValueChange={(v: RipSituacao) => setForm({ ...form, rip_situacao: v, matricula: v === "possui" ? form.matricula : null })}>
+                   <SelectTrigger><SelectValue /></SelectTrigger>
+                   <SelectContent>
+                     <SelectItem value="nao_informado">Não informado</SelectItem>
+                     <SelectItem value="possui">Sim</SelectItem>
+                     <SelectItem value="nao_possui">Não</SelectItem>
+                   </SelectContent>
+                 </Select>
+               </div>
+               {form.rip_situacao === "possui" && (
+                 <div className="space-y-2"><Label>Número do RIP *</Label><Input value={form.matricula ?? ""} onChange={(e) => setForm({ ...form, matricula: e.target.value || null })} /></div>
+               )}
               <div className="space-y-2"><Label>Inscrição municipal</Label><Input value={form.inscricao_municipal ?? ""} onChange={(e) => setForm({ ...form, inscricao_municipal: e.target.value || null })} /></div>
               <div className="space-y-2"><Label>Área total (m²)</Label><Input type="number" step="0.01" value={form.area_total ?? ""} onChange={(e) => setForm({ ...form, area_total: e.target.value ? Number(e.target.value) : null })} /></div>
               <div className="space-y-2"><Label>Valor de aluguel</Label><Input type="number" step="0.01" value={form.valor_aluguel ?? 0} onChange={(e) => setForm({ ...form, valor_aluguel: Number(e.target.value) })} /></div>

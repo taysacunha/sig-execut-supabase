@@ -742,6 +742,48 @@ export type Database = {
           },
         ]
       }
+      despesas_duplicidades_revisoes: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          justificativa: string
+          lancamento_a_id: string
+          lancamento_b_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          justificativa: string
+          lancamento_a_id: string
+          lancamento_b_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          justificativa?: string
+          lancamento_a_id?: string
+          lancamento_b_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_duplicidades_revisoes_lancamento_a_id_fkey"
+            columns: ["lancamento_a_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_lancamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_duplicidades_revisoes_lancamento_b_id_fkey"
+            columns: ["lancamento_b_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_lancamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       despesas_imoveis: {
         Row: {
           area_total: number | null
@@ -765,6 +807,7 @@ export type Database = {
           numero: string | null
           observacao: string | null
           proprietario_id: string | null
+          rip_situacao: string
           situacao: string
           taxa_administracao_pct: number | null
           tipo: string
@@ -794,6 +837,7 @@ export type Database = {
           numero?: string | null
           observacao?: string | null
           proprietario_id?: string | null
+          rip_situacao?: string
           situacao?: string
           taxa_administracao_pct?: number | null
           tipo?: string
@@ -823,6 +867,7 @@ export type Database = {
           numero?: string | null
           observacao?: string | null
           proprietario_id?: string | null
+          rip_situacao?: string
           situacao?: string
           taxa_administracao_pct?: number | null
           tipo?: string
@@ -5088,6 +5133,10 @@ export type Database = {
       despesas_gerar_encargos_veiculo: {
         Args: { _ano: number; _veiculo_id: string }
         Returns: number
+      }
+      despesas_gerar_encargos_veiculo_detalhado: {
+        Args: { _ano: number; _veiculo_id: string }
+        Returns: Json
       }
       despesas_gerar_lancamento_bem: {
         Args: { _pagamento_id: string }

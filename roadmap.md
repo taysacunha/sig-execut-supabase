@@ -17,3 +17,7 @@
 - [x] Corrigir permissões relacionadas de Veículos/Bens, vínculo das recorrências e situação “Em aquisição” dos imóveis.
 - [x] Verificar lançamentos antigos de recorrências de veículos sem vínculo e registrar esta correção em `/dev` (nenhum lançamento antigo exigia reparo).
 - [x] Alinhar “nenhum centro marcado = todos” para Taysa, STI e demais usuários, preservando as permissões por aba.
+- [x] Corrigir pendências cadastrais de imóveis, busca por código e classificação individual do RIP.
+- [x] Permitir filtrar e justificar possíveis duplicidades no Calendário de Despesas.
+- [ ] Gerar e validar os encargos sem valor do Fiat 500 OFA 7777 no calendário anual.
+- [ ] Validar a entrega completa e registrá-la no histórico `/dev`.

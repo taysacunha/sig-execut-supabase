@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDespesasPermissions } from "@/hooks/useDespesasPermissions";
-import { ShieldAlert, Plus, Pencil, Trash2, CalendarClock, Search } from "lucide-react";
+import { ShieldAlert, Plus, Pencil, Trash2, CalendarClock, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,7 +35,9 @@ export default function DespesasImoveis() {
   const money = (n: number | null | undefined) =>
     showValues ? formatValue(n) : "R$ ******";
   const { centros, pessoas } = useDespesasLookups();
-  const [filtros, setFiltros] = useState<ImovelFiltros>({});
+  const [searchParams, setSearchParams] = useSearchParams();
+  const pendenciaParam = searchParams.get("pendencia") as ImovelFiltros["pendencia"];
+  const [filtros, setFiltros] = useState<ImovelFiltros>({ pendencia: pendenciaParam });
   const { data: imoveis = [], isLoading } = useImoveis(filtros);
   const delMut = useDeleteImovel();
   const gerarMut = useGerarEncargosImovel();
@@ -70,6 +73,17 @@ export default function DespesasImoveis() {
 
   const openNew = () => { setEditing(null); setDialogOpen(true); };
   const openEdit = (i: Imovel) => { setEditing(i); setDialogOpen(true); };
+  const limparPendencia = () => {
+    setFiltros((f) => ({ ...f, pendencia: undefined }));
+    const next = new URLSearchParams(searchParams);
+    next.delete("pendencia");
+    setSearchParams(next, { replace: true });
+  };
+  const pendenciaLabel: Record<string, string> = {
+    alugado_sem_inquilino: "Alugados sem inquilino",
+    sem_inscricao: "Sem inscrição municipal",
+    rip_nao_informado: "Situação do RIP não informada",
+  };
 
   async function gerarEncargos() {
     if (!confirmGerar) return;
@@ -118,7 +132,7 @@ export default function DespesasImoveis() {
             <Label>Buscar</Label>
             <div className="relative">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input className="pl-8" value={filtros.busca ?? ""} onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })} placeholder="Descrição" />
+               <Input className="pl-8" value={filtros.busca ?? ""} onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })} placeholder="Código ou descrição" />
             </div>
           </div>
           <div className="space-y-1">
@@ -170,6 +184,14 @@ export default function DespesasImoveis() {
           </div>
         </CardContent>
       </Card>
+
+      {filtros.pendencia && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="font-medium">Filtro do painel:</span>
+          <span>{pendenciaLabel[filtros.pendencia]}</span>
+          <Button size="sm" variant="ghost" onClick={limparPendencia}><X className="h-4 w-4 mr-1" />Limpar filtro</Button>
+        </div>
+      )}
 
       <Card>
         <CardHeader>

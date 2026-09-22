@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Plus, Pencil, Trash2, ShieldAlert, DollarSign, AlertTriangle,
-  CheckCircle2, XCircle, Download, Ban, Repeat, RotateCcw,
+  CheckCircle2, XCircle, Download, Ban, Repeat, RotateCcw, ShieldCheck,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -34,6 +34,9 @@ import { LancamentoDialog } from "@/components/despesas/LancamentoDialog";
 import { PagamentoDialog } from "@/components/despesas/PagamentoDialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useDespesasValues } from "@/contexts/DespesasValuesContext";
+import {
+  chaveParDuplicidade, useDuplicidadesRevisoes, useMarcarNaoDuplicidade,
+} from "@/hooks/useDespesasDuplicidadesRevisoes";
 
 const STATUS_META: Record<LancamentoStatus, { label: string; variant: any; icon: any }> = {
   a_vencer: { label: "A vencer", variant: "secondary", icon: DollarSign },
@@ -149,10 +152,18 @@ export default function DespesasCalendario() {
   const [estornoMotivo, setEstornoMotivo] = useState("");
   const [tipoDefault, setTipoDefault] = useState<LancamentoTipo>("a_pagar");
   const [aba, setAba] = useState<"ativos" | "cancelados">("ativos");
+  const [soDuplicados, setSoDuplicados] = useState(false);
+  const [revisando, setRevisando] = useState<{ a: Lancamento; b: Lancamento } | null>(null);
+  const [justificativaDuplicidade, setJustificativaDuplicidade] = useState("");
+  const { data: revisoes = [] } = useDuplicidadesRevisoes();
+  const revisarMut = useMarcarNaoDuplicidade();
 
   const rowsAtivos = useMemo(() => rows.filter((r) => r.status !== "cancelado"), [rows]);
   const rowsCancelados = useMemo(() => rows.filter((r) => r.status === "cancelado"), [rows]);
-  const rowsVisiveis = aba === "cancelados" ? rowsCancelados : rowsAtivos;
+  const revisados = useMemo(
+    () => new Set(revisoes.map((r) => chaveParDuplicidade(r.lancamento_a_id, r.lancamento_b_id))),
+    [revisoes],
+  );
 
   const deleteMut = useDeleteLancamento();
   const cancelMut = useCancelLancamento();
@@ -173,12 +184,13 @@ export default function DespesasCalendario() {
   }, [rows]);
 
   // Duplicidade ±3 dias (mesmo valor, mesmo tipo, mesma pessoa) — client only.
-  const { duplicados, gruposDuplicados } = useMemo(() => {
+  const { duplicados, gruposDuplicados, paresDuplicados } = useMemo(() => {
     const candidatos = rows.filter(
       (r) => r.status !== "cancelado" && r.status !== "gimob"
     );
     const grupos: string[][] = [];
     const grupoDe = new Map<string, number>();
+    const pares: { a: Lancamento; b: Lancamento }[] = [];
 
     const mesmoContexto = (a: Lancamento, b: Lancamento) =>
       a.tipo === b.tipo &&
@@ -198,11 +210,13 @@ export default function DespesasCalendario() {
       for (let j = i + 1; j < candidatos.length; j++) {
         const a = candidatos[i], b = candidatos[j];
         if (!mesmoContexto(a, b)) continue;
+        if (revisados.has(chaveParDuplicidade(a.id, b.id))) continue;
         const diff = Math.abs(
           (new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime()) /
             (1000 * 60 * 60 * 24)
         );
         if (diff > 3) continue;
+        pares.push({ a, b });
 
         const gi = grupoDe.get(a.id) ?? grupoDe.get(b.id);
         if (gi === undefined) {
@@ -215,8 +229,12 @@ export default function DespesasCalendario() {
         }
       }
     }
-    return { duplicados: new Set(grupoDe.keys()), gruposDuplicados: grupos.length };
-  }, [rows]);
+    return { duplicados: new Set(grupoDe.keys()), gruposDuplicados: grupos.length, paresDuplicados: pares };
+  }, [rows, revisados]);
+  const baseRowsVisiveis = aba === "cancelados" ? rowsCancelados : rowsAtivos;
+  const rowsVisiveis = soDuplicados
+    ? baseRowsVisiveis.filter((r) => duplicados.has(r.id))
+    : baseRowsVisiveis;
 
   if (!podeVer("calendario")) {
     return (
@@ -444,10 +462,11 @@ export default function DespesasCalendario() {
             Lançamentos {isLoading ? "" : `(${rowsVisiveis.length})`}
           </CardTitle>
           {gruposDuplicados > 0 && (
-            <Badge variant="destructive" className="gap-1">
+             <Button variant={soDuplicados ? "destructive" : "outline"} size="sm" onClick={() => setSoDuplicados((v) => !v)}>
               <AlertTriangle className="h-3 w-3" />
               {gruposDuplicados} possível(is) duplicidade(s)
-            </Badge>
+               {soDuplicados ? " · limpar filtro" : ""}
+             </Button>
           )}
         </CardHeader>
         <CardContent>
@@ -557,6 +576,19 @@ export default function DespesasCalendario() {
                               <Pencil className="h-4 w-4" />
                             </Button>
                           )}
+                          {canEdit && dup && (() => {
+                            const par = paresDuplicados.find((p) => p.a.id === r.id || p.b.id === r.id);
+                            return par ? (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                title="Marcar como não duplicidade"
+                                onClick={() => { setJustificativaDuplicidade(""); setRevisando(par); }}
+                              >
+                                <ShieldCheck className="h-4 w-4" />
+                              </Button>
+                            ) : null;
+                          })()}
                           {canEdit && r.status !== "cancelado" && r.status !== "pago" && (
                             <Button size="icon" variant="ghost" onClick={() => setConfirmCancel(r)} title="Cancelar">
                               <Ban className="h-4 w-4" />
@@ -629,6 +661,44 @@ export default function DespesasCalendario() {
         onOpenChange={(o) => !o && setPagando(null)}
         lancamento={pagando}
       />
+
+      <AlertDialog open={!!revisando} onOpenChange={(o) => !o && setRevisando(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar que não é duplicidade?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A justificativa ficará registrada e este par deixará de aparecer nos avisos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <div className="rounded-md border p-3 text-sm">
+              <div>{revisando?.a.descricao}</div>
+              <div>{revisando?.b.descricao}</div>
+            </div>
+            <Label>Justificativa (mín. 10 caracteres) *</Label>
+            <Textarea value={justificativaDuplicidade} onChange={(e) => setJustificativaDuplicidade(e.target.value)} rows={3} />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={justificativaDuplicidade.trim().length < 10 || revisarMut.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!revisando) return;
+                revisarMut.mutate(
+                  { a: revisando.a.id, b: revisando.b.id, justificativa: justificativaDuplicidade },
+                  {
+                    onSuccess: () => { toast.success("Revisão registrada"); setRevisando(null); },
+                    onError: (err: any) => toast.error(err?.message ?? "Erro ao registrar revisão"),
+                  },
+                );
+              }}
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
         <AlertDialogContent>
