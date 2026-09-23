@@ -5108,12 +5108,12 @@ export type Database = {
       despesas_detectar_duplicidades: {
         Args: {
           _centro_custo_id: string
-          _conta_bancaria_id: string
+          _conta_bancaria_id?: string
           _data_venc: string
           _ignorar_id?: string
           _janela_dias?: number
-          _pessoa_id: string
-          _plano_conta_id: string
+          _pessoa_id?: string
+          _plano_conta_id?: string
           _valor: number
         }
         Returns: {
