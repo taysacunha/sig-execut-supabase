@@ -1068,6 +1068,7 @@ export type Database = {
         Row: {
           categoria_id: string | null
           centro_custo_id: string
+          ciclo: number | null
           conta_bancaria_id: string | null
           created_at: string
           created_by: string | null
@@ -1079,6 +1080,8 @@ export type Database = {
           imovel_id: string | null
           is_manual: boolean
           observacao: string | null
+          parcela_num: number | null
+          parcela_total: number | null
           pessoa_id: string | null
           plano_conta_id: string | null
           referencia_numero: string | null
@@ -1094,11 +1097,13 @@ export type Database = {
           updated_at: string
           valor_pago: number
           valor_total: number | null
+          veiculo_documento_id: string | null
           veiculo_id: string | null
         }
         Insert: {
           categoria_id?: string | null
           centro_custo_id: string
+          ciclo?: number | null
           conta_bancaria_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -1110,6 +1115,8 @@ export type Database = {
           imovel_id?: string | null
           is_manual?: boolean
           observacao?: string | null
+          parcela_num?: number | null
+          parcela_total?: number | null
           pessoa_id?: string | null
           plano_conta_id?: string | null
           referencia_numero?: string | null
@@ -1125,11 +1132,13 @@ export type Database = {
           updated_at?: string
           valor_pago?: number
           valor_total?: number | null
+          veiculo_documento_id?: string | null
           veiculo_id?: string | null
         }
         Update: {
           categoria_id?: string | null
           centro_custo_id?: string
+          ciclo?: number | null
           conta_bancaria_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -1141,6 +1150,8 @@ export type Database = {
           imovel_id?: string | null
           is_manual?: boolean
           observacao?: string | null
+          parcela_num?: number | null
+          parcela_total?: number | null
           pessoa_id?: string | null
           plano_conta_id?: string | null
           referencia_numero?: string | null
@@ -1156,6 +1167,7 @@ export type Database = {
           updated_at?: string
           valor_pago?: number
           valor_total?: number | null
+          veiculo_documento_id?: string | null
           veiculo_id?: string | null
         }
         Relationships: [
@@ -1213,6 +1225,13 @@ export type Database = {
             columns: ["subcategoria_id"]
             isOneToOne: false
             referencedRelation: "despesas_subcategorias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_lancamentos_veiculo_documento_id_fkey"
+            columns: ["veiculo_documento_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_veiculo_documentos"
             referencedColumns: ["id"]
           },
           {
@@ -5094,6 +5113,10 @@ export type Database = {
         Args: { p_end_date: string; p_start_date: string }
         Returns: Json
       }
+      despesas_baixar_encargo_veiculo: {
+        Args: { _data: string; _id: string; _obs?: string }
+        Returns: undefined
+      }
       despesas_centros_lookup: {
         Args: never
         Returns: {
@@ -5126,6 +5149,10 @@ export type Database = {
           valor_total: number
         }[]
       }
+      despesas_excluir_encargo_veiculo: {
+        Args: { _id: string; _justificativa: string; _modo: string }
+        Returns: number
+      }
       despesas_gerar_encargos_imovel: {
         Args: { _ano: number; _imovel_id: string }
         Returns: number
@@ -5133,6 +5160,10 @@ export type Database = {
       despesas_gerar_encargos_veiculo: {
         Args: { _ano: number; _veiculo_id: string }
         Returns: number
+      }
+      despesas_gerar_encargos_veiculo_ciclo: {
+        Args: { _simular?: boolean; _veiculo_id: string }
+        Returns: Json
       }
       despesas_gerar_encargos_veiculo_detalhado: {
         Args: { _ano: number; _veiculo_id: string }
