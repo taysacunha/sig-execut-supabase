@@ -177,17 +177,76 @@ export function useDeleteVeiculoDocumento() {
   });
 }
 
+export interface EncargoPrevisto {
+  tipo: string;
+  ciclo: number;
+  parcela: number;
+  total: number;
+  vencimento: string;
+}
+export interface ResultadoGeracao {
+  criados: number;
+  itens: EncargoPrevisto[];
+  avisos: { tipo: string; motivo: string }[];
+}
+
+async function chamarGeracao(veiculoId: string, simular: boolean) {
+  const { data, error } = await supabase.rpc(
+    "despesas_gerar_encargos_veiculo_ciclo" as any,
+    { _veiculo_id: veiculoId, _simular: simular } as any,
+  );
+  if (error) throw error;
+  return data as unknown as ResultadoGeracao;
+}
+
+/** Prévia do próximo ciclo de cada documento (não grava nada). */
+export function usePreviaEncargosVeiculo(veiculoId: string | null) {
+  return useQuery({
+    queryKey: [VEICULOS_KEY, "previa", veiculoId],
+    enabled: !!veiculoId,
+    staleTime: 0,
+    queryFn: () => chamarGeracao(veiculoId!, true),
+  });
+}
+
+/** Gera o próximo ciclo ainda não lançado de cada documento ativo. */
 export function useGerarEncargosVeiculo() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ veiculoId, ano }: { veiculoId: string; ano: number }) => {
-      const { data, error } = await supabase.rpc(
-        "despesas_gerar_encargos_veiculo_detalhado" as any,
-        { _veiculo_id: veiculoId, _ano: ano } as any
-      );
+    mutationFn: ({ veiculoId }: { veiculoId: string }) => chamarGeracao(veiculoId, false),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["despesas-lancamentos"] });
+      qc.invalidateQueries({ queryKey: [VEICULOS_KEY, "previa"] });
+    },
+  });
+}
+
+export function useBaixarEncargoVeiculo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data, obs }: { id: string; data: string; obs: string }) => {
+      const { error } = await supabase.rpc("despesas_baixar_encargo_veiculo" as any, {
+        _id: id, _data: data, _obs: obs || null,
+      } as any);
       if (error) throw error;
-      return data as unknown as { criados: number; existentes: number; sem_valor: number };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["despesas-lancamentos"] }),
+  });
+}
+
+export function useExcluirEncargoVeiculo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, modo, justificativa }: { id: string; modo: "esta" | "seguintes"; justificativa: string }) => {
+      const { data, error } = await supabase.rpc("despesas_excluir_encargo_veiculo" as any, {
+        _id: id, _modo: modo, _justificativa: justificativa,
+      } as any);
+      if (error) throw error;
+      return Number(data ?? 0);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["despesas-lancamentos"] });
+      qc.invalidateQueries({ queryKey: [VEICULOS_KEY, "previa"] });
+    },
   });
 }
