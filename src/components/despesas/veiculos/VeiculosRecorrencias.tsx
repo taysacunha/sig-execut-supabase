@@ -1,71 +1,45 @@
-import { traduzirErroDespesas } from "@/lib/despesasErros";
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { RefreshCw } from "lucide-react";
-import {
-  useVeiculosDocumentosAtivos, useGerarEncargosVeiculo, Veiculo, VeiculoDocumento,
-} from "@/hooks/useDespesasVeiculos";
-import { useDespesasValues } from "@/contexts/DespesasValuesContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RefreshCw, Search } from "lucide-react";
+import { useVeiculosDocumentosAtivos, Veiculo, VeiculoDocumento } from "@/hooks/useDespesasVeiculos";
+import { GerarEncargosDialog } from "./GerarEncargosDialog";
+import { normalizeText } from "@/lib/textUtils";
 
-interface Props {
-  veiculos: Veiculo[];
-  canEdit: boolean;
-}
-
-interface Linha {
-  veiculo: Veiculo;
-  doc: VeiculoDocumento;
-}
+interface Props { veiculos: Veiculo[]; canEdit: boolean; }
+interface Linha { veiculo: Veiculo; doc: VeiculoDocumento; }
 
 const fmtData = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("pt-BR");
 
 export function VeiculosRecorrencias({ veiculos, canEdit }: Props) {
   const { data: docsPorVeiculo = {} } = useVeiculosDocumentosAtivos();
-  const gerarMut = useGerarEncargosVeiculo();
-  const { formatValue } = useDespesasValues();
-
-  const [confirmGerar, setConfirmGerar] = useState<Linha | null>(null);
-  const [ano, setAno] = useState(new Date().getFullYear());
+  const [gerar, setGerar] = useState<Veiculo | null>(null);
+  const [busca, setBusca] = useState("");
+  const [tipo, setTipo] = useState("todos");
+  const [situacao, setSituacao] = useState<"ativos" | "vendidos" | "todos">("ativos");
 
   const linhas = useMemo<Linha[]>(() => {
     const out: Linha[] = [];
-    for (const v of veiculos) {
-      for (const doc of docsPorVeiculo[v.id] ?? []) out.push({ veiculo: v, doc });
-    }
-    return out.sort(
-      (a, b) =>
-        a.veiculo.modelo.localeCompare(b.veiculo.modelo) || a.doc.tipo.localeCompare(b.doc.tipo),
-    );
+    for (const v of veiculos) for (const doc of docsPorVeiculo[v.id] ?? []) out.push({ veiculo: v, doc });
+    return out.sort((a, b) => a.veiculo.modelo.localeCompare(b.veiculo.modelo) || a.doc.tipo.localeCompare(b.doc.tipo));
   }, [veiculos, docsPorVeiculo]);
 
-  function gerar() {
-    if (!confirmGerar) return;
-    gerarMut.mutate(
-      { veiculoId: confirmGerar.veiculo.id, ano },
-      {
-         onSuccess: (resultado) => {
-           if (resultado.criados > 0) {
-             const pendentes = resultado.sem_valor > 0 ? ` ${resultado.sem_valor} com valor pendente.` : "";
-             toast.success(`${resultado.criados} lançamento(s) gerado(s) para ${ano}.${pendentes}`);
-           } else if (resultado.existentes > 0) toast.info(`Nenhum lançamento novo: ${resultado.existentes} encargo(s) já existem.`);
-           else toast.warning("Nenhum lançamento foi gerado. Revise os documentos ativos do veículo.");
-          setConfirmGerar(null);
-        },
-        onError: (e: any) => toast.error(traduzirErroDespesas(e)),
+  const tipos = useMemo(() => Array.from(new Set(linhas.map((l) => l.doc.tipo))).sort(), [linhas]);
 
-      },
-    );
-  }
+  const filtradas = useMemo(() => {
+    const q = normalizeText(busca.trim());
+    return linhas.filter(({ veiculo, doc }) => {
+      if (tipo !== "todos" && doc.tipo !== tipo) return false;
+      if (situacao === "ativos" && veiculo.data_venda) return false;
+      if (situacao === "vendidos" && !veiculo.data_venda) return false;
+      if (q && !normalizeText(`${veiculo.modelo} ${veiculo.placa ?? ""} ${doc.tipo} ${doc.descricao ?? ""}`).includes(q)) return false;
+      return true;
+    });
+  }, [linhas, busca, tipo, situacao]);
 
   return (
     <div className="space-y-4">
@@ -73,15 +47,33 @@ export function VeiculosRecorrencias({ veiculos, canEdit }: Props) {
         <CardHeader>
           <CardTitle className="text-base">Encargos recorrentes da frota</CardTitle>
           <CardDescription>
-            Documentos ativos que se repetem todo ano (IPVA, licenciamento, seguro etc.). Gere as
-            parcelas do ano desejado para que apareçam no calendário.
+            Documentos que se repetem todo ano. "Gerar" cria o próximo ciclo ainda não lançado, nas datas de cada documento.
           </CardDescription>
+          <div className="flex flex-wrap gap-3 pt-2">
+            <div className="relative w-64">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input className="pl-8" placeholder="Buscar veículo, placa, encargo…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+            </div>
+            <Select value={tipo} onValueChange={setTipo}>
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os encargos</SelectItem>
+                {tipos.map((t) => <SelectItem key={t} value={t} className="uppercase">{t}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={situacao} onValueChange={(v) => setSituacao(v as any)}>
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ativos">Veículos ativos</SelectItem>
+                <SelectItem value="vendidos">Veículos vendidos</SelectItem>
+                <SelectItem value="todos">Todos</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent>
-          {linhas.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Nenhum encargo recorrente cadastrado. Abra um veículo e cadastre os documentos.
-            </p>
+          {filtradas.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhum encargo encontrado.</p>
           ) : (
             <Table>
               <TableHeader>
@@ -89,40 +81,28 @@ export function VeiculosRecorrencias({ veiculos, canEdit }: Props) {
                   <TableHead>Veículo</TableHead>
                   <TableHead>Encargo</TableHead>
                   <TableHead>Frequência</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
                   <TableHead>Parcelas</TableHead>
                   <TableHead>1º vencimento</TableHead>
-                  {canEdit && <TableHead className="text-right w-40">Ações</TableHead>}
+                  {canEdit && <TableHead className="text-right w-36">Ações</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {linhas.map(({ veiculo, doc }) => (
+                {filtradas.map(({ veiculo, doc }) => (
                   <TableRow key={doc.id}>
-                    <TableCell className="font-medium">
-                      {veiculo.modelo}{veiculo.placa ? ` (${veiculo.placa})` : ""}
-                    </TableCell>
+                    <TableCell className="font-medium">{veiculo.modelo}{veiculo.placa ? ` (${veiculo.placa})` : ""}</TableCell>
                     <TableCell className="uppercase">{doc.tipo}</TableCell>
                     <TableCell><Badge variant="secondary">Anual</Badge></TableCell>
-                    <TableCell className="text-right">{formatValue(Number(doc.valor ?? 0))}</TableCell>
                     <TableCell>{doc.parcelas}x</TableCell>
                     <TableCell>{fmtData(doc.vencimento_primeira_parcela)}</TableCell>
                     {canEdit && (
                       <TableCell className="text-right">
                         <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={!veiculo.centro_custo_id}
-                          title={
-                            veiculo.centro_custo_id
-                              ? "Gerar parcelas do ano"
-                              : "Defina o centro de custo do veículo"
-                          }
-                          onClick={() => {
-                            setConfirmGerar({ veiculo, doc });
-                            setAno(new Date().getFullYear());
-                          }}
+                          size="sm" variant="outline"
+                          disabled={!veiculo.centro_custo_id || !!veiculo.data_venda}
+                          title={veiculo.centro_custo_id ? "Gerar próximo ciclo" : "Defina o centro de custo do veículo"}
+                          onClick={() => setGerar(veiculo)}
                         >
-                          <RefreshCw className="h-4 w-4 mr-2" />Gerar ano
+                          <RefreshCw className="h-4 w-4 mr-2" />Gerar
                         </Button>
                       </TableCell>
                     )}
@@ -133,31 +113,7 @@ export function VeiculosRecorrencias({ veiculos, canEdit }: Props) {
           )}
         </CardContent>
       </Card>
-
-      <AlertDialog open={!!confirmGerar} onOpenChange={(o) => !o && setConfirmGerar(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Gerar encargos do ano</AlertDialogTitle>
-            <AlertDialogDescription>
-              Serão criadas as parcelas de todos os documentos ativos de{" "}
-              <b>{confirmGerar?.veiculo.modelo}</b>. Lançamentos já existentes não são duplicados.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-2 py-2">
-            <Label>Ano</Label>
-            <Input type="number" value={ano} onChange={(e) => setAno(Number(e.target.value))} />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={gerarMut.isPending}
-              onClick={(e) => { e.preventDefault(); gerar(); }}
-            >
-              {gerarMut.isPending ? "Gerando…" : "Gerar"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <GerarEncargosDialog veiculo={gerar} onClose={() => setGerar(null)} />
     </div>
   );
 }
