@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DespesasSidebar } from "@/components/DespesasSidebar";
 import { DashboardSkeleton } from "@/components/DashboardSkeleton";
@@ -12,6 +12,7 @@ import {
 } from "@/contexts/DespesasValuesContext";
 
 export function DespesasLayout() {
+  const { pathname } = useLocation();
   return (
     <SystemGuard system="despesas">
       <DespesasValuesProvider>
@@ -25,7 +26,7 @@ export function DespesasLayout() {
                 </SidebarTrigger>
                 <span className="ml-2 font-semibold md:hidden">Despesas</span>
                 <div className="ml-auto flex items-center gap-1">
-                  <ToggleValuesButton />
+                  {!pathname.startsWith("/despesas/veiculos") && <ToggleValuesButton />}
                   <DespesasNotificacoesBell />
                 </div>
               </header>

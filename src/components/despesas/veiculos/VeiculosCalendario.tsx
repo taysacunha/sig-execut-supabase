@@ -15,9 +15,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ChevronLeft, ChevronRight, CheckCircle2, Undo2, CalendarDays, Trash2, Search } from "lucide-react";
 import {
-  useLancamentos, useEstornarLancamento, Lancamento, LancamentoStatus,
+  useLancamentos, Lancamento, LancamentoStatus,
 } from "@/hooks/useDespesasLancamentos";
-import { useExcluirEncargoVeiculo, type Veiculo } from "@/hooks/useDespesasVeiculos";
+import { useExcluirEncargoVeiculo, useEstornarEncargoVeiculo, type Veiculo } from "@/hooks/useDespesasVeiculos";
 import { BaixaEncargoDialog } from "./BaixaEncargoDialog";
 import { traduzirErroDespesas } from "@/lib/despesasErros";
 import { normalizeText } from "@/lib/textUtils";
@@ -76,7 +76,7 @@ export function VeiculosCalendario({ veiculos, canEdit, canDelete = false }: Pro
   const [modoExc, setModoExc] = useState<"esta" | "seguintes">("esta");
   const [justificativa, setJustificativa] = useState("");
 
-  const estornoMut = useEstornarLancamento();
+  const estornoMut = useEstornarEncargoVeiculo();
   const excluirMut = useExcluirEncargoVeiculo();
 
   const anual = escopo === "ano";
