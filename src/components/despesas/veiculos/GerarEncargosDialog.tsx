@@ -18,7 +18,7 @@ interface Props {
 
 /** Gera o próximo ciclo de cada documento, com prévia das datas. Sem campo de ano. */
 export function GerarEncargosDialog({ veiculo, onClose, onCadastrarDocumentos }: Props) {
-  const { data: previa, isLoading } = usePreviaEncargosVeiculo(veiculo?.id ?? null);
+  const { data: previa, isLoading, isFetching, error } = usePreviaEncargosVeiculo(veiculo?.id ?? null);
   const gerarMut = useGerarEncargosVeiculo();
   const itens = previa?.itens ?? [];
   const avisos = previa?.avisos ?? [];
@@ -46,7 +46,7 @@ export function GerarEncargosDialog({ veiculo, onClose, onCadastrarDocumentos }:
           </AlertDialogDescription>
         </AlertDialogHeader>
 
-        {isLoading ? (
+        {error ? <p className="text-sm text-destructive">{traduzirErroDespesas(error)}</p> : isLoading ? (
           <p className="text-sm text-muted-foreground">Calculando…</p>
         ) : itens.length === 0 ? (
           <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
@@ -71,13 +71,13 @@ export function GerarEncargosDialog({ veiculo, onClose, onCadastrarDocumentos }:
 
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          {itens.length === 0 && avisos.length === 0 && onCadastrarDocumentos ? (
+          {!error && !isFetching && itens.length === 0 && avisos.length === 0 && onCadastrarDocumentos ? (
             <AlertDialogAction onClick={(e) => { e.preventDefault(); if (veiculo) onCadastrarDocumentos(veiculo); }}>
               Cadastrar documentos
             </AlertDialogAction>
           ) : (
             <AlertDialogAction
-              disabled={itens.length === 0 || gerarMut.isPending}
+              disabled={!!error || isFetching || itens.length === 0 || gerarMut.isPending}
               onClick={(e) => { e.preventDefault(); gerar(); }}
             >
               {gerarMut.isPending ? "Gerando…" : "Gerar"}

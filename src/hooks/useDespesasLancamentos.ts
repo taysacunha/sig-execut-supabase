@@ -42,6 +42,11 @@ export interface Lancamento {
   pessoa_id: string | null;
   imovel_id: string | null;
   veiculo_id: string | null;
+  veiculo_documento_id?: string | null;
+  ciclo?: number | null;
+  parcela_num?: number | null;
+  parcela_total?: number | null;
+  data_baixa_veiculo?: string | null;
   referencia_tipo: DespesaReferenciaTipo | null;
   referencia_numero: string | null;
   referencia_numero_pasta: string | null;
@@ -166,6 +171,17 @@ export function useLancamentos(filtros: LancamentoFiltros) {
         query = query.or(ors.join(","));
       }
 
+      if (filtros.somenteVeiculos) {
+        const itens: Lancamento[] = [];
+        for (let offset = 0; ; offset += 500) {
+          const { data, error } = await query.range(offset, offset + 499);
+          if (error) throw error;
+          const pagina = (data ?? []) as unknown as Lancamento[];
+          itens.push(...pagina);
+          if (pagina.length < 500) break;
+        }
+        return itens;
+      }
       const { data, error } = await query.limit(1000);
       if (error) throw error;
       return (data ?? []) as unknown as Lancamento[];
