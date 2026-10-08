@@ -15,9 +15,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ChevronLeft, ChevronRight, CheckCircle2, Undo2, CalendarDays, Trash2, Search } from "lucide-react";
 import {
-  useLancamentos, useEstornarLancamento, Lancamento, LancamentoStatus,
+  useLancamentos, Lancamento, LancamentoStatus,
 } from "@/hooks/useDespesasLancamentos";
-import { useExcluirEncargoVeiculo, type Veiculo } from "@/hooks/useDespesasVeiculos";
+import { useExcluirEncargoVeiculo, useEstornarEncargoVeiculo, type Veiculo } from "@/hooks/useDespesasVeiculos";
 import { BaixaEncargoDialog } from "./BaixaEncargoDialog";
 import { traduzirErroDespesas } from "@/lib/despesasErros";
 import { normalizeText } from "@/lib/textUtils";
@@ -48,8 +48,7 @@ function tipoEncargo(l: Lancamento): string {
   return m ? m[1] : "OUTRO";
 }
 function parcela(l: Lancamento): string {
-  const any = l as any;
-  if (any.parcela_num && any.parcela_total) return `${any.parcela_num}/${any.parcela_total}`;
+  if (l.parcela_num && l.parcela_total) return `${l.parcela_num}/${l.parcela_total}`;
   const m = /parcela (\d+\/\d+)/.exec(l.descricao);
   return m ? m[1] : "—";
 }
@@ -76,14 +75,14 @@ export function VeiculosCalendario({ veiculos, canEdit, canDelete = false }: Pro
   const [modoExc, setModoExc] = useState<"esta" | "seguintes">("esta");
   const [justificativa, setJustificativa] = useState("");
 
-  const estornoMut = useEstornarLancamento();
+  const estornoMut = useEstornarEncargoVeiculo();
   const excluirMut = useExcluirEncargoVeiculo();
 
   const anual = escopo === "ano";
   const inicio = anual ? new Date(ano, 0, 1) : new Date(ano, mes, 1);
   const fim = anual ? new Date(ano, 11, 31) : new Date(ano, mes + 1, 0);
 
-  const { data: lancamentos = [], isLoading } = useLancamentos({
+  const { data: lancamentos = [], isLoading, error } = useLancamentos({
     somenteVeiculos: true,
     veiculoId: veiculoId === "todos" ? undefined : veiculoId,
     dataInicio: iso(inicio),
@@ -213,7 +212,7 @@ export function VeiculosCalendario({ veiculos, canEdit, canDelete = false }: Pro
         </CardHeader>
       </Card>
 
-      {isLoading ? (
+      {error ? <p className="text-sm text-destructive">{traduzirErroDespesas(error)}</p> : isLoading ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>
       ) : grupos.length === 0 ? (
         <Card>
@@ -235,6 +234,7 @@ export function VeiculosCalendario({ veiculos, canEdit, canDelete = false }: Pro
                     <TableHead>Veículo</TableHead>
                     <TableHead>Parcela</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Baixa</TableHead>
                     {(canEdit || canDelete) && <TableHead className="text-right w-36">Ações</TableHead>}
                   </TableRow>
                 </TableHeader>
@@ -248,6 +248,7 @@ export function VeiculosCalendario({ veiculos, canEdit, canDelete = false }: Pro
                         <TableCell>{nome(l.veiculo_id)}</TableCell>
                         <TableCell>{parcela(l)}</TableCell>
                         <TableCell><Badge variant={statusVariant(l.status)}>{STATUS_LABEL[l.status]}</Badge></TableCell>
+                        <TableCell className="whitespace-nowrap">{l.data_baixa_veiculo ? fmtData(l.data_baixa_veiculo) : "—"}</TableCell>
                         {(canEdit || canDelete) && (
                           <TableCell className="text-right space-x-1">
                             {canEdit && l.status !== "cancelado" && !quitado && (
@@ -260,7 +261,7 @@ export function VeiculosCalendario({ veiculos, canEdit, canDelete = false }: Pro
                                 <Undo2 className="h-4 w-4 text-destructive" />
                               </Button>
                             )}
-                            {canDelete && !quitado && l.status !== "pago_parcial" && (
+                            {canDelete && !quitado && l.status !== "pago_parcial" && l.status !== "gimob" && (
                               <Button size="icon" variant="ghost" title="Excluir encargo" onClick={() => setExcluir(l)}>
                                 <Trash2 className="h-4 w-4 text-destructive" />
                               </Button>

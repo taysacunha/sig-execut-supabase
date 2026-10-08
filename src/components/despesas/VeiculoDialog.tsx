@@ -21,11 +21,8 @@ import {
 } from "@/hooks/useDespesasVeiculos";
 import { useDespesasLookups } from "@/hooks/useDespesasLancamentos";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
-import {
-  useDespesasValues,
-  DespesasValuesScope,
-  ToggleValuesButton,
-} from "@/contexts/DespesasValuesContext";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from "@/components/ui/alert-dialog";
+import { useDespesasPermissions } from "@/hooks/useDespesasPermissions";
 
 interface Props {
   open: boolean;
@@ -80,7 +77,6 @@ function VeiculoDialogInner({ open, onOpenChange, editing }: Props) {
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 pr-8">
             <DialogTitle>{editing ? "Editar veículo" : "Novo veículo"}</DialogTitle>
-            <ToggleValuesButton />
           </div>
         </DialogHeader>
 
@@ -161,9 +157,6 @@ function VeiculoDialogInner({ open, onOpenChange, editing }: Props) {
                     allowClear
                   />
                 </div>
-                <div className="md:col-span-2 text-sm text-muted-foreground">
-                  Após informar data de venda, novos documentos deste veículo ficarão bloqueados na UI.
-                </div>
               </div>
             )}
           </TabsContent>
@@ -184,7 +177,8 @@ function DocumentosTab({ veiculoId }: { veiculoId: string }) {
   const { data: docs = [], isLoading } = useVeiculoDocumentos(veiculoId);
   const saveMut = useSaveVeiculoDocumento();
   const delMut = useDeleteVeiculoDocumento();
-  const { showValues, formatValue } = useDespesasValues();
+  const { podeExcluir } = useDespesasPermissions();
+  const [excluir, setExcluir] = useState<VeiculoDocumento | null>(null);
   const [editing, setEditing] = useState<Partial<VeiculoDocumento> | null>(null);
 
   const start = () => setEditing({
@@ -195,7 +189,10 @@ function DocumentosTab({ veiculoId }: { veiculoId: string }) {
   });
 
   async function salvar() {
-    if (!editing) return;
+    if (!editing || !editing.vencimento_primeira_parcela || !Number.isInteger(editing.parcelas) || Number(editing.parcelas) < 1 || Number(editing.parcelas) > 24) {
+      toast.error("Informe uma data e uma quantidade inteira de 1 a 24 parcelas.");
+      return;
+    }
     try {
       await saveMut.mutateAsync({ ...(editing as any), veiculo_id: veiculoId });
       toast.success("Documento salvo");
@@ -212,7 +209,7 @@ function DocumentosTab({ veiculoId }: { veiculoId: string }) {
         docs.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum documento.</p> :
         <Table>
           <TableHeader><TableRow>
-            <TableHead>Tipo</TableHead><TableHead>Valor</TableHead>
+            <TableHead>Tipo</TableHead>
             <TableHead>Parcelas</TableHead><TableHead>1º venc.</TableHead>
             <TableHead>Ativo</TableHead><TableHead className="w-24"></TableHead>
           </TableRow></TableHeader>
@@ -220,15 +217,14 @@ function DocumentosTab({ veiculoId }: { veiculoId: string }) {
             {docs.map((d) => (
               <TableRow key={d.id}>
                 <TableCell className="uppercase">{d.tipo}</TableCell>
-                <TableCell>{showValues ? formatValue(d.valor) : "R$ ******"}</TableCell>
                 <TableCell>{d.parcelas}</TableCell>
                 <TableCell>{new Date(d.vencimento_primeira_parcela + "T00:00:00").toLocaleDateString("pt-BR")}</TableCell>
                 <TableCell>{d.ativo ? "Sim" : "Não"}</TableCell>
                 <TableCell className="text-right">
                   <Button size="icon" variant="ghost" onClick={() => setEditing(d)}><Pencil className="h-4 w-4" /></Button>
-                  <Button size="icon" variant="ghost" onClick={() => delMut.mutate({ id: d.id, veiculo_id: veiculoId })}>
+                  {podeExcluir("veiculos") && <Button size="icon" variant="ghost" title="Desativar documento" onClick={() => setExcluir(d)}>
                     <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+                  </Button>}
                 </TableCell>
               </TableRow>
             ))}
@@ -247,9 +243,6 @@ function DocumentosTab({ veiculoId }: { veiculoId: string }) {
           <div className="space-y-2"><Label>Descrição</Label>
             <Input value={editing.descricao ?? ""} onChange={(e) => setEditing({ ...editing, descricao: e.target.value })} />
           </div>
-          <div className="space-y-2"><Label>Valor</Label>
-            <Input type="number" step="0.01" value={editing.valor ?? 0} onChange={(e) => setEditing({ ...editing, valor: Number(e.target.value) })} />
-          </div>
           <div className="space-y-2"><Label>Parcelas</Label>
             <Input type="number" min={1} max={24} value={editing.parcelas ?? 1} onChange={(e) => setEditing({ ...editing, parcelas: Number(e.target.value) })} />
           </div>
@@ -262,14 +255,26 @@ function DocumentosTab({ veiculoId }: { veiculoId: string }) {
           </div>
         </div>
       )}
+      <AlertDialog open={!!excluir} onOpenChange={(o) => !o && setExcluir(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>Desativar documento?</AlertDialogTitle>
+            <AlertDialogDescription>O documento deixa de gerar novos encargos. Parcelas e ciclos anteriores são preservados.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <Button variant="destructive" disabled={delMut.isPending} onClick={() => {
+              if (!excluir) return;
+              delMut.mutate({ id: excluir.id, veiculo_id: veiculoId }, {
+                onSuccess: () => { setExcluir(null); toast.success("Documento desativado"); },
+                onError: (e: any) => toast.error(e?.message ?? "Erro ao desativar"),
+              });
+            }}>Desativar</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
 export function VeiculoDialog(props: Props) {
-  return (
-    <DespesasValuesScope active={props.open}>
-      <VeiculoDialogInner {...props} />
-    </DespesasValuesScope>
-  );
+  return <VeiculoDialogInner {...props} />;
 }

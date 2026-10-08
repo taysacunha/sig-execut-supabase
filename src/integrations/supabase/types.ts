@@ -1072,6 +1072,7 @@ export type Database = {
           conta_bancaria_id: string | null
           created_at: string
           created_by: string | null
+          data_baixa_veiculo: string | null
           data_competencia: string
           data_vencimento: string
           descricao: string
@@ -1107,6 +1108,7 @@ export type Database = {
           conta_bancaria_id?: string | null
           created_at?: string
           created_by?: string | null
+          data_baixa_veiculo?: string | null
           data_competencia: string
           data_vencimento: string
           descricao: string
@@ -1142,6 +1144,7 @@ export type Database = {
           conta_bancaria_id?: string | null
           created_at?: string
           created_by?: string | null
+          data_baixa_veiculo?: string | null
           data_competencia?: string
           data_vencimento?: string
           descricao?: string
@@ -2000,6 +2003,7 @@ export type Database = {
           observacao: string | null
           parcelas: number
           tipo: string
+          ultimo_ciclo_gerado: number | null
           updated_at: string
           valor: number
           veiculo_id: string
@@ -2014,6 +2018,7 @@ export type Database = {
           observacao?: string | null
           parcelas?: number
           tipo: string
+          ultimo_ciclo_gerado?: number | null
           updated_at?: string
           valor: number
           veiculo_id: string
@@ -2028,6 +2033,7 @@ export type Database = {
           observacao?: string | null
           parcelas?: number
           tipo?: string
+          ultimo_ciclo_gerado?: number | null
           updated_at?: string
           valor?: number
           veiculo_id?: string
@@ -5149,6 +5155,10 @@ export type Database = {
           valor_total: number
         }[]
       }
+      despesas_estornar_encargo_veiculo: {
+        Args: { _id: string; _justificativa: string }
+        Returns: undefined
+      }
       despesas_excluir_encargo_veiculo: {
         Args: { _id: string; _justificativa: string; _modo: string }
         Returns: number
@@ -5162,7 +5172,7 @@ export type Database = {
         Returns: number
       }
       despesas_gerar_encargos_veiculo_ciclo: {
-        Args: { _simular?: boolean; _veiculo_id: string }
+        Args: { _previa?: Json; _simular?: boolean; _veiculo_id: string }
         Returns: Json
       }
       despesas_gerar_encargos_veiculo_detalhado: {

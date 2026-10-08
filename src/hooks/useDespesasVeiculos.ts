@@ -105,10 +105,11 @@ export function useVeiculoDocumentos(veiculoId: string | null) {
     queryKey: [VEICULOS_KEY, "docs", veiculoId],
     enabled: !!veiculoId,
     queryFn: async () => {
+      if (!veiculoId) return [];
       const { data, error } = await supabase
         .from("despesas_veiculo_documentos" as any)
         .select("*")
-        .eq("veiculo_id", veiculoId!)
+        .eq("veiculo_id", veiculoId)
         .order("tipo");
       if (error) throw error;
       return (data ?? []) as unknown as VeiculoDocumento[];
@@ -136,6 +137,7 @@ export function useSaveVeiculoDocumento() {
     onSuccess: (_d, v) => {
       qc.invalidateQueries({ queryKey: [VEICULOS_KEY, "docs", v.veiculo_id] });
       qc.invalidateQueries({ queryKey: [VEICULOS_KEY, "docs-ativos"] });
+      qc.invalidateQueries({ queryKey: [VEICULOS_KEY, "previa"] });
     },
   });
 }
@@ -165,7 +167,7 @@ export function useDeleteVeiculoDocumento() {
     mutationFn: async ({ id, veiculo_id }: { id: string; veiculo_id: string }) => {
       const { error } = await supabase
         .from("despesas_veiculo_documentos" as any)
-        .delete()
+        .update({ ativo: false })
         .eq("id", id);
       if (error) throw error;
       return veiculo_id;
@@ -173,6 +175,7 @@ export function useDeleteVeiculoDocumento() {
     onSuccess: (veiculo_id) => {
       qc.invalidateQueries({ queryKey: [VEICULOS_KEY, "docs", veiculo_id] });
       qc.invalidateQueries({ queryKey: [VEICULOS_KEY, "docs-ativos"] });
+      qc.invalidateQueries({ queryKey: [VEICULOS_KEY, "previa"] });
     },
   });
 }
@@ -205,7 +208,10 @@ export function usePreviaEncargosVeiculo(veiculoId: string | null) {
     queryKey: [VEICULOS_KEY, "previa", veiculoId],
     enabled: !!veiculoId,
     staleTime: 0,
-    queryFn: () => chamarGeracao(veiculoId!, true),
+    queryFn: () => {
+      if (!veiculoId) throw new Error("Selecione um veículo");
+      return chamarGeracao(veiculoId, true);
+    },
   });
 }
 
@@ -248,5 +254,18 @@ export function useExcluirEncargoVeiculo() {
       qc.invalidateQueries({ queryKey: ["despesas-lancamentos"] });
       qc.invalidateQueries({ queryKey: [VEICULOS_KEY, "previa"] });
     },
+  });
+}
+
+export function useEstornarEncargoVeiculo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, justificativa }: { id: string; justificativa: string }) => {
+      const { error } = await supabase.rpc("despesas_estornar_encargo_veiculo" as any, {
+        _id: id, _justificativa: justificativa,
+      } as any);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["despesas-lancamentos"] }),
   });
 }
