@@ -5172,7 +5172,7 @@ export type Database = {
         Returns: number
       }
       despesas_gerar_encargos_veiculo_ciclo: {
-        Args: { _simular?: boolean; _veiculo_id: string }
+        Args: { _previa?: Json; _simular?: boolean; _veiculo_id: string }
         Returns: Json
       }
       despesas_gerar_encargos_veiculo_detalhado: {
