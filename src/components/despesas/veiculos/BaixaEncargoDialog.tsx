@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { traduzirErroDespesas } from "@/lib/despesasErros";
 import { useBaixarEncargoVeiculo } from "@/hooks/useDespesasVeiculos";
 import type { Lancamento } from "@/hooks/useDespesasLancamentos";
+import { podeBaixarEncargoVeiculo } from "@/lib/veiculoEncargos";
 
 const hojeIso = () => {
   const d = new Date();
@@ -25,7 +26,7 @@ export function BaixaEncargoDialog({ lancamento, onClose }: { lancamento: Lancam
   }, [lancamento]);
 
   async function salvar() {
-    if (!lancamento) return;
+    if (!lancamento || !podeBaixarEncargoVeiculo(lancamento.status, data)) return;
     try {
       await mut.mutateAsync({ id: lancamento.id, data, obs: obs.trim() });
       toast.success("Baixa registrada");
@@ -59,7 +60,7 @@ export function BaixaEncargoDialog({ lancamento, onClose }: { lancamento: Lancam
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={salvar} disabled={!data || mut.isPending}>
+          <Button onClick={salvar} disabled={!lancamento || !podeBaixarEncargoVeiculo(lancamento.status, data) || mut.isPending}>
             {mut.isPending ? "Salvando…" : "Dar baixa"}
           </Button>
         </DialogFooter>

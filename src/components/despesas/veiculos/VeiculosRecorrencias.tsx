@@ -9,6 +9,8 @@ import { RefreshCw, Search } from "lucide-react";
 import { useVeiculosDocumentosAtivos, Veiculo, VeiculoDocumento } from "@/hooks/useDespesasVeiculos";
 import { GerarEncargosDialog } from "./GerarEncargosDialog";
 import { normalizeText } from "@/lib/textUtils";
+import { datasParcelasVeiculo } from "@/lib/veiculoEncargos";
+import { Label } from "@/components/ui/label";
 
 interface Props { veiculos: Veiculo[]; canEdit: boolean; }
 interface Linha { veiculo: Veiculo; doc: VeiculoDocumento; }
@@ -20,6 +22,8 @@ export function VeiculosRecorrencias({ veiculos, canEdit }: Props) {
   const [gerar, setGerar] = useState<Veiculo | null>(null);
   const [busca, setBusca] = useState("");
   const [tipo, setTipo] = useState("todos");
+  const [inicio, setInicio] = useState("");
+  const [fim, setFim] = useState("");
   const [situacao, setSituacao] = useState<"ativos" | "vendidos" | "todos">("ativos");
 
   const linhas = useMemo<Linha[]>(() => {
@@ -34,12 +38,14 @@ export function VeiculosRecorrencias({ veiculos, canEdit }: Props) {
     const q = normalizeText(busca.trim());
     return linhas.filter(({ veiculo, doc }) => {
       if (tipo !== "todos" && doc.tipo !== tipo) return false;
+      if (inicio && doc.vencimento_primeira_parcela < inicio) return false;
+      if (fim && doc.vencimento_primeira_parcela > fim) return false;
       if (situacao === "ativos" && veiculo.data_venda) return false;
       if (situacao === "vendidos" && !veiculo.data_venda) return false;
       if (q && !normalizeText(`${veiculo.modelo} ${veiculo.placa ?? ""} ${doc.tipo} ${doc.descricao ?? ""}`).includes(q)) return false;
       return true;
     });
-  }, [linhas, busca, tipo, situacao]);
+  }, [linhas, busca, tipo, situacao, inicio, fim]);
 
   return (
     <div className="space-y-4">
@@ -61,6 +67,8 @@ export function VeiculosRecorrencias({ veiculos, canEdit }: Props) {
                 {tipos.map((t) => <SelectItem key={t} value={t} className="uppercase">{t}</SelectItem>)}
               </SelectContent>
             </Select>
+            <div className="space-y-1"><Label>Vencimento inicial — de</Label><Input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} /></div>
+            <div className="space-y-1"><Label>Até</Label><Input type="date" value={fim} onChange={(e) => setFim(e.target.value)} /></div>
             <Select value={situacao} onValueChange={(v) => setSituacao(v as any)}>
               <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -93,7 +101,7 @@ export function VeiculosRecorrencias({ veiculos, canEdit }: Props) {
                     <TableCell className="uppercase">{doc.tipo}</TableCell>
                     <TableCell><Badge variant="secondary">Anual</Badge></TableCell>
                     <TableCell>{doc.parcelas}x</TableCell>
-                    <TableCell>{fmtData(doc.vencimento_primeira_parcela)}</TableCell>
+                    <TableCell title={datasParcelasVeiculo(doc.vencimento_primeira_parcela, doc.parcelas).map(fmtData).join(" · ")}>{fmtData(doc.vencimento_primeira_parcela)}</TableCell>
                     {canEdit && (
                       <TableCell className="text-right">
                         <Button
