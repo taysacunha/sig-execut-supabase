@@ -26,7 +26,7 @@ export function GerarEncargosDialog({ veiculo, onClose, onCadastrarDocumentos }:
   async function gerar() {
     if (!veiculo) return;
     try {
-      const r = await gerarMut.mutateAsync({ veiculoId: veiculo.id });
+      const r = await gerarMut.mutateAsync({ veiculoId: veiculo.id, previa: itens });
       const ciclos = Array.from(new Set(r.itens.map((i) => i.ciclo))).join(", ");
       toast.success(`${r.criados} parcela(s) gerada(s) (ciclo ${ciclos}).`);
       onClose();

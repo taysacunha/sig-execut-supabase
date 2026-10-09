@@ -181,6 +181,7 @@ export function useDeleteVeiculoDocumento() {
 }
 
 export interface EncargoPrevisto {
+  documento_id: string;
   tipo: string;
   ciclo: number;
   parcela: number;
@@ -193,10 +194,10 @@ export interface ResultadoGeracao {
   avisos: { tipo: string; motivo: string }[];
 }
 
-async function chamarGeracao(veiculoId: string, simular: boolean) {
+async function chamarGeracao(veiculoId: string, simular: boolean, previa?: EncargoPrevisto[]) {
   const { data, error } = await supabase.rpc(
     "despesas_gerar_encargos_veiculo_ciclo" as any,
-    { _veiculo_id: veiculoId, _simular: simular } as any,
+    { _veiculo_id: veiculoId, _simular: simular, _previa: previa ?? null } as any,
   );
   if (error) throw error;
   return data as unknown as ResultadoGeracao;
@@ -219,7 +220,7 @@ export function usePreviaEncargosVeiculo(veiculoId: string | null) {
 export function useGerarEncargosVeiculo() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ veiculoId }: { veiculoId: string }) => chamarGeracao(veiculoId, false),
+    mutationFn: ({ veiculoId, previa }: { veiculoId: string; previa: EncargoPrevisto[] }) => chamarGeracao(veiculoId, false, previa),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["despesas-lancamentos"] });
       qc.invalidateQueries({ queryKey: [VEICULOS_KEY, "previa"] });
