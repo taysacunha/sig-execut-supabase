@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { FileDown, DollarSign, ShieldAlert, Loader2 } from "lucide-react";
+import { FileDown, DollarSign, ShieldAlert, Loader2, House } from "lucide-react";
 import { Link } from "react-router-dom";
 import { DevHistoryTab } from "@/components/dev/DevHistoryTab";
 import { useDevTrackerLog, type DevLogEntry } from "@/hooks/useDevTrackerLog";
@@ -176,6 +176,7 @@ export default function DevTracker() {
           <p className="text-lg font-semibold">Acesso Restrito</p>
           <p className="text-sm text-muted-foreground">Esta página é de uso exclusivo do responsável pelo desenvolvimento.</p>
           <p className="text-xs text-muted-foreground">Usuário atual: <span className="font-medium">{email || "não identificado"}</span></p>
+          <Button asChild variant="outline"><Link to="/"><House className="mr-2 h-4 w-4" />Homepage</Link></Button>
         </CardContent></Card>
       </div>
     );
@@ -189,6 +190,7 @@ export default function DevTracker() {
           <p className="text-muted-foreground text-sm">Uma base única, organizada por sistema ou cronologicamente</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" size="sm"><Link to="/"><House className="mr-2 h-4 w-4" />Homepage</Link></Button>
           <div className="flex items-center gap-2 bg-muted rounded-md px-3 py-1.5">
             <DollarSign className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">R$/hora:</span>

@@ -16,7 +16,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, ShieldAlert } from "lucide-react";
+import { Plus, Pencil, Trash2, ShieldAlert, Power } from "lucide-react";
+import { useUserRole } from "@/hooks/useUserRole";
+import { podeExcluirCentroCusto } from "@/lib/centroCustoAcoes";
 import {
   usePessoas, useDeletePessoa, Pessoa, PAPEIS_PESSOA, PapelPessoa, labelPapel,
 } from "@/hooks/useDespesasPessoas";
@@ -36,15 +38,25 @@ interface SimpleCrudProps {
   temDescricao?: boolean;
   canEdit: boolean;
   canDelete: boolean;
+  canPermanentDelete?: boolean;
 }
 
-function SimpleCadastroCrud({ tabela, singular, plural, temDescricao, canEdit, canDelete }: SimpleCrudProps) {
+function SimpleCadastroCrud({ tabela, singular, plural, temDescricao, canEdit, canDelete, canPermanentDelete = false }: SimpleCrudProps) {
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<NamedRow | null>(null);
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<NamedRow | null>(null);
+  const [permanentDelete, setPermanentDelete] = useState<NamedRow | null>(null);
+  const isCentro = tabela === "despesas_centros_custo";
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: key });
+    if (isCentro) {
+      qc.invalidateQueries({ queryKey: ["desp-lookup"] });
+      qc.invalidateQueries({ queryKey: ["despesas-veiculos-full-v2"] });
+    }
+  };
 
   const key = ["despesas-cadastro", tabela];
 
@@ -88,10 +100,21 @@ function SimpleCadastroCrud({ tabela, singular, plural, temDescricao, canEdit, c
     },
     onSuccess: () => {
       toast.success(`${singular} desativado`);
-      qc.invalidateQueries({ queryKey: key });
+      refresh();
       setConfirmDelete(null);
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao desativar"),
+  });
+
+  const permanentMut = useMutation({
+    mutationFn: async (id: string) => {
+      if (!isCentro || !canPermanentDelete) throw new Error("Sem permissão para excluir centro de custo");
+      const { data, error } = await supabase.from("despesas_centros_custo").delete().eq("id", id).select("id");
+      if (error) throw error;
+      if (!data?.length) throw new Error("Centro não excluído: verifique sua permissão ou atualize a página.");
+    },
+    onSuccess: () => { toast.success("Centro de custo excluído"); refresh(); setPermanentDelete(null); },
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao excluir centro de custo"),
   });
 
   function openNew() {
@@ -140,7 +163,12 @@ function SimpleCadastroCrud({ tabela, singular, plural, temDescricao, canEdit, c
                       </Button>
                     )}
                     {canDelete && r.is_active && (
-                      <Button size="icon" variant="ghost" onClick={() => setConfirmDelete(r)}>
+                      <Button size="icon" variant="ghost" title="Desativar" aria-label={`Desativar ${r.nome}`} onClick={() => setConfirmDelete(r)}>
+                        {isCentro ? <Power className="h-4 w-4 text-destructive" /> : <Trash2 className="h-4 w-4 text-destructive" />}
+                      </Button>
+                    )}
+                    {isCentro && canPermanentDelete && (
+                      <Button size="icon" variant="ghost" title="Excluir definitivamente" aria-label={`Excluir ${r.nome}`} onClick={() => setPermanentDelete(r)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     )}
@@ -190,19 +218,33 @@ function SimpleCadastroCrud({ tabela, singular, plural, temDescricao, canEdit, c
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => confirmDelete && deleteMut.mutate(confirmDelete.id)}
+              disabled={deleteMut.isPending}
+              onClick={(e) => { e.preventDefault(); if (confirmDelete) deleteMut.mutate(confirmDelete.id); }}
             >
               Desativar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {isCentro && <AlertDialog open={!!permanentDelete} onOpenChange={(o) => !o && setPermanentDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir centro de custo definitivamente?</AlertDialogTitle>
+            <AlertDialogDescription>O centro <b>{permanentDelete?.nome}</b> será apagado, incluindo suas vinculações de permissão. Esta ação não pode ser desfeita. Centros em uso não podem ser excluídos; nesses casos, use Desativar.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={permanentMut.isPending} onClick={(e) => { e.preventDefault(); if (permanentDelete) permanentMut.mutate(permanentDelete.id); }}>Excluir definitivamente</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>}
     </Card>
   );
 }
 
 export default function DespesasCadastros() {
   const { podeVer, podeEditar, podeExcluir } = useDespesasPermissions();
+  const { role } = useUserRole();
   if (!podeVer("cadastros")) {
     return (
       <Card className="max-w-md mx-auto mt-8">
@@ -236,7 +278,7 @@ export default function DespesasCadastros() {
         </TabsList>
 
         <TabsContent value="centros" className="mt-4">
-          <SimpleCadastroCrud tabela="despesas_centros_custo" singular="Centro de custo" plural="Centros de custo" temDescricao canEdit={canEdit} canDelete={canDelete} />
+          <SimpleCadastroCrud tabela="despesas_centros_custo" singular="Centro de custo" plural="Centros de custo" temDescricao canEdit={canEdit} canDelete={canDelete} canPermanentDelete={podeExcluirCentroCusto(role, canEdit)} />
         </TabsContent>
         <TabsContent value="categorias" className="mt-4">
           <SimpleCadastroCrud tabela="despesas_categorias" singular="Categoria" plural="Categorias" canEdit={canEdit} canDelete={canDelete} />
