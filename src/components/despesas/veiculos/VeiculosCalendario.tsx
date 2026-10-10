@@ -21,6 +21,7 @@ import { useExcluirEncargoVeiculo, useEstornarEncargoVeiculo, type Veiculo } fro
 import { BaixaEncargoDialog } from "./BaixaEncargoDialog";
 import { traduzirErroDespesas } from "@/lib/despesasErros";
 import { normalizeText } from "@/lib/textUtils";
+import { podeBaixarEncargoVeiculo } from "@/lib/veiculoEncargos";
 
 const MESES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -251,12 +252,12 @@ export function VeiculosCalendario({ veiculos, canEdit, canDelete = false }: Pro
                         <TableCell className="whitespace-nowrap">{l.data_baixa_veiculo ? fmtData(l.data_baixa_veiculo) : "—"}</TableCell>
                         {(canEdit || canDelete) && (
                           <TableCell className="text-right space-x-1">
-                            {canEdit && l.status !== "cancelado" && !quitado && (
-                              <Button size="icon" variant="ghost" title="Dar baixa" onClick={() => setPagar(l)}>
+                             {canEdit && podeBaixarEncargoVeiculo(l.status, iso(hoje)) && (
+                               <Button size="icon" variant="ghost" title="Dar baixa" aria-label="Dar baixa" onClick={() => setPagar(l)}>
                                 <CheckCircle2 className="h-4 w-4 text-primary" />
                               </Button>
                             )}
-                            {canEdit && (quitado || l.status === "pago_parcial") && (
+                             {canEdit && quitado && (
                               <Button size="icon" variant="ghost" title="Desfazer baixa" onClick={() => setEstornar(l)}>
                                 <Undo2 className="h-4 w-4 text-destructive" />
                               </Button>
@@ -293,7 +294,7 @@ export function VeiculosCalendario({ veiculos, canEdit, canDelete = false }: Pro
           {excluir && (
             <RadioGroup value={modoExc} onValueChange={(v) => setModoExc(v as any)} className="py-1">
               <div className="flex items-center gap-2"><RadioGroupItem value="esta" id="m1" /><Label htmlFor="m1">Só esta parcela</Label></div>
-              <div className="flex items-center gap-2"><RadioGroupItem value="seguintes" id="m2" /><Label htmlFor="m2">Esta e as seguintes do mesmo documento</Label></div>
+               <div className="flex items-center gap-2"><RadioGroupItem value="seguintes" id="m2" disabled={!excluir.veiculo_documento_id && !excluir.serie_recorrencia_id} /><Label htmlFor="m2">Esta e as seguintes do mesmo documento</Label></div>
             </RadioGroup>
           )}
           <div className="space-y-2 py-2">
