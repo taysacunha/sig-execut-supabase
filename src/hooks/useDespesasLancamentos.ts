@@ -108,7 +108,8 @@ export function useLancamentos(filtros: LancamentoFiltros) {
            categoria:despesas_categorias(nome),
            pagamentos:despesas_lancamento_pagamentos(*)`
         )
-        .order("data_vencimento", { ascending: true });
+         .order("data_vencimento", { ascending: true })
+         .order("id", { ascending: true });
 
       if (filtros.tipo && filtros.tipo !== "todos") query = query.eq("tipo", filtros.tipo);
       if (filtros.status && filtros.status !== "todos") query = query.eq("status", filtros.status);

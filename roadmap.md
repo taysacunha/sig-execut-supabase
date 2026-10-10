@@ -1,7 +1,8 @@
 # Roadmap
 
-- [ ] Finalizar Veículos sem valores, geração por ciclo, baixas, exclusão justificada, ficha e filtros.
-- [ ] Validar calendário mensal/anual e registrar os ajustes de Veículos no histórico.
+- [x] Implementar Veículos sem valores, geração por ciclo, baixas, exclusão justificada, ficha e filtros.
+- [x] Validar testes de parcelas e datas, compilação e registrar os ajustes de Veículos no histórico.
+- [ ] Validar visualmente geração, baixa e calendário mensal/anual com usuário autenticado — sessão de teste indisponível no Supabase externo.
 
 - [x] Auditar a diferença real entre `dev_tracker` e `dev_tracker_log`.
 - [x] Reconciliar o histórico sem perder horas do consolidado.
