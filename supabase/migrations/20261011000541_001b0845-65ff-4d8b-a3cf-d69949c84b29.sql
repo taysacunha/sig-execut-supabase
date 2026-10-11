@@ -1,0 +1,12 @@
+CREATE SCHEMA IF NOT EXISTS despesas_private;
+REVOKE ALL ON SCHEMA despesas_private FROM PUBLIC,anon;
+GRANT USAGE ON SCHEMA despesas_private TO authenticated,service_role;
+CREATE FUNCTION despesas_private.conta_permitida(_user_id uuid,_conta uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$ SELECT public.can_view_system(_user_id,'despesas') AND EXISTS(SELECT 1 FROM public.despesas_contas_bancarias_permissoes p JOIN public.despesas_contas_bancarias c ON c.id=p.conta_bancaria_id WHERE p.user_id=_user_id AND c.id=_conta AND c.is_active AND (c.centro_custo_id IS NULL OR c.centro_custo_id IN (SELECT public.despesas_centros_permitidos(_user_id)))) $$;
+REVOKE ALL ON FUNCTION despesas_private.conta_permitida(uuid,uuid) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION despesas_private.conta_permitida(uuid,uuid) TO authenticated,service_role;
+CREATE OR REPLACE FUNCTION public.despesas_conta_permitida(_user_id uuid,_conta uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY INVOKER SET search_path=public AS $$ SELECT despesas_private.conta_permitida(_user_id,_conta) $$;
+ALTER FUNCTION public.despesas_contas_lookup() SECURITY INVOKER;
+REVOKE ALL ON FUNCTION public.despesas_validar_conta_vinculada() FROM PUBLIC,anon,authenticated;
+REVOKE ALL ON FUNCTION public.despesas_marcar_vencidos() FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.despesas_marcar_vencidos() TO service_role;
+REVOKE ALL ON FUNCTION public.despesas_gerar_ocorrencias(uuid,date) FROM PUBLIC,anon;
