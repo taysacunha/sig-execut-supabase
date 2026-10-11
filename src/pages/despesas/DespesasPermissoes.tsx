@@ -15,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Loader2, ShieldAlert, Info, RefreshCw, Users, Check, X, Wand2 } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import type { DespesasAba, DespesasNivel } from "@/hooks/useDespesasPermissions";
+import { ContasPermissoesTab } from "@/components/despesas/ContasPermissoesTab";
 
 const ABAS: { key: DespesasAba; label: string }[] = [
   { key: "calendario", label: "Calendário" },
@@ -71,9 +72,9 @@ export default function DespesasPermissoes() {
     queryFn: async (): Promise<UserRow[]> => {
       const { data: authData } = await supabase.functions.invoke("list-users");
       const authUsers: any[] = authData?.users ?? [];
-      const { data: profiles } = await supabase.from("user_profiles").select("id, name");
+      const { data: profiles } = await supabase.from("user_profiles").select("user_id, name");
       const nameById: Record<string, string | null> = {};
-      (profiles ?? []).forEach((p: any) => { nameById[p.id] = p.name; });
+      (profiles ?? []).forEach((p: any) => { nameById[p.user_id] = p.name; });
       return authUsers.map((u) => ({
         user_id: u.id,
         email: u.email ?? "",
@@ -375,9 +376,10 @@ export default function DespesasPermissoes() {
       </Card>
 
       <Tabs defaultValue="niveis">
-        <TabsList>
+        <TabsList className="flex h-auto flex-wrap justify-start">
           <TabsTrigger value="niveis">Níveis por aba</TabsTrigger>
           <TabsTrigger value="centros">Centros de custo</TabsTrigger>
+          <TabsTrigger value="contas">Contas bancárias</TabsTrigger>
           <TabsTrigger value="assistente"><Wand2 className="h-3 w-3 mr-1" /> Assistente</TabsTrigger>
         </TabsList>
 
@@ -614,6 +616,10 @@ export default function DespesasPermissoes() {
               </Card>
             </>
           )}
+        </TabsContent>
+
+        <TabsContent value="contas">
+          <ContasPermissoesTab users={filtered} selected={selecionados} toggleUser={toggleSel} toggleAll={toggleSelAll} clearSelection={() => setSelecionados(new Set())} />
         </TabsContent>
 
         {/* -------- Aba 3: Assistente -------- */}

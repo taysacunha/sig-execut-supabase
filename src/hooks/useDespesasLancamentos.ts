@@ -576,13 +576,9 @@ export function useDespesasLookups() {
     },
   });
   const contas = useQuery({
-    queryKey: ["desp-lookup", "contas"],
+    queryKey: ["desp-lookup", "contas-autorizadas"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("despesas_contas_bancarias" as any)
-        .select("id, nome, banco")
-        .eq("is_active", true)
-        .order("nome");
+      const { data, error } = await supabase.rpc("despesas_contas_lookup");
       if (error) throw error;
       return (data ?? []) as unknown as { id: string; nome: string; banco: string | null }[];
     },

@@ -742,6 +742,38 @@ export type Database = {
           },
         ]
       }
+      despesas_contas_bancarias_permissoes: {
+        Row: {
+          conta_bancaria_id: string
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          conta_bancaria_id: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          conta_bancaria_id?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_contas_bancarias_permissoes_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       despesas_duplicidades_revisoes: {
         Row: {
           created_at: string
@@ -5134,6 +5166,18 @@ export type Database = {
         Args: { _user_id: string }
         Returns: string[]
       }
+      despesas_conta_permitida: {
+        Args: { _conta: string; _user_id: string }
+        Returns: boolean
+      }
+      despesas_contas_lookup: {
+        Args: never
+        Returns: {
+          banco: string
+          id: string
+          nome: string
+        }[]
+      }
       despesas_detectar_duplicidades: {
         Args: {
           _centro_custo_id: string
@@ -5187,6 +5231,7 @@ export type Database = {
         Args: { _ate?: string; _serie: string }
         Returns: number
       }
+      despesas_hoje: { Args: never; Returns: string }
       despesas_marcar_vencidos: { Args: never; Returns: number }
       despesas_montar_repasse: {
         Args: {
@@ -5235,6 +5280,17 @@ export type Database = {
       despesas_repasse_recalcular: {
         Args: { _repasse_id: string }
         Returns: undefined
+      }
+      despesas_status_por_vencimento: {
+        Args: {
+          _baixa: string
+          _hoje: string
+          _pago: number
+          _status: string
+          _total: number
+          _venc: string
+        }
+        Returns: string
       }
       despesas_veiculos_lookup: {
         Args: never
