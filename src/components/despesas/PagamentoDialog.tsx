@@ -55,14 +55,14 @@ function PagamentoDialogInner({ open, onOpenChange, lancamento }: Props) {
     const restante = Number(lancamento.valor_total) - Number(lancamento.valor_pago);
     setValor(restante > 0 ? Number(restante.toFixed(2)) : 0);
     setForma("pix");
-    setContaId(lancamento.conta_bancaria_id);
+    setContaId(null);
     setObs("");
   }, [open, lancamento]);
 
   if (!lancamento) return null;
 
   const restante = Number(lancamento.valor_total) - Number(lancamento.valor_pago);
-  const podeSalvar = valor > 0 && valor <= restante + 0.001;
+  const podeSalvar = valor > 0 && valor <= restante + 0.001 && (!contaId || (contas.data ?? []).some(c => c.id === contaId));
 
   async function salvar() {
     if (!lancamento) return;

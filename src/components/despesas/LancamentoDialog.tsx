@@ -522,7 +522,7 @@ export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: P
               value={form.conta_bancaria_id}
               onChange={(v) => setForm({ ...form, conta_bancaria_id: v })}
               options={(contas.data ?? []).map((c) => ({ value: c.id, label: c.nome }))}
-              placeholder="Opcional"
+              placeholder={form.conta_bancaria_id && !(contas.data ?? []).some(c => c.id === form.conta_bancaria_id) ? "Conta restrita — vínculo preservado" : "Opcional"}
               searchPlaceholder="Buscar conta…"
               allowClear
               showFullText
