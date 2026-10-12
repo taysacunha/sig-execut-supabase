@@ -1,8 +1,8 @@
 # Roadmap
 
-- [ ] Implementar matriz de contas bancárias (nenhuma seleção = nenhuma conta), autorização no banco e testes.
-- [ ] Corrigir status após alteração do vencimento, unificar dia Fortaleza e validar regressões.
-- [ ] Registrar entrega e conferir fluxos autenticados quando houver sessão disponível.
+- [x] Implementar matriz de contas bancárias (nenhuma seleção = nenhuma conta), autorização no banco e testes transacionais de permissões.
+- [x] Corrigir status após alteração do vencimento, unificar dia Fortaleza e validar regressões (18 testes e edição autenticada transacional).
+- [ ] Conferir visualmente matriz e salvamento no navegador — sessão autenticada indisponível no Supabase externo.
 
 - [x] Adicionar Homepage em /dev e corrigir preferências de notificações e ações de centros de custo; testes e registro histórico concluídos.
 - [ ] Conferir Homepage, preferências e ações de centros visualmente com usuário conectado — sessão de teste indisponível no Supabase externo.
