@@ -19,10 +19,10 @@ type Prefs = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) return new Response("Configuração indisponível", { status: 500, headers: corsHeaders });
+  const supabase = createClient(url, key);
 
   const resumo = { series: 0, criadas: 0, vencidos_marcados: 0, notificacoes: 0, erros: [] as string[] };
 
@@ -44,17 +44,12 @@ Deno.serve(async (req) => {
       resumo.criadas += Number(criadas ?? 0);
     }
 
-    // 2) Marcar como vencido lançamentos com data_vencimento < hoje que ainda
-    //    estão em `a_vencer` ou `pago_parcial`.
-    const hoje = new Date().toISOString().slice(0, 10);
-    const { data: vencidos, error: vErr } = await supabase
-      .from("despesas_lancamentos")
-      .update({ status: "vencido" })
-      .lt("data_vencimento", hoje)
-      .in("status", ["a_vencer", "pago_parcial"])
-      .select("id");
+    // A mesma regra do formulário, com dia de Fortaleza e pagamentos preservados.
+    const { data: vencidos, error: vErr } = await supabase.rpc("despesas_marcar_vencidos");
     if (vErr) throw vErr;
-    resumo.vencidos_marcados = vencidos?.length ?? 0;
+    resumo.vencidos_marcados = Number(vencidos ?? 0);
+    const { data: hoje, error: diaErr } = await supabase.rpc("despesas_hoje");
+    if (diaErr) throw diaErr;
 
     // 3) Notificações — busca preferências de todos os usuários com permissão de
     //    visualizar o módulo (temos apenas as prefs de quem já ajustou).
@@ -68,8 +63,8 @@ Deno.serve(async (req) => {
     for (const p of (prefs ?? []) as Prefs[]) {
       // 3a) Proximidade
       for (const dias of p.dias_antecedencia ?? []) {
-        const alvo = new Date();
-        alvo.setDate(alvo.getDate() + dias);
+        const alvo = new Date(`${hoje}T12:00:00Z`);
+        alvo.setUTCDate(alvo.getUTCDate() + dias);
         const alvoStr = alvo.toISOString().slice(0, 10);
 
         const { data: lancs, error: lErr } = await supabase

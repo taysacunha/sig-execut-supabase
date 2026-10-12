@@ -1,0 +1,11 @@
+CREATE OR REPLACE FUNCTION public.despesas_validar_conta_vinculada() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$ DECLARE j jsonb:=to_jsonb(NEW); BEGIN
+ IF auth.uid() IS NULL THEN IF current_setting('role',true) IN ('none','service_role') OR auth.role()='service_role' THEN RETURN NEW; END IF; RAISE EXCEPTION 'Usuário não autenticado'; END IF;
+ IF TG_OP='UPDATE' AND NEW.conta_bancaria_id IS NOT DISTINCT FROM OLD.conta_bancaria_id THEN RETURN NEW; END IF;
+ IF NEW.conta_bancaria_id IS NULL THEN RETURN NEW; END IF;
+ IF TG_TABLE_NAME='despesas_lancamentos' AND TG_OP='INSERT' AND j->>'serie_recorrencia_id' IS NOT NULL AND EXISTS(SELECT 1 FROM public.despesas_recorrencias r WHERE r.id=(j->>'serie_recorrencia_id')::uuid AND r.conta_bancaria_id=NEW.conta_bancaria_id AND r.centro_custo_id=(j->>'centro_custo_id')::uuid AND public.can_view_system(auth.uid(),'despesas') AND (public.despesas_pode_editar_aba(auth.uid(),'calendario') OR (r.veiculo_id IS NOT NULL AND public.despesas_pode_editar_aba(auth.uid(),'veiculos'))) AND r.centro_custo_id IN (SELECT public.despesas_centros_permitidos(auth.uid()))) THEN RETURN NEW; END IF;
+ IF NOT public.despesas_conta_permitida(auth.uid(),NEW.conta_bancaria_id) THEN RAISE EXCEPTION 'Conta bancária não autorizada para este usuário' USING ERRCODE='42501'; END IF; RETURN NEW; END $$;
+DO $$ DECLARE def text; p record; BEGIN
+ FOR p IN SELECT oid FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN ('despesas_estornar_encargo_veiculo','despesas_baixar_encargo_veiculo','despesas_gerar_encargos_veiculo_ciclo') LOOP SELECT pg_get_functiondef(p.oid) INTO def; def:=replace(def,'current_date','public.despesas_hoje()'); EXECUTE def; END LOOP;
+ SELECT pg_get_functiondef('public.despesas_gerar_ocorrencias(uuid,date)'::regprocedure) INTO def;
+ def:=replace(def,'IF auth.uid() IS NOT NULL AND r.centro_custo_id NOT IN', 'IF auth.uid() IS NOT NULL AND NOT (public.despesas_pode_editar_aba(auth.uid(),''calendario'') OR (r.veiculo_id IS NOT NULL AND public.despesas_pode_editar_aba(auth.uid(),''veiculos''))) THEN RAISE EXCEPTION ''Sem permissão para esta recorrência''; END IF; IF auth.uid() IS NOT NULL AND r.centro_custo_id NOT IN'); EXECUTE def;
+END $$;
