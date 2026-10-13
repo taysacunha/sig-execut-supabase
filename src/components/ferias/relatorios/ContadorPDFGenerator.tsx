@@ -1,3 +1,4 @@
+import { vendaContabilPorPeriodo } from "@/lib/feriasVenda";
 import { useState } from "react";
 import { getYearOptions } from "@/lib/dateUtils";
 import { useQuery } from "@tanstack/react-query";
@@ -127,44 +128,26 @@ export function ContadorPDFGenerator() {
   };
 
   const getDiasVendidosSelecionado = (f: any) => {
-    const diasVendidosContador = Math.min(f.dias_vendidos || 0, 10);
-    if (showingPeriodo1) return f.quinzena_venda === 1 ? diasVendidosContador : 0;
-    if (showingPeriodo2) return f.quinzena_venda === 2 ? diasVendidosContador : 0;
-    return diasVendidosContador;
+    const { v1, v2 } = vendaContabilPorPeriodo(f);
+    if (showingPeriodo1) return v1;
+    if (showingPeriodo2) return v2;
+    return Math.min(f.dias_vendidos || 0, 10);
   };
 
-  // Formata "Dias Vend." sempre com o sufixo do período (1º/2º) quando definido,
-  // independente do modo selecionado, deixando explícito a qual período aquisitivo
-  // a venda foi alocada.
   const formatDiasVendidos = (f: any) => {
     const dias = getDiasVendidosSelecionado(f);
     if (dias <= 0) return "0";
-    if (f.quinzena_venda) return `${dias} (${f.quinzena_venda}º)`;
-    return String(dias);
+    if (f.quinzena_venda === 3) {
+      return showingAmbos ? "10 (5 no 1º + 5 no 2º)" : `${dias} (${showingPeriodo1 ? "1º" : "2º"})`;
+    }
+    return f.quinzena_venda ? `${dias} (${f.quinzena_venda}º)` : String(dias);
   };
 
   const getDiasGozoSelecionado = (f: any) => {
-    if (showingPeriodo1) {
-      return f.quinzena1_inicio && f.quinzena1_fim
-        ? calcularDiasContador(f.quinzena1_inicio, f.quinzena1_fim, f.quinzena_venda === 1 ? getDiasVendidosSelecionado(f) : 0)
-        : 0;
-    }
-
-    if (showingPeriodo2) {
-      return f.quinzena2_inicio && f.quinzena2_fim
-        ? calcularDiasContador(f.quinzena2_inicio, f.quinzena2_fim, f.quinzena_venda === 2 ? getDiasVendidosSelecionado(f) : 0)
-        : 0;
-    }
-
-    const diasVendidosContador = getDiasVendidosSelecionado(f);
-    const diasGozo1 = f.quinzena1_inicio && f.quinzena1_fim
-      ? calcularDiasContador(f.quinzena1_inicio, f.quinzena1_fim, f.quinzena_venda === 1 ? diasVendidosContador : 0)
-      : 0;
-    const diasGozo2 = f.quinzena2_inicio && f.quinzena2_fim
-      ? calcularDiasContador(f.quinzena2_inicio, f.quinzena2_fim, f.quinzena_venda === 2 ? diasVendidosContador : 0)
-      : 0;
-
-    return diasGozo1 + diasGozo2;
+    const { v1, v2 } = vendaContabilPorPeriodo(f);
+    const gozo1 = f.quinzena1_inicio && f.quinzena1_fim ? calcularDiasContador(f.quinzena1_inicio, f.quinzena1_fim, v1) : 0;
+    const gozo2 = f.quinzena2_inicio && f.quinzena2_fim ? calcularDiasContador(f.quinzena2_inicio, f.quinzena2_fim, v2) : 0;
+    return showingPeriodo1 ? gozo1 : showingPeriodo2 ? gozo2 : gozo1 + gozo2;
   };
 
   const toggleMonth = (month: number) => {
@@ -260,11 +243,11 @@ export function ContadorPDFGenerator() {
             ];
 
         rowData.forEach((text, i) => {
-          pdf.text(text, xPos, yPos);
+          pdf.text(pdf.splitTextToSize(text, colWidths[i] - 3), xPos, yPos);
           xPos += colWidths[i];
         });
 
-        yPos += 8;
+        yPos += Math.max(8, ...rowData.map((text, i) => pdf.splitTextToSize(text, colWidths[i] - 3).length * 4 + 3));
       });
 
       // Footer
@@ -272,7 +255,7 @@ export function ContadorPDFGenerator() {
       pdf.setTextColor(128, 128, 128);
       pdf.text(`Total de registros: ${ferias.length}`, margin, pageHeight - 10);
       pdf.text(
-        "Dias vendidos limitados a 10. O sufixo (1º/2º) indica o período aquisitivo da venda.",
+        "Dias vendidos limitados a 10. A divisão 5 + 5 indica venda em ambos os períodos de férias.",
         pageWidth - margin,
         pageHeight - 10,
         { align: "right" }

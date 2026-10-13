@@ -268,7 +268,7 @@ export function ConsultaGeralTab() {
                         </TableCell>
                         <TableCell>
                           {f.vender_dias && f.dias_vendidos ? (
-                            <Badge variant="outline" className="text-xs">{f.dias_vendidos}d</Badge>
+                            <Badge variant="outline" className="text-xs">{f.quinzena_venda === 3 ? "10d (5 no 1º + 5 no 2º)" : `${f.dias_vendidos}d`}</Badge>
                           ) : <span className="text-muted-foreground text-xs">—</span>}
                         </TableCell>
                         <TableCell className="text-sm">

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { ExcecaoPeriodosSection, type GozoPeriodo } from "./ExcecaoPeriodosSection";
-import { resolverVendaConsolidada } from "@/lib/feriasVenda";
+import { resolverVendaConsolidada, validarVendaDividida } from "@/lib/feriasVenda";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -82,7 +82,7 @@ const feriasSchema = z.object({
   gozo_quinzena2_inicio: reasonableDate(false),
   gozo_quinzena2_fim: reasonableDate(false),
   dias_vendidos: z.number().min(0).max(30).optional(),
-  quinzena_venda: z.number().min(1).max(2).optional(),
+  quinzena_venda: z.number().int().min(1).max(3).optional(),
   gozo_venda_inicio: reasonableDate(false),
   gozo_venda_fim: reasonableDate(false),
   gozo_venda_periodos: z.enum(["1", "2"]).default("1"),
@@ -329,6 +329,10 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       toast.error("Informe a justificativa do cancelamento.");
       return;
     }
+    if (excQuinzenaVenda === 3 && excDiasVendidos > 0) {
+      toast.error("A venda está dividida entre os dois períodos. Ajuste a alocação da venda antes de cancelar o segundo período.");
+      return;
+    }
     setQ2Cancelado(true);
     setQ2CancMotivo(q2CancDialogMotivo);
     setQ2CancJustificativa(q2CancDialogJustificativa.trim());
@@ -382,7 +386,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   // não para ocultar ou desfazer um Q1 que já está registrado no banco.
   const q1HistoricoJaRegistrado = isEditing
     && ferias?.vender_dias === true
-    && ferias?.quinzena_venda === 1;
+    && (ferias?.quinzena_venda === 1 || ferias?.quinzena_venda === 3);
   const q1BloqueadoParaVenda = q1JaGozada
     && !permitirCorrecaoQV
     && !q1HistoricoJaRegistrado;
@@ -414,7 +418,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     if (data.opcao_adicional === "vender" && (data.dias_vendidos || 0) > 0) {
       // Fallback: venda padrão sem períodos estruturados.
       const vendaPeriodo = shouldSkipConsumedQ1 ? 2 : (data.quinzena_venda || 1);
-      if (vendaPeriodo === 1) {
+      if (vendaPeriodo === 3) {
+        for (const [inicio, fim] of [[data.gozo_quinzena1_inicio, data.gozo_quinzena1_fim], [data.gozo_quinzena2_inicio, data.gozo_quinzena2_fim]]) {
+          if (inicio && fim) intervals.push({ start: parseISO(inicio), end: parseISO(fim) });
+        }
+      } else if (vendaPeriodo === 1) {
         if (data.gozo_venda_inicio && data.gozo_venda_fim) intervals.push({ start: parseISO(data.gozo_venda_inicio), end: parseISO(data.gozo_venda_fim) });
         if (data.quinzena2_inicio && data.quinzena2_fim) intervals.push({ start: parseISO(data.quinzena2_inicio), end: parseISO(data.quinzena2_fim) });
       } else {
@@ -449,7 +457,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   }, [forceSingleGozo]);
 
   useEffect(() => {
-    if (q1BloqueadoParaVenda && isVenda && quinzenaVenda !== 2) {
+    if (q1BloqueadoParaVenda && isVenda && quinzenaVenda !== 2 && quinzenaVenda !== 3) {
       form.setValue("quinzena_venda", 2);
       form.setValue("gozo_venda_inicio", "");
       form.setValue("gozo_venda_fim", "");
@@ -611,7 +619,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       const hasVenda = ferias.vender_dias && (ferias.dias_vendidos || 0) > 0;
       const hasGozo = ferias.gozo_diferente;
       // Respeita o que foi salvo: venda padrão (<= 10 dias) não é exceção.
-      const inferredIsExcecao = !!(ferias.is_excecao || hasFlexible);
+      const inferredIsExcecao = !!(ferias.is_excecao || (hasFlexible && !hasVenda));
       let opcao: "nenhum" | "vender" | "gozo_diferente" = "nenhum";
       if (hasVenda) opcao = "vender";
       else if (hasGozo) opcao = "gozo_diferente";
@@ -773,12 +781,12 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
               sintetizados.push({
                 id: crypto.randomUUID(), referencia_periodo: 1,
                 dias: Math.ceil(diasGozoTotal / 2),
-                data_inicio: g1i!, data_fim: g1f!, tipo: "vender",
+                data_inicio: g1i || "", data_fim: g1f || "", tipo: "vender",
               });
               sintetizados.push({
                 id: crypto.randomUUID(), referencia_periodo: 2,
                 dias: Math.floor(diasGozoTotal / 2),
-                data_inicio: g2i!, data_fim: g2f!, tipo: "vender",
+                data_inicio: g2i || "", data_fim: g2f || "", tipo: "vender",
               });
             } else if (tem1) {
               if (!inferredDistFallback) inferredDistFallback = qv === 1 ? "2" : "1";
@@ -786,7 +794,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                 id: crypto.randomUUID(),
                 referencia_periodo: qv === 1 ? 2 : 1,
                 dias: diasGozoTotal,
-                data_inicio: g1i!, data_fim: g1f!, tipo: "vender",
+                data_inicio: g1i || "", data_fim: g1f || "", tipo: "vender",
               });
             } else if (tem2) {
               if (!inferredDistFallback) inferredDistFallback = qv === 1 ? "2" : "1";
@@ -794,7 +802,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                 id: crypto.randomUUID(),
                 referencia_periodo: qv === 1 ? 2 : 1,
                 dias: diasGozoTotal,
-                data_inicio: g2i!, data_fim: g2f!, tipo: "vender",
+                data_inicio: g2i || "", data_fim: g2f || "", tipo: "vender",
               });
             }
           } else if (inferredOpcao === "gozo_diferente") {
@@ -809,11 +817,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
             else if (tem2 && !inferredDistFallback) inferredDistFallback = "2";
             if (tem1) sintetizados.push({
               id: crypto.randomUUID(), referencia_periodo: 1, dias: 15,
-              data_inicio: g1i!, data_fim: g1f!, tipo: "gozo_diferente",
+              data_inicio: g1i || "", data_fim: g1f || "", tipo: "gozo_diferente",
             });
             if (tem2) sintetizados.push({
               id: crypto.randomUUID(), referencia_periodo: 2, dias: 15,
-              data_inicio: g2i!, data_fim: g2f!, tipo: "gozo_diferente",
+              data_inicio: g2i || "", data_fim: g2f || "", tipo: "gozo_diferente",
             });
           }
 
@@ -1359,7 +1367,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           }
         }
         // Calcular dias vendidos explícitos por quinzena.
-        if (data.is_excecao) {
+        if (data.is_excecao && venda.quinzenaVenda !== 3) {
           // Exceção (>10 dias vendidos): a distribuição do gozo interno define
           // quantos dias foram vendidos em cada quinzena.
           const venderRows = excPeriodos.filter(p => (p.tipo || "vender") === "vender");
@@ -1399,10 +1407,16 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           // registros legados ou estado temporário).
           venderDias = true;
           diasVend = data.dias_vendidos || 0;
-          quinzenaVendaVal = q1BloqueadoParaVenda ? 2 : (data.quinzena_venda || 1);
+          const venda = resolverVendaConsolidada({ opcaoAdicional: data.opcao_adicional, excecaoTipo, diasVendidos: data.dias_vendidos, quinzenaVenda: data.quinzena_venda, q1BloqueadoParaVenda, isExcecao: data.is_excecao });
+          quinzenaVendaVal = venda.quinzenaVenda;
 
           if (diasVend <= 10) {
-            if (quinzenaVendaVal === 1) {
+            if (quinzenaVendaVal === 3) {
+              gozoQ1Inicio = data.gozo_quinzena1_inicio || null;
+              gozoQ1Fim = data.gozo_quinzena1_fim || null;
+              gozoQ2Inicio = data.gozo_quinzena2_inicio || null;
+              gozoQ2Fim = data.gozo_quinzena2_fim || null;
+            } else if (quinzenaVendaVal === 1) {
               gozoQ1Inicio = data.gozo_venda_inicio || null;
               gozoQ1Fim = data.gozo_venda_fim || null;
             } else {
@@ -1410,8 +1424,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
               gozoQ2Fim = data.gozo_venda_fim || null;
             }
             // Venda padrão: tudo na quinzena escolhida.
-            diasVendQ1 = quinzenaVendaVal === 1 ? diasVend : 0;
-            diasVendQ2 = quinzenaVendaVal === 2 ? diasVend : 0;
+            diasVendQ1 = venda.diasVendidosQ1;
+            diasVendQ2 = venda.diasVendidosQ2;
           } else {
             gozoQ1Inicio = data.gozo_venda_q1_inicio || null;
             gozoQ1Fim = data.gozo_venda_q1_fim || null;
@@ -1610,6 +1624,16 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   }, [afastamentos, buildNewVacationIntervals, q1Inicio, q1Fim, q2Inicio, q2Fim, opcaoAdicional, diasVendidos, quinzenaVendaEfetiva, gozoVendaInicio, gozoVendaFim, form]);
 
   const onSubmit = (data: FeriasFormData) => {
+    const periodoVendaAtual = excecaoTipo === "vender" ? excQuinzenaVenda : data.quinzena_venda;
+    const vendaAtiva = data.opcao_adicional === "vender" || excecaoTipo === "vender";
+    const splitEnvolvido = periodoVendaAtual === 3 || ferias?.quinzena_venda === 3;
+    const alocacaoAlterada = splitEnvolvido && isEditing && (periodoVendaAtual !== ferias?.quinzena_venda || data.dias_vendidos !== ferias?.dias_vendidos || !vendaAtiva);
+    const erroVenda = validarVendaDividida({ periodo: vendaAtiva ? periodoVendaAtual : null, dias: data.dias_vendidos || 0, q1Bloqueado: q1BloqueadoParaVenda, q2Cancelado, q2Inicio: data.quinzena2_inicio, q2Fim: data.quinzena2_fim, alocacaoAlterada, enviadoQ1: ferias?.enviado_contador_q1, enviadoQ2: ferias?.enviado_contador_q2 });
+    if (erroVenda) { toast.error(erroVenda); return; }
+    if (periodoVendaAtual === 3 && vendaAtiva && excPeriodos.length === 0) {
+      toast.error("Informe os períodos de gozo antes de salvar a venda dividida.");
+      return;
+    }
     if (!q2Cancelado && !data.quinzena2_inicio) {
       toast.error('Informe o 2º período ou use "Cancelar 2º período" com motivo e justificativa.');
       return;
@@ -1675,9 +1699,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
 
   const executeSave = (data: FeriasFormData) => {
     // Se houve correção histórica de período da venda, registrar auditoria após salvar.
-    const finalQV = data.is_excecao
-      ? (q1BloqueadoParaVenda ? 2 : (excQuinzenaVenda || 1))
-      : (data.opcao_adicional === "vender" ? (q1BloqueadoParaVenda ? 2 : (data.quinzena_venda || 1)) : null);
+    const finalQV = buildPayloadCore(data).payload.quinzena_venda;
     const qvAntes = ferias?.quinzena_venda ?? null;
     const deveAuditar = permitirCorrecaoQV && finalQV !== qvAntes;
     const q2CanceladoAntes = !!ferias?.q2_cancelado;
@@ -1736,6 +1758,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                 motivo: motivoCorrecaoQV,
                 quinzena_venda_antes: qvAntes,
                 quinzena_venda_depois: finalQV,
+                dias_vendidos_q1_depois: buildPayloadCore(data).payload.dias_vendidos_q1,
+                dias_vendidos_q2_depois: buildPayloadCore(data).payload.dias_vendidos_q2,
                 corrigido_em: new Date().toISOString(),
               },
             });
@@ -2046,18 +2070,21 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                           Período da venda (enviado ao contador)
                         </Label>
                         <p className="text-xs text-muted-foreground">
-                          Selecione em qual período aquisitivo os <strong>{Math.min(excDiasVendidos, 10)} dia{Math.min(excDiasVendidos, 10) !== 1 ? "s" : ""} vendidos</strong> serão alocados no relatório do contador.
+                          Selecione em qual período de férias os <strong>{Math.min(excDiasVendidos, 10)} dia{Math.min(excDiasVendidos, 10) !== 1 ? "s" : ""} vendidos</strong> serão alocados no relatório do contador.
                         </p>
                         <Select
-                          value={String(q1BloqueadoParaVenda ? 2 : excQuinzenaVenda)}
+                          value={String(excQuinzenaVenda === 3 ? 3 : q1BloqueadoParaVenda ? 2 : excQuinzenaVenda)}
                           onValueChange={(v) => setExcQuinzenaVenda(parseInt(v))}
                         >
-                          <SelectTrigger className="max-w-[220px] bg-background">
+                          <SelectTrigger className="w-full max-w-[380px] bg-background">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             {(!q1JaGozada || permitirCorrecaoQV || q1HistoricoJaRegistrado) && <SelectItem value="1">1º Período</SelectItem>}
                             <SelectItem value="2">2º Período</SelectItem>
+                            {(excDiasVendidos === 10 || excQuinzenaVenda === 3) && !q2Cancelado && q2Inicio && q2Fim && (!q1BloqueadoParaVenda || excQuinzenaVenda === 3) && (
+                              <SelectItem value="3">5 dias no 1º + 5 dias no 2º</SelectItem>
+                            )}
                           </SelectContent>
                         </Select>
                         {q1JaGozada && (
