@@ -301,6 +301,7 @@ const fieldLabels: Record<string, string> = {
 
 // Tradução de valores específicos por campo
 const valueLabels: Record<string, Record<string, string>> = {
+  quinzena_venda: { "1": "1º período", "2": "2º período", "3": "5 dias no 1º + 5 dias no 2º" },
   role: {
     super_admin: "Super Administrador",
     admin: "Administrador",
