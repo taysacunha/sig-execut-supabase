@@ -1,5 +1,8 @@
 # Roadmap
 
+- [ ] Implementar venda de 10 dias dividida em 5/5, relatórios, bloqueios e compatibilidade com folgas.
+- [ ] Validar regras e persistência da divisão e registrar no histórico.
+
 - [x] Implementar matriz de contas bancárias (nenhuma seleção = nenhuma conta), autorização no banco e testes transacionais de permissões.
 - [x] Corrigir status após alteração do vencimento, unificar dia Fortaleza e validar regressões (18 testes e edição autenticada transacional).
 - [ ] Conferir visualmente matriz e salvamento no navegador — sessão autenticada indisponível no Supabase externo.
