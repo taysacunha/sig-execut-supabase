@@ -1,4 +1,5 @@
 import { format, parseISO } from "date-fns";
+import { labelPeriodoVenda } from "./feriasVenda";
 
 export interface FeriasDiffRow {
   label: string;
@@ -113,7 +114,7 @@ const CAMPOS: CampoDef[] = [
   {
     key: "quinzena_venda",
     label: "Período da venda",
-    fmt: (v) => (v ? `${v}º período` : VAZIO),
+    fmt: labelPeriodoVenda,
   },
   { key: "dias_vendidos_q1", label: "Dias vendidos no 1º período", fmt: fmtNum },
   { key: "dias_vendidos_q2", label: "Dias vendidos no 2º período", fmt: fmtNum },

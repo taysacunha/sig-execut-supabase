@@ -1,3 +1,4 @@
+import { vendaContabilPorPeriodo } from "@/lib/feriasVenda";
 import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -737,13 +738,10 @@ export default function FeriasFerias() {
 
       const diasVendTotal = f.vender_dias && f.dias_vendidos ? Math.min(f.dias_vendidos, 10) : 0;
       const qVenda = resolveQuinzenaVenda(f);
-      let vendP1 = 0, vendP2 = 0;
-      if (diasVendTotal > 0) {
-        if (qVenda === 1) vendP1 = diasVendTotal; else vendP2 = diasVendTotal;
-      }
+      const { v1: vendP1, v2: vendP2 } = f.quinzena_venda === 3 ? vendaContabilPorPeriodo(f) : { v1: qVenda === 1 ? diasVendTotal : 0, v2: qVenda === 2 ? diasVendTotal : 0 };
       // Mostrar venda apenas se a quinzena correspondente está sendo exibida nesta linha
       const vendaVisivel = (qVenda === 1 && f._showQ1) || (qVenda === 2 && f._showQ2);
-      const diasVendExibir = vendaVisivel ? diasVendTotal : 0;
+      const diasVendExibir = f.quinzena_venda === 3 ? (f._showQ1 ? 5 : 0) + (f._showQ2 ? 5 : 0) : vendaVisivel ? diasVendTotal : 0;
 
       let xPos = margin;
       pdf.text(nomeColLines, xPos + 2, yPos);
@@ -762,7 +760,7 @@ export default function FeriasFerias() {
         pdf.text(f._showQ2 && f.quinzena2_inicio && f.quinzena2_fim ? calcAdjustedPeriodo(f.quinzena2_inicio, f.quinzena2_fim, vendP2) : "—", xPos + 2, yPos);
         xPos += colWidths[showP1 ? 5 : 4];
       }
-      pdf.text(diasVendExibir > 0 ? `${diasVendExibir} dias (${qVenda}º período)` : "—", xPos + 2, yPos);
+      pdf.text(diasVendExibir > 0 ? (f.quinzena_venda === 3 ? `${diasVendExibir} dias (${f._showQ1 && f._showQ2 ? "5 no 1º + 5 no 2º" : f._showQ1 ? "1º período" : "2º período"})` : `${diasVendExibir} dias (${qVenda}º período)`) : "—", xPos + 2, yPos);
 
       yPos += rowH;
     });
@@ -1557,17 +1555,21 @@ export default function FeriasFerias() {
                           {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "1") && (() => {
                             const diasVendTotal = f.vender_dias && f.dias_vendidos ? Math.min(f.dias_vendidos, 10) : 0;
                             const qVenda = resolveQuinzenaVenda(f);
-                            const vendP1 = qVenda === 1 ? diasVendTotal : 0;
+                            const vendP1 = f.quinzena_venda === 3 ? 5 : qVenda === 1 ? diasVendTotal : 0;
                             return <TableCell className="text-sm">{f._showQ1 ? calcAdjustedPeriodo(f.quinzena1_inicio, f.quinzena1_fim, vendP1) : "—"}</TableCell>;
                           })()}
                           {(contadorPeriodoFilter === "all" || contadorPeriodoFilter === "2") && (() => {
                             const diasVendTotal = f.vender_dias && f.dias_vendidos ? Math.min(f.dias_vendidos, 10) : 0;
                             const qVenda = resolveQuinzenaVenda(f);
-                            const vendP2 = qVenda === 2 ? diasVendTotal : 0;
+                            const vendP2 = f.quinzena_venda === 3 ? 5 : qVenda === 2 ? diasVendTotal : 0;
                             return <TableCell className="text-sm">{f._showQ2 && f.quinzena2_inicio && f.quinzena2_fim ? calcAdjustedPeriodo(f.quinzena2_inicio, f.quinzena2_fim, vendP2) : "—"}</TableCell>;
                           })()}
                           <TableCell>{(() => {
                             if (!f.vender_dias || !f.dias_vendidos) return <span className="text-muted-foreground text-xs">—</span>;
+                            if (f.quinzena_venda === 3) {
+                              const totalSplit = (f._showQ1 ? 5 : 0) + (f._showQ2 ? 5 : 0);
+                              return <Badge variant="outline" className="text-xs">{totalSplit} dias ({f._showQ1 && f._showQ2 ? "5 no 1º + 5 no 2º" : f._showQ1 ? "1º período" : "2º período"})</Badge>;
+                            }
                             const total = Math.min(f.dias_vendidos, 10);
                             const qv = resolveQuinzenaVenda(f);
                             const vendaVisivel = (qv === 1 && f._showQ1) || (qv === 2 && f._showQ2);
