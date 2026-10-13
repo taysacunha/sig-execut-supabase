@@ -1,3 +1,4 @@
+import { intervalosVendaDividida } from "@/lib/feriasVendaIntervalos";
 import { useMemo, useRef, useState } from "react";
 import { format, parseISO, eachDayOfInterval, isWithinInterval, isWeekend, differenceInDays, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -88,6 +89,7 @@ function shrinkByVenda(start: Date, end: Date, venda: number): { gozoEnd: Date; 
 }
 
 export function getGozoIntervals(f: Ferias): GozoInterval[] {
+  if (f.quinzena_venda === 3) return intervalosVendaDividida(f);
   // Flexible periods: keep only internal gozo (drop "vender" entries)
   if (f.gozo_flexivel && f._gozoPeriodos && f._gozoPeriodos.length > 0) {
     const internos = f._gozoPeriodos.filter((p) => p.tipo !== "vender");

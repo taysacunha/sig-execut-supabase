@@ -1,3 +1,4 @@
+import { intervalosVendaDividida } from "@/lib/feriasVendaIntervalos";
 import { useState, useMemo, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,6 +33,7 @@ interface Setor {
 }
 
 interface FeriasAtivas {
+  quinzena_venda?: number | null;
   id: string;
   colaborador_id: string;
   quinzena1_inicio: string;
@@ -218,7 +220,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month, perdasPer
       // Filtrar por datas oficiais aqui esconde férias cujo gozo interno foi movido para outro mês.
       const { data, error } = await supabase
         .from("ferias_ferias")
-        .select("id, colaborador_id, quinzena1_inicio, quinzena1_fim, quinzena2_inicio, quinzena2_fim, gozo_diferente, gozo_quinzena1_inicio, gozo_quinzena1_fim, gozo_quinzena2_inicio, gozo_quinzena2_fim, is_excecao, status, gozo_flexivel")
+        .select("id, colaborador_id, quinzena1_inicio, quinzena1_fim, quinzena2_inicio, quinzena2_fim, gozo_diferente, gozo_quinzena1_inicio, gozo_quinzena1_fim, gozo_quinzena2_inicio, gozo_quinzena2_fim, is_excecao, status, gozo_flexivel, quinzena_venda")
         .not("status", "in", '("cancelada","reprovada","concluida")');
 
       if (error) throw error;
@@ -255,6 +257,7 @@ export function GeradorFolgasDialog({ open, onOpenChange, year, month, perdasPer
   // Retorna intervalos REAIS de gozo (descanso) para uma férias
   const getGozoRanges = (ferias: FeriasAtivas): Array<{ inicio: string; fim: string }> => {
     const subs = gozoPeriodosByFerias.get(ferias.id);
+    if (ferias.quinzena_venda === 3) return intervalosVendaDividida({ ...ferias, _gozoPeriodos: subs }).map(p => ({ inicio: format(p.start, "yyyy-MM-dd"), fim: format(p.end, "yyyy-MM-dd") }));
     if (subs && subs.length > 0) {
       return subs.map(s => ({ inicio: s.data_inicio, fim: s.data_fim }));
     }

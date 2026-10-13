@@ -1,3 +1,4 @@
+import { intervalosVendaDividida } from "@/lib/feriasVendaIntervalos";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -109,7 +110,9 @@ export function SetoresSabadosTable({ year, month }: SetoresSabadosTableProps) {
       if (!setorId) return;
       // Build internal gozo intervals
       let intervals: Array<{ start: Date; end: Date }> = [];
-      if (f.gozo_flexivel && f._gozoPeriodos?.length) {
+      if (f.quinzena_venda === 3) {
+        intervals = intervalosVendaDividida(f);
+      } else if (f.gozo_flexivel && f._gozoPeriodos?.length) {
         const internos = f._gozoPeriodos.filter((p: any) => p.tipo !== "vender");
         const src = internos.length > 0 ? internos : f._gozoPeriodos;
         intervals = src.map((p: any) => ({ start: parseISO(p.data_inicio), end: parseISO(p.data_fim) }));

@@ -1,3 +1,4 @@
+import { intervalosVendaDividida } from "@/lib/feriasVendaIntervalos";
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Download, Loader2 } from "lucide-react";
@@ -67,6 +68,7 @@ const daysBetween = (a: Date, b: Date) => Math.round((b.getTime() - a.getTime())
 const mk = (start: Date, end: Date, diasVendidos = 0): GozoInterval => ({ start, end, diasGozados: daysBetween(start, end), diasVendidos });
 
 function getGozoIntervals(f: Ferias): GozoInterval[] {
+  if (f.quinzena_venda === 3) return intervalosVendaDividida(f);
   if (f.gozo_flexivel && f._gozoPeriodos && f._gozoPeriodos.length > 0) {
     const internos = f._gozoPeriodos.filter((p) => p.tipo !== "vender");
     const source = internos.length > 0 ? internos : f._gozoPeriodos;
