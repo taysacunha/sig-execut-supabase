@@ -1633,7 +1633,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     const vendaAtiva = data.opcao_adicional === "vender" || excecaoTipo === "vender";
     const splitEnvolvido = periodoVendaAtual === 3 || ferias?.quinzena_venda === 3;
     const alocacaoAlterada = splitEnvolvido && isEditing && (periodoVendaAtual !== ferias?.quinzena_venda || data.dias_vendidos !== ferias?.dias_vendidos || !vendaAtiva);
-    const erroVenda = validarVendaDividida({ periodo: vendaAtiva ? periodoVendaAtual : null, dias: data.dias_vendidos || 0, q1Bloqueado: q1BloqueadoParaVenda, q2Cancelado, q2Inicio: data.quinzena2_inicio, q2Fim: data.quinzena2_fim, alocacaoAlterada, enviadoQ1: ferias?.enviado_contador_q1, enviadoQ2: ferias?.enviado_contador_q2 });
+    const erroVenda = validarVendaDividida({ periodo: vendaAtiva ? periodoVendaAtual : null, dias: (excecaoTipo === "vender" ? excDiasVendidos : data.dias_vendidos) || 0, q1Bloqueado: q1BloqueadoParaVenda, q2Cancelado, q2Inicio: data.quinzena2_inicio, q2Fim: data.quinzena2_fim, alocacaoAlterada, enviadoQ1: ferias?.enviado_contador_q1, enviadoQ2: ferias?.enviado_contador_q2 });
     if (erroVenda) { toast.error(erroVenda); return; }
     if (!q2Cancelado && !data.quinzena2_inicio) {
       toast.error('Informe o 2º período ou use "Cancelar 2º período" com motivo e justificativa.');
