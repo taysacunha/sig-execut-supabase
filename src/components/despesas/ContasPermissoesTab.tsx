@@ -47,8 +47,8 @@ export function ContasPermissoesTab({ users, selected, toggleUser, toggleAll, cl
       <Button disabled={!contaId || salvar.isPending} onClick={() => salvar.mutate({ ids: [...selected], conta: contaId, marcar: acao === "add" })}>Aplicar</Button>
       <Button variant="ghost" onClick={clearSelection}>Limpar seleção</Button>
     </div>}
-    {rows.length === 0 ? <p className="text-muted-foreground">Nenhuma conta bancária ativa cadastrada.</p> : <Table>
-      <TableHeader><TableRow><TableHead><Checkbox aria-label="Selecionar todos os usuários" checked={users.length > 0 && users.every(u => selected.has(u.user_id))} onCheckedChange={() => toggleAll(users)} /></TableHead><TableHead>Usuário</TableHead>{rows.map(c => <TableHead key={c.id} className="min-w-40"><div>{c.nome}</div><div className="text-xs text-muted-foreground">{c.banco}</div></TableHead>)}<TableHead>Contas disponíveis</TableHead></TableRow></TableHeader>
+    {rows.length === 0 ? <p className="text-muted-foreground">Nenhuma conta bancária ativa cadastrada.</p> : <Table containerClassName="max-h-[70vh] rounded-md border">
+      <TableHeader className="sticky top-0 z-20 bg-background shadow-sm"><TableRow><TableHead><Checkbox aria-label="Selecionar todos os usuários" checked={users.length > 0 && users.every(u => selected.has(u.user_id))} onCheckedChange={() => toggleAll(users)} /></TableHead><TableHead>Usuário</TableHead>{rows.map(c => <TableHead key={c.id} className="min-w-40"><div>{c.nome}</div><div className="text-xs text-muted-foreground">{c.banco}</div></TableHead>)}<TableHead>Contas disponíveis</TableHead></TableRow></TableHeader>
       <TableBody>{users.map(u => {
         const permitidas = new Set((permissoes.data ?? []).filter(p => p.user_id === u.user_id).map(p => p.conta_bancaria_id));
         const total = rows.filter(c => permitidas.has(c.id)).length;
