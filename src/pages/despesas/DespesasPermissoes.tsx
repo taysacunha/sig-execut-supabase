@@ -564,9 +564,9 @@ export default function DespesasPermissoes() {
 
               <Card>
                 <CardContent className="pt-4">
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
+                  <div>
+                    <Table containerClassName="max-h-[70vh] rounded-md border">
+                      <TableHeader className="sticky top-0 z-20 bg-background shadow-sm">
                         <TableRow>
                           <TableHead className="w-8">
                             <Checkbox
