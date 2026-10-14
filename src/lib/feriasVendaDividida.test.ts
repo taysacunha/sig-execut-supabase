@@ -49,3 +49,18 @@ describe("Contador, gozo e folgas", () => {
   });
   it("premiação reconhece gozo de 10 dias em cada cenário de venda de 5", () => expect(calcularPremiacao(3000, 5).diasGozados).toBe(10));
 });
+import { resolverVendaConsolidada as resolver15, validarVendaDividida as validar15, vendaContabilPorPeriodo as contabil15 } from "./feriasVenda";
+describe("5 + 5 só no contador com venda interna acima de 10", () => {
+  it("15 dias vendidos com 5+5 mantém o total interno e envia 5/5 ao contador", () => {
+    const v = resolver15({ opcaoAdicional: null, excecaoTipo: "vender", diasVendidos: 15, quinzenaVenda: 3, q1BloqueadoParaVenda: false, isExcecao: true } as any);
+    expect(v.diasVendidos).toBe(15);
+    expect(v.quinzenaVenda).toBe(3);
+    expect(contabil15({ dias_vendidos: 15, quinzena_venda: 3 })).toEqual({ v1: 5, v2: 5 });
+  });
+  it("9 dias não permite 5+5", () => {
+    expect(validar15({ periodo: 3, dias: 9, q1Bloqueado: false, q2Cancelado: false, q2Inicio: "2026-10-13", q2Fim: "2026-10-27" })).not.toBeNull();
+  });
+  it("30 dias permite 5+5", () => {
+    expect(validar15({ periodo: 3, dias: 30, q1Bloqueado: false, q2Cancelado: false, q2Inicio: "2026-10-13", q2Fim: "2026-10-27" })).toBeNull();
+  });
+});
