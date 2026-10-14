@@ -1,7 +1,8 @@
 # Roadmap
 
-- [ ] Implementar venda de 10 dias dividida em 5/5, relatórios, bloqueios e compatibilidade com folgas.
-- [ ] Validar regras e persistência da divisão e registrar no histórico.
+- [x] Implementar venda de 10 dias dividida em 5/5, relatórios, bloqueios e compatibilidade com folgas.
+- [x] Validar regras e persistência da divisão (23 testes automatizados e 9 verificações SQL com rollback) e registrar no histórico.
+- [ ] Conferir visualmente salvar/reabrir venda 5/5 e PDFs com usuário conectado — sessão de teste indisponível no Supabase externo.
 
 - [x] Implementar matriz de contas bancárias (nenhuma seleção = nenhuma conta), autorização no banco e testes transacionais de permissões.
 - [x] Corrigir status após alteração do vencimento, unificar dia Fortaleza e validar regressões (18 testes e edição autenticada transacional).

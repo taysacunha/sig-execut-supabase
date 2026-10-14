@@ -1520,7 +1520,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       }
 
       if (gozoFlexivel && excPeriodos.length > 0) {
-        await supabase.from("ferias_gozo_periodos" as any).delete().eq("ferias_id", feriasId);
+        const { error: removeError } = await supabase.from("ferias_gozo_periodos" as any).delete().eq("ferias_id", feriasId);
+        if (removeError) throw removeError;
         const periodosPayload = excPeriodos
           .filter(p => p.data_inicio && p.data_fim && p.dias > 0)
           .sort((a, b) => a.data_inicio.localeCompare(b.data_inicio))
@@ -1538,7 +1539,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           if (pError) throw pError;
         }
       } else if (isEditing) {
-        await supabase.from("ferias_gozo_periodos" as any).delete().eq("ferias_id", feriasId);
+        const { error: removeError } = await supabase.from("ferias_gozo_periodos" as any).delete().eq("ferias_id", feriasId);
+        if (removeError) throw removeError;
       }
 
       return savedFerias;
@@ -1564,7 +1566,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     },
     onError: (error) => {
       console.error("Error saving férias:", error);
-      toast.error("Erro ao salvar férias");
+      toast.error(error instanceof Error ? error.message : "Erro ao salvar férias");
     },
   });
 

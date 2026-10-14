@@ -729,7 +729,7 @@ export default function FeriasFerias() {
       const nomeColLines = pdf.splitTextToSize(f.colaborador?.nome || "—", colWidths[0] - 4).slice(0, 2) as string[];
       const setorColLines = pdf.splitTextToSize(f.colaborador?.setor_titular?.nome || "—", colWidths[2] - 4).slice(0, 2) as string[];
       const lineCount = Math.max(1, nomeColLines.length, setorColLines.length);
-      const rowH = lineCount === 2 ? 12 : 8;
+      const rowH = f.quinzena_venda === 3 ? 16 : lineCount === 2 ? 12 : 8;
 
       if (idx % 2 === 1) {
         pdf.setFillColor(245, 245, 245);
@@ -760,7 +760,8 @@ export default function FeriasFerias() {
         pdf.text(f._showQ2 && f.quinzena2_inicio && f.quinzena2_fim ? calcAdjustedPeriodo(f.quinzena2_inicio, f.quinzena2_fim, vendP2) : "—", xPos + 2, yPos);
         xPos += colWidths[showP1 ? 5 : 4];
       }
-      pdf.text(diasVendExibir > 0 ? (f.quinzena_venda === 3 ? `${diasVendExibir} dias (${f._showQ1 && f._showQ2 ? "5 no 1º + 5 no 2º" : f._showQ1 ? "1º período" : "2º período"})` : `${diasVendExibir} dias (${qVenda}º período)`) : "—", xPos + 2, yPos);
+      const textoVenda = diasVendExibir > 0 ? (f.quinzena_venda === 3 ? `${diasVendExibir} dias (${f._showQ1 && f._showQ2 ? "5 no 1º + 5 no 2º" : f._showQ1 ? "1º período" : "2º período"})` : `${diasVendExibir} dias (${qVenda}º período)`) : "—";
+      pdf.text(pdf.splitTextToSize(textoVenda, colWidths[colWidths.length - 1] - 4), xPos + 2, yPos);
 
       yPos += rowH;
     });
