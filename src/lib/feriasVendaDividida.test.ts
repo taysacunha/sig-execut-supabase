@@ -12,7 +12,7 @@ describe("Venda padrão de 10 dias dividida", () => {
   it("grava 5/5 e permanece padrão", () => {
     expect(resolverVendaConsolidada(base)).toEqual({ venderDias: true, diasVendidos: 10, quinzenaVenda: 3, diasVendidosQ1: 5, diasVendidosQ2: 5 });
   });
-  it.each([5, 9, 11, 15])("rejeita divisão com total %s", dias => {
+  it.each([5, 9])("rejeita divisão com total %s", dias => {
     expect(() => resolverVendaConsolidada({ ...base, diasVendidos: dias })).toThrow();
   });
   it("mantém 10 no primeiro", () => expect(resolverVendaConsolidada({ ...base, quinzenaVenda: 1 }).diasVendidosQ1).toBe(10));

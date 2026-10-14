@@ -1636,61 +1636,6 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     const erroVenda = validarVendaDividida({ periodo: vendaAtiva ? periodoVendaAtual : null, dias: data.dias_vendidos || 0, q1Bloqueado: q1BloqueadoParaVenda, q2Cancelado, q2Inicio: data.quinzena2_inicio, q2Fim: data.quinzena2_fim, alocacaoAlterada, enviadoQ1: ferias?.enviado_contador_q1, enviadoQ2: ferias?.enviado_contador_q2 });
     if (erroVenda) { toast.error(erroVenda); return; }
     if (!q2Cancelado && !data.quinzena2_inicio) {
-      errors.push("Informe o 2º período ou cancele-o com justificativa");
-    }
-
-    if (data.quinzena2_inicio) {
-      const q2Start = parseISO(data.quinzena2_inicio);
-      const q2Month = q2Start.getMonth() + 1;
-      if (q2Month === 1 || q2Month === 12) {
-        requiresException = true;
-        exceptionReason = "mes_bloqueado";
-        errors.push("Férias em janeiro ou dezembro no 2º período requerem exceção");
-      }
-    }
-
-    if (data.opcao_adicional === "vender" && data.dias_vendidos && data.dias_vendidos > 10) {
-      requiresException = true;
-      exceptionReason = "venda_acima_limite";
-      errors.push("Venda acima de 10 dias requer exceção");
-    }
-    if (conflicts.length > 0 && !data.is_excecao) {
-      requiresException = true;
-      exceptionReason = "conflito_setor";
-      errors.push(`Conflito de setor: ${conflicts.map(c => c.colaborador_nome).join(", ")}`);
-    }
-    return { isValid: errors.length === 0 || data.is_excecao, errors, requiresException, exceptionReason };
-  };
-
-  // Check afastamento conflicts with vacation periods
-  const afastamentoConflicts = useMemo(() => {
-    if (afastamentos.length === 0) return [];
-    const vacIntervals = buildNewVacationIntervals(form.getValues())
-      .map((periodo) => ({ start: format(periodo.start, "yyyy-MM-dd"), end: format(periodo.end, "yyyy-MM-dd") }));
-    const conflicts: { afastamento: typeof afastamentos[0]; periodo: string }[] = [];
-    for (const af of afastamentos) {
-      for (const vi of vacIntervals) {
-        if (af.data_inicio <= vi.end && af.data_fim >= vi.start) {
-          conflicts.push({ afastamento: af, periodo: `${formatDateBR(vi.start)} a ${formatDateBR(vi.end)}` });
-          break;
-        }
-      }
-    }
-    return conflicts;
-  }, [afastamentos, buildNewVacationIntervals, q1Inicio, q1Fim, q2Inicio, q2Fim, opcaoAdicional, diasVendidos, quinzenaVendaEfetiva, gozoVendaInicio, gozoVendaFim, form]);
-
-  const onSubmit = (data: FeriasFormData) => {
-    const periodoVendaAtual = excecaoTipo === "vender" ? excQuinzenaVenda : data.quinzena_venda;
-    const vendaAtiva = data.opcao_adicional === "vender" || excecaoTipo === "vender";
-    const splitEnvolvido = periodoVendaAtual === 3 || ferias?.quinzena_venda === 3;
-    const alocacaoAlterada = splitEnvolvido && isEditing && (periodoVendaAtual !== ferias?.quinzena_venda || data.dias_vendidos !== ferias?.dias_vendidos || !vendaAtiva);
-    const erroVenda = validarVendaDividida({ periodo: vendaAtiva ? periodoVendaAtual : null, dias: data.dias_vendidos || 0, q1Bloqueado: q1BloqueadoParaVenda, q2Cancelado, q2Inicio: data.quinzena2_inicio, q2Fim: data.quinzena2_fim, alocacaoAlterada, enviadoQ1: ferias?.enviado_contador_q1, enviadoQ2: ferias?.enviado_contador_q2 });
-    if (erroVenda) { toast.error(erroVenda); return; }
-    if (periodoVendaAtual === 3 && vendaAtiva && excPeriodos.length === 0) {
-      toast.error("Informe os períodos de gozo antes de salvar a venda dividida.");
-      return;
-    }
-    if (!q2Cancelado && !data.quinzena2_inicio) {
       toast.error('Informe o 2º período ou use "Cancelar 2º período" com motivo e justificativa.');
       return;
     }
