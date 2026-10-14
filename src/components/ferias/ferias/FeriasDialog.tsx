@@ -394,7 +394,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   const isVenda = opcaoAdicional === "vender";
   const isGozoDiferente = opcaoAdicional === "gozo_diferente";
   const quinzenaVendaEfetiva = q1BloqueadoParaVenda ? 2 : quinzenaVenda;
-  const diasDisponiveisPadrao = q1JaGozada && excQuinzenaVenda !== 3 ? 15 : 30;
+  const diasDisponiveisPadrao = q1JaGozada ? 15 : 30;
   const diasGozo = Math.max(0, diasDisponiveisPadrao - diasVendidos);
   const diasGozoNoPeriodoVenda = Math.max(0, 15 - diasVendidos);
   const isVendaPadrao = isVenda && diasVendidos <= 10 && diasVendidos >= 1;
@@ -1367,7 +1367,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
           }
         }
         // Calcular dias vendidos explícitos por quinzena.
-        if (data.is_excecao && venda.quinzenaVenda !== 3) {
+        if (data.is_excecao) {
           // Exceção (>10 dias vendidos): a distribuição do gozo interno define
           // quantos dias foram vendidos em cada quinzena.
           const venderRows = excPeriodos.filter(p => (p.tipo || "vender") === "vender");
@@ -1633,27 +1633,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     const vendaAtiva = data.opcao_adicional === "vender" || excecaoTipo === "vender";
     const splitEnvolvido = periodoVendaAtual === 3 || ferias?.quinzena_venda === 3;
     const alocacaoAlterada = splitEnvolvido && isEditing && (periodoVendaAtual !== ferias?.quinzena_venda || data.dias_vendidos !== ferias?.dias_vendidos || !vendaAtiva);
-    const erroVenda = validarVendaDividida({ periodo: vendaAtiva ? periodoVendaAtual : null, dias: data.dias_vendidos || 0, q1Bloqueado: q1BloqueadoParaVenda, q2Cancelado, q2Inicio: data.quinzena2_inicio, q2Fim: data.quinzena2_fim, alocacaoAlterada, enviadoQ1: ferias?.enviado_contador_q1, enviadoQ2: ferias?.enviado_contador_q2 });
+    const erroVenda = validarVendaDividida({ periodo: vendaAtiva ? periodoVendaAtual : null, dias: (excecaoTipo === "vender" ? excDiasVendidos : data.dias_vendidos) || 0, q1Bloqueado: q1BloqueadoParaVenda, q2Cancelado, q2Inicio: data.quinzena2_inicio, q2Fim: data.quinzena2_fim, alocacaoAlterada, enviadoQ1: ferias?.enviado_contador_q1, enviadoQ2: ferias?.enviado_contador_q2 });
     if (erroVenda) { toast.error(erroVenda); return; }
-    if (periodoVendaAtual === 3 && vendaAtiva && excPeriodos.length === 0) {
-      toast.error("Informe os períodos de gozo antes de salvar a venda dividida.");
-      return;
-    }
     if (!q2Cancelado && !data.quinzena2_inicio) {
       toast.error('Informe o 2º período ou use "Cancelar 2º período" com motivo e justificativa.');
       return;
-    }
-    if (periodoVendaAtual === 3 && vendaAtiva) {
-      const soma = excPeriodos.reduce((total, p) => total + (p.dias || 0), 0);
-      if (soma !== 20 || excPeriodos.some(p => !p.data_inicio || !p.data_fim || p.dias <= 0 || differenceInDays(parseISO(p.data_fim), parseISO(p.data_inicio)) + 1 !== p.dias)) {
-        toast.error("Distribua exatamente 20 dias de gozo, com datas completas e quantidade coerente em cada período.");
-        return;
-      }
-      for (const ref of [1, 2]) {
-        if (excPeriodos.filter(p => p.referencia_periodo === ref).reduce((total, p) => total + p.dias, 0) > 15) {
-          toast.error("Cada período oficial comporta no máximo 15 dias de gozo."); return;
-        }
-      }
     }
     const validation = validateVacation(data);
     if (validation.requiresException && !data.is_excecao) {
@@ -2099,7 +2083,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                           <SelectContent>
                             {(!q1JaGozada || permitirCorrecaoQV || q1HistoricoJaRegistrado) && <SelectItem value="1">1º Período</SelectItem>}
                             <SelectItem value="2">2º Período</SelectItem>
-                            {(excDiasVendidos === 10 || excQuinzenaVenda === 3) && !q2Cancelado && q2Inicio && q2Fim && (!q1BloqueadoParaVenda || excQuinzenaVenda === 3) && (
+                            {(excDiasVendidos >= 10 || excQuinzenaVenda === 3) && !q2Cancelado && q2Inicio && q2Fim && (!q1BloqueadoParaVenda || excQuinzenaVenda === 3) && (
                               <SelectItem value="3">5 dias no 1º + 5 dias no 2º</SelectItem>
                             )}
                           </SelectContent>
@@ -2230,7 +2214,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
 
                 {isVendaPadrao && (
                   <div className="space-y-4 pl-7 border-l-2 border-primary/20">
-                    {q1JaGozada && excQuinzenaVenda !== 3 && (
+                    {q1JaGozada && (
                       <Alert className="border-amber-500/40 bg-amber-500/10">
                         <Info className="h-4 w-4" />
                         <AlertTitle className="text-sm">1º período já gozado</AlertTitle>
@@ -2264,8 +2248,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                     <Card className="border-muted bg-muted/30">
                       <CardContent className="pt-4 space-y-2">
                         <div className="flex justify-between text-sm"><span>Dias totais do período aquisitivo:</span><span className="font-semibold">30 dias</span></div>
-                        {q1JaGozada && excQuinzenaVenda !== 3 && <div className="flex justify-between text-sm text-muted-foreground"><span>Já gozados (1º período):</span><span className="font-semibold">-15 dias</span></div>}
-                        {q1JaGozada && excQuinzenaVenda !== 3 && <div className="flex justify-between text-sm"><span>Disponíveis para ajuste:</span><span className="font-semibold">15 dias</span></div>}
+                        {q1JaGozada && <div className="flex justify-between text-sm text-muted-foreground"><span>Já gozados (1º período):</span><span className="font-semibold">-15 dias</span></div>}
+                        {q1JaGozada && <div className="flex justify-between text-sm"><span>Disponíveis para ajuste:</span><span className="font-semibold">15 dias</span></div>}
                         <div className="border-t pt-2 flex justify-between text-sm font-bold"><span>Dias de gozo:</span><span>{diasGozo} dias</span></div>
                       </CardContent>
                     </Card>

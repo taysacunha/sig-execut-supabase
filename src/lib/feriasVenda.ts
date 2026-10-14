@@ -41,9 +41,11 @@ export function resolverVendaConsolidada({
   }
 
   if (quinzenaVenda === 3) {
-    if (dias !== 10) throw new Error("A divisão 5 + 5 exige venda total de exatamente 10 dias. Selecione outro período da venda.");
+    // Alocação apenas para o contador: o total e a distribuição interna não mudam.
+    if (dias < 10) throw new Error("A divisão 5 + 5 no contador exige pelo menos 10 dias vendidos.");
     if (q1BloqueadoParaVenda) throw new Error("O primeiro período já foi concluído. Use a correção histórica justificada para alterar sua alocação.");
-    return { venderDias: true, diasVendidos: 10, quinzenaVenda: 3, diasVendidosQ1: 5, diasVendidosQ2: 5 };
+    const padrao10 = dias === 10 && !isExcecao;
+    return { venderDias: true, diasVendidos: dias, quinzenaVenda: 3, diasVendidosQ1: padrao10 ? 5 : null, diasVendidosQ2: padrao10 ? 5 : null };
   }
   const periodo = q1BloqueadoParaVenda ? 2 : quinzenaVenda === 2 ? 2 : 1;
   return {
@@ -85,7 +87,7 @@ export function validarVendaDividida(input: {
 }): string | null {
   if (input.alocacaoAlterada && (input.enviadoQ1 || input.enviadoQ2)) return "A alocação já foi enviada ao contador. Regularize o envio do período antes de alterar a venda.";
   if (input.periodo !== 3) return null;
-  if (input.dias !== 10) return "A divisão 5 + 5 exige venda total de exatamente 10 dias. Selecione outro período da venda.";
+  if (input.dias < 10) return "A divisão 5 + 5 no contador exige pelo menos 10 dias vendidos.";
   if (input.q1Bloqueado) return "O primeiro período já foi concluído. Use a correção histórica justificada.";
   if (input.q2Cancelado || !input.q2Inicio || !input.q2Fim) return "A divisão 5 + 5 exige segundo período cadastrado e não cancelado.";
   return null;
