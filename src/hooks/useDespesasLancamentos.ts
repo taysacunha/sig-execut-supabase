@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { normalizeText } from "@/lib/textUtils";
@@ -586,6 +587,7 @@ export function useDespesasLookups() {
   });
   const contas = useQuery({
     queryKey: ["desp-lookup", "contas-autorizadas"],
+    staleTime: 0,
     queryFn: async () => {
       const { data, error } = await supabase.rpc("despesas_contas_lookup");
       if (error) throw error;

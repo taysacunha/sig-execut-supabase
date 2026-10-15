@@ -20,6 +20,7 @@ import {
   useSaveVeiculo, useVeiculoDocumentos, useSaveVeiculoDocumento, useDeleteVeiculoDocumento,
 } from "@/hooks/useDespesasVeiculos";
 import { useDespesasLookups } from "@/hooks/useDespesasLancamentos";
+import { useRefreshLookupsOnOpen } from "@/hooks/useDespesasLancamentos";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { useDespesasPermissions } from "@/hooks/useDespesasPermissions";
@@ -41,6 +42,7 @@ const docTipos: { v: VeiculoDocTipo; l: string }[] = [
 
 function VeiculoDialogInner({ open, onOpenChange, editing }: Props) {
   const { centros, pessoas } = useDespesasLookups();
+  useRefreshLookupsOnOpen(open);
   const saveMut = useSaveVeiculo();
 
   const empty = (): VeiculoInput => ({

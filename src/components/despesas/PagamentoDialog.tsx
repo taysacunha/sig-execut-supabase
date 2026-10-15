@@ -15,6 +15,7 @@ import {
   FormaPagamento, Lancamento,
   useAddPagamento, useDespesasLookups,
 } from "@/hooks/useDespesasLancamentos";
+import { useRefreshLookupsOnOpen } from "@/hooks/useDespesasLancamentos";
 import {
   useDespesasValues,
   DespesasValuesScope,
@@ -39,6 +40,7 @@ const FORMAS: { value: FormaPagamento; label: string }[] = [
 
 function PagamentoDialogInner({ open, onOpenChange, lancamento }: Props) {
   const { contas } = useDespesasLookups();
+  useRefreshLookupsOnOpen(open);
   const addMut = useAddPagamento();
   const { showValues, formatValue } = useDespesasValues();
   const money = (n: number) => (showValues ? formatValue(n) : "R$ ******");

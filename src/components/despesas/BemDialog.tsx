@@ -26,6 +26,7 @@ import {
   useBemHistorico, useGerarLancamentoBem,
 } from "@/hooks/useDespesasBens";
 import { useDespesasLookups } from "@/hooks/useDespesasLancamentos";
+import { useRefreshLookupsOnOpen } from "@/hooks/useDespesasLancamentos";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
 import {
   useDespesasValues, DespesasValuesScope, ToggleValuesButton,
@@ -39,6 +40,7 @@ interface Props {
 
 function BemDialogInner({ open, onOpenChange, editing }: Props) {
   const { centros, pessoas } = useDespesasLookups();
+  useRefreshLookupsOnOpen(open);
   const saveMut = useSaveBem();
 
   const empty = (): BemInput => ({
