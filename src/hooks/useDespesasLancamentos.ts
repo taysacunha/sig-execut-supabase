@@ -529,10 +529,19 @@ export function useSaveLancamentoCredenciais() {
   });
 }
 
+/** Recarrega listas dependentes de permissão sempre que um diálogo abre. */
+export function useRefreshLookupsOnOpen(open: boolean) {
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (open) qc.invalidateQueries({ queryKey: ["desp-lookup"] });
+  }, [open, qc]);
+}
+
 /** Lookup helpers para dropdowns do formulário. */
 export function useDespesasLookups() {
   const centros = useQuery({
     queryKey: ["desp-lookup", "centros"],
+    staleTime: 0,
     queryFn: async () => {
       const { data, error } = await supabase.rpc("despesas_centros_lookup" as any);
       if (error) throw error;

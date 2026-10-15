@@ -1,4 +1,5 @@
 import React, { Suspense, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { lazyWithRetry as lazy } from "@/lib/lazyWithRetry";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -103,6 +104,21 @@ const queryClient = new QueryClient({
 const App = () => {
   useSessionControl();
   useInactivityLogout(30);
+
+  // Limpa todo o cache ao trocar de usuário, evitando que dados/permissões
+  // de uma conta anterior apareçam para outra na mesma aba.
+  useEffect(() => {
+    let lastUserId: string | null | undefined;
+    supabase.auth.getSession().then(({ data }) => { lastUserId = data.session?.user?.id ?? null; });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      const uid = session?.user?.id ?? null;
+      if (event === "SIGNED_OUT" || (event === "SIGNED_IN" && lastUserId !== undefined && uid !== lastUserId)) {
+        queryClient.clear();
+      }
+      lastUserId = uid;
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
