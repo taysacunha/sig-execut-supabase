@@ -50,6 +50,7 @@ function SimpleCadastroCrud({ tabela, singular, plural, temDescricao, canEdit, c
   const [confirmDelete, setConfirmDelete] = useState<NamedRow | null>(null);
   const [permanentDelete, setPermanentDelete] = useState<NamedRow | null>(null);
   const isCentro = tabela === "despesas_centros_custo";
+  const isOperadora = tabela === "despesas_operadoras";
   const refresh = () => {
     qc.invalidateQueries({ queryKey: key });
     if (isCentro) {
@@ -74,7 +75,12 @@ function SimpleCadastroCrud({ tabela, singular, plural, temDescricao, canEdit, c
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      const payload: any = { nome: nome.trim() };
+      const payload: any = { nome: nome.trim().replace(/\s+/g, " ") };
+      if (isOperadora) {
+        const n = payload.nome.toLowerCase();
+        if (rows.some((r) => r.id !== editing?.id && r.nome.trim().toLowerCase() === n))
+          throw new Error("Já existe uma operadora cadastrada com este nome.");
+      }
       if (temDescricao) payload.descricao = descricao.trim() || null;
       if (editing) {
         const { error } = await supabase.from(tabela as any).update(payload).eq("id", editing.id);
@@ -90,7 +96,7 @@ function SimpleCadastroCrud({ tabela, singular, plural, temDescricao, canEdit, c
       qc.invalidateQueries({ queryKey: key });
       setDialogOpen(false);
     },
-    onError: (e: any) => toast.error(e?.message ?? "Erro ao salvar"),
+    onError: (e: any) => toast.error(/ux_desp_operadoras_nome|duplicate/i.test(e?.message ?? "") ? "Já existe uma operadora cadastrada com este nome." : (e?.message ?? "Erro ao salvar")),
   });
 
   const deleteMut = useMutation({
@@ -104,6 +110,28 @@ function SimpleCadastroCrud({ tabela, singular, plural, temDescricao, canEdit, c
       setConfirmDelete(null);
     },
     onError: (e: any) => toast.error(e?.message ?? "Erro ao desativar"),
+  });
+
+  const reativarMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from(tabela as any).update({ is_active: true }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success(`${singular} reativado`); refresh(); },
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao reativar"),
+  });
+
+  const opDeleteMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.from("despesas_operadoras" as any).delete().eq("id", id).select("id");
+      if (error) {
+        if (/foreign key|violates/i.test(error.message)) throw new Error("Operadora vinculada a linhas telefônicas. Use Desativar.");
+        throw error;
+      }
+      if (!data?.length) throw new Error("Operadora não excluída: verifique sua permissão.");
+    },
+    onSuccess: () => { toast.success("Operadora excluída"); refresh(); setPermanentDelete(null); },
+    onError: (e: any) => toast.error(e?.message ?? "Erro ao excluir operadora"),
   });
 
   const permanentMut = useMutation({
@@ -164,10 +192,15 @@ function SimpleCadastroCrud({ tabela, singular, plural, temDescricao, canEdit, c
                     )}
                     {canDelete && r.is_active && (
                       <Button size="icon" variant="ghost" title="Desativar" aria-label={`Desativar ${r.nome}`} onClick={() => setConfirmDelete(r)}>
-                        {isCentro ? <Power className="h-4 w-4 text-destructive" /> : <Trash2 className="h-4 w-4 text-destructive" />}
+                        {isCentro || isOperadora ? <Power className="h-4 w-4 text-destructive" /> : <Trash2 className="h-4 w-4 text-destructive" />}
                       </Button>
                     )}
-                    {isCentro && canPermanentDelete && (
+                    {isOperadora && canEdit && !r.is_active && (
+                      <Button size="icon" variant="ghost" title="Ativar" aria-label={`Ativar ${r.nome}`} disabled={reativarMut.isPending} onClick={() => reativarMut.mutate(r.id)}>
+                        <Power className="h-4 w-4 text-primary" />
+                      </Button>
+                    )}
+                    {((isCentro && canPermanentDelete) || (isOperadora && canDelete)) && (
                       <Button size="icon" variant="ghost" title="Excluir definitivamente" aria-label={`Excluir ${r.nome}`} onClick={() => setPermanentDelete(r)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -181,12 +214,12 @@ function SimpleCadastroCrud({ tabela, singular, plural, temDescricao, canEdit, c
       </CardContent>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-md overflow-x-hidden">
           <DialogHeader>
             <DialogTitle>{editing ? `Editar ${singular}` : `Novo ${singular}`}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
+          <div className="space-y-4 py-2 px-1 min-w-0">
+            <div className="space-y-2 min-w-0">
               <Label>Nome</Label>
               <Input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={120} />
             </div>
@@ -226,6 +259,18 @@ function SimpleCadastroCrud({ tabela, singular, plural, temDescricao, canEdit, c
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {isOperadora && <AlertDialog open={!!permanentDelete} onOpenChange={(o) => !o && setPermanentDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir operadora?</AlertDialogTitle>
+            <AlertDialogDescription>A operadora <b>{permanentDelete?.nome}</b> será apagada definitivamente. Se estiver vinculada a linhas, a exclusão será bloqueada; nesse caso use Desativar.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={opDeleteMut.isPending} onClick={(e) => { e.preventDefault(); if (permanentDelete) opDeleteMut.mutate(permanentDelete.id); }}>Excluir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>}
       {isCentro && <AlertDialog open={!!permanentDelete} onOpenChange={(o) => !o && setPermanentDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

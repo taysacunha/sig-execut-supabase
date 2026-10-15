@@ -1314,6 +1314,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           empresa_contratada: string | null
+          empresa_pessoa_id: string | null
           id: string
           modelo_aparelho: string | null
           numero: string
@@ -1334,6 +1335,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           empresa_contratada?: string | null
+          empresa_pessoa_id?: string | null
           id?: string
           modelo_aparelho?: string | null
           numero: string
@@ -1354,6 +1356,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           empresa_contratada?: string | null
+          empresa_pessoa_id?: string | null
           id?: string
           modelo_aparelho?: string | null
           numero?: string
@@ -1374,6 +1377,13 @@ export type Database = {
             columns: ["centro_custo_id"]
             isOneToOne: false
             referencedRelation: "despesas_centros_custo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_linhas_telefonicas_empresa_pessoa_id_fkey"
+            columns: ["empresa_pessoa_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_pessoas"
             referencedColumns: ["id"]
           },
           {
