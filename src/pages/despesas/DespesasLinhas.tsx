@@ -11,8 +11,8 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, ShieldAlert, Search, FileDown, FilterX } from "lucide-react";
-import { useLinhas, useLinhasLookup, useDeleteLinha, LinhaTelefonica } from "@/hooks/useDespesasLinhas";
+import { Plus, Pencil, Trash2, CheckCircle2, PauseCircle, XCircle, ShieldAlert, Search, FileDown, FilterX } from "lucide-react";
+import { useLinhas, useLinhasLookup, useDeleteLinha, useSituacaoLinha, LinhaTelefonica, SituacaoLinha } from "@/hooks/useDespesasLinhas";
 import { LinhaDialog } from "@/components/despesas/linhas/LinhaDialog";
 import { gerarRelatorioPdf } from "@/lib/despesasRelatorioPdf";
 
@@ -30,6 +30,11 @@ export default function DespesasLinhas() {
   const { data: linhas = [], isLoading } = useLinhas();
   const { data: lookup, refetch: refetchLookup } = useLinhasLookup();
   const delMut = useDeleteLinha();
+  const sitMut = useSituacaoLinha();
+  const mudarSituacao = async (l: LinhaTelefonica, sit: SituacaoLinha) => {
+    try { await sitMut.mutateAsync({ id: l.id, situacao: sit }); toast.success(`Linha ${l.numero}: ${SITUACAO[sit]}`); }
+    catch (e: any) { toast.error(e?.message ?? "Erro ao alterar situação"); }
+  };
 
   const [busca, setBusca] = useState("");
   const [tipo, setTipo] = useState(T);
@@ -216,8 +221,17 @@ export default function DespesasLinhas() {
                           <Pencil className="h-4 w-4" />
                         </Button>
                       )}
+                      {canEdit && ([
+                        ["ativa", CheckCircle2, "Marcar como ativa"],
+                        ["inativa", PauseCircle, "Marcar como inativa"],
+                        ["cancelada", XCircle, "Marcar como cancelada"],
+                      ] as const).filter(([s]) => s !== l.situacao).map(([s, Icon, t]) => (
+                        <Button key={s} size="icon" variant="ghost" title={t} aria-label={t} disabled={sitMut.isPending} onClick={() => mudarSituacao(l, s)}>
+                          <Icon className="h-4 w-4" />
+                        </Button>
+                      ))}
                       {canDelete && (
-                        <Button size="icon" variant="ghost" aria-label="Excluir" onClick={() => setConfirmDelete(l)}>
+                        <Button size="icon" variant="ghost" title="Excluir" aria-label="Excluir" onClick={() => setConfirmDelete(l)}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       )}
@@ -231,7 +245,7 @@ export default function DespesasLinhas() {
       </Card>
 
       {lookup && (
-        <LinhaDialog open={dialogOpen} onOpenChange={setDialogOpen} linha={editing} lookup={lookup} onOpened={() => refetchLookup()} />
+        <LinhaDialog open={dialogOpen} onOpenChange={setDialogOpen} linha={editing} lookup={lookup} onOpened={() => refetchLookup()} existentes={linhas} />
       )}
 
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
@@ -239,7 +253,7 @@ export default function DespesasLinhas() {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir linha?</AlertDialogTitle>
             <AlertDialogDescription>
-              A linha <b>{confirmDelete?.numero}</b> será apagada definitivamente. Para manter o histórico, prefira editar e marcar como Cancelada ou Inativa.
+              A linha <b>{confirmDelete?.numero}</b> será apagada definitivamente. Para manter o histórico, prefira marcar como Cancelada ou Inativa.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
