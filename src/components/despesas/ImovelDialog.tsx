@@ -26,6 +26,7 @@ import {
   buscarImoveisDuplicados, DuplicadoImovel,
 } from "@/hooks/useDespesasImoveis";
 import { useDespesasLookups } from "@/hooks/useDespesasLancamentos";
+import { useRefreshLookupsOnOpen } from "@/hooks/useDespesasLancamentos";
 import { ComboboxSelect } from "@/components/ui/combobox-select";
 import { usePessoas, PapelPessoa } from "@/hooks/useDespesasPessoas";
 import {
@@ -58,6 +59,7 @@ const tipos: { v: ImovelTipo; l: string }[] = [
 
 function ImovelDialogInner({ open, onOpenChange, editing }: Props) {
   const { centros, pessoas } = useDespesasLookups();
+  useRefreshLookupsOnOpen(open);
   const saveMut = useSaveImovel();
 
   const proprietarios = usePessoas({ papel: "proprietario" });

@@ -23,6 +23,7 @@ import {
   useSaveLancamento, useLancamentoCredenciais, useSaveLancamentoCredenciais,
   LancamentoCredenciais, PROPAGAVEIS,
 } from "@/hooks/useDespesasLancamentos";
+import { useRefreshLookupsOnOpen } from "@/hooks/useDespesasLancamentos";
 import {
   RecorrenciaBlock, RecorrenciaFormState,
 } from "./RecorrenciaBlock";
@@ -39,6 +40,7 @@ interface Props {
 
 export function LancamentoDialog({ open, onOpenChange, editing, tipoDefault }: Props) {
   const { centros, categorias, planos, contas, pessoas, imoveis } = useDespesasLookups();
+  useRefreshLookupsOnOpen(open);
   const saveMut = useSaveLancamento();
   const saveRecMut = useSaveRecorrencia();
   const credQuery = useLancamentoCredenciais(editing?.id ?? null);
