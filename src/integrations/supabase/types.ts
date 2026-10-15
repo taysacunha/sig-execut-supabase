@@ -1307,6 +1307,105 @@ export type Database = {
           },
         ]
       }
+      despesas_linhas_telefonicas: {
+        Row: {
+          capacidade_internet: string | null
+          centro_custo_id: string | null
+          created_at: string
+          created_by: string | null
+          empresa_contratada: string | null
+          id: string
+          modelo_aparelho: string | null
+          numero: string
+          observacoes: string | null
+          operadora_id: string
+          responsavel_id: string | null
+          setor_id: string | null
+          situacao: string
+          tipo: string
+          tipo_valor: string | null
+          unidade_id: string
+          updated_at: string
+          valor_contratado: number | null
+        }
+        Insert: {
+          capacidade_internet?: string | null
+          centro_custo_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          empresa_contratada?: string | null
+          id?: string
+          modelo_aparelho?: string | null
+          numero: string
+          observacoes?: string | null
+          operadora_id: string
+          responsavel_id?: string | null
+          setor_id?: string | null
+          situacao?: string
+          tipo: string
+          tipo_valor?: string | null
+          unidade_id: string
+          updated_at?: string
+          valor_contratado?: number | null
+        }
+        Update: {
+          capacidade_internet?: string | null
+          centro_custo_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          empresa_contratada?: string | null
+          id?: string
+          modelo_aparelho?: string | null
+          numero?: string
+          observacoes?: string | null
+          operadora_id?: string
+          responsavel_id?: string | null
+          setor_id?: string | null
+          situacao?: string
+          tipo?: string
+          tipo_valor?: string | null
+          unidade_id?: string
+          updated_at?: string
+          valor_contratado?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_linhas_telefonicas_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_centros_custo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_linhas_telefonicas_operadora_id_fkey"
+            columns: ["operadora_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_operadoras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_linhas_telefonicas_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "ferias_colaboradores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_linhas_telefonicas_setor_id_fkey"
+            columns: ["setor_id"]
+            isOneToOne: false
+            referencedRelation: "ferias_setores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesas_linhas_telefonicas_unidade_id_fkey"
+            columns: ["unidade_id"]
+            isOneToOne: false
+            referencedRelation: "ferias_unidades"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       despesas_notificacoes: {
         Row: {
           created_at: string
@@ -1369,6 +1468,33 @@ export type Database = {
           notificar_vencidos?: boolean
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      despesas_operadoras: {
+        Row: {
+          created_at: string
+          descricao: string | null
+          id: string
+          is_active: boolean
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          is_active?: boolean
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          is_active?: boolean
+          nome?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -5232,6 +5358,7 @@ export type Database = {
         Returns: number
       }
       despesas_hoje: { Args: never; Returns: string }
+      despesas_linhas_lookup: { Args: never; Returns: Json }
       despesas_marcar_vencidos: { Args: never; Returns: number }
       despesas_montar_repasse: {
         Args: {
