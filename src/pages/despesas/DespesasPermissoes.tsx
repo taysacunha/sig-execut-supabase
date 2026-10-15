@@ -51,7 +51,7 @@ const PERFIS_RAPIDOS: Record<string, { label: string; niveis: Record<DespesasAba
   },
   revogar: {
     label: "Revogar acesso (sem acesso em tudo)",
-    niveis: { calendario: "sem_acesso", imoveis: "sem_acesso", bens: "sem_acesso", veiculos: "sem_acesso", repasses: "sem_acesso", cadastros: "sem_acesso" },
+    niveis: { calendario: "sem_acesso", imoveis: "sem_acesso", bens: "sem_acesso", veiculos: "sem_acesso", linhas: "sem_acesso", repasses: "sem_acesso", cadastros: "sem_acesso" },
   },
 };
 
