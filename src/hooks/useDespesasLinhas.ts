@@ -10,6 +10,7 @@ export interface LinhaTelefonica {
   numero: string;
   operadora_id: string;
   empresa_contratada: string | null;
+  empresa_pessoa_id: string | null;
   unidade_id: string;
   setor_id: string | null;
   responsavel_id: string | null;
@@ -28,6 +29,7 @@ export interface LinhasLookup {
   colaboradores: { id: string; nome: string; setor_id: string | null }[];
   operadoras: { id: string; nome: string; is_active: boolean }[];
   centros: { id: string; nome: string }[];
+  empresas: { id: string; nome: string; cpf_cnpj: string | null }[];
 }
 
 const KEY = ["despesas-linhas"];
@@ -65,6 +67,7 @@ export function useLinhasLookup() {
         colaboradores: base.colaboradores ?? [],
         operadoras: ((o.data ?? []) as any[]),
         centros: ((c.data ?? []) as any[]),
+        empresas: base.empresas ?? [],
       };
     },
   });
@@ -80,10 +83,22 @@ export function useSaveLinha() {
         : supabase.from("despesas_linhas_telefonicas" as any).insert(payload);
       const { error } = await q;
       if (error) {
-        if (/ux_desp_linhas_numero_ativa|duplicate/i.test(error.message))
-          throw new Error("Já existe uma linha ativa com esse número.");
+        if (/ux_desp_linhas_numero|duplicate/i.test(error.message))
+          throw new Error(`Já existe uma linha cadastrada com o número ${l.numero ?? ""}.`.replace(" .", "."));
         throw error;
       }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+export function useSituacaoLinha() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, situacao }: { id: string; situacao: SituacaoLinha }) => {
+      const { data, error } = await supabase.from("despesas_linhas_telefonicas" as any).update({ situacao }).eq("id", id).select("id");
+      if (error) throw error;
+      if (!data?.length) throw new Error("Sem permissão para alterar esta linha.");
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });

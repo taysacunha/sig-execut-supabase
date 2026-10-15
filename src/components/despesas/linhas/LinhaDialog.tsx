@@ -17,15 +17,16 @@ interface Props {
   linha: LinhaTelefonica | null;
   lookup: LinhasLookup;
   onOpened?: () => void;
+  existentes?: LinhaTelefonica[];
 }
 
 const vazio = {
-  tipo: "celular", numero: "", operadora_id: "", empresa_contratada: "", unidade_id: "",
+  tipo: "celular", numero: "", operadora_id: "", empresa_contratada: "", empresa_pessoa_id: "", unidade_id: "",
   setor_id: "", responsavel_id: "", valor_contratado: "", tipo_valor: "individual",
-  capacidade_internet: "", modelo_aparelho: "", observacoes: "", centro_custo_id: "", situacao: "ativa",
+  capacidade_internet: "", modelo_aparelho: "", observacoes: "", centro_custo_id: "",
 };
 
-export function LinhaDialog({ open, onOpenChange, linha, lookup, onOpened }: Props) {
+export function LinhaDialog({ open, onOpenChange, linha, lookup, onOpened, existentes = [] }: Props) {
   const [f, setF] = useState<Record<string, string>>(vazio);
   const save = useSaveLinha();
   const set = (k: string, v: string | null) => setF((p) => ({ ...p, [k]: v ?? "" }));
@@ -48,13 +49,17 @@ export function LinhaDialog({ open, onOpenChange, linha, lookup, onOpened }: Pro
     if (!f.unidade_id) return toast.error("Selecione a unidade instalada.");
     const valor = f.valor_contratado ? Number(f.valor_contratado.replace(",", ".")) : null;
     if (valor != null && (isNaN(valor) || valor < 0)) return toast.error("Valor contratado inválido.");
+    const dup = existentes.find((x) => x.id !== linha?.id && x.numero.replace(/\D/g, "") === digitos);
+    if (dup) return toast.error(`Já existe uma linha cadastrada com o número ${dup.numero}.`);
+    const emp = lookup.empresas.find((e) => e.id === f.empresa_pessoa_id);
     try {
       await save.mutateAsync({
         id: linha?.id,
         tipo: f.tipo as any,
         numero: formatarTelefone(f.numero),
         operadora_id: f.operadora_id,
-        empresa_contratada: f.empresa_contratada.trim() || null,
+        empresa_pessoa_id: f.empresa_pessoa_id || null,
+        empresa_contratada: emp ? emp.nome : (f.empresa_pessoa_id ? f.empresa_contratada || null : null),
         unidade_id: f.unidade_id,
         setor_id: f.setor_id || null,
         responsavel_id: f.responsavel_id || null,
@@ -64,7 +69,7 @@ export function LinhaDialog({ open, onOpenChange, linha, lookup, onOpened }: Pro
         modelo_aparelho: celular ? f.modelo_aparelho.trim() || null : null,
         observacoes: f.observacoes.trim() || null,
         centro_custo_id: f.centro_custo_id || null,
-        situacao: f.situacao as any,
+        ...(linha ? {} : { situacao: "ativa" as const }),
       });
       toast.success(linha ? "Linha atualizada" : "Linha cadastrada");
       onOpenChange(false);
@@ -75,11 +80,11 @@ export function LinhaDialog({ open, onOpenChange, linha, lookup, onOpened }: Pro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{linha ? "Editar linha telefônica" : "Nova linha telefônica"}</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2 min-w-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2 px-1 min-w-0">
           <div className="space-y-2 min-w-0">
             <Label>Tipo *</Label>
             <Select value={f.tipo} onValueChange={(v) => set("tipo", v)}>
@@ -100,7 +105,7 @@ export function LinhaDialog({ open, onOpenChange, linha, lookup, onOpened }: Pro
           </div>
           <div className="space-y-2 min-w-0">
             <Label>Empresa contratada</Label>
-            <Input value={f.empresa_contratada} onChange={(e) => set("empresa_contratada", e.target.value)} maxLength={160} />
+            <ComboboxSelect options={lookup.empresas.map((e) => ({ value: e.id, label: e.cpf_cnpj ? `${e.nome} (${e.cpf_cnpj})` : e.nome }))} value={f.empresa_pessoa_id} onChange={(v) => set("empresa_pessoa_id", v)} placeholder="Selecione a pessoa jurídica" emptyText="Cadastre a empresa em Cadastros > Pessoas (Pessoa Jurídica)" allowClear />
           </div>
           <div className="space-y-2 min-w-0">
             <Label>Unidade instalada *</Label>
@@ -144,17 +149,6 @@ export function LinhaDialog({ open, onOpenChange, linha, lookup, onOpened }: Pro
               </div>
             </>
           )}
-          <div className="space-y-2 min-w-0">
-            <Label>Situação</Label>
-            <Select value={f.situacao} onValueChange={(v) => set("situacao", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ativa">Ativa</SelectItem>
-                <SelectItem value="inativa">Inativa</SelectItem>
-                <SelectItem value="cancelada">Cancelada</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           <div className="space-y-2 sm:col-span-2 min-w-0">
             <Label>Observações</Label>
             <Textarea value={f.observacoes} onChange={(e) => set("observacoes", e.target.value)} maxLength={1000} rows={3} />
