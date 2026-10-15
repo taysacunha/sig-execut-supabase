@@ -430,17 +430,17 @@ export default function DespesasPermissoes() {
               {loading ? (
                 <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
+                <div>
+                  <Table containerClassName="max-h-[70vh] rounded-md border">
+                    <TableHeader className="sticky top-0 z-30 bg-background shadow-sm">
                       <TableRow>
-                        <TableHead className="w-8">
+                        <TableHead className="sticky left-0 z-40 w-12 min-w-12 bg-background">
                           <Checkbox
                             checked={filtered.length > 0 && filtered.every((u) => selecionados.has(u.user_id))}
                             onCheckedChange={() => toggleSelAll(filtered)}
                           />
                         </TableHead>
-                        <TableHead>Usuário</TableHead>
+                        <TableHead className="sticky left-12 z-40 min-w-48 bg-background border-r">Usuário</TableHead>
                         <TableHead>Acesso ao módulo</TableHead>
                         {ABAS.map((a) => <TableHead key={a.key}>{a.label}</TableHead>)}
                         <TableHead>Resumo</TableHead>
@@ -454,13 +454,13 @@ export default function DespesasPermissoes() {
                         const acesso = temAcessoModulo(u.user_id);
                         return (
                           <TableRow key={u.user_id}>
-                            <TableCell>
+                            <TableCell className="sticky left-0 z-10 w-12 min-w-12 bg-background">
                               <Checkbox
                                 checked={selecionados.has(u.user_id)}
                                 onCheckedChange={() => toggleSel(u.user_id)}
                               />
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="sticky left-12 z-10 min-w-48 bg-background border-r">
                               <div className="font-medium">{u.name ?? u.email}</div>
                               {u.name && <div className="text-xs text-muted-foreground">{u.email}</div>}
                             </TableCell>
@@ -512,14 +512,6 @@ export default function DespesasPermissoes() {
 
         {/* -------- Aba 2: Centros -------- */}
         <TabsContent value="centros" className="space-y-3">
-          <Alert>
-            <Info className="h-4 w-4" />
-            <AlertTitle>Escopo dos centros</AlertTitle>
-            <AlertDescription>
-              Sem nenhum centro marcado, o usuário acessa todos os centros ativos somente nas abas permitidas.
-              Ao marcar um ou mais, o acesso fica restrito aos centros selecionados.
-            </AlertDescription>
-          </Alert>
           {centros.length === 0 ? (
             <Card><CardContent className="pt-6 text-sm text-muted-foreground">
               Cadastre centros de custo na aba Cadastros para poder atribuí-los aqui.
@@ -603,7 +595,7 @@ export default function DespesasPermissoes() {
                               ))}
                               <TableCell>
                                 {set.size === 0
-                                  ? <Badge variant="outline">Todos os centros ativos</Badge>
+                                  ? <Badge variant="outline">Nenhum centro</Badge>
                                   : <Badge>{set.size} centro(s) selecionado(s)</Badge>}
                               </TableCell>
                             </TableRow>
