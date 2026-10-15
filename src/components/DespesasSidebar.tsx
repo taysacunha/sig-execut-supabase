@@ -1,7 +1,7 @@
 import {
   Home, Wallet, Building2, ArrowLeftRight, Database, Shield, History,
   UserCircle, LogOut, ArrowLeft, Crown, Briefcase, User, HelpCircle, Users,
-  Repeat, Bell, BarChart3, Package, Car,
+  Repeat, Bell, BarChart3, Package, Car, Phone,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,6 +34,7 @@ const moduleMenuItems: MenuItem[] = [
   { title: "Imóveis", url: "/despesas/imoveis", icon: Building2, aba: "imoveis" },
   { title: "Bens Permanentes", url: "/despesas/bens", icon: Package, aba: "bens" },
   { title: "Veículos", url: "/despesas/veiculos", icon: Car, aba: "veiculos" },
+  { title: "Linhas Telefônicas", url: "/despesas/linhas-telefonicas", icon: Phone, aba: "linhas" },
   { title: "Repasses", url: "/despesas/repasses", icon: ArrowLeftRight, aba: "repasses" },
   { title: "Relatórios", url: "/despesas/relatorios", icon: BarChart3, aba: "calendario" },
   { title: "Cadastros", url: "/despesas/cadastros", icon: Database, aba: "cadastros" },
