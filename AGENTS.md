@@ -11,3 +11,5 @@
 
 ## Vacation sale allocation
 - Resolve accountant allocation independently from internal enjoyed-day distribution through shared sale helpers; the explicit both-period allocation must never be read as a third vacation period or inferred from exception sale amounts.
+## Phone lines
+- Phone lines read units, sectors and collaborators from the vacation system only through a permission-scoped lookup RPC; Despesas users must not need vacation-system access to fill those fields.

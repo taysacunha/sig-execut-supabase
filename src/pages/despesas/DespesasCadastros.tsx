@@ -275,6 +275,7 @@ export default function DespesasCadastros() {
           <TabsTrigger value="planos">Planos de conta</TabsTrigger>
           <TabsTrigger value="contas">Contas bancárias</TabsTrigger>
           <TabsTrigger value="pessoas">Pessoas</TabsTrigger>
+          <TabsTrigger value="operadoras">Operadoras</TabsTrigger>
         </TabsList>
 
         <TabsContent value="centros" className="mt-4">
@@ -291,6 +292,9 @@ export default function DespesasCadastros() {
         </TabsContent>
         <TabsContent value="pessoas" className="mt-4">
           <PessoasTab canEdit={canEdit} canDelete={canDelete} />
+        </TabsContent>
+        <TabsContent value="operadoras" className="mt-4">
+          <SimpleCadastroCrud tabela="despesas_operadoras" singular="Operadora" plural="Operadoras" temDescricao canEdit={canEdit} canDelete={canDelete} />
         </TabsContent>
       </Tabs>
     </div>

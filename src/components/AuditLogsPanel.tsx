@@ -369,6 +369,7 @@ const valueLabels: Record<string, Record<string, string>> = {
     repasses: "Repasses",
     veiculos: "Veículos",
     cadastros: "Cadastros",
+    linhas: "Linhas telefônicas",
     relatorios: "Relatórios",
     permissoes: "Permissões",
     auditoria: "Auditoria",

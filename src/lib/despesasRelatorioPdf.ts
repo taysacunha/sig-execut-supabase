@@ -41,6 +41,8 @@ export async function gerarRelatorioPdf(opts: {
   colunas: string[];
   linhas: string[][];
   arquivo: string;
+  pesos?: number[];
+  unidade?: string;
 }) {
   const { default: jsPDF } = await import("jspdf");
   const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
@@ -48,7 +50,7 @@ export async function gerarRelatorioPdf(opts: {
   const H = pdf.internal.pageSize.getHeight();
   const m = 8;
   // pesos de largura por coluna
-  const pesos = [9, 13, 15, 26, 18, 12, 12, 13];
+  const pesos = opts.pesos ?? [9, 13, 15, 26, 18, 12, 12, 13];
   const total = pesos.reduce((a, b) => a + b, 0);
   const larg = pesos.map((p) => ((W - 2 * m) * p) / total);
   const lh = 3.6;
@@ -60,7 +62,7 @@ export async function gerarRelatorioPdf(opts: {
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(8);
     const sub = pdf.splitTextToSize(
-      `${opts.filtros} • ${opts.linhas.length} lançamento(s) • Gerado em ${new Date().toLocaleString("pt-BR")}`,
+      `${opts.filtros} • ${opts.linhas.length} ${opts.unidade ?? "lançamento(s)"} • Gerado em ${new Date().toLocaleString("pt-BR")}`,
       W - 2 * m,
     );
     pdf.text(sub, m, 17);
