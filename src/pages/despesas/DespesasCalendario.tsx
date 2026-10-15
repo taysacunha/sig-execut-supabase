@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Plus, Pencil, Trash2, ShieldAlert, DollarSign, AlertTriangle,
-  CheckCircle2, XCircle, Download, Ban, Repeat, RotateCcw, ShieldCheck,
+  CheckCircle2, XCircle, Download, Ban, Repeat, RotateCcw, ShieldCheck, FileText, FilterX,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -34,6 +34,7 @@ import { LancamentoDialog } from "@/components/despesas/LancamentoDialog";
 import { PagamentoDialog } from "@/components/despesas/PagamentoDialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useDespesasValues } from "@/contexts/DespesasValuesContext";
+import { COLUNAS_RELATORIO, gerarRelatorioPdf, linhasRelatorio } from "@/lib/despesasRelatorioPdf";
 import {
   chaveParDuplicidade, useDuplicidadesRevisoes, useMarcarNaoDuplicidade,
 } from "@/hooks/useDespesasDuplicidadesRevisoes";
@@ -248,6 +249,35 @@ export default function DespesasCalendario() {
     );
   }
 
+  function limparFiltros() {
+    setFiltros({ tipo: "todos", status: "todos" });
+    setSoDuplicados(false);
+    setAba("ativos");
+    if (serieParam) limparSerie();
+  }
+
+  async function gerarPdf() {
+    const contas = Object.fromEntries((lookups.contas.data ?? []).map((c) => [c.id, c.banco ? `${c.nome} (${c.banco})` : c.nome]));
+    const planos = Object.fromEntries((lookups.planos.data ?? []).map((p) => [p.id, p.nome]));
+    const desc: string[] = [aba === "cancelados" ? "Cancelados" : "Ativos"];
+    if (filtros.dataInicio || filtros.dataFim) desc.push(`Vencimento ${filtros.dataInicio ? fmtDate(filtros.dataInicio) : "…"} a ${filtros.dataFim ? fmtDate(filtros.dataFim) : "…"}`);
+    if (filtros.tipo && filtros.tipo !== "todos") desc.push(filtros.tipo === "a_pagar" ? "A pagar" : "A receber");
+    if (filtros.status && filtros.status !== "todos") desc.push(STATUS_META[filtros.status].label);
+    if (filtros.busca?.trim()) desc.push(`Busca: "${filtros.busca.trim()}"`);
+    if (soDuplicados) desc.push("Somente duplicidades");
+    try {
+      await gerarRelatorioPdf({
+        titulo: "Relatório — Calendário de Despesas",
+        filtros: desc.join(" • "),
+        colunas: COLUNAS_RELATORIO,
+        linhas: linhasRelatorio(rowsVisiveis, { contas, planos }),
+        arquivo: `despesas-calendario-${new Date().toISOString().slice(0, 10)}.pdf`,
+      });
+    } catch (e: any) {
+      toast.error("Erro ao gerar PDF: " + (e?.message ?? e));
+    }
+  }
+
   function openNew(tipo: LancamentoTipo) {
     setEditing(null);
     setDialogOpen(true);
@@ -287,6 +317,9 @@ export default function DespesasCalendario() {
           <Button variant="outline" size="sm" onClick={() => exportarCsv(rows)} disabled={!rows.length}>
             <Download className="h-4 w-4 mr-2" />Exportar CSV
           </Button>
+          <Button variant="outline" size="sm" onClick={gerarPdf} disabled={!rowsVisiveis.length}>
+            <FileText className="h-4 w-4 mr-2" />Gerar PDF ({rowsVisiveis.length})
+          </Button>
           {canEdit && (
             <>
               <Button size="sm" variant="outline" onClick={() => openNew("a_receber")}>
@@ -322,7 +355,12 @@ export default function DespesasCalendario() {
 
       {/* Filtros */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Filtros</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base">Filtros</CardTitle>
+          <Button variant="ghost" size="sm" onClick={limparFiltros}>
+            <FilterX className="h-4 w-4 mr-2" />Limpar filtros
+          </Button>
+        </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-4">
           <div className="space-y-1">
             <Label>Tipo</Label>
