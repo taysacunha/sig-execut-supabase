@@ -13,10 +13,11 @@ import {
   AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronLeft, ChevronRight, CheckCircle2, Undo2, CalendarDays, Trash2, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle2, Undo2, CalendarDays, Trash2, Search, FileText, FilterX } from "lucide-react";
 import {
-  useLancamentos, Lancamento, LancamentoStatus,
+  useLancamentos, useDespesasLookups, Lancamento, LancamentoStatus,
 } from "@/hooks/useDespesasLancamentos";
+import { COLUNAS_RELATORIO, gerarRelatorioPdf, linhasRelatorio } from "@/lib/despesasRelatorioPdf";
 import { useExcluirEncargoVeiculo, useEstornarEncargoVeiculo, type Veiculo } from "@/hooks/useDespesasVeiculos";
 import { BaixaEncargoDialog } from "./BaixaEncargoDialog";
 import { traduzirErroDespesas } from "@/lib/despesasErros";
@@ -78,6 +79,7 @@ export function VeiculosCalendario({ veiculos, canEdit, canDelete = false }: Pro
 
   const estornoMut = useEstornarEncargoVeiculo();
   const excluirMut = useExcluirEncargoVeiculo();
+  const lookups = useDespesasLookups();
 
   const anual = escopo === "ano";
   const inicio = anual ? new Date(ano, 0, 1) : new Date(ano, mes, 1);
@@ -136,6 +138,34 @@ export function VeiculosCalendario({ veiculos, canEdit, canDelete = false }: Pro
   }
 
   function fecharJust() { setEstornar(null); setExcluir(null); setJustificativa(""); setModoExc("esta"); }
+
+  function limparFiltros() {
+    setAno(hoje.getFullYear()); setMes(hoje.getMonth()); setEscopo("mes");
+    setVeiculoId("todos"); setTipo("todos"); setStatus("todos"); setSituacao("todos"); setBusca("");
+  }
+
+  async function gerarPdf() {
+    const contas = Object.fromEntries((lookups.contas.data ?? []).map((c) => [c.id, c.banco ? `${c.nome} (${c.banco})` : c.nome]));
+    const planos = Object.fromEntries((lookups.planos.data ?? []).map((p) => [p.id, p.nome]));
+    const veics = Object.fromEntries(veiculos.map((v) => [v.id, nome(v.id)]));
+    const desc = [anual ? `Ano ${ano}` : `${MESES[mes]} / ${ano}`];
+    if (veiculoId !== "todos") desc.push(`Veículo: ${nome(veiculoId)}`);
+    if (tipo !== "todos") desc.push(`Encargo: ${tipo}`);
+    if (status !== "todos") desc.push(STATUS_LABEL[status as LancamentoStatus]);
+    if (situacao !== "todos") desc.push(situacao === "ativos" ? "Veículos ativos" : "Veículos vendidos");
+    if (busca.trim()) desc.push(`Busca: "${busca.trim()}"`);
+    try {
+      await gerarRelatorioPdf({
+        titulo: "Relatório — Calendário de Veículos",
+        filtros: desc.join(" • "),
+        colunas: COLUNAS_RELATORIO.map((c) => (c === "Imóvel" ? "Veículo" : c)),
+        linhas: linhasRelatorio(filtrados, { contas, planos, veiculos: veics }, true),
+        arquivo: `veiculos-calendario-${iso(hoje)}.pdf`,
+      });
+    } catch (e: any) {
+      toast.error("Erro ao gerar PDF: " + (e?.message ?? e));
+    }
+  }
 
   function confirmarEstorno() {
     if (!estornar) return;
@@ -208,7 +238,13 @@ export function VeiculosCalendario({ veiculos, canEdit, canDelete = false }: Pro
                 <SelectItem value="todos">Todos</SelectItem>
               </SelectContent>
             </Select>
+            <Button variant="ghost" size="sm" onClick={limparFiltros}>
+              <FilterX className="h-4 w-4 mr-2" />Limpar filtros
+            </Button>
             <span className="ml-auto text-sm text-muted-foreground">{filtrados.length} encargo(s)</span>
+            <Button variant="outline" size="sm" onClick={gerarPdf} disabled={!filtrados.length}>
+              <FileText className="h-4 w-4 mr-2" />Gerar PDF ({filtrados.length})
+            </Button>
           </div>
         </CardHeader>
       </Card>
