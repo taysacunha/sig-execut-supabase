@@ -4,6 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -29,6 +30,7 @@ interface PreviewFeriasTableProps {
   onDeselectAll: () => void;
   showConflicts?: boolean;
   onChangeDate?: (colaboradorId: string, periodo: 1 | 2, inicio: string) => void;
+  onTogglePeriodoUnico?: (colaboradorId: string, on: boolean) => void;
 }
 
 export function PreviewFeriasTable({
@@ -39,8 +41,12 @@ export function PreviewFeriasTable({
   onDeselectAll,
   showConflicts = false,
   onChangeDate,
+  onTogglePeriodoUnico,
 }: PreviewFeriasTableProps) {
   const renderPeriodoCell = (v: GeneratedVacation, periodo: 1 | 2) => {
+    if (periodo === 2 && v.periodo_unico) {
+      return <span className="text-xs text-muted-foreground">Período único de 30 dias</span>;
+    }
     const inicio = periodo === 1 ? v.quinzena1_inicio : v.quinzena2_inicio;
     const fim = periodo === 1 ? v.quinzena1_fim : v.quinzena2_fim;
     const emConflito = v.conflicts.some((c) => c.periodo === periodo && (c.tipo === "setor" || c.tipo === "substituto"));
@@ -111,6 +117,7 @@ export function PreviewFeriasTable({
               <TableHead>1º Período</TableHead>
               <TableHead>2º Período</TableHead>
               <TableHead>Venda</TableHead>
+              {onTogglePeriodoUnico && <TableHead>30 dias</TableHead>}
               {showConflicts && <TableHead>Conflitos</TableHead>}
               <TableHead>Info</TableHead>
             </TableRow>
@@ -148,6 +155,18 @@ export function PreviewFeriasTable({
                     <span className="text-muted-foreground text-xs">—</span>
                   )}
                 </TableCell>
+                {onTogglePeriodoUnico && (
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={!!vacation.periodo_unico}
+                        onCheckedChange={(on) => onTogglePeriodoUnico(vacation.colaborador_id, on)}
+                        aria-label={`30 dias direto para ${vacation.colaborador_nome}`}
+                      />
+                      {vacation.periodo_unico && <Badge variant="outline" className="text-xs">Exceção</Badge>}
+                    </div>
+                  </TableCell>
+                )}
                 {showConflicts && (
                   <TableCell>
                     {vacation.conflicts.length === 0 && (

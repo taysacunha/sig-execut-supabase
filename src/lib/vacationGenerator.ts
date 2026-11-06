@@ -43,6 +43,10 @@ export interface GeneratedVacation {
   conflicts: ConflictInfo[];
   familiar_match: boolean;
   origem: string;
+  /** 30 dias direto: período único, sem 2º período e sem venda */
+  periodo_unico?: boolean;
+  /** Backup do 2º período/venda para restaurar ao desativar os 30 dias */
+  q2_backup?: { inicio: string; fim: string; vender_dias: boolean; dias_vendidos: number; quinzena_venda: number };
 }
 
 export interface ConflictInfo {
@@ -494,22 +498,25 @@ export async function saveGeneratedVacations(
 
   for (const vacation of vacations) {
     try {
+      const unico = !!vacation.periodo_unico;
       const { error } = await supabase.from("ferias_ferias").insert({
         colaborador_id: vacation.colaborador_id,
         quinzena1_inicio: vacation.quinzena1_inicio,
         quinzena1_fim: vacation.quinzena1_fim,
-        quinzena2_inicio: vacation.quinzena2_inicio,
-        quinzena2_fim: vacation.quinzena2_fim,
+        quinzena2_inicio: unico ? null : vacation.quinzena2_inicio,
+        quinzena2_fim: unico ? null : vacation.quinzena2_fim,
+        periodo_unico: unico,
         gozo_diferente: false,
-        vender_dias: vacation.vender_dias,
-        dias_vendidos: vacation.dias_vendidos || null,
-        quinzena_venda: vacation.vender_dias ? vacation.quinzena_venda : null,
+        vender_dias: unico ? false : vacation.vender_dias,
+        dias_vendidos: unico ? null : (vacation.dias_vendidos || null),
+        quinzena_venda: !unico && vacation.vender_dias ? vacation.quinzena_venda : null,
         status: "aprovada",
-        is_excecao: vacation.is_excecao || (forceExceptions && vacation.conflicts.length > 0),
-        excecao_motivo: vacation.excecao_motivo,
-        excecao_justificativa: vacation.conflicts.length > 0
-          ? `Gerado automaticamente com conflitos: ${vacation.conflicts.map(c => c.descricao).join("; ")}`
-          : null,
+        is_excecao: unico || vacation.is_excecao || (forceExceptions && vacation.conflicts.length > 0),
+        excecao_motivo: unico ? (vacation.excecao_motivo || "30 dias direto") : vacation.excecao_motivo,
+        excecao_justificativa: [
+          unico ? "30 dias direto (período único) definido no gerador automático" : null,
+          vacation.conflicts.length > 0 ? `Gerado automaticamente com conflitos: ${vacation.conflicts.map(c => c.descricao).join("; ")}` : null,
+        ].filter(Boolean).join(". ") || null,
         origem: vacation.origem,
       });
 

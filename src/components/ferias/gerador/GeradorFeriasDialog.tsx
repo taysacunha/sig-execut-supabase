@@ -97,20 +97,47 @@ export function GeradorFeriasDialog({ open, onOpenChange, anoReferencia, onSucce
     }
   };
 
-  const handleChangeDate = (colaboradorId: string, periodo: 1 | 2, inicio: string) => {
-    if (!inicio) return;
+  const applyPatch = (colaboradorId: string, fn: (v: GeneratedVacation) => GeneratedVacation) => {
     setGenerationResult((prev) => {
       if (!prev?.context) return prev;
-      const fim = format(addDays(parseISO(inicio), 14), "yyyy-MM-dd");
-      const patch = (v: GeneratedVacation): GeneratedVacation =>
-        v.colaborador_id !== colaboradorId ? v
-          : periodo === 1 ? { ...v, quinzena1_inicio: inicio, quinzena1_fim: fim }
-          : { ...v, quinzena2_inicio: inicio, quinzena2_fim: fim };
+      const patch = (v: GeneratedVacation): GeneratedVacation => v.colaborador_id !== colaboradorId ? v : fn(v);
       const success = prev.success.map(patch);
       const conflicts = prev.conflicts.map(patch);
       const all = [...success, ...conflicts];
       const recheck = (v: GeneratedVacation) => ({ ...v, conflicts: recheckVacationConflicts(v, all, prev.context!) });
       return { ...prev, success: success.map(recheck), conflicts: conflicts.map(recheck) };
+    });
+  };
+
+  const handleChangeDate = (colaboradorId: string, periodo: 1 | 2, inicio: string) => {
+    if (!inicio) return;
+    applyPatch(colaboradorId, (v) => {
+      const fim = format(addDays(parseISO(inicio), periodo === 1 && v.periodo_unico ? 29 : 14), "yyyy-MM-dd");
+      return periodo === 1 ? { ...v, quinzena1_inicio: inicio, quinzena1_fim: fim } : { ...v, quinzena2_inicio: inicio, quinzena2_fim: fim };
+    });
+  };
+
+  const handleTogglePeriodoUnico = (colaboradorId: string, on: boolean) => {
+    applyPatch(colaboradorId, (v) => {
+      if (on) {
+        return {
+          ...v,
+          periodo_unico: true,
+          q2_backup: { inicio: v.quinzena2_inicio, fim: v.quinzena2_fim, vender_dias: v.vender_dias, dias_vendidos: v.dias_vendidos, quinzena_venda: v.quinzena_venda },
+          quinzena1_fim: format(addDays(parseISO(v.quinzena1_inicio), 29), "yyyy-MM-dd"),
+          quinzena2_inicio: "", quinzena2_fim: "",
+          vender_dias: false, dias_vendidos: 0,
+        };
+      }
+      const b = v.q2_backup;
+      return {
+        ...v,
+        periodo_unico: false,
+        q2_backup: undefined,
+        quinzena1_fim: format(addDays(parseISO(v.quinzena1_inicio), 14), "yyyy-MM-dd"),
+        quinzena2_inicio: b?.inicio ?? "", quinzena2_fim: b?.fim ?? "",
+        vender_dias: b?.vender_dias ?? false, dias_vendidos: b?.dias_vendidos ?? 0, quinzena_venda: b?.quinzena_venda ?? v.quinzena_venda,
+      };
     });
   };
 
@@ -203,7 +230,7 @@ export function GeradorFeriasDialog({ open, onOpenChange, anoReferencia, onSucce
 
                 <TabsContent value="success" className="mt-4">
                   {generationResult.success.length > 0 ? (
-                    <PreviewFeriasTable vacations={generationResult.success} selectedIds={selectedVacations} onToggleSelection={toggleVacationSelection} onSelectAll={() => selectAll(generationResult.success)} onDeselectAll={() => deselectAll(generationResult.success)} />
+                    <PreviewFeriasTable vacations={generationResult.success} selectedIds={selectedVacations} onToggleSelection={toggleVacationSelection} onSelectAll={() => selectAll(generationResult.success)} onDeselectAll={() => deselectAll(generationResult.success)} onChangeDate={handleChangeDate} onTogglePeriodoUnico={handleTogglePeriodoUnico} />
                   ) : <div className="text-center py-8 text-muted-foreground">Nenhuma férias gerada sem conflitos</div>}
                 </TabsContent>
 
@@ -213,9 +240,9 @@ export function GeradorFeriasDialog({ open, onOpenChange, anoReferencia, onSucce
                       <Alert className="mb-4">
                         <AlertTriangle className="h-4 w-4" />
                         <AlertTitle>Férias com conflitos</AlertTitle>
-                        <AlertDescription>A coluna Conflitos mostra em qual período ocorre o choque e com quem. Altere a data de início do período em vermelho aqui mesmo (o fim é calculado em 15 dias); os conflitos são recalculados na hora. Se salvar com conflito, a férias será marcada como exceção.</AlertDescription>
+                        <AlertDescription>A coluna Conflitos mostra em qual período ocorre o choque e com quem. Altere a data de início do período em vermelho aqui mesmo (o fim é calculado em 15 dias, ou 30 se marcar "30 dias"); os conflitos são recalculados na hora. Se salvar com conflito, a férias será marcada como exceção.</AlertDescription>
                       </Alert>
-                      <PreviewFeriasTable vacations={generationResult.conflicts} selectedIds={selectedVacations} onToggleSelection={toggleVacationSelection} onSelectAll={() => selectAll(generationResult.conflicts)} onDeselectAll={() => deselectAll(generationResult.conflicts)} showConflicts onChangeDate={handleChangeDate} />
+                      <PreviewFeriasTable vacations={generationResult.conflicts} selectedIds={selectedVacations} onToggleSelection={toggleVacationSelection} onSelectAll={() => selectAll(generationResult.conflicts)} onDeselectAll={() => deselectAll(generationResult.conflicts)} showConflicts onChangeDate={handleChangeDate} onTogglePeriodoUnico={handleTogglePeriodoUnico} />
                     </>
                   ) : <div className="text-center py-8 text-muted-foreground">Nenhuma férias com conflitos</div>}
                 </TabsContent>

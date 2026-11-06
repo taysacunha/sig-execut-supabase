@@ -382,7 +382,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 space-y-2">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-0.5">
-          <p className="text-sm font-medium">30 dias direto (exceção das exceções)</p>
+          <p className="text-sm font-medium">30 dias direto</p>
           <p className="text-xs text-muted-foreground">
             Envia ao contador um único período de 30 dias corridos, sem 2º período e sem venda de dias. Fica registrado como exceção com justificativa.
           </p>
