@@ -682,6 +682,58 @@ export function logValidationResult(result: PostValidationResult): void {
 }
 
 // ═══════════════════════════════════════════════════════════
+// DATAS EXCLUÍDAS (FERIADOS/FECHAMENTOS) — mesma regra do gerador:
+// verifica pelo período e, como fallback, por qualquer período do local.
+// shifts === null → dia inteiro excluído.
+// ═══════════════════════════════════════════════════════════
+export interface ExcludedShiftsMap {
+  byPeriod: Map<string, Map<string, string[] | null>>;
+  byLocation: Map<string, Map<string, string[] | null>>;
+}
+
+const mergeExcluded = (target: Map<string, string[] | null>, date: string, shifts: string[] | null) => {
+  if (!target.has(date)) { target.set(date, shifts); return; }
+  const existing = target.get(date);
+  if (existing === null || shifts === null) { target.set(date, null); return; }
+  target.set(date, Array.from(new Set([...(existing || []), ...shifts])));
+};
+
+export function buildExcludedShiftsMap(
+  rows: { period_id: string; excluded_date: string; excluded_shifts?: string[] | null }[],
+  periodToLocation: Map<string, string>
+): ExcludedShiftsMap {
+  const byPeriod = new Map<string, Map<string, string[] | null>>();
+  const byLocation = new Map<string, Map<string, string[] | null>>();
+  for (const r of rows) {
+    const shifts = r.excluded_shifts && r.excluded_shifts.length > 0 ? r.excluded_shifts : null;
+    if (!byPeriod.has(r.period_id)) byPeriod.set(r.period_id, new Map());
+    mergeExcluded(byPeriod.get(r.period_id)!, r.excluded_date, shifts);
+    const locId = periodToLocation.get(r.period_id);
+    if (locId) {
+      if (!byLocation.has(locId)) byLocation.set(locId, new Map());
+      mergeExcluded(byLocation.get(locId)!, r.excluded_date, shifts);
+    }
+  }
+  return { byPeriod, byLocation };
+}
+
+export function isShiftExcludedFor(
+  map: ExcludedShiftsMap,
+  periodId: string | null | undefined,
+  locationId: string | null | undefined,
+  dateStr: string,
+  shift: "morning" | "afternoon"
+): boolean {
+  const check = (m?: Map<string, string[] | null>) => {
+    if (!m || !m.has(dateStr)) return false;
+    const s = m.get(dateStr);
+    return s === null || (s || []).includes(shift);
+  };
+  return (periodId ? check(map.byPeriod.get(periodId)) : false) ||
+    (locationId ? check(map.byLocation.get(locationId)) : false);
+}
+
+// ═══════════════════════════════════════════════════════════
 // DETECÇÃO INDEPENDENTE DE DEMANDAS NÃO ALOCADAS
 // Consulta Supabase para comparar configs vs alocações
 // Funciona tanto na geração quanto na re-validação
@@ -713,6 +765,18 @@ export async function detectUnallocatedDemands(
     periodsWithSpecific.add(config.period_id);
     specificConfigsMap.set(`${config.period_id}-${config.specific_date}`, config);
   });
+
+  // Buscar datas excluídas (feriados/fechamentos) — igual ao gerador
+  const { data: excludedRows } = await supabase
+    .from("period_excluded_dates")
+    .select("period_id, excluded_date, excluded_shifts")
+    .gte("excluded_date", weekStartDate)
+    .lte("excluded_date", weekEndDate);
+  const periodToLocation = new Map<string, string>();
+  (locations || []).forEach((l: any) =>
+    (l.location_periods || []).forEach((p: any) => periodToLocation.set(p.id, l.id))
+  );
+  const excludedMap = buildExcludedShiftsMap(excludedRows || [], periodToLocation);
 
   // Buscar corretores configurados por local para justificativa
   const { data: locationBrokersData } = await supabase
@@ -764,6 +828,10 @@ export async function detectUnallocatedDemands(
           expectedAfternoon = dayConfig.has_afternoon;
         }
       }
+
+      // Feriado / data excluída desativa a expectativa do turno
+      if (isShiftExcludedFor(excludedMap, period.id, location.id, dateStr, "morning")) expectedMorning = false;
+      if (isShiftExcludedFor(excludedMap, period.id, location.id, dateStr, "afternoon")) expectedAfternoon = false;
 
       // Comparar com alocações existentes
       const hasMorningAssignment = assignments.some(
