@@ -243,6 +243,11 @@ export function AddAssignmentDialog({
         .select("*")
         .eq("specific_date", selectedDate);
 
+      const { data: whitelistRows } = await supabase
+        .from("period_specific_day_configs")
+        .select("period_id");
+      const periodsWithSpecific = new Set((whitelistRows || []).map((r: any) => r.period_id));
+
       // Filter locations that have shifts configured for this day
       const validLocations = locations?.filter((loc: any) => {
         const specificConfig = specificConfigs?.find((sc: any) => {
@@ -264,6 +269,7 @@ export function AddAssignmentDialog({
         });
 
         if (!period) return false;
+        if (periodsWithSpecific.has(period.id)) return false;
 
         const dayConfig = period.period_day_configs?.find((dc: any) => dc.weekday === dayOfWeek);
         if (!dayConfig) return false;

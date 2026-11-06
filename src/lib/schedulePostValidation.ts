@@ -708,7 +708,9 @@ export async function detectUnallocatedDemands(
     .select("*");
 
   const specificConfigsMap = new Map<string, any>();
+  const periodsWithSpecific = new Set<string>();
   allSpecificConfigs?.forEach((config: any) => {
+    periodsWithSpecific.add(config.period_id);
     specificConfigsMap.set(`${config.period_id}-${config.specific_date}`, config);
   });
 
@@ -752,7 +754,8 @@ export async function detectUnallocatedDemands(
       if (specificConfig) {
         expectedMorning = specificConfig.has_morning;
         expectedAfternoon = specificConfig.has_afternoon;
-      } else if ((location as any).shift_config_mode === 'specific_date') {
+      } else if ((location as any).shift_config_mode === 'specific_date' || periodsWithSpecific.has(period.id)) {
+        // Whitelist: período com datas específicas só considera as datas cadastradas (igual ao gerador)
         continue;
       } else {
         const dayConfig = period.period_day_configs?.find((dc: any) => dc.weekday === dayOfWeek);

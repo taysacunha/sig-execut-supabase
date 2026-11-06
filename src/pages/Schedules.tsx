@@ -814,8 +814,8 @@ const Schedules = () => {
             hasMorning: specificConfig.has_morning ?? true,
             hasAfternoon: specificConfig.has_afternoon ?? true
           });
-        } else {
-          // Fallback: config por dia da semana
+        } else if (!specificConfigs.some(sc => sc.period_id === period.id)) {
+          // Fallback: config por dia da semana (somente se o período não usa whitelist de datas)
           const weekdayConfig = weekdayConfigs.find(
             wc => wc.period_id === period.id && wc.weekday === dayName
           );

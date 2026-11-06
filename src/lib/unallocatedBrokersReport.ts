@@ -239,8 +239,10 @@ export function buildUnallocatedBrokerReport(input: UnallocatedReportInput): Una
       const location = locationById.get(p.location_id);
       if (!location || location.is_active === false) return;
 
-      const specific = specificByPeriod.get(p.id)?.get(date);
-      const generic = dayConfigByPeriod.get(p.id)?.get(weekday);
+      const periodSpecific = specificByPeriod.get(p.id);
+      const specific = periodSpecific?.get(date);
+      // Whitelist: período com datas específicas ignora a config semanal
+      const generic = periodSpecific ? undefined : dayConfigByPeriod.get(p.id)?.get(weekday);
       const config = specific || generic;
       if (!config) return;
 
