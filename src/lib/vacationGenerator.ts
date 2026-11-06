@@ -49,12 +49,52 @@ export interface ConflictInfo {
   tipo: "setor" | "familiar" | "substituto" | "mes_bloqueado";
   descricao: string;
   colaborador_nome?: string;
+  colaborador_id?: string;
+  /** Período deste colaborador onde ocorre o conflito */
+  periodo?: 1 | 2;
+  /** Datas do período do outro colaborador que colide */
+  outro_inicio?: string;
+  outro_fim?: string;
+  outro_periodo?: 1 | 2;
+  ja_cadastrado?: boolean;
+}
+
+export interface GenerationContext {
+  existingVacations: any[];
+  forms: FormularioAnual[];
+  substituteSectors: Record<string, string[]>;
+  sectorToColabs: Record<string, string[]>;
 }
 
 export interface GenerationResult {
   success: GeneratedVacation[];
   conflicts: GeneratedVacation[];
   unprocessed: { colaborador_nome: string; motivo: string }[];
+  context?: GenerationContext;
+}
+
+const tagPeriodo = (list: ConflictInfo[], periodo: 1 | 2): ConflictInfo[] => list.map((c) => ({ ...c, periodo }));
+
+/**
+ * Recalcula os conflitos de setor/substituto de uma férias gerada após edição manual de datas,
+ * comparando com as demais férias da prévia e com as já cadastradas. Mantém alertas de familiar
+ * e mês bloqueado já existentes.
+ */
+export function recheckVacationConflicts(
+  vac: GeneratedVacation,
+  others: GeneratedVacation[],
+  ctx: GenerationContext,
+): ConflictInfo[] {
+  const form = ctx.forms.find((f) => f.colaborador_id === vac.colaborador_id);
+  const setorId = form?.colaborador?.setor_titular_id || "";
+  const subs = ctx.substituteSectors[vac.colaborador_id] || [];
+  const outros = others.filter((o) => o.colaborador_id !== vac.colaborador_id);
+  const q1 = checkWindowConflicts({ start: vac.quinzena1_inicio, end: vac.quinzena1_fim }, setorId, subs, vac.colaborador_id, outros, ctx.existingVacations, ctx.forms, ctx.sectorToColabs);
+  const q2 = vac.quinzena2_inicio && vac.quinzena2_fim
+    ? checkWindowConflicts({ start: vac.quinzena2_inicio, end: vac.quinzena2_fim }, setorId, subs, vac.colaborador_id, outros, ctx.existingVacations, ctx.forms, ctx.sectorToColabs)
+    : [];
+  const manter = vac.conflicts.filter((c) => c.tipo === "familiar" || c.tipo === "mes_bloqueado");
+  return [...tagPeriodo(q1, 1), ...tagPeriodo(q2, 2), ...manter];
 }
 
 interface CandidateWindow {
@@ -200,15 +240,16 @@ function checkWindowConflicts(
     const aQ2S = alloc.quinzena2_inicio ? parseISO(alloc.quinzena2_inicio) : null;
     const aQ2E = alloc.quinzena2_fim ? parseISO(alloc.quinzena2_fim) : null;
 
-    let hasOverlap = datesOverlap(wStart, wEnd, aQ1S, aQ1E);
-    if (aQ2S && aQ2E) {
-      hasOverlap = hasOverlap || datesOverlap(wStart, wEnd, aQ2S, aQ2E);
-    }
-    if (hasOverlap) {
+    const hits: [string, string, 1 | 2][] = [];
+    if (datesOverlap(wStart, wEnd, aQ1S, aQ1E)) hits.push([alloc.quinzena1_inicio, alloc.quinzena1_fim, 1]);
+    if (aQ2S && aQ2E && datesOverlap(wStart, wEnd, aQ2S, aQ2E)) hits.push([alloc.quinzena2_inicio, alloc.quinzena2_fim, 2]);
+    for (const [oi, of, op] of hits) {
       conflicts.push({
         tipo: allocSetorId !== setorId ? "substituto" : "setor",
         descricao: `Conflito com ${alloc.colaborador_nome}`,
         colaborador_nome: alloc.colaborador_nome,
+        colaborador_id: alloc.colaborador_id,
+        outro_inicio: oi, outro_fim: of, outro_periodo: op,
       });
     }
   }
@@ -226,16 +267,16 @@ function checkWindowConflicts(
     const eQ2S = existing.quinzena2_inicio ? parseISO(existing.quinzena2_inicio) : null;
     const eQ2E = existing.quinzena2_fim ? parseISO(existing.quinzena2_fim) : null;
 
-    let hasOverlap = datesOverlap(wStart, wEnd, eQ1S, eQ1E);
-    if (eQ2S && eQ2E) {
-      hasOverlap = hasOverlap || datesOverlap(wStart, wEnd, eQ2S, eQ2E);
-    }
-
-    if (hasOverlap) {
+    const hits: [string, string, 1 | 2][] = [];
+    if (datesOverlap(wStart, wEnd, eQ1S, eQ1E)) hits.push([existing.quinzena1_inicio, existing.quinzena1_fim, 1]);
+    if (eQ2S && eQ2E && datesOverlap(wStart, wEnd, eQ2S, eQ2E)) hits.push([existing.quinzena2_inicio, existing.quinzena2_fim, 2]);
+    for (const [oi, of, op] of hits) {
       conflicts.push({
         tipo: existSetorId !== setorId ? "substituto" : "setor",
         descricao: `Conflito com ${existing.colaborador?.nome || 'colaborador'} (já cadastrado)`,
         colaborador_nome: existing.colaborador?.nome,
+        colaborador_id: existing.colaborador_id,
+        outro_inicio: oi, outro_fim: of, outro_periodo: op, ja_cadastrado: true,
       });
     }
   }
@@ -285,8 +326,8 @@ export async function generateVacations(
 
     // Check if already has vacation
     const existingForColab = existingVacations.filter(v => v.colaborador_id === form.colaborador_id);
-    const hasComplete = existingForColab.some(v => v.quinzena2_inicio != null);
-    const hasPendingQ2 = existingForColab.some(v => v.quinzena2_inicio == null);
+    const hasComplete = existingForColab.some(v => v.quinzena2_inicio != null || v.periodo_unico || v.q2_cancelado);
+    const hasPendingQ2 = existingForColab.some(v => v.quinzena2_inicio == null && !v.periodo_unico && !v.q2_cancelado);
     if (hasComplete) {
       result.unprocessed.push({ colaborador_nome: form.colaborador.nome, motivo: "Já possui férias completas cadastradas para este ano" });
       continue;
@@ -380,7 +421,7 @@ export async function generateVacations(
         }
       }
 
-      const allConflicts = [...bestQ1Conflicts, ...q2Conflicts];
+      const allConflicts: ConflictInfo[] = [...tagPeriodo(bestQ1Conflicts, 1), ...tagPeriodo(q2Conflicts, 2)];
 
       // Check Jan/Dec block
       const q1Month = parseISO(bestQ1.start).getMonth() + 1;
@@ -439,6 +480,7 @@ export async function generateVacations(
     }
   }
 
+  result.context = { existingVacations, forms, substituteSectors, sectorToColabs };
   return result;
 }
 

@@ -1,0 +1,4 @@
+INSERT INTO public.dev_tracker_log (title, description, change_type, hours, occurred_on, source, system_name) VALUES
+('Gerador de férias: conflitos por período com edição', 'Aba Com conflitos mostra o período em choque e as datas do colega; datas editáveis no próprio diálogo com recálculo imediato.', 'melhoria', 1.5, '2026-11-06', 'lovable', 'ferias'),
+('Férias: 30 dias direto para o contador', 'Novo período único de 30 dias como exceção justificada, sem 2º período e sem venda; validação no banco e exibição nos relatórios.', 'melhoria', 2, '2026-11-06', 'lovable', 'ferias'),
+('Linhas telefônicas: erro tipo_valor', 'Corrigido envio de tipo de valor vazio ao salvar linha com valor contratado.', 'correcao', 0.5, '2026-11-06', 'lovable', 'despesas');

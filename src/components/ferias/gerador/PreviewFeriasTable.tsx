@@ -3,6 +3,7 @@ import { ptBR } from "date-fns/locale";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -27,6 +28,7 @@ interface PreviewFeriasTableProps {
   onSelectAll: () => void;
   onDeselectAll: () => void;
   showConflicts?: boolean;
+  onChangeDate?: (colaboradorId: string, periodo: 1 | 2, inicio: string) => void;
 }
 
 export function PreviewFeriasTable({
@@ -36,7 +38,28 @@ export function PreviewFeriasTable({
   onSelectAll,
   onDeselectAll,
   showConflicts = false,
+  onChangeDate,
 }: PreviewFeriasTableProps) {
+  const renderPeriodoCell = (v: GeneratedVacation, periodo: 1 | 2) => {
+    const inicio = periodo === 1 ? v.quinzena1_inicio : v.quinzena2_inicio;
+    const fim = periodo === 1 ? v.quinzena1_fim : v.quinzena2_fim;
+    const emConflito = v.conflicts.some((c) => c.periodo === periodo && (c.tipo === "setor" || c.tipo === "substituto"));
+    if (!onChangeDate) return formatPeriodo(inicio, fim);
+    return (
+      <div className={`space-y-1 rounded-md p-1 ${emConflito ? "bg-destructive/10 ring-1 ring-destructive/40" : ""}`}>
+        <Input
+          type="date"
+          value={inicio || ""}
+          onChange={(e) => onChangeDate(v.colaborador_id, periodo, e.target.value)}
+          className="h-8 w-[140px] text-xs"
+          aria-label={`Início do ${periodo}º período de ${v.colaborador_nome}`}
+        />
+        <div className={`text-xs ${emConflito ? "text-destructive font-medium" : "text-muted-foreground"}`}>
+          {formatPeriodo(inicio, fim)} {emConflito ? "• em conflito" : "• ok"}
+        </div>
+      </div>
+    );
+  };
   const formatDate = (dateStr: string) => {
     try {
       return format(parseISO(dateStr), "dd/MM", { locale: ptBR });
@@ -111,10 +134,10 @@ export function PreviewFeriasTable({
                   {vacation.setor_nome || "—"}
                 </TableCell>
                 <TableCell className="text-sm">
-                  {formatPeriodo(vacation.quinzena1_inicio, vacation.quinzena1_fim)}
+                  {renderPeriodoCell(vacation, 1)}
                 </TableCell>
                 <TableCell className="text-sm">
-                  {formatPeriodo(vacation.quinzena2_inicio, vacation.quinzena2_fim)}
+                  {renderPeriodoCell(vacation, 2)}
                 </TableCell>
                 <TableCell>
                   {vacation.vender_dias && vacation.dias_vendidos ? (
@@ -127,6 +150,19 @@ export function PreviewFeriasTable({
                 </TableCell>
                 {showConflicts && (
                   <TableCell>
+                    {vacation.conflicts.length === 0 && (
+                      <Badge variant="outline" className="text-xs">Resolvido</Badge>
+                    )}
+                    <div className="mb-1 space-y-0.5">
+                      {vacation.conflicts.filter((c) => c.periodo).map((c, i) => (
+                        <div key={i} className="text-xs leading-snug">
+                          <span className="font-medium">{c.periodo}º período</span> × {c.colaborador_nome || "colaborador"}
+                          {c.outro_periodo && c.outro_inicio && c.outro_fim && (
+                            <span className="text-muted-foreground"> ({c.outro_periodo}º: {formatPeriodo(c.outro_inicio, c.outro_fim)}{c.ja_cadastrado ? ", já cadastrado" : ""})</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                     <TooltipProvider>
                       <div className="flex flex-wrap gap-1">
                         {vacation.conflicts.map((conflict, idx) => (

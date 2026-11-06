@@ -78,6 +78,10 @@ export function useSaveLinha() {
   return useMutation({
     mutationFn: async (l: Partial<LinhaTelefonica> & { id?: string }) => {
       const { id, ...payload } = l;
+      if ("tipo_valor" in payload) {
+        const tv = payload.tipo_valor as string | null | undefined;
+        payload.tipo_valor = payload.valor_contratado == null ? null : tv === "global" ? "global" : "individual";
+      }
       const q = id
         ? supabase.from("despesas_linhas_telefonicas" as any).update(payload).eq("id", id)
         : supabase.from("despesas_linhas_telefonicas" as any).insert(payload);

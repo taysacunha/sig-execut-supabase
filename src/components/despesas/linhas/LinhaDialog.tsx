@@ -64,7 +64,7 @@ export function LinhaDialog({ open, onOpenChange, linha, lookup, onOpened, exist
         setor_id: f.setor_id || null,
         responsavel_id: f.responsavel_id || null,
         valor_contratado: valor,
-        tipo_valor: valor != null ? (f.tipo_valor as any) : null,
+        tipo_valor: valor != null ? (f.tipo_valor === "global" ? "global" : "individual") : null,
         capacidade_internet: celular ? f.capacidade_internet.trim() || null : null,
         modelo_aparelho: celular ? f.modelo_aparelho.trim() || null : null,
         observacoes: f.observacoes.trim() || null,

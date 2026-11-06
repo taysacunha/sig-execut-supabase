@@ -10,7 +10,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, Wand2, AlertTriangle, CheckCircle2, XCircle, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { generateVacations, saveGeneratedVacations, GenerationResult, GeneratedVacation } from "@/lib/vacationGenerator";
+import { generateVacations, saveGeneratedVacations, recheckVacationConflicts, GenerationResult, GeneratedVacation } from "@/lib/vacationGenerator";
+import { addDays, format, parseISO } from "date-fns";
 import { PreviewFeriasTable } from "./PreviewFeriasTable";
 
 interface GeradorFeriasDialogProps {
@@ -94,6 +95,23 @@ export function GeradorFeriasDialog({ open, onOpenChange, anoReferencia, onSucce
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleChangeDate = (colaboradorId: string, periodo: 1 | 2, inicio: string) => {
+    if (!inicio) return;
+    setGenerationResult((prev) => {
+      if (!prev?.context) return prev;
+      const fim = format(addDays(parseISO(inicio), 14), "yyyy-MM-dd");
+      const patch = (v: GeneratedVacation): GeneratedVacation =>
+        v.colaborador_id !== colaboradorId ? v
+          : periodo === 1 ? { ...v, quinzena1_inicio: inicio, quinzena1_fim: fim }
+          : { ...v, quinzena2_inicio: inicio, quinzena2_fim: fim };
+      const success = prev.success.map(patch);
+      const conflicts = prev.conflicts.map(patch);
+      const all = [...success, ...conflicts];
+      const recheck = (v: GeneratedVacation) => ({ ...v, conflicts: recheckVacationConflicts(v, all, prev.context!) });
+      return { ...prev, success: success.map(recheck), conflicts: conflicts.map(recheck) };
+    });
   };
 
   const toggleVacationSelection = (colaboradorId: string) => {
@@ -195,9 +213,9 @@ export function GeradorFeriasDialog({ open, onOpenChange, anoReferencia, onSucce
                       <Alert className="mb-4">
                         <AlertTriangle className="h-4 w-4" />
                         <AlertTitle>Férias com conflitos</AlertTitle>
-                        <AlertDescription>Estas férias têm conflitos de setor. Ao salvar, serão marcadas como exceção.</AlertDescription>
+                        <AlertDescription>A coluna Conflitos mostra em qual período ocorre o choque e com quem. Altere a data de início do período em vermelho aqui mesmo (o fim é calculado em 15 dias); os conflitos são recalculados na hora. Se salvar com conflito, a férias será marcada como exceção.</AlertDescription>
                       </Alert>
-                      <PreviewFeriasTable vacations={generationResult.conflicts} selectedIds={selectedVacations} onToggleSelection={toggleVacationSelection} onSelectAll={() => selectAll(generationResult.conflicts)} onDeselectAll={() => deselectAll(generationResult.conflicts)} showConflicts />
+                      <PreviewFeriasTable vacations={generationResult.conflicts} selectedIds={selectedVacations} onToggleSelection={toggleVacationSelection} onSelectAll={() => selectAll(generationResult.conflicts)} onDeselectAll={() => deselectAll(generationResult.conflicts)} showConflicts onChangeDate={handleChangeDate} />
                     </>
                   ) : <div className="text-center py-8 text-muted-foreground">Nenhuma férias com conflitos</div>}
                 </TabsContent>

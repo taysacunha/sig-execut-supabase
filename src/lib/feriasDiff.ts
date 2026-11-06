@@ -98,6 +98,7 @@ const CAMPOS: CampoDef[] = [
   { key: "quinzena2_inicio", label: "2º período — início", fmt: fmtData },
   { key: "quinzena2_fim", label: "2º período — fim", fmt: fmtData },
   { key: "q2_cancelado", label: "2º período cancelado", fmt: fmtBool, destaque: true },
+  { key: "periodo_unico", label: "30 dias direto (período único)", fmt: fmtBool, destaque: true },
   {
     key: "q2_cancelamento_motivo",
     label: "Motivo do cancelamento do 2º período",

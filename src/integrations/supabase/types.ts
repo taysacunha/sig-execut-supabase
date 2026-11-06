@@ -3448,6 +3448,7 @@ export type Database = {
           origem: string | null
           periodo_aquisitivo_fim: string | null
           periodo_aquisitivo_inicio: string | null
+          periodo_unico: boolean
           q2_cancelado: boolean
           q2_cancelado_em: string | null
           q2_cancelado_por: string | null
@@ -3489,6 +3490,7 @@ export type Database = {
           origem?: string | null
           periodo_aquisitivo_fim?: string | null
           periodo_aquisitivo_inicio?: string | null
+          periodo_unico?: boolean
           q2_cancelado?: boolean
           q2_cancelado_em?: string | null
           q2_cancelado_por?: string | null
@@ -3530,6 +3532,7 @@ export type Database = {
           origem?: string | null
           periodo_aquisitivo_fim?: string | null
           periodo_aquisitivo_inicio?: string | null
+          periodo_unico?: boolean
           q2_cancelado?: boolean
           q2_cancelado_em?: string | null
           q2_cancelado_por?: string | null

@@ -29,6 +29,7 @@ const excecaoMotivoLabels: Record<string, string> = {
   ajuste_setor: "Ajuste de setor",
   mes_bloqueado: "Férias em janeiro/dezembro",
   venda_acima_limite: "Venda acima de 10 dias",
+  periodo_unico_30: "30 dias direto (período único)",
   periodo_aquisitivo: "Período aquisitivo irregular",
   outro: "Outro",
 };

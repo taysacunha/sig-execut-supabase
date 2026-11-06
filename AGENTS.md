@@ -13,3 +13,6 @@
 - Resolve accountant allocation independently from internal enjoyed-day distribution through shared sale helpers; the explicit both-period allocation must never be read as a third vacation period or inferred from exception sale amounts.
 ## Phone lines
 - Phone lines read units, sectors and collaborators from the vacation system only through a permission-scoped lookup RPC; Despesas users must not need vacation-system access to fill those fields.
+
+## Vacation single period
+- 30-day single-period vacations use `ferias_ferias.periodo_unico`, enforced by a database trigger (30 days, no Q2, no sale, justified exception); null Q2 alone must never be read as a single period.

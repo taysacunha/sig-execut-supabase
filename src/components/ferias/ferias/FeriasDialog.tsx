@@ -47,6 +47,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Loader2, AlertTriangle, Calendar, Check, ChevronsUpDown, Users, Info, ShieldAlert, FileCheck, CalendarClock } from "lucide-react";
 import { format, parseISO, addDays, addYears, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -312,6 +313,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   // ===== Cancelamento do 2º período (ex.: desligamento) =====
   // Não transforma o cadastro em exceção — as regras/datas seguem como padrão.
   const [q2Cancelado, setQ2Cancelado] = useState(false);
+  // ===== Exceção das exceções: 30 dias direto (período único enviado ao contador) =====
+  const [periodoUnico, setPeriodoUnico] = useState(false);
+  const [periodoUnicoJustificativa, setPeriodoUnicoJustificativa] = useState("");
   const [q2CancMotivo, setQ2CancMotivo] = useState("");
   const [q2CancJustificativa, setQ2CancJustificativa] = useState("");
   const [q2CancDialogOpen, setQ2CancDialogOpen] = useState(false);
@@ -357,6 +361,45 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     setQ2CancMotivo("");
     setQ2CancJustificativa("");
   };
+
+  const togglePeriodoUnico = (on: boolean) => {
+    setPeriodoUnico(on);
+    if (on) {
+      setQ2Cancelado(false);
+      form.setValue("quinzena2_inicio", "");
+      form.setValue("quinzena2_fim", "");
+      form.setValue("opcao_adicional", "nenhum");
+      form.setValue("dias_vendidos", 0);
+    }
+    const ini = form.getValues("quinzena1_inicio");
+    if (ini) {
+      try { form.setValue("quinzena1_fim", format(addDays(parseISO(ini), on ? 29 : 14), "yyyy-MM-dd")); } catch { /* ignore */ }
+    }
+  };
+
+  const bloqueioPeriodoUnico = !!ferias?.enviado_contador_q2 || (!!ferias?.enviado_contador_q1 && !ferias?.periodo_unico);
+  const periodoUnicoCard = (
+    <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 space-y-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium">30 dias direto (exceção das exceções)</p>
+          <p className="text-xs text-muted-foreground">
+            Envia ao contador um único período de 30 dias corridos, sem 2º período e sem venda de dias. Fica registrado como exceção com justificativa.
+          </p>
+        </div>
+        <Switch checked={periodoUnico} onCheckedChange={togglePeriodoUnico} disabled={bloqueioPeriodoUnico} aria-label="30 dias direto" />
+      </div>
+      {bloqueioPeriodoUnico && !periodoUnico && (
+        <p className="text-xs text-muted-foreground">Indisponível: período já enviado ao contador.</p>
+      )}
+      {periodoUnico && (
+        <div className="space-y-1">
+          <Label className="text-xs">Justificativa *</Label>
+          <Textarea value={periodoUnicoJustificativa} onChange={(e) => setPeriodoUnicoJustificativa(e.target.value)} placeholder="Motivo da autorização dos 30 dias direto" rows={2} />
+        </div>
+      )}
+    </div>
+  );
 
   const q2CanceladoBanner = (
     <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 space-y-1">
@@ -469,11 +512,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     if (isResettingRef.current) return;
     if (q1Inicio) {
       try {
-        const endDate = addDays(parseISO(q1Inicio), 14);
+        const endDate = addDays(parseISO(q1Inicio), periodoUnico ? 29 : 14);
         form.setValue("quinzena1_fim", format(endDate, "yyyy-MM-dd"));
       } catch { /* ignore */ }
     }
-  }, [q1Inicio]);
+  }, [q1Inicio, periodoUnico]);
 
   useEffect(() => {
     if (isResettingRef.current) return;
@@ -684,6 +727,8 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
     setConflicts([]);
     setGozoDateError(null);
     setQ2Cancelado(!!ferias?.q2_cancelado);
+    setPeriodoUnico(!!ferias?.periodo_unico);
+    setPeriodoUnicoJustificativa(ferias?.periodo_unico ? (ferias?.excecao_justificativa || "") : "");
     setQ2CancMotivo(ferias?.q2_cancelamento_motivo || "");
     setQ2CancJustificativa(ferias?.q2_cancelamento_justificativa || "");
     setQ2CancDialogMotivo(ferias?.q2_cancelamento_motivo || "desligamento");
@@ -1484,7 +1529,22 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
         periodo_aquisitivo_fim: periodoAquisitivo?.fim || null,
         gozo_flexivel: gozoFlexivel,
         distribuicao_tipo: distribuicaoTipoVal,
+        periodo_unico: periodoUnico,
       };
+
+      if (periodoUnico) {
+        Object.assign(payload, {
+          quinzena1_fim: format(addDays(parseISO(data.quinzena1_inicio), 29), "yyyy-MM-dd"),
+          quinzena2_inicio: null, quinzena2_fim: null,
+          q2_cancelado: false, q2_cancelamento_motivo: null, q2_cancelamento_justificativa: null,
+          q2_cancelado_em: null, q2_cancelado_por: null,
+          gozo_diferente: false, gozo_flexivel: false, distribuicao_tipo: null,
+          gozo_quinzena1_inicio: null, gozo_quinzena1_fim: null, gozo_quinzena2_inicio: null, gozo_quinzena2_fim: null,
+          vender_dias: false, dias_vendidos: null, quinzena_venda: null, dias_vendidos_q1: null, dias_vendidos_q2: null,
+          is_excecao: true, excecao_motivo: "periodo_unico_30", excecao_justificativa: periodoUnicoJustificativa.trim(),
+        });
+        return { payload, gozoFlexivel: false };
+      }
 
       return { payload, gozoFlexivel };
   };
@@ -1584,11 +1644,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       errors.push("Férias em janeiro ou dezembro no 1º período requerem exceção");
     }
 
-    if (!q2Cancelado && !data.quinzena2_inicio) {
+    if (!periodoUnico && !q2Cancelado && !data.quinzena2_inicio) {
       errors.push("Informe o 2º período ou cancele-o com justificativa");
     }
 
-    if (data.quinzena2_inicio) {
+    if (data.quinzena2_inicio && !periodoUnico) {
       const q2Start = parseISO(data.quinzena2_inicio);
       const q2Month = q2Start.getMonth() + 1;
       if (q2Month === 1 || q2Month === 12) {
@@ -1629,6 +1689,33 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
   }, [afastamentos, buildNewVacationIntervals, q1Inicio, q1Fim, q2Inicio, q2Fim, opcaoAdicional, diasVendidos, quinzenaVendaEfetiva, gozoVendaInicio, gozoVendaFim, form]);
 
   const onSubmit = (data: FeriasFormData) => {
+    if (periodoUnico) {
+      if (periodoUnicoJustificativa.trim().length < 10) {
+        toast.error("Informe a justificativa (mín. 10 caracteres) para os 30 dias direto.");
+        return;
+      }
+      if (ferias?.enviado_contador_q1 && !ferias?.periodo_unico) {
+        toast.error("O 1º período já foi enviado ao contador. Regularize o envio antes de converter para 30 dias direto.");
+        return;
+      }
+      if (ferias?.enviado_contador_q2) {
+        toast.error("O 2º período já foi enviado ao contador. Não é possível converter para 30 dias direto.");
+        return;
+      }
+      const d30 = { ...data, quinzena2_inicio: "", quinzena2_fim: "", opcao_adicional: "nenhum" as const, dias_vendidos: 0 };
+      if (isEditing && ferias) {
+        const { payload } = buildPayloadCore(d30);
+        const diff = diffFerias(ferias, payload, originalPeriodos, []);
+        if (diff.rows.length > 0 || diff.periodosMudaram) {
+          setPendingData(d30);
+          setPendingDiff(diff);
+          setConfirmOpen(true);
+          return;
+        }
+      }
+      executeSave(d30);
+      return;
+    }
     const periodoVendaAtual = excecaoTipo === "vender" ? excQuinzenaVenda : data.quinzena_venda;
     const vendaAtiva = data.opcao_adicional === "vender" || excecaoTipo === "vender";
     const splitEnvolvido = periodoVendaAtual === 3 || ferias?.quinzena_venda === 3;
@@ -1644,6 +1731,7 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
       const motivoLabel: Record<string, string> = {
         mes_bloqueado: "Férias em janeiro ou dezembro",
         venda_acima_limite: "Venda acima de 10 dias",
+        periodo_unico_30: "30 dias direto (período único)",
         conflito_setor: "Conflito de setor",
       };
       const label = motivoLabel[validation.exceptionReason] || "Esta operação";
@@ -1991,8 +2079,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {periodoUnicoCard}
                     <Card>
-                      <CardHeader className="pb-3"><CardTitle className="text-sm">1º Período (15 dias)</CardTitle></CardHeader>
+                      <CardHeader className="pb-3"><CardTitle className="text-sm">{periodoUnico ? "Período único (30 dias direto)" : "1º Período (15 dias)"}</CardTitle></CardHeader>
                       <CardContent className="grid grid-cols-2 gap-4">
                         <FormField control={form.control} name="quinzena1_inicio" render={({ field }) => (
                           <FormItem>
@@ -2016,11 +2105,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                         <FormItem>
                           <FormLabel>Data de Fim (automático)</FormLabel>
                           <Input type="date" value={q1Fim} readOnly className="bg-muted cursor-not-allowed" />
-                          {q1Inicio && q1Fim && <p className="text-xs text-muted-foreground mt-1">15 dias a partir de {formatDateBR(q1Inicio)}</p>}
+                          {q1Inicio && q1Fim && <p className="text-xs text-muted-foreground mt-1">{periodoUnico ? 30 : 15} dias a partir de {formatDateBR(q1Inicio)}</p>}
                         </FormItem>
                       </CardContent>
                     </Card>
-                    <Card>
+                    <Card className={periodoUnico ? "hidden" : undefined}>
                       <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
                         <CardTitle className="text-sm">2º Período (15 dias)</CardTitle>
                         {!ferias?.enviado_contador_q2 && (
@@ -2122,8 +2211,9 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                 </Card>
               ) : (
                 <>
+                  {periodoUnicoCard}
                   <Card>
-                    <CardHeader className="pb-3"><CardTitle className="text-sm">1º Período (15 dias)</CardTitle></CardHeader>
+                    <CardHeader className="pb-3"><CardTitle className="text-sm">{periodoUnico ? "Período único (30 dias direto)" : "1º Período (15 dias)"}</CardTitle></CardHeader>
                     <CardContent className="grid grid-cols-2 gap-4">
                        <FormField control={form.control} name="quinzena1_inicio" render={({ field }) => (
                          <FormItem><FormLabel>Data de Início *</FormLabel><FormControl><Input type="date" min="1990-01-01" max="2100-12-31" {...field} /></FormControl><FormMessage /></FormItem>
@@ -2131,11 +2221,11 @@ export function FeriasDialog({ open, onOpenChange, ferias, anoReferencia, onSucc
                       <FormItem>
                         <FormLabel>Data de Fim (automático)</FormLabel>
                         <Input type="date" value={q1Fim} readOnly className="bg-muted cursor-not-allowed" />
-                        {q1Inicio && q1Fim && <p className="text-xs text-muted-foreground mt-1">15 dias a partir de {formatDateBR(q1Inicio)}</p>}
+                        {q1Inicio && q1Fim && <p className="text-xs text-muted-foreground mt-1">{periodoUnico ? 30 : 15} dias a partir de {formatDateBR(q1Inicio)}</p>}
                       </FormItem>
                     </CardContent>
                   </Card>
-                  <Card>
+                  <Card className={periodoUnico ? "hidden" : undefined}>
                     <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
                       <CardTitle className="text-sm">2º Período (15 dias)</CardTitle>
                       {!ferias?.enviado_contador_q2 && (

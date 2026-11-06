@@ -784,6 +784,7 @@ export default function FeriasFerias() {
     const excecaoLabels: Record<string, string> = {
       mes_bloqueado: "Mês bloqueado",
       venda_acima_limite: "Venda > 10 dias",
+      periodo_unico_30: "30 dias direto",
       familiar: "Familiar",
       conflito_setor: "Conflito setor",
       conflito_equipe: "Conflito equipe",
@@ -844,6 +845,7 @@ export default function FeriasFerias() {
       } else {
         periodosLines.push(formatPeriodo(f.quinzena1_inicio, f.quinzena1_fim));
         if (f.quinzena2_inicio && f.quinzena2_fim) periodosLines.push(formatPeriodo(f.quinzena2_inicio, f.quinzena2_fim));
+        else if ((f as any).periodo_unico) periodosLines.push("30 dias direto (período único)");
         else periodosLines.push("2º pendente");
       }
 
@@ -1071,6 +1073,11 @@ export default function FeriasFerias() {
                                 gozoDifFim: string | null,
                               ) => {
                                 const subs = flexPeriods.filter((p: any) => p.referencia_periodo === num);
+                                if (num === 2 && (f as any).periodo_unico) {
+                                  return (
+                                    <Badge variant="outline" className="bg-amber-500/10 text-amber-700 border-amber-500/20 text-xs">30 dias direto</Badge>
+                                  );
+                                }
                                 return (
                                   <div className="space-y-0.5">
                                     <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{num}º período</div>

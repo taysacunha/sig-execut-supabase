@@ -21,6 +21,7 @@ import { getYearOptions, FERIAS_STATUS_LABELS as statusLabels, FERIAS_STATUS_COL
 const excecaoMotivoLabels: Record<string, string> = {
   mes_bloqueado: "Mês bloqueado",
   venda_acima_limite: "Venda > 10 dias",
+  periodo_unico_30: "30 dias direto",
   familiar: "Familiar",
   conflito_setor: "Conflito setor",
   conflito_equipe: "Conflito equipe",
