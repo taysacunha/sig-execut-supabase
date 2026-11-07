@@ -251,7 +251,15 @@ export function buildUnallocatedBrokerReport(input: UnallocatedReportInput): Una
       if (config.afternoon) shifts.add("afternoon");
       if (shifts.size === 0) return;
 
-      const excluded = excludedByPeriod.get(p.id)?.get(date);
+      // Fallback por local: exclusão salva em outro período do mesmo local também vale
+      let excluded = excludedByPeriod.get(p.id)?.get(date);
+      if (!excluded) {
+        for (const other of input.periods) {
+          if (other.location_id !== p.location_id || other.id === p.id) continue;
+          const e = excludedByPeriod.get(other.id)?.get(date);
+          if (e) { excluded = e; break; }
+        }
+      }
       if (excluded) {
         anyExclusionToday = true;
         if (!exclusionReason && excluded.reason) exclusionReason = excluded.reason;

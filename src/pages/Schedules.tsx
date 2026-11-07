@@ -48,7 +48,7 @@ import { ptBR } from "date-fns/locale";
 import { generateWeeklySchedule, generateMonthlySchedule, generateSelectedWeeksSchedule, ScheduleAssignment, validateGeneratedSchedule, ValidationResult, GenerateMonthlyResult } from "@/lib/scheduleGenerator";
 import { getLastGenerationTrace } from "@/lib/generationTrace";
 import { RuleViolation } from "@/lib/scheduleValidator";
-import { validateGeneratedSchedule as postValidateSchedule, logValidationResult, PostValidationResult, UnallocatedDemand, detectUnallocatedDemands } from "@/lib/schedulePostValidation";
+import { validateGeneratedSchedule as postValidateSchedule, logValidationResult, PostValidationResult, UnallocatedDemand, detectUnallocatedDemands, buildExcludedShiftsMap, isShiftExcludedFor } from "@/lib/schedulePostValidation";
 import { normalizeText } from "@/lib/textUtils";
 import { ScheduleReplacementDialog } from "@/components/ScheduleReplacementDialog";
 import { SchedulePDFGenerator } from "@/components/SchedulePDFGenerator";
@@ -827,6 +827,25 @@ const Schedules = () => {
             });
           }
         }
+      }
+    }
+
+    // Feriados / datas excluídas: turno excluído deixa de estar configurado
+    const { data: excludedRows } = await supabase
+      .from("period_excluded_dates")
+      .select("period_id, excluded_date, excluded_shifts")
+      .in("period_id", periodIds)
+      .gte("excluded_date", minDate)
+      .lte("excluded_date", maxDate);
+    const periodToLocation = new Map(periods.map(p => [p.id, p.location_id]));
+    const excludedMap = buildExcludedShiftsMap((excludedRows || []) as any, periodToLocation);
+    for (const [locationId, dates] of result.entries()) {
+      for (const [dateStr, cfg] of dates.entries()) {
+        const period = periods.find(p => p.location_id === locationId && dateStr >= p.start_date && dateStr <= p.end_date);
+        dates.set(dateStr, {
+          hasMorning: cfg.hasMorning && !isShiftExcludedFor(excludedMap, period?.id, locationId, dateStr, "morning"),
+          hasAfternoon: cfg.hasAfternoon && !isShiftExcludedFor(excludedMap, period?.id, locationId, dateStr, "afternoon"),
+        });
       }
     }
 

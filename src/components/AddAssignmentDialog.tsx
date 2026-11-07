@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { buildExcludedShiftsMap, isShiftExcludedFor } from "@/lib/schedulePostValidation";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { normalizeText } from "@/lib/textUtils";
@@ -248,8 +249,18 @@ export function AddAssignmentDialog({
         .select("period_id");
       const periodsWithSpecific = new Set((whitelistRows || []).map((r: any) => r.period_id));
 
+      // Feriados / datas excluídas nesta data
+      const { data: excludedRows } = await supabase
+        .from("period_excluded_dates")
+        .select("period_id, excluded_date, excluded_shifts")
+        .eq("excluded_date", selectedDate);
+      const periodToLocation = new Map<string, string>();
+      locations?.forEach((l: any) => (l.location_periods || []).forEach((p: any) => periodToLocation.set(p.id, l.id)));
+      const excludedMap = buildExcludedShiftsMap((excludedRows || []) as any, periodToLocation);
+
       // Filter locations that have shifts configured for this day
       const validLocations = locations?.filter((loc: any) => {
+        if (isShiftExcludedFor(excludedMap, null, loc.id, selectedDate, selectedShift)) return false;
         const specificConfig = specificConfigs?.find((sc: any) => {
           const period = loc.location_periods?.find((p: any) => p.id === sc.period_id);
           return period !== undefined;
