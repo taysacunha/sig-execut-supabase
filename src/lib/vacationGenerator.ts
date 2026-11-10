@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { addDays, parseISO, format } from "date-fns";
+import { getConcessivoInfo, suggestSecondPeriod, periodsOverlap } from "@/lib/feriasConcessivo";
 
 export interface FormularioAnual {
   id: string;
@@ -16,6 +17,9 @@ export interface FormularioAnual {
   dias_vender: number | null;
   observacao: string | null;
   data_inicio_preferencia: string | null;
+  /** '15_15' (padrão) ou '30' (30 dias direto) */
+  modo_periodo?: string | null;
+  data_inicio_q2_preferencia?: string | null;
   status: string | null;
   colaborador?: {
     id: string;
@@ -120,9 +124,9 @@ function generateCandidateWindows(ano: number, mes: number): CandidateWindow[] {
 }
 
 // Generate a single window from a specific date
-function generateWindowFromDate(dateStr: string): CandidateWindow {
+function generateWindowFromDate(dateStr: string, dias = 15): CandidateWindow {
   const start = parseISO(dateStr);
-  const end = addDays(start, 14);
+  const end = addDays(start, dias - 1);
   return {
     start: format(start, "yyyy-MM-dd"),
     end: format(end, "yyyy-MM-dd"),
@@ -357,12 +361,13 @@ export async function generateVacations(
       let candidateWindows: CandidateWindow[];
 
       // If this is the preferred month and there's a specific start date, use it
+      const modo30 = form.modo_periodo === "30";
+      const durQ1 = modo30 ? 30 : 15;
+      const monthWindows = generateCandidateWindows(ano, chosenMonth).map((w) => generateWindowFromDate(w.start, durQ1));
       if (chosenMonth === preferredMonth && form.data_inicio_preferencia) {
-        candidateWindows = [generateWindowFromDate(form.data_inicio_preferencia)];
-        // Also add fallback windows in case the specific date has conflicts
-        candidateWindows.push(...generateCandidateWindows(ano, chosenMonth));
+        candidateWindows = [generateWindowFromDate(form.data_inicio_preferencia, durQ1), ...monthWindows];
       } else {
-        candidateWindows = generateCandidateWindows(ano, chosenMonth);
+        candidateWindows = monthWindows;
       }
 
       // Find best window for first period
@@ -384,52 +389,52 @@ export async function generateVacations(
 
       if (!bestQ1) continue;
 
-      // Find best window for second period (different month if available)
-      let secondMonth = orderedMonths.find(m => m !== chosenMonth);
-      let bestQ2: CandidateWindow;
+      // 2º período: nunca pode sobrepor o 1º. Ordem: data informada → mês alternativo →
+      // sugestão livre dentro do período concessivo, sem colidir com colegas do setor.
+      let bestQ2: CandidateWindow | null = null;
       let q2Conflicts: ConflictInfo[] = [];
-
-      if (secondMonth) {
-        const q2Windows = generateCandidateWindows(ano, secondMonth);
-        bestQ2 = q2Windows[0];
-        q2Conflicts = [];
-
-        for (const window of q2Windows) {
-          const windowConflicts = checkWindowConflicts(window, setorId, subSectors, form.colaborador_id, allocatedVacations, existingVacations, forms, sectorToColabs);
-          if (windowConflicts.length === 0) {
-            bestQ2 = window;
-            q2Conflicts = [];
-            break;
+      if (!modo30) {
+        const q1i = { inicio: bestQ1.start, fim: bestQ1.end };
+        const tryWindows = (ws: CandidateWindow[]) => {
+          for (const w of ws) {
+            if (periodsOverlap({ inicio: w.start, fim: w.end }, q1i)) continue;
+            const c = checkWindowConflicts(w, setorId, subSectors, form.colaborador_id, allocatedVacations, existingVacations, forms, sectorToColabs);
+            if (c.length === 0) { bestQ2 = w; q2Conflicts = []; return true; }
+            if (!bestQ2 || c.length < q2Conflicts.length) { bestQ2 = w; q2Conflicts = c; }
           }
-          if (windowConflicts.length < q2Conflicts.length || q2Conflicts.length === 0) {
-            bestQ2 = window;
-            q2Conflicts = windowConflicts;
-          }
+          return false;
+        };
+        let ok = false;
+        if (form.data_inicio_q2_preferencia) ok = tryWindows([generateWindowFromDate(form.data_inicio_q2_preferencia)]);
+        const secondMonth = orderedMonths.find(m => m !== chosenMonth);
+        if (!ok && secondMonth) ok = tryWindows(generateCandidateWindows(ano, secondMonth));
+        if (!ok) {
+          const info = form.colaborador.data_admissao ? getConcessivoInfo(form.colaborador.data_admissao, bestQ1.start) : null;
+          const anoIni = `${ano}-02-01`, anoFim = `${ano}-11-30`;
+          const limiteInicio = info && info.concessivoInicio > anoIni ? info.concessivoInicio : anoIni;
+          const limiteFim = info && info.concessivoFim < anoFim ? info.concessivoFim : anoFim;
+          const ocupados = [
+            ...allocatedVacations.filter(v => forms.find(f => f.colaborador_id === v.colaborador_id)?.colaborador?.setor_titular_id === setorId)
+              .flatMap(v => [{ inicio: v.quinzena1_inicio, fim: v.quinzena1_fim }, ...(v.quinzena2_inicio ? [{ inicio: v.quinzena2_inicio, fim: v.quinzena2_fim }] : [])]),
+            ...existingVacations.filter(v => v.colaborador_id !== form.colaborador_id && v.colaborador?.setor_titular_id === setorId)
+              .flatMap(v => [{ inicio: v.quinzena1_inicio, fim: v.quinzena1_fim }, ...(v.quinzena2_inicio ? [{ inicio: v.quinzena2_inicio, fim: v.quinzena2_fim }] : [])]),
+          ];
+          const sug = suggestSecondPeriod({ q1: q1i, limiteInicio, limiteFim, ocupados, seed: form.colaborador_id });
+          if (sug) ok = tryWindows([{ start: sug.inicio, end: sug.fim }]);
         }
-      } else {
-        // Only one month: use second half windows
-        const allWindows = generateCandidateWindows(ano, chosenMonth);
-        // Pick a window that doesn't overlap with Q1
-        bestQ2 = allWindows[allWindows.length - 1]; // Default to last window
-        for (const window of allWindows) {
-          const wStart = parseISO(window.start), wEnd = parseISO(window.end);
-          const q1Start = parseISO(bestQ1.start), q1End = parseISO(bestQ1.end);
-          if (!datesOverlap(wStart, wEnd, q1Start, q1End)) {
-            const windowConflicts = checkWindowConflicts(window, setorId, subSectors, form.colaborador_id, allocatedVacations, existingVacations, forms, sectorToColabs);
-            if (windowConflicts.length === 0) {
-              bestQ2 = window;
-              q2Conflicts = [];
-              break;
-            }
-          }
+        if (!bestQ2) {
+          // Fallback: qualquer janela sem sobreposição no ano (com conflitos, vai para "Com conflitos")
+          for (let m = 2; m <= 11 && !bestQ2; m++) tryWindows(generateCandidateWindows(ano, m));
         }
+        if (!bestQ2) continue;
       }
+      const q2Final = bestQ2 as CandidateWindow | null;
 
       const allConflicts: ConflictInfo[] = [...tagPeriodo(bestQ1Conflicts, 1), ...tagPeriodo(q2Conflicts, 2)];
 
       // Check Jan/Dec block
       const q1Month = parseISO(bestQ1.start).getMonth() + 1;
-      const q2Month = parseISO(bestQ2.start).getMonth() + 1;
+      const q2Month = q2Final ? parseISO(q2Final.start).getMonth() + 1 : 0;
       if ((q1Month === 1 || q1Month === 12 || q2Month === 1 || q2Month === 12) && rules["BLOQUEAR_JAN_DEZ"] === "true") {
         allConflicts.push({ tipo: "mes_bloqueado", descricao: "Férias em janeiro ou dezembro requerem exceção" });
       }
@@ -457,13 +462,14 @@ export async function generateVacations(
         setor_nome: form.colaborador.setor_titular?.nome || "",
         quinzena1_inicio: bestQ1.start,
         quinzena1_fim: bestQ1.end,
-        quinzena2_inicio: bestQ2.start,
-        quinzena2_fim: bestQ2.end,
-        vender_dias: form.vender_dias || false,
-        dias_vendidos: form.dias_vender || 0,
+        quinzena2_inicio: q2Final ? q2Final.start : "",
+        quinzena2_fim: q2Final ? q2Final.end : "",
+        periodo_unico: modo30,
+        vender_dias: modo30 ? false : (form.vender_dias || false),
+        dias_vendidos: modo30 ? 0 : (form.dias_vender || 0),
         quinzena_venda: 2,
-        is_excecao: allConflicts.some(c => c.tipo === "mes_bloqueado") || (form.dias_vender != null && form.dias_vender > 10),
-        excecao_motivo: allConflicts.some(c => c.tipo === "mes_bloqueado") ? "mes_bloqueado" : (form.dias_vender != null && form.dias_vender > 10 ? "venda_acima_limite" : null),
+        is_excecao: modo30 || allConflicts.some(c => c.tipo === "mes_bloqueado") || (form.dias_vender != null && form.dias_vender > 10),
+        excecao_motivo: modo30 ? "30 dias direto" : allConflicts.some(c => c.tipo === "mes_bloqueado") ? "mes_bloqueado" : (form.dias_vender != null && form.dias_vender > 10 ? "venda_acima_limite" : null),
         conflicts: allConflicts,
         familiar_match: familiarMatch,
         origem: "formulario_anual",

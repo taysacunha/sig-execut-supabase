@@ -4,7 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { format, parseISO, getDaysInMonth } from "date-fns";
+import { format, parseISO, getDaysInMonth, addDays } from "date-fns";
+import { getConcessivoInfo, suggestSecondPeriod } from "@/lib/feriasConcessivo";
 import { ptBR } from "date-fns/locale";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -59,6 +60,8 @@ const formSchema = z.object({
   periodo3_mes: z.string().optional(),
   periodo_preferencia: z.string().optional(),
   data_inicio_preferencia: z.string().optional(),
+  modo_periodo: z.enum(["15_15", "30"]).default("15_15"),
+  data_inicio_q2_preferencia: z.string().optional(),
   vender_dias: z.boolean().default(false),
   dias_vender: z.number().min(0).max(10).optional(),
   observacao: z.string().max(500).optional(),
@@ -106,6 +109,8 @@ export function FormularioAnualDialog({
       periodo3_mes: "",
       periodo_preferencia: "",
       data_inicio_preferencia: "",
+      modo_periodo: "15_15",
+      data_inicio_q2_preferencia: "",
       vender_dias: false,
       dias_vender: 0,
       observacao: "",
@@ -132,7 +137,7 @@ export function FormularioAnualDialog({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ferias_colaboradores")
-        .select("id, nome, data_admissao, familiar_id, setor_titular:ferias_setores!setor_titular_id(nome)")
+        .select("id, nome, data_admissao, familiar_id, setor_titular_id, setor_titular:ferias_setores!setor_titular_id(nome)")
         .eq("status", "ativo")
         .order("nome");
       if (error) throw error;
@@ -219,6 +224,8 @@ export function FormularioAnualDialog({
           periodo3_mes: formulario.periodo3_mes?.toString() || "",
           periodo_preferencia: formulario.periodo_preferencia?.toString() || "",
           data_inicio_preferencia: (formulario as any).data_inicio_preferencia || "",
+          modo_periodo: (formulario as any).modo_periodo === "30" ? "30" : "15_15",
+          data_inicio_q2_preferencia: (formulario as any).data_inicio_q2_preferencia || "",
           vender_dias: formulario.vender_dias || false,
           dias_vender: formulario.dias_vender || 0,
           observacao: (formulario as any).observacao || "",
@@ -231,6 +238,8 @@ export function FormularioAnualDialog({
           periodo3_mes: "",
           periodo_preferencia: "",
           data_inicio_preferencia: "",
+          modo_periodo: "15_15",
+          data_inicio_q2_preferencia: "",
           vender_dias: false,
           dias_vender: 0,
           observacao: "",
@@ -271,8 +280,10 @@ export function FormularioAnualDialog({
         periodo3_mes: p3_mes ? parseInt(p3_mes) : null,
         periodo3_quinzena: null,
         periodo_preferencia: preferencia ? parseInt(preferencia) : null,
-        vender_dias: data.vender_dias,
-        dias_vender: data.vender_dias ? data.dias_vender : 0,
+        modo_periodo: data.modo_periodo,
+        data_inicio_q2_preferencia: data.modo_periodo === "15_15" ? (data.data_inicio_q2_preferencia || null) : null,
+        vender_dias: data.modo_periodo === "30" ? false : data.vender_dias,
+        dias_vender: data.modo_periodo === "30" ? 0 : (data.vender_dias ? data.dias_vender : 0),
         observacao: data.observacao || null,
         data_inicio_preferencia: data.data_inicio_preferencia || null,
         status: "pendente",
@@ -325,6 +336,14 @@ export function FormularioAnualDialog({
       }
     }
 
+    if (data.modo_periodo === "15_15" && data.data_inicio_preferencia && data.data_inicio_q2_preferencia) {
+      const a = parseISO(data.data_inicio_preferencia), b = parseISO(data.data_inicio_q2_preferencia);
+      if (a <= addDays(b, 14) && addDays(a, 14) >= b) {
+        toast.error("O 1º e o 2º período não podem se sobrepor");
+        return;
+      }
+    }
+
     saveMutation.mutate(data);
   };
 
@@ -360,6 +379,47 @@ export function FormularioAnualDialog({
       max: `${year}-${String(preferredMonth).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`,
     };
   }, [preferredMonth, anoReferencia]);
+
+  const modoPeriodo = form.watch("modo_periodo");
+  const dataInicio = form.watch("data_inicio_preferencia");
+  const dataInicioQ2 = form.watch("data_inicio_q2_preferencia");
+  const setorId = (selectedColaborador as any)?.setor_titular_id as string | undefined;
+  const refDate = dataInicio || (preferredMonth ? `${anoReferencia}-${String(preferredMonth).padStart(2, "0")}-01` : "");
+  const concessivo = useMemo(
+    () => (selectedColaborador?.data_admissao && refDate ? getConcessivoInfo(selectedColaborador.data_admissao, refDate) : null),
+    [selectedColaborador?.data_admissao, refDate],
+  );
+
+  const { data: feriasSetor = [] } = useQuery({
+    queryKey: ["ferias-setor-formulario", setorId, anoReferencia],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ferias_ferias")
+        .select("colaborador_id, quinzena1_inicio, quinzena1_fim, quinzena2_inicio, quinzena2_fim, colaborador:ferias_colaboradores!colaborador_id!inner(nome, setor_titular_id)")
+        .eq("colaborador.setor_titular_id", setorId!)
+        .gte("quinzena1_inicio", `${anoReferencia - 1}-01-01`)
+        .lte("quinzena1_inicio", `${anoReferencia + 1}-12-31`)
+        .not("status", "in", "(cancelada,rejeitada)");
+      if (error) throw error;
+      return (data || []).filter((f: any) => f.colaborador_id !== selectedColaboradorId);
+    },
+    enabled: open && !!setorId,
+  });
+
+  const sugestaoQ2 = useMemo(() => {
+    if (modoPeriodo !== "15_15" || !dataInicio || dataInicioQ2) return null;
+    const q1 = { inicio: dataInicio, fim: format(addDays(parseISO(dataInicio), 14), "yyyy-MM-dd") };
+    const anoIni = `${anoReferencia}-02-01`, anoFim = `${anoReferencia}-11-30`;
+    const limiteInicio = concessivo && !concessivo.antesDoConcessivo && concessivo.concessivoInicio > anoIni ? concessivo.concessivoInicio : anoIni;
+    const limiteFim = concessivo && concessivo.concessivoFim < anoFim ? concessivo.concessivoFim : anoFim;
+    const ocupados = feriasSetor.flatMap((f: any) => [
+      { inicio: f.quinzena1_inicio, fim: f.quinzena1_fim },
+      ...(f.quinzena2_inicio ? [{ inicio: f.quinzena2_inicio, fim: f.quinzena2_fim }] : []),
+    ]);
+    return suggestSecondPeriod({ q1, limiteInicio, limiteFim, ocupados, seed: selectedColaboradorId });
+  }, [modoPeriodo, dataInicio, dataInicioQ2, concessivo, feriasSetor, anoReferencia, selectedColaboradorId]);
+
+  const fimPeriodo = (d: string, dias: number) => { try { return formatDateBR(format(addDays(parseISO(d), dias - 1), "yyyy-MM-dd")); } catch { return ""; } };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -552,6 +612,32 @@ export function FormularioAnualDialog({
               </Card>
             )}
 
+            {/* Aviso de período concessivo */}
+            {concessivo?.antesDoConcessivo && selectedColaborador && (
+              <Alert variant="destructive">
+                <Ban className="h-4 w-4" />
+                <AlertTitle>Preferência antes do período concessivo</AlertTitle>
+                <AlertDescription className="text-sm space-y-1">
+                  <p>Admissão: <strong>{formatDateBR(selectedColaborador.data_admissao)}</strong></p>
+                  <p>Período aquisitivo: <strong>{formatDateBR(concessivo.aquisitivoInicio)} a {formatDateBR(concessivo.aquisitivoFim)}</strong></p>
+                  <p>Período concessivo devido: <strong>{formatDateBR(concessivo.concessivoInicio)} a {formatDateBR(concessivo.concessivoFim)}</strong></p>
+                  <p>A data/mês informado é anterior ao início do período concessivo.</p>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {preferredMonth && (
+              <FormField control={form.control} name="modo_periodo" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Formato das férias</FormLabel>
+                  <RadioGroup value={field.value} onValueChange={field.onChange} className="flex gap-4">
+                    <div className="flex items-center gap-2"><RadioGroupItem value="15_15" id="modo-1515" /><Label htmlFor="modo-1515">15/15 (dois períodos)</Label></div>
+                    <div className="flex items-center gap-2"><RadioGroupItem value="30" id="modo-30" /><Label htmlFor="modo-30">30 dias direto</Label></div>
+                  </RadioGroup>
+                </FormItem>
+              )} />
+            )}
+
             {/* Data de início desejada */}
             {preferredMonth && (
               <FormField
@@ -559,22 +645,59 @@ export function FormularioAnualDialog({
                 name="data_inicio_preferencia"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Data de início desejada (opcional)</FormLabel>
+                    <FormLabel>{modoPeriodo === "30" ? "Data de início dos 30 dias" : "Início do 1º período (opcional)"}</FormLabel>
                     <FormControl>
-                      <Input
-                        type="date"
-                        {...field}
-                        min={preferredMonthDateLimits?.min}
-                        max={preferredMonthDateLimits?.max}
-                      />
+                      <Input type="date" {...field} min={preferredMonthDateLimits?.min} max={preferredMonthDateLimits?.max} />
                     </FormControl>
-                    <FormDescription>
-                      Se o colaborador deseja iniciar as férias em uma data específica de {MONTHS.find(m => m.value === String(preferredMonth))?.label}, informe aqui.
-                    </FormDescription>
+                    {field.value && (
+                      <FormDescription>Término: {fimPeriodo(field.value, modoPeriodo === "30" ? 30 : 15)}</FormDescription>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
               />
+            )}
+
+            {preferredMonth && modoPeriodo === "15_15" && (
+              <FormField control={form.control} name="data_inicio_q2_preferencia" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Início do 2º período (opcional)</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} min={`${anoReferencia}-02-01`} max={`${anoReferencia}-11-30`} />
+                  </FormControl>
+                  {field.value ? (
+                    <FormDescription>Término: {fimPeriodo(field.value, 15)}</FormDescription>
+                  ) : (
+                    <FormDescription>Se não informado, o sistema sugere uma data sem conflito com o setor e dentro do período concessivo.</FormDescription>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )} />
+            )}
+
+            {preferredMonth && modoPeriodo === "15_15" && dataInicio && !dataInicioQ2 && (
+              <Card className="bg-muted/40">
+                <CardContent className="pt-4 space-y-2 text-sm">
+                  <p className="font-medium">Férias de outros colaboradores do setor</p>
+                  {feriasSetor.length === 0 ? (
+                    <p className="text-muted-foreground">Nenhuma férias cadastrada no setor.</p>
+                  ) : (
+                    <ul className="list-disc list-inside text-muted-foreground">
+                      {feriasSetor.map((f: any, i: number) => (
+                        <li key={i}>{f.colaborador?.nome}: {formatDateBR(f.quinzena1_inicio)}–{formatDateBR(f.quinzena1_fim)}{f.quinzena2_inicio ? ` | ${formatDateBR(f.quinzena2_inicio)}–${formatDateBR(f.quinzena2_fim)}` : ""}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {sugestaoQ2 ? (
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <span>Sugestão para o 2º período: <strong>{formatDateBR(sugestaoQ2.inicio)} a {formatDateBR(sugestaoQ2.fim)}</strong></span>
+                      <Button type="button" size="sm" variant="outline" onClick={() => form.setValue("data_inicio_q2_preferencia", sugestaoQ2.inicio)}>Usar sugestão</Button>
+                    </div>
+                  ) : (
+                    <p className="text-destructive">Não há data livre para o 2º período dentro do período concessivo; informe manualmente.</p>
+                  )}
+                </CardContent>
+              </Card>
             )}
 
             <Separator />
@@ -619,7 +742,7 @@ export function FormularioAnualDialog({
                 )}
               />
 
-              {venderDias && (
+              {venderDias && modoPeriodo !== "30" && (
                 <FormField control={form.control} name="dias_vender" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Quantidade de dias a vender (máx. 10)</FormLabel>

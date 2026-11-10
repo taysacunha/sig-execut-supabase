@@ -3754,8 +3754,10 @@ export type Database = {
           colaborador_id: string | null
           created_at: string | null
           data_inicio_preferencia: string | null
+          data_inicio_q2_preferencia: string | null
           dias_vender: number | null
           id: string
+          modo_periodo: string
           observacao: string | null
           periodo_preferencia: number | null
           periodo1_mes: number | null
@@ -3773,8 +3775,10 @@ export type Database = {
           colaborador_id?: string | null
           created_at?: string | null
           data_inicio_preferencia?: string | null
+          data_inicio_q2_preferencia?: string | null
           dias_vender?: number | null
           id?: string
+          modo_periodo?: string
           observacao?: string | null
           periodo_preferencia?: number | null
           periodo1_mes?: number | null
@@ -3792,8 +3796,10 @@ export type Database = {
           colaborador_id?: string | null
           created_at?: string | null
           data_inicio_preferencia?: string | null
+          data_inicio_q2_preferencia?: string | null
           dias_vender?: number | null
           id?: string
+          modo_periodo?: string
           observacao?: string | null
           periodo_preferencia?: number | null
           periodo1_mes?: number | null
