@@ -397,14 +397,32 @@ export function FormularioAnualDialog({
         .from("ferias_ferias")
         .select("colaborador_id, quinzena1_inicio, quinzena1_fim, quinzena2_inicio, quinzena2_fim, colaborador:ferias_colaboradores!colaborador_id!inner(nome, setor_titular_id)")
         .eq("colaborador.setor_titular_id", setorId!)
-        .gte("quinzena1_inicio", `${anoReferencia - 1}-01-01`)
-        .lte("quinzena1_inicio", `${anoReferencia + 1}-12-31`)
-        .not("status", "in", "(cancelada,rejeitada)");
+        .gte("quinzena1_inicio", `${anoReferencia}-01-01`)
+        .lte("quinzena1_inicio", `${anoReferencia}-12-31`)
+        .not("status", "in", "(cancelada,rejeitada,concluida)");
       if (error) throw error;
       return (data || []).filter((f: any) => f.colaborador_id !== selectedColaboradorId);
     },
     enabled: open && !!setorId,
   });
+
+  // Agrupa por colaborador, somente períodos ainda não gozados, em ordem cronológica
+  const feriasSetorAgrupadas = useMemo(() => {
+    const hoje = format(new Date(), "yyyy-MM-dd");
+    const map = new Map<string, { nome: string; periodos: { inicio: string; fim: string }[] }>();
+    feriasSetor.forEach((f: any) => {
+      const nome = f.colaborador?.nome || "—";
+      const g = map.get(f.colaborador_id) || { nome, periodos: [] };
+      [[f.quinzena1_inicio, f.quinzena1_fim], [f.quinzena2_inicio, f.quinzena2_fim]].forEach(([i, fim]) => {
+        if (i && fim && fim >= hoje) g.periodos.push({ inicio: i, fim });
+      });
+      map.set(f.colaborador_id, g);
+    });
+    return [...map.values()]
+      .filter((g) => g.periodos.length > 0)
+      .map((g) => ({ ...g, periodos: g.periodos.sort((a, b) => a.inicio.localeCompare(b.inicio)) }))
+      .sort((a, b) => a.periodos[0].inicio.localeCompare(b.periodos[0].inicio));
+  }, [feriasSetor]);
 
   const sugestaoQ2 = useMemo(() => {
     if (modoPeriodo !== "15_15" || !dataInicio || dataInicioQ2) return null;
@@ -423,7 +441,7 @@ export function FormularioAnualDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5 text-primary" />
@@ -435,7 +453,7 @@ export function FormularioAnualDialog({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 min-h-0 overflow-y-auto pr-2 -mr-2">
             {/* Combobox Colaborador */}
             <FormField
               control={form.control}
@@ -679,14 +697,23 @@ export function FormularioAnualDialog({
               <Card className="bg-muted/40">
                 <CardContent className="pt-4 space-y-2 text-sm">
                   <p className="font-medium">Férias de outros colaboradores do setor</p>
-                  {feriasSetor.length === 0 ? (
-                    <p className="text-muted-foreground">Nenhuma férias cadastrada no setor.</p>
+                  {feriasSetorAgrupadas.length === 0 ? (
+                    <p className="text-muted-foreground">Nenhuma férias a gozar no setor em {anoReferencia}.</p>
                   ) : (
-                    <ul className="list-disc list-inside text-muted-foreground">
-                      {feriasSetor.map((f: any, i: number) => (
-                        <li key={i}>{f.colaborador?.nome}: {formatDateBR(f.quinzena1_inicio)}–{formatDateBR(f.quinzena1_fim)}{f.quinzena2_inicio ? ` | ${formatDateBR(f.quinzena2_inicio)}–${formatDateBR(f.quinzena2_fim)}` : ""}</li>
+                    <div className="divide-y rounded-md border bg-background">
+                      {feriasSetorAgrupadas.map((g) => (
+                        <div key={g.nome} className="flex flex-col gap-1 p-2 sm:flex-row sm:items-center sm:justify-between">
+                          <span className="font-medium">{g.nome}</span>
+                          <div className="flex flex-wrap gap-1">
+                            {g.periodos.map((p) => (
+                              <span key={p.inicio} className="rounded border bg-muted px-2 py-0.5 text-xs">
+                                {formatDateBR(p.inicio)} a {formatDateBR(p.fim)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   )}
                   {sugestaoQ2 ? (
                     <div className="flex flex-wrap items-center gap-2 pt-1">
