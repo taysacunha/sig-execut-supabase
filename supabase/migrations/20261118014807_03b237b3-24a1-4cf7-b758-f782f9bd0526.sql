@@ -1,0 +1,7 @@
+INSERT INTO public.dev_tracker_log (occurred_on, system_name, title, change_type, hours, description) VALUES
+('2026-11-08','escalas','Validação de turnos não alocados: datas específicas, feriados e exclusões','correcao',2,'Aba Validação passou a respeitar datas específicas configuradas, feriados e dias/turnos retirados; mesmo ajuste no relatório Sem alocação e dialogs de plantão avulso.'),
+('2026-11-12','ferias','Formulário anual: aviso de concessivo, sugestão do 2º período e 30 dias/15+15','melhoria',3,'Destaque em vermelho fora do concessivo, sugestão de 2º período sem conflito e escolha entre 30 dias direto ou 15/15; correção de sobreposição no gerador.'),
+('2026-11-13','ferias','Formulário anual: rolagem dupla e lista de férias do setor','ajuste',1,'Removida rolagem duplicada e lista de férias do setor filtrada pelo ano, sem férias já gozadas, agrupada e ordenada.'),
+('2026-11-14','ferias','Ordem cronológica dos períodos e detalhes do formulário anual','correcao',2,'Mês mais antigo no 1º período, status atualizado após geração e detalhes com modo, datas e observações.'),
+('2026-11-16','ferias','Edição volta formulário para Pendente e prévia processa só pendentes','correcao',2,'Férias geradas sem alteração permanecem como bloqueio e aparecem em Não processadas.'),
+('2026-11-17','ferias','Datas exatas preservadas na prévia e mês de preferência não obrigatório','correcao',2,'Datas informadas prevalecem mesmo com conflito; mês de preferência vira aviso, exigindo apenas ordem cronológica e sem sobreposição.');
