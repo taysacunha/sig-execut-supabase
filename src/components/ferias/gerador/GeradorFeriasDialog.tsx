@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -22,6 +22,7 @@ interface GeradorFeriasDialogProps {
 }
 
 export function GeradorFeriasDialog({ open, onOpenChange, anoReferencia, onSuccess }: GeradorFeriasDialogProps) {
+  const queryClient = useQueryClient();
   const [setorFilter, setSetorFilter] = useState<string>("all");
   const [generationResult, setGenerationResult] = useState<GenerationResult | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -82,11 +83,12 @@ export function GeradorFeriasDialog({ open, onOpenChange, anoReferencia, onSucce
         ...generationResult.conflicts.filter(v => selectedVacations.has(v.colaborador_id)),
       ];
       if (vacationsToSave.length === 0) { toast.error("Selecione pelo menos uma férias para salvar"); return; }
-      const { saved, errors } = await saveGeneratedVacations(vacationsToSave, true);
+      const { saved, errors } = await saveGeneratedVacations(vacationsToSave, true, anoReferencia);
       if (errors.length > 0) {
         toast.error(`Salvo ${saved} férias. Erros: ${errors.join(", ")}`);
       } else {
         toast.success(`${saved} férias salvas com sucesso!`);
+        queryClient.invalidateQueries({ queryKey: ["ferias-formularios"] });
         onSuccess();
         onOpenChange(false);
       }

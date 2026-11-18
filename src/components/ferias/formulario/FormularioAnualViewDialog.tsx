@@ -30,6 +30,10 @@ interface FormularioAnual {
   vender_dias: boolean | null;
   dias_vender: number | null;
   status: string | null;
+  observacao?: string | null;
+  data_inicio_preferencia?: string | null;
+  data_inicio_q2_preferencia?: string | null;
+  modo_periodo?: string | null;
   created_at: string | null;
   updated_at: string | null;
   colaborador?: {
@@ -78,10 +82,22 @@ export function FormularioAnualViewDialog({
 }: FormularioAnualViewDialogProps) {
   if (!formulario) return null;
 
-  const status = statusConfig[formulario.status || "pendente"];
+  const status = statusConfig[formulario.status || "pendente"] || statusConfig.pendente;
+  const modo30 = formulario.modo_periodo === "30";
+  const fmtRange = (d: string | null | undefined, dias: number) => {
+    if (!d) return null;
+    try {
+      const ini = parseISO(d);
+      const fim = new Date(ini); fim.setDate(fim.getDate() + dias - 1);
+      return `${format(ini, "dd/MM/yyyy")} a ${format(fim, "dd/MM/yyyy")}`;
+    } catch { return d; }
+  };
+  const datas1 = fmtRange(formulario.data_inicio_preferencia, modo30 ? 30 : 15);
+  const datas2 = modo30 ? null : fmtRange(formulario.data_inicio_q2_preferencia, 15);
 
   const formatPeriodo = (mes: number | null, quinzena: string | null) => {
-    if (mes === null || !quinzena) return null;
+    if (!mes) return null;
+    if (!quinzena) return MONTHS[mes - 1];
     return `${quinzena === "1" ? "1ª" : "2ª"} quinzena de ${MONTHS[mes - 1]}`;
   };
 
@@ -100,7 +116,7 @@ export function FormularioAnualViewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5 text-primary" />
@@ -195,6 +211,32 @@ export function FormularioAnualViewDialog({
               </p>
             )}
           </div>
+
+          <Separator />
+
+          <div className="space-y-2 rounded-lg bg-muted/50 p-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span>Formato</span>
+              <Badge variant="outline">{modo30 ? "30 dias direto" : "15/15"}</Badge>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span>{modo30 ? "Período" : "1º período"}</span>
+              <span className="text-muted-foreground">{datas1 || "Data não informada"}</span>
+            </div>
+            {!modo30 && (
+              <div className="flex items-center justify-between gap-2">
+                <span>2º período</span>
+                <span className="text-muted-foreground">{datas2 || "Será sugerido na geração"}</span>
+              </div>
+            )}
+          </div>
+
+          {formulario.observacao && (
+            <div className="rounded-lg bg-muted/50 p-3 text-sm">
+              <p className="font-medium mb-1">Observação</p>
+              <p className="text-muted-foreground whitespace-pre-wrap break-words">{formulario.observacao}</p>
+            </div>
+          )}
 
           <Separator />
 

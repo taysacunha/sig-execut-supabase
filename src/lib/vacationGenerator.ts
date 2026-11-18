@@ -428,9 +428,19 @@ export async function generateVacations(
         }
         if (!bestQ2) continue;
       }
-      const q2Final = bestQ2 as CandidateWindow | null;
+      let q2Final = bestQ2 as CandidateWindow | null;
+      let q1ConfFinal = bestQ1Conflicts;
+      let q2ConfFinal = q2Conflicts;
+      // Ordem cronológica: o 1º período é sempre o que começa antes no ano
+      if (q2Final && q2Final.start < bestQ1.start) {
+        const tmp = bestQ1;
+        bestQ1 = q2Final;
+        q2Final = tmp;
+        q1ConfFinal = q2Conflicts;
+        q2ConfFinal = bestQ1Conflicts;
+      }
 
-      const allConflicts: ConflictInfo[] = [...tagPeriodo(bestQ1Conflicts, 1), ...tagPeriodo(q2Conflicts, 2)];
+      const allConflicts: ConflictInfo[] = [...tagPeriodo(q1ConfFinal, 1), ...tagPeriodo(q2ConfFinal, 2)];
 
       // Check Jan/Dec block
       const q1Month = parseISO(bestQ1.start).getMonth() + 1;
@@ -497,7 +507,8 @@ export async function generateVacations(
 // Save generated vacations to database
 export async function saveGeneratedVacations(
   vacations: GeneratedVacation[],
-  forceExceptions: boolean = false
+  forceExceptions: boolean = false,
+  anoReferencia?: number,
 ): Promise<{ saved: number; errors: string[] }> {
   const errors: string[] = [];
   let saved = 0;
@@ -528,6 +539,12 @@ export async function saveGeneratedVacations(
 
       if (error) throw error;
       saved++;
+      if (anoReferencia) {
+        await supabase.from("ferias_formulario_anual")
+          .update({ status: "aprovado", updated_at: new Date().toISOString() })
+          .eq("colaborador_id", vacation.colaborador_id)
+          .eq("ano_referencia", anoReferencia);
+      }
     } catch (err: any) {
       errors.push(`${vacation.colaborador_nome}: ${err.message}`);
     }
