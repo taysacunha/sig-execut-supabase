@@ -377,8 +377,13 @@ export async function generateVacations(
       const modo30 = form.modo_periodo === "30";
       const durQ1 = modo30 ? 30 : 15;
       const monthWindows = generateCandidateWindows(ano, chosenMonth).map((w) => generateWindowFromDate(w.start, durQ1));
-      if (chosenMonth === preferredMonth && form.data_inicio_preferencia) {
-        candidateWindows = [generateWindowFromDate(form.data_inicio_preferencia, durQ1), ...monthWindows];
+      // Datas exatas valem para o mês em que caem (ordem cronológica, não prioridade)
+      const mesDe = (d?: string | null) => (d ? parseISO(d).getMonth() + 1 : 0);
+      const fixa = modo30
+        ? (chosenMonth === preferredMonth ? form.data_inicio_preferencia : null)
+        : [form.data_inicio_preferencia, form.data_inicio_q2_preferencia].find((d) => mesDe(d) === chosenMonth) || null;
+      if (fixa) {
+        candidateWindows = [generateWindowFromDate(fixa, durQ1), ...monthWindows];
       } else {
         candidateWindows = monthWindows;
       }
@@ -418,7 +423,9 @@ export async function generateVacations(
           return false;
         };
         let ok = false;
-        if (form.data_inicio_q2_preferencia) ok = tryWindows([generateWindowFromDate(form.data_inicio_q2_preferencia)]);
+        const outrasDatas = [form.data_inicio_preferencia, form.data_inicio_q2_preferencia]
+          .filter((d): d is string => !!d && parseISO(d).getMonth() + 1 !== chosenMonth);
+        if (outrasDatas.length) ok = tryWindows(outrasDatas.map((d) => generateWindowFromDate(d)));
         const secondMonth = orderedMonths.find(m => m !== chosenMonth);
         if (!ok && secondMonth) ok = tryWindows(generateCandidateWindows(ano, secondMonth));
         if (!ok) {

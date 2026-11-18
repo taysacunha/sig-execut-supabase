@@ -131,6 +131,16 @@ export function FormularioAnualDialog({
     return mesVal && mesVal !== "_none_" ? parseInt(mesVal) : null;
   }, [periodoPreferencia, periodo1_mes, periodo2_mes, periodo3_mes]);
 
+  // Meses cronológicos para os campos de data (independente da preferência)
+  const modoPeriodoW = form.watch("modo_periodo");
+  const mesesOrdenados = useMemo(() => {
+    const ms = [periodo1_mes, periodo2_mes, periodo3_mes]
+      .map((v) => normalizeValue(v)).filter(Boolean).map((v) => parseInt(v as string));
+    return [...new Set(ms)].sort((a, b) => a - b);
+  }, [periodo1_mes, periodo2_mes, periodo3_mes]);
+  const mesQ1 = modoPeriodoW === "30" ? preferredMonth : (mesesOrdenados[0] ?? null);
+  const mesQ2 = modoPeriodoW === "30" ? null : (mesesOrdenados[1] ?? null);
+
   // Fetch colaboradores ativos
   const { data: colaboradores = [] } = useQuery({
     queryKey: ["ferias-colaboradores-formulario"],
@@ -251,20 +261,21 @@ export function FormularioAnualDialog({
   // Clear data_inicio_preferencia when preferred month changes
   useEffect(() => {
     const currentDate = form.getValues("data_inicio_preferencia");
-    if (currentDate && preferredMonth) {
+    const alvo = mesQ1;
+    if (currentDate && alvo) {
       try {
         const d = parseISO(currentDate);
-        if (d.getMonth() + 1 !== preferredMonth) {
-          // Preserva o dia escolhido, movendo-o para o novo mês preferido
+        if (d.getMonth() + 1 !== alvo) {
+          // Preserva o dia escolhido, movendo-o para o mês cronológico do 1º período
           const ano = d.getFullYear();
-          const dia = Math.min(d.getDate(), getDaysInMonth(new Date(ano, preferredMonth - 1)));
-          form.setValue("data_inicio_preferencia", `${ano}-${String(preferredMonth).padStart(2, "0")}-${String(dia).padStart(2, "0")}`);
+          const dia = Math.min(d.getDate(), getDaysInMonth(new Date(ano, alvo - 1)));
+          form.setValue("data_inicio_preferencia", `${ano}-${String(alvo).padStart(2, "0")}-${String(dia).padStart(2, "0")}`);
         }
       } catch {
         form.setValue("data_inicio_preferencia", "");
       }
     }
-  }, [preferredMonth]);
+  }, [mesQ1]);
 
   const saveMutation = useMutation({
     mutationFn: async (data: FormData) => {
@@ -326,11 +337,22 @@ export function FormularioAnualDialog({
     }
 
     // Validate data_inicio_preferencia is within preferred month
-    if (data.data_inicio_preferencia && preferredMonth) {
+    const nomeMes = (m: number) => MONTHS.find((x) => parseInt(x.value) === m)?.label || String(m);
+    if (data.modo_periodo === "15_15" && mesesOrdenados.length < 2) {
+      toast.warning("Apenas um mês informado: o 2º período será sugerido pelo sistema.");
+    }
+    if (data.modo_periodo === "15_15" && data.data_inicio_q2_preferencia && mesQ2) {
+      const d2 = parseISO(data.data_inicio_q2_preferencia);
+      if (d2.getMonth() + 1 !== mesQ2) {
+        toast.error(`O início do 2º período deve estar em ${nomeMes(mesQ2)}`);
+        return;
+      }
+    }
+    if (data.data_inicio_preferencia && mesQ1) {
       try {
         const d = parseISO(data.data_inicio_preferencia);
-        if (d.getMonth() + 1 !== preferredMonth) {
-          toast.error("A data de início deve estar dentro do mês de preferência");
+        if (d.getMonth() + 1 !== mesQ1) {
+          toast.error(`O início do ${data.modo_periodo === "30" ? "período de 30 dias" : "1º período"} deve estar em ${nomeMes(mesQ1)}`);
           return;
         }
       } catch {
@@ -374,14 +396,20 @@ export function FormularioAnualDialog({
 
   // Compute min/max dates for the preferred month date picker
   const preferredMonthDateLimits = useMemo(() => {
-    if (!preferredMonth) return null;
+    if (!mesQ1) return null;
     const year = anoReferencia;
-    const daysInMonth = getDaysInMonth(new Date(year, preferredMonth - 1));
+    const daysInMonth = getDaysInMonth(new Date(year, mesQ1 - 1));
     return {
-      min: `${year}-${String(preferredMonth).padStart(2, "0")}-01`,
-      max: `${year}-${String(preferredMonth).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`,
+      min: `${year}-${String(mesQ1).padStart(2, "0")}-01`,
+      max: `${year}-${String(mesQ1).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`,
     };
-  }, [preferredMonth, anoReferencia]);
+  }, [mesQ1, anoReferencia]);
+  const q2DateLimits = useMemo(() => {
+    if (!mesQ2) return { min: `${anoReferencia}-02-01`, max: `${anoReferencia}-11-30` };
+    const d = getDaysInMonth(new Date(anoReferencia, mesQ2 - 1));
+    const mm = String(mesQ2).padStart(2, "0");
+    return { min: `${anoReferencia}-${mm}-01`, max: `${anoReferencia}-${mm}-${String(d).padStart(2, "0")}` };
+  }, [mesQ2, anoReferencia]);
 
   const modoPeriodo = form.watch("modo_periodo");
   const dataInicio = form.watch("data_inicio_preferencia");
@@ -670,8 +698,11 @@ export function FormularioAnualDialog({
                     <FormControl>
                       <Input type="date" {...field} min={preferredMonthDateLimits?.min} max={preferredMonthDateLimits?.max} />
                     </FormControl>
-                    {field.value && (
-                      <FormDescription>Término: {fimPeriodo(field.value, modoPeriodo === "30" ? 30 : 15)}</FormDescription>
+                    {mesQ1 && (
+                      <FormDescription>
+                        {`Data em ${MONTHS.find((x) => parseInt(x.value) === mesQ1)?.label}.`}
+                        {field.value ? ` Término: ${fimPeriodo(field.value, modoPeriodo === "30" ? 30 : 15)}` : ""}
+                      </FormDescription>
                     )}
                     <FormMessage />
                   </FormItem>
@@ -684,12 +715,12 @@ export function FormularioAnualDialog({
                 <FormItem>
                   <FormLabel>Início do 2º período (opcional)</FormLabel>
                   <FormControl>
-                    <Input type="date" {...field} min={`${anoReferencia}-02-01`} max={`${anoReferencia}-11-30`} />
+                    <Input type="date" {...field} min={q2DateLimits.min} max={q2DateLimits.max} />
                   </FormControl>
                   {field.value ? (
                     <FormDescription>Término: {fimPeriodo(field.value, 15)}</FormDescription>
                   ) : (
-                    <FormDescription>Se não informado, o sistema sugere uma data sem conflito com o setor e dentro do período concessivo.</FormDescription>
+                    <FormDescription>{mesQ2 ? `Data em ${MONTHS.find((x) => parseInt(x.value) === mesQ2)?.label}. ` : "Nenhum 2º mês informado. "}Se não informado, o sistema sugere uma data sem conflito com o setor e dentro do período concessivo.</FormDescription>
                   )}
                   <FormMessage />
                 </FormItem>
