@@ -101,6 +101,9 @@ export function FormularioAnualViewDialog({
     return `${quinzena === "1" ? "1ª" : "2ª"} quinzena de ${MONTHS[mes - 1]}`;
   };
 
+  const mesPrefNum = formulario.periodo_preferencia === 2 ? formulario.periodo2_mes
+    : formulario.periodo_preferencia === 3 ? formulario.periodo3_mes : formulario.periodo1_mes;
+  const mesPreferido = mesPrefNum ? MONTHS[mesPrefNum - 1] : null;
   const periodo1 = formatPeriodo(formulario.periodo1_mes, formulario.periodo1_quinzena);
   const periodo2 = formatPeriodo(formulario.periodo2_mes, formulario.periodo2_quinzena);
   const periodo3 = formatPeriodo(formulario.periodo3_mes, formulario.periodo3_quinzena);
@@ -221,7 +224,7 @@ export function FormularioAnualViewDialog({
             </div>
             <div className="flex items-center justify-between gap-2">
               <span>{modo30 ? "Período" : "1º período"}</span>
-              <span className="text-muted-foreground">{datas1 || "Data não informada"}</span>
+              <span className="text-muted-foreground">{datas1 || (mesPreferido ? `${mesPreferido} (dia definido na geração)` : "Data não informada")}</span>
             </div>
             {!modo30 && (
               <div className="flex items-center justify-between gap-2">

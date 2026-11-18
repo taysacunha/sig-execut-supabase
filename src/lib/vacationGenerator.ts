@@ -49,6 +49,8 @@ export interface GeneratedVacation {
   origem: string;
   /** 30 dias direto: período único, sem 2º período e sem venda */
   periodo_unico?: boolean;
+  /** Férias já geradas pelo formulário que serão substituídas ao salvar */
+  substitui_ids?: string[];
   /** Backup do 2º período/venda para restaurar ao desativar os 30 dias */
   q2_backup?: { inicio: string; fim: string; vender_dias: boolean; dias_vendidos: number; quinzena_venda: number };
 }
@@ -299,7 +301,7 @@ export async function generateVacations(
 ): Promise<GenerationResult> {
   const result: GenerationResult = { success: [], conflicts: [], unprocessed: [] };
 
-  const [forms, existingVacations, rules, substituteData] = await Promise.all([
+  const [forms, allExistingVacations, rules, substituteData] = await Promise.all([
     fetchForms(ano),
     fetchExistingVacations(ano),
     fetchRules(),
@@ -313,6 +315,17 @@ export async function generateVacations(
     ? forms.filter(f => f.colaborador?.setor_titular_id === setorFilter)
     : forms;
 
+  const replaceMap: Record<string, string[]> = {};
+  // Férias geradas pelo formulário, ainda não iniciadas e não enviadas ao contador, podem ser regeneradas
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const formColabs = new Set(filteredForms.map(f => f.colaborador_id));
+  const isReplaceable = (v: any) => formColabs.has(v.colaborador_id) &&
+    v.origem === "formulario_anual" && v.status === "aprovada" && v.quinzena1_inicio > todayStr &&
+    !v.enviado_contador && !v.enviado_contador_q1 && !v.enviado_contador_q2;
+  for (const v of allExistingVacations) {
+    if (isReplaceable(v)) (replaceMap[v.colaborador_id] ||= []).push(v.id);
+  }
+  const existingVacations = allExistingVacations.filter(v => !isReplaceable(v));
   // Track allocated vacations during generation
   const allocatedVacations: GeneratedVacation[] = [];
 
@@ -500,6 +513,9 @@ export async function generateVacations(
     }
   }
 
+  for (const v of [...result.success, ...result.conflicts]) {
+    if (replaceMap[v.colaborador_id]) v.substitui_ids = replaceMap[v.colaborador_id];
+  }
   result.context = { existingVacations, forms, substituteSectors, sectorToColabs };
   return result;
 }
@@ -516,6 +532,10 @@ export async function saveGeneratedVacations(
   for (const vacation of vacations) {
     try {
       const unico = !!vacation.periodo_unico;
+      if (vacation.substitui_ids?.length) {
+        const { error: delErr } = await supabase.from("ferias_ferias").delete().in("id", vacation.substitui_ids);
+        if (delErr) throw delErr;
+      }
       const { error } = await supabase.from("ferias_ferias").insert({
         colaborador_id: vacation.colaborador_id,
         quinzena1_inicio: vacation.quinzena1_inicio,

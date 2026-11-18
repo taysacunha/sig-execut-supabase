@@ -255,7 +255,10 @@ export function FormularioAnualDialog({
       try {
         const d = parseISO(currentDate);
         if (d.getMonth() + 1 !== preferredMonth) {
-          form.setValue("data_inicio_preferencia", "");
+          // Preserva o dia escolhido, movendo-o para o novo mês preferido
+          const ano = d.getFullYear();
+          const dia = Math.min(d.getDate(), getDaysInMonth(new Date(ano, preferredMonth - 1)));
+          form.setValue("data_inicio_preferencia", `${ano}-${String(preferredMonth).padStart(2, "0")}-${String(dia).padStart(2, "0")}`);
         }
       } catch {
         form.setValue("data_inicio_preferencia", "");
@@ -286,7 +289,7 @@ export function FormularioAnualDialog({
         dias_vender: data.modo_periodo === "30" ? 0 : (data.vender_dias ? data.dias_vender : 0),
         observacao: data.observacao || null,
         data_inicio_preferencia: data.data_inicio_preferencia || null,
-        status: "pendente",
+        ...(isEditing ? {} : { status: "pendente" }),
         updated_at: new Date().toISOString(),
       };
 
