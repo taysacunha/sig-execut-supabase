@@ -300,7 +300,7 @@ export function FormularioAnualDialog({
         dias_vender: data.modo_periodo === "30" ? 0 : (data.vender_dias ? data.dias_vender : 0),
         observacao: data.observacao || null,
         data_inicio_preferencia: data.data_inicio_preferencia || null,
-        ...(isEditing ? {} : { status: "pendente" }),
+        status: "pendente",
         updated_at: new Date().toISOString(),
       };
 

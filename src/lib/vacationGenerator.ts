@@ -318,7 +318,8 @@ export async function generateVacations(
   const replaceMap: Record<string, string[]> = {};
   // Férias geradas pelo formulário, ainda não iniciadas e não enviadas ao contador, podem ser regeneradas
   const todayStr = format(new Date(), "yyyy-MM-dd");
-  const formColabs = new Set(filteredForms.map(f => f.colaborador_id));
+  // Só regenera quem teve o formulário atualizado (status pendente)
+  const formColabs = new Set(filteredForms.filter(f => (f as any).status === "pendente").map(f => f.colaborador_id));
   const isReplaceable = (v: any) => formColabs.has(v.colaborador_id) &&
     v.origem === "formulario_anual" && v.status === "aprovada" && v.quinzena1_inicio > todayStr &&
     !v.enviado_contador && !v.enviado_contador_q1 && !v.enviado_contador_q2;
