@@ -359,7 +359,14 @@ export async function generateVacations(
       continue;
     }
 
-    const orderedMonths = getOrderedMonths(form);
+    // Datas exatas informadas no formulário são soberanas: nunca são trocadas por janelas alternativas.
+    const datasFixas = (form.modo_periodo === "30"
+      ? [form.data_inicio_preferencia]
+      : [form.data_inicio_preferencia, form.data_inicio_q2_preferencia]
+    ).filter((d): d is string => !!d).sort();
+    const orderedMonths = datasFixas.length
+      ? [parseISO(datasFixas[0]).getMonth() + 1]
+      : getOrderedMonths(form);
     if (orderedMonths.length === 0) {
       result.unprocessed.push({ colaborador_nome: form.colaborador.nome, motivo: "Formulário sem meses preenchidos" });
       continue;
@@ -379,15 +386,8 @@ export async function generateVacations(
       const durQ1 = modo30 ? 30 : 15;
       const monthWindows = generateCandidateWindows(ano, chosenMonth).map((w) => generateWindowFromDate(w.start, durQ1));
       // Datas exatas valem para o mês em que caem (ordem cronológica, não prioridade)
-      const mesDe = (d?: string | null) => (d ? parseISO(d).getMonth() + 1 : 0);
-      const fixa = modo30
-        ? (chosenMonth === preferredMonth ? form.data_inicio_preferencia : null)
-        : [form.data_inicio_preferencia, form.data_inicio_q2_preferencia].find((d) => mesDe(d) === chosenMonth) || null;
-      if (fixa) {
-        candidateWindows = [generateWindowFromDate(fixa, durQ1), ...monthWindows];
-      } else {
-        candidateWindows = monthWindows;
-      }
+      const fixa = datasFixas[0] || null;
+      candidateWindows = fixa ? [generateWindowFromDate(fixa, durQ1)] : monthWindows;
 
       // Find best window for first period
       let bestQ1: CandidateWindow | null = null;
@@ -424,10 +424,12 @@ export async function generateVacations(
           return false;
         };
         let ok = false;
-        const outrasDatas = [form.data_inicio_preferencia, form.data_inicio_q2_preferencia]
-          .filter((d): d is string => !!d && parseISO(d).getMonth() + 1 !== chosenMonth);
-        if (outrasDatas.length) ok = tryWindows(outrasDatas.map((d) => generateWindowFromDate(d)));
-        const secondMonth = orderedMonths.find(m => m !== chosenMonth);
+        const outrasDatas = datasFixas.slice(1);
+        if (outrasDatas.length) {
+          tryWindows(outrasDatas.map((d) => generateWindowFromDate(d)));
+          ok = !!bestQ2; // data informada é mantida mesmo com conflito
+        }
+        const secondMonth = getOrderedMonths(form).find(m => m !== chosenMonth);
         if (!ok && secondMonth) ok = tryWindows(generateCandidateWindows(ano, secondMonth));
         if (!ok) {
           const info = form.colaborador.data_admissao ? getConcessivoInfo(form.colaborador.data_admissao, bestQ1.start) : null;

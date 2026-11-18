@@ -258,25 +258,6 @@ export function FormularioAnualDialog({
     }
   }, [open, formulario, form]);
 
-  // Clear data_inicio_preferencia when preferred month changes
-  useEffect(() => {
-    const currentDate = form.getValues("data_inicio_preferencia");
-    const alvo = mesQ1;
-    if (currentDate && alvo) {
-      try {
-        const d = parseISO(currentDate);
-        if (d.getMonth() + 1 !== alvo) {
-          // Preserva o dia escolhido, movendo-o para o mês cronológico do 1º período
-          const ano = d.getFullYear();
-          const dia = Math.min(d.getDate(), getDaysInMonth(new Date(ano, alvo - 1)));
-          form.setValue("data_inicio_preferencia", `${ano}-${String(alvo).padStart(2, "0")}-${String(dia).padStart(2, "0")}`);
-        }
-      } catch {
-        form.setValue("data_inicio_preferencia", "");
-      }
-    }
-  }, [mesQ1]);
-
   const saveMutation = useMutation({
     mutationFn: async (data: FormData) => {
       const p1_mes = normalizeValue(data.periodo1_mes);
@@ -331,42 +312,28 @@ export function FormularioAnualDialog({
     const p2 = normalizeValue(data.periodo2_mes);
     const p3 = normalizeValue(data.periodo3_mes);
 
-    if (!p1 && !p2 && !p3) {
-      toast.error("Informe pelo menos um mês de preferência");
+    if (!p1 && !p2 && !p3 && !data.data_inicio_preferencia) {
+      toast.error("Informe pelo menos um mês de preferência ou uma data de início");
       return;
     }
-
-    // Validate data_inicio_preferencia is within preferred month
     const nomeMes = (m: number) => MONTHS.find((x) => parseInt(x.value) === m)?.label || String(m);
-    if (data.modo_periodo === "15_15" && mesesOrdenados.length < 2) {
-      toast.warning("Apenas um mês informado: o 2º período será sugerido pelo sistema.");
+    const datasInf = [data.data_inicio_preferencia, data.modo_periodo === "15_15" ? data.data_inicio_q2_preferencia : ""]
+      .filter((d): d is string => !!d);
+    for (const d of datasInf) {
+      if (!d.startsWith(`${anoReferencia}-`)) { toast.error(`As datas devem estar em ${anoReferencia}`); return; }
     }
-    if (data.modo_periodo === "15_15" && data.data_inicio_q2_preferencia && mesQ2) {
-      const d2 = parseISO(data.data_inicio_q2_preferencia);
-      if (d2.getMonth() + 1 !== mesQ2) {
-        toast.error(`O início do 2º período deve estar em ${nomeMes(mesQ2)}`);
-        return;
-      }
-    }
-    if (data.data_inicio_preferencia && mesQ1) {
-      try {
-        const d = parseISO(data.data_inicio_preferencia);
-        if (d.getMonth() + 1 !== mesQ1) {
-          toast.error(`O início do ${data.modo_periodo === "30" ? "período de 30 dias" : "1º período"} deve estar em ${nomeMes(mesQ1)}`);
-          return;
-        }
-      } catch {
-        toast.error("Data de início inválida");
-        return;
-      }
-    }
-
     if (data.modo_periodo === "15_15" && data.data_inicio_preferencia && data.data_inicio_q2_preferencia) {
       const a = parseISO(data.data_inicio_preferencia), b = parseISO(data.data_inicio_q2_preferencia);
-      if (a <= addDays(b, 14) && addDays(a, 14) >= b) {
-        toast.error("O 1º e o 2º período não podem se sobrepor");
-        return;
-      }
+      if (a >= b) { toast.error("O início do 1º período deve ser anterior ao início do 2º período"); return; }
+      if (addDays(a, 14) >= b) { toast.error("O 1º e o 2º período não podem se sobrepor"); return; }
+    }
+    if (data.modo_periodo === "15_15" && mesesOrdenados.length < 2 && !data.data_inicio_q2_preferencia) {
+      toast.warning("Apenas um período definido: o 2º período será sugerido pelo sistema.");
+    }
+    if (datasInf.length && mesesOrdenados.length) {
+      const mesesDatas = new Set(datasInf.map((d) => parseISO(d).getMonth() + 1));
+      const fora = mesesOrdenados.filter((m) => !mesesDatas.has(m));
+      if (fora.length) toast.warning(`Mês(es) de preferência não contemplado(s) pelas datas: ${fora.map(nomeMes).join(", ")}`);
     }
 
     saveMutation.mutate(data);
@@ -696,11 +663,11 @@ export function FormularioAnualDialog({
                   <FormItem>
                     <FormLabel>{modoPeriodo === "30" ? "Data de início dos 30 dias" : "Início do 1º período (opcional)"}</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} min={preferredMonthDateLimits?.min} max={preferredMonthDateLimits?.max} />
+                      <Input type="date" {...field} min={`${anoReferencia}-01-01`} max={`${anoReferencia}-12-31`} />
                     </FormControl>
                     {mesQ1 && (
                       <FormDescription>
-                        {`Data em ${MONTHS.find((x) => parseInt(x.value) === mesQ1)?.label}.`}
+                        {`Sugestão: ${MONTHS.find((x) => parseInt(x.value) === mesQ1)?.label} (pode escolher outra data).`}
                         {field.value ? ` Término: ${fimPeriodo(field.value, modoPeriodo === "30" ? 30 : 15)}` : ""}
                       </FormDescription>
                     )}
@@ -715,12 +682,12 @@ export function FormularioAnualDialog({
                 <FormItem>
                   <FormLabel>Início do 2º período (opcional)</FormLabel>
                   <FormControl>
-                    <Input type="date" {...field} min={q2DateLimits.min} max={q2DateLimits.max} />
+                    <Input type="date" {...field} min={`${anoReferencia}-01-01`} max={`${anoReferencia}-12-31`} />
                   </FormControl>
                   {field.value ? (
                     <FormDescription>Término: {fimPeriodo(field.value, 15)}</FormDescription>
                   ) : (
-                    <FormDescription>{mesQ2 ? `Data em ${MONTHS.find((x) => parseInt(x.value) === mesQ2)?.label}. ` : "Nenhum 2º mês informado. "}Se não informado, o sistema sugere uma data sem conflito com o setor e dentro do período concessivo.</FormDescription>
+                    <FormDescription>{mesQ2 ? `Sugestão: ${MONTHS.find((x) => parseInt(x.value) === mesQ2)?.label}. ` : ""}Se não informado, o sistema sugere uma data sem conflito com o setor e dentro do período concessivo.</FormDescription>
                   )}
                   <FormMessage />
                 </FormItem>
