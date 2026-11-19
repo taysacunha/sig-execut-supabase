@@ -114,7 +114,7 @@ export function GeradorFeriasDialog({ open, onOpenChange, anoReferencia, onSucce
   const handleChangeDate = (colaboradorId: string, periodo: 1 | 2, inicio: string) => {
     if (!inicio) return;
     applyPatch(colaboradorId, (v) => {
-      const fim = format(addDays(parseISO(inicio), periodo === 1 && v.periodo_unico ? 29 : 14), "yyyy-MM-dd");
+      const fim = format(addDays(parseISO(inicio), periodo === 1 && v.periodo_unico ? 29 - (v.vender_dias ? Math.min(10, v.dias_vendidos || 0) : 0) : 14), "yyyy-MM-dd");
       return periodo === 1 ? { ...v, quinzena1_inicio: inicio, quinzena1_fim: fim } : { ...v, quinzena2_inicio: inicio, quinzena2_fim: fim };
     });
   };

@@ -277,8 +277,8 @@ export function FormularioAnualDialog({
         periodo_preferencia: preferencia ? parseInt(preferencia) : null,
         modo_periodo: data.modo_periodo,
         data_inicio_q2_preferencia: data.modo_periodo === "15_15" ? (data.data_inicio_q2_preferencia || null) : null,
-        vender_dias: data.modo_periodo === "30" ? false : data.vender_dias,
-        dias_vender: data.modo_periodo === "30" ? 0 : (data.vender_dias ? data.dias_vender : 0),
+        vender_dias: data.vender_dias && (data.dias_vender || 0) > 0,
+        dias_vender: data.vender_dias ? (data.dias_vender || 0) : 0,
         observacao: data.observacao || null,
         data_inicio_preferencia: data.data_inicio_preferencia || null,
         status: "pendente",
@@ -668,7 +668,7 @@ export function FormularioAnualDialog({
                     {mesQ1 && (
                       <FormDescription>
                         {`Sugestão: ${MONTHS.find((x) => parseInt(x.value) === mesQ1)?.label} (pode escolher outra data).`}
-                        {field.value ? ` Término: ${fimPeriodo(field.value, modoPeriodo === "30" ? 30 : 15)}` : ""}
+                        {field.value ? ` Término: ${fimPeriodo(field.value, modoPeriodo === "30" ? 30 - (venderDias ? Math.min(10, Number(form.watch("dias_vender")) || 0) : 0) : 15)}` : ""}
                       </FormDescription>
                     )}
                     <FormMessage />
@@ -770,7 +770,7 @@ export function FormularioAnualDialog({
                 )}
               />
 
-              {venderDias && modoPeriodo !== "30" && (
+              {venderDias && (
                 <FormField control={form.control} name="dias_vender" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Quantidade de dias a vender (máx. 10)</FormLabel>

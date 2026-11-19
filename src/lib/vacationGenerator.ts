@@ -383,7 +383,8 @@ export async function generateVacations(
 
       // If this is the preferred month and there's a specific start date, use it
       const modo30 = form.modo_periodo === "30";
-      const durQ1 = modo30 ? 30 : 15;
+      const vend30 = modo30 && form.vender_dias ? Math.min(10, Math.max(0, form.dias_vender || 0)) : 0;
+      const durQ1 = modo30 ? 30 - vend30 : 15;
       const monthWindows = generateCandidateWindows(ano, chosenMonth).map((w) => generateWindowFromDate(w.start, durQ1));
       // Datas exatas valem para o mês em que caem (ordem cronológica, não prioridade)
       const fixa = datasFixas[0] || null;
@@ -498,9 +499,9 @@ export async function generateVacations(
         quinzena2_inicio: q2Final ? q2Final.start : "",
         quinzena2_fim: q2Final ? q2Final.end : "",
         periodo_unico: modo30,
-        vender_dias: modo30 ? false : (form.vender_dias || false),
-        dias_vendidos: modo30 ? 0 : (form.dias_vender || 0),
-        quinzena_venda: 2,
+        vender_dias: modo30 ? vend30 > 0 : (form.vender_dias || false),
+        dias_vendidos: modo30 ? vend30 : (form.dias_vender || 0),
+        quinzena_venda: modo30 ? 1 : 2,
         is_excecao: modo30 || allConflicts.some(c => c.tipo === "mes_bloqueado") || (form.dias_vender != null && form.dias_vender > 10),
         excecao_motivo: modo30 ? "30 dias direto" : allConflicts.some(c => c.tipo === "mes_bloqueado") ? "mes_bloqueado" : (form.dias_vender != null && form.dias_vender > 10 ? "venda_acima_limite" : null),
         conflicts: allConflicts,
@@ -554,9 +555,9 @@ export async function saveGeneratedVacations(
         quinzena2_fim: unico ? null : vacation.quinzena2_fim,
         periodo_unico: unico,
         gozo_diferente: false,
-        vender_dias: unico ? false : vacation.vender_dias,
-        dias_vendidos: unico ? null : (vacation.dias_vendidos || null),
-        quinzena_venda: !unico && vacation.vender_dias ? vacation.quinzena_venda : null,
+        vender_dias: !!vacation.vender_dias && (vacation.dias_vendidos || 0) > 0,
+        dias_vendidos: vacation.vender_dias ? (vacation.dias_vendidos || null) : null,
+        quinzena_venda: vacation.vender_dias ? (unico ? 1 : vacation.quinzena_venda) : null,
         status: "aprovada",
         is_excecao: unico || vacation.is_excecao || (forceExceptions && vacation.conflicts.length > 0),
         excecao_motivo: unico ? (vacation.excecao_motivo || "30 dias direto") : vacation.excecao_motivo,
