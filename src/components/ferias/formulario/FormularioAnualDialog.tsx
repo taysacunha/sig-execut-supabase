@@ -140,6 +140,9 @@ export function FormularioAnualDialog({
   }, [periodo1_mes, periodo2_mes, periodo3_mes]);
   const mesQ1 = modoPeriodoW === "30" ? preferredMonth : (mesesOrdenados[0] ?? null);
   const mesQ2 = modoPeriodoW === "30" ? null : (mesesOrdenados[1] ?? null);
+  const listaMeses = mesesOrdenados
+    .map((m) => `${MONTHS.find((x) => parseInt(x.value) === m)?.label}${m === preferredMonth ? " (preferido)" : ""}`)
+    .join(", ");
 
   // Fetch colaboradores ativos
   const { data: colaboradores = [] } = useQuery({
@@ -667,7 +670,9 @@ export function FormularioAnualDialog({
                     </FormControl>
                     {mesQ1 && (
                       <FormDescription>
-                        {`Sugestão: ${MONTHS.find((x) => parseInt(x.value) === mesQ1)?.label} (pode escolher outra data).`}
+                        {modoPeriodo === "15_15" && mesesOrdenados.length > 2
+                          ? `Meses informados: ${listaMeses}. Sem datas exatas, o sistema escolhe 2 desses meses, priorizando o preferido.`
+                          : `Sugestão: ${MONTHS.find((x) => parseInt(x.value) === mesQ1)?.label} (pode escolher outra data).`}
                         {field.value ? ` Término: ${fimPeriodo(field.value, modoPeriodo === "30" ? 30 - (venderDias ? Math.min(10, Number(form.watch("dias_vender")) || 0) : 0) : 15)}` : ""}
                       </FormDescription>
                     )}
@@ -687,7 +692,7 @@ export function FormularioAnualDialog({
                   {field.value ? (
                     <FormDescription>Término: {fimPeriodo(field.value, 15)}</FormDescription>
                   ) : (
-                    <FormDescription>{mesQ2 ? `Sugestão: ${MONTHS.find((x) => parseInt(x.value) === mesQ2)?.label}. ` : ""}Se não informado, o sistema sugere uma data sem conflito com o setor e dentro do período concessivo.</FormDescription>
+                    <FormDescription>{mesQ2 && mesesOrdenados.length <= 2 ? `Sugestão: ${MONTHS.find((x) => parseInt(x.value) === mesQ2)?.label}. ` : ""}Se não informado, o sistema sugere uma data sem conflito com o setor e dentro do período concessivo.</FormDescription>
                   )}
                   <FormMessage />
                 </FormItem>

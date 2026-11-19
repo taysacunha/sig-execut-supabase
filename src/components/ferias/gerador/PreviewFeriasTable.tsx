@@ -145,6 +145,11 @@ export function PreviewFeriasTable({
                 </TableCell>
                 <TableCell className="text-sm">
                   {renderPeriodoCell(vacation, 2)}
+                  {vacation.preferencia_atendida != null && (
+                    <div className={`text-xs mt-1 ${vacation.preferencia_atendida ? "text-muted-foreground" : "text-destructive"}`}>
+                      {vacation.preferencia_atendida ? "Mês preferido atendido" : "Mês preferido não atendido"}
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell>
                   {vacation.vender_dias && vacation.dias_vendidos ? (

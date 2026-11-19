@@ -52,6 +52,9 @@ export interface GeneratedVacation {
   /** Férias já geradas pelo formulário que serão substituídas ao salvar */
   substitui_ids?: string[];
   /** Backup do 2º período/venda para restaurar ao desativar os 30 dias */
+  /** Meses do formulário efetivamente usados e se o preferido foi atendido */
+  meses_atendidos?: number[];
+  preferencia_atendida?: boolean;
   q2_backup?: { inicio: string; fim: string; vender_dias: boolean; dias_vendidos: number; quinzena_venda: number };
 }
 
@@ -376,6 +379,7 @@ export async function generateVacations(
     const subSectors = substituteSectors[form.colaborador_id] || [];
     const preferredMonth = getPreferredMonth(form);
     let allocated = false;
+    let fallback: { vacation: GeneratedVacation; n: number } | null = null;
 
     // Generate candidate windows for the preferred month
     for (const chosenMonth of orderedMonths) {
@@ -430,8 +434,11 @@ export async function generateVacations(
           tryWindows(outrasDatas.map((d) => generateWindowFromDate(d)));
           ok = !!bestQ2; // data informada é mantida mesmo com conflito
         }
-        const secondMonth = getOrderedMonths(form).find(m => m !== chosenMonth);
-        if (!ok && secondMonth) ok = tryWindows(generateCandidateWindows(ano, secondMonth));
+        // Testa todos os outros meses informados, na ordem do formulário (preferido primeiro)
+        for (const m of getOrderedMonths(form).filter(m => m !== chosenMonth)) {
+          if (ok) break;
+          ok = tryWindows(generateCandidateWindows(ano, m));
+        }
         if (!ok) {
           const info = form.colaborador.data_admissao ? getConcessivoInfo(form.colaborador.data_admissao, bestQ1.start) : null;
           const anoIni = `${ano}-02-01`, anoFim = `${ano}-11-30`;
@@ -508,6 +515,16 @@ export async function generateVacations(
         familiar_match: familiarMatch,
         origem: "formulario_anual",
       };
+      const mesesForm = [form.periodo1_mes, form.periodo2_mes, form.periodo3_mes].filter(Boolean) as number[];
+      vacation.meses_atendidos = [q1Month, q2Month].filter((m) => m && mesesForm.includes(m));
+      vacation.preferencia_atendida = preferredMonth != null && (q1Month === preferredMonth || q2Month === preferredMonth);
+
+      // Sem datas exatas: se houver conflito, tenta os outros meses antes de aceitar
+      if (hasSectorConflict && !datasFixas.length) {
+        const n = allConflicts.filter(c => c.tipo === "setor" || c.tipo === "substituto").length;
+        if (!fallback || n < fallback.n) fallback = { vacation, n };
+        continue;
+      }
 
       if (!hasSectorConflict) {
         result.success.push(vacation);
@@ -519,6 +536,11 @@ export async function generateVacations(
       break;
     }
 
+    if (!allocated && fallback) {
+      result.conflicts.push(fallback.vacation);
+      allocatedVacations.push(fallback.vacation);
+      allocated = true;
+    }
     if (!allocated) {
       result.unprocessed.push({ colaborador_nome: form.colaborador.nome, motivo: "Nenhum mês disponível sem conflitos" });
     }
