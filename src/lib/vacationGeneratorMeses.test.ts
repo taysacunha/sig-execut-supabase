@@ -63,4 +63,12 @@ describe("gerador com 3 meses e preferência", () => {
     const v = r.success[0];
     expect([v.quinzena1_inicio, v.quinzena2_inicio]).toEqual(["2027-05-10", "2027-10-04"]);
   });
+
+  it("data por mês: escolhe a melhor combinação e mantém as datas de cada mês", async () => {
+    db.ferias_formulario_anual = [ivone({ periodo1_data: "2027-02-04", periodo2_data: "2027-05-06", periodo3_data: "2027-10-18" })];
+    db.ferias_ferias = [ferias("x", "2027-02-01", "2027-02-28", "2027-03-01", "2027-03-15")];
+    const r = await generateVacations(2027);
+    const v = r.success[0];
+    expect([v.quinzena1_inicio, v.quinzena2_inicio]).toEqual(["2027-05-06", "2027-10-18"]);
+  });
 });

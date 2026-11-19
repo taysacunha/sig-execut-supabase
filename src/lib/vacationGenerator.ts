@@ -20,6 +20,10 @@ export interface FormularioAnual {
   /** '15_15' (padrão) ou '30' (30 dias direto) */
   modo_periodo?: string | null;
   data_inicio_q2_preferencia?: string | null;
+  /** Data de início desejada para cada mês escolhido (opções 1–3) */
+  periodo1_data?: string | null;
+  periodo2_data?: string | null;
+  periodo3_data?: string | null;
   status: string | null;
   colaborador?: {
     id: string;
@@ -214,6 +218,18 @@ function getOrderedMonths(form: FormularioAnual): number[] {
   return months.map(m => m.mes);
 }
 
+// Data de início informada para um mês específico do formulário (opções 1–3)
+function dataDoMes(form: FormularioAnual, mes: number): string | null {
+  const pares: [number | null, string | null | undefined][] = [
+    [form.periodo1_mes, form.periodo1_data], [form.periodo2_mes, form.periodo2_data], [form.periodo3_mes, form.periodo3_data],
+  ];
+  return pares.find(([m, d]) => m === mes && !!d)?.[1] ?? null;
+}
+
+function temDatasPorMes(form: FormularioAnual): boolean {
+  return !!(form.periodo1_data || form.periodo2_data || form.periodo3_data);
+}
+
 // Get the preferred month from the form
 function getPreferredMonth(form: FormularioAnual): number | null {
   if (form.periodo_preferencia === 1) return form.periodo1_mes;
@@ -363,10 +379,16 @@ export async function generateVacations(
     }
 
     // Datas exatas informadas no formulário são soberanas: nunca são trocadas por janelas alternativas.
-    const datasFixas = (form.modo_periodo === "30"
+    // Novo modelo: cada mês tem sua própria data; o gerador escolhe a melhor combinação.
+    const porMes = temDatasPorMes(form);
+    const datasFixas = porMes ? [] : (form.modo_periodo === "30"
       ? [form.data_inicio_preferencia]
       : [form.data_inicio_preferencia, form.data_inicio_q2_preferencia]
     ).filter((d): d is string => !!d).sort();
+    const janelasDoMes = (m: number, dias = 15) => {
+      const d = porMes ? dataDoMes(form, m) : null;
+      return d ? [generateWindowFromDate(d, dias)] : generateCandidateWindows(ano, m).map((w) => generateWindowFromDate(w.start, dias));
+    };
     const orderedMonths = datasFixas.length
       ? [parseISO(datasFixas[0]).getMonth() + 1]
       : getOrderedMonths(form);
@@ -389,7 +411,7 @@ export async function generateVacations(
       const modo30 = form.modo_periodo === "30";
       const vend30 = modo30 && form.vender_dias ? Math.min(10, Math.max(0, form.dias_vender || 0)) : 0;
       const durQ1 = modo30 ? 30 - vend30 : 15;
-      const monthWindows = generateCandidateWindows(ano, chosenMonth).map((w) => generateWindowFromDate(w.start, durQ1));
+      const monthWindows = janelasDoMes(chosenMonth, durQ1);
       // Datas exatas valem para o mês em que caem (ordem cronológica, não prioridade)
       const fixa = datasFixas[0] || null;
       candidateWindows = fixa ? [generateWindowFromDate(fixa, durQ1)] : monthWindows;
@@ -437,7 +459,7 @@ export async function generateVacations(
         // Testa todos os outros meses informados, na ordem do formulário (preferido primeiro)
         for (const m of getOrderedMonths(form).filter(m => m !== chosenMonth)) {
           if (ok) break;
-          ok = tryWindows(generateCandidateWindows(ano, m));
+          ok = tryWindows(janelasDoMes(m));
         }
         if (!ok) {
           const info = form.colaborador.data_admissao ? getConcessivoInfo(form.colaborador.data_admissao, bestQ1.start) : null;

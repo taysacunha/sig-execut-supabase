@@ -3760,10 +3760,13 @@ export type Database = {
           modo_periodo: string
           observacao: string | null
           periodo_preferencia: number | null
+          periodo1_data: string | null
           periodo1_mes: number | null
           periodo1_quinzena: string | null
+          periodo2_data: string | null
           periodo2_mes: number | null
           periodo2_quinzena: string | null
+          periodo3_data: string | null
           periodo3_mes: number | null
           periodo3_quinzena: string | null
           status: string | null
@@ -3781,10 +3784,13 @@ export type Database = {
           modo_periodo?: string
           observacao?: string | null
           periodo_preferencia?: number | null
+          periodo1_data?: string | null
           periodo1_mes?: number | null
           periodo1_quinzena?: string | null
+          periodo2_data?: string | null
           periodo2_mes?: number | null
           periodo2_quinzena?: string | null
+          periodo3_data?: string | null
           periodo3_mes?: number | null
           periodo3_quinzena?: string | null
           status?: string | null
@@ -3802,10 +3808,13 @@ export type Database = {
           modo_periodo?: string
           observacao?: string | null
           periodo_preferencia?: number | null
+          periodo1_data?: string | null
           periodo1_mes?: number | null
           periodo1_quinzena?: string | null
+          periodo2_data?: string | null
           periodo2_mes?: number | null
           periodo2_quinzena?: string | null
+          periodo3_data?: string | null
           periodo3_mes?: number | null
           periodo3_quinzena?: string | null
           status?: string | null

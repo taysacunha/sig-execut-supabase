@@ -33,6 +33,9 @@ interface FormularioAnual {
   observacao?: string | null;
   data_inicio_preferencia?: string | null;
   data_inicio_q2_preferencia?: string | null;
+  periodo1_data?: string | null;
+  periodo2_data?: string | null;
+  periodo3_data?: string | null;
   modo_periodo?: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -101,9 +104,18 @@ export function FormularioAnualViewDialog({
     return `${quinzena === "1" ? "1ª" : "2ª"} quinzena de ${MONTHS[mes - 1]}`;
   };
 
-  const periodo1 = formatPeriodo(formulario.periodo1_mes, formulario.periodo1_quinzena);
-  const periodo2 = formatPeriodo(formulario.periodo2_mes, formulario.periodo2_quinzena);
-  const periodo3 = formatPeriodo(formulario.periodo3_mes, formulario.periodo3_quinzena);
+  const periodo1Base = formatPeriodo(formulario.periodo1_mes, formulario.periodo1_quinzena);
+  const periodo1 = periodo1Base && formulario.periodo1_data
+    ? `${periodo1Base} — início ${fmtRange(formulario.periodo1_data, modo30 ? 30 : 15)}`
+    : periodo1Base;
+  const periodo2Base = formatPeriodo(formulario.periodo2_mes, formulario.periodo2_quinzena);
+  const periodo2 = periodo2Base && formulario.periodo2_data
+    ? `${periodo2Base} — início ${fmtRange(formulario.periodo2_data, modo30 ? 30 : 15)}`
+    : periodo2Base;
+  const periodo3Base = formatPeriodo(formulario.periodo3_mes, formulario.periodo3_quinzena);
+  const periodo3 = periodo3Base && formulario.periodo3_data
+    ? `${periodo3Base} — início ${fmtRange(formulario.periodo3_data, modo30 ? 30 : 15)}`
+    : periodo3Base;
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "—";
