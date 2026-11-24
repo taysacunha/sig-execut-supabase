@@ -81,6 +81,8 @@ export interface GenerationContext {
   forms: FormularioAnual[];
   substituteSectors: Record<string, string[]>;
   sectorToColabs: Record<string, string[]>;
+  /** Regras do sistema (ex.: BLOQUEAR_JAN_DEZ) usadas nas sugestões de resolução */
+  rules?: Record<string, string>;
 }
 
 export interface GenerationResult {
@@ -571,7 +573,7 @@ export async function generateVacations(
   for (const v of [...result.success, ...result.conflicts]) {
     if (replaceMap[v.colaborador_id]) v.substitui_ids = replaceMap[v.colaborador_id];
   }
-  result.context = { existingVacations, forms, substituteSectors, sectorToColabs };
+  result.context = { existingVacations, forms, substituteSectors, sectorToColabs, rules };
   return result;
 }
 

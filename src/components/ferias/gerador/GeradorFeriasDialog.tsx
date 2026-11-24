@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generateVacations, saveGeneratedVacations, recheckVacationConflicts, GenerationResult, GeneratedVacation } from "@/lib/vacationGenerator";
 import { addDays, format, parseISO } from "date-fns";
 import { PreviewFeriasTable } from "./PreviewFeriasTable";
+import { sugerirResolucoes, aplicarJanela, type SugestoesConflito } from "@/lib/feriasConflitoSugestoes";
 
 interface GeradorFeriasDialogProps {
   open: boolean;
@@ -119,6 +120,22 @@ export function GeradorFeriasDialog({ open, onOpenChange, anoReferencia, onSucce
     });
   };
 
+  const handleApplySuggestion = (colaboradorId: string, periodo: 1 | 2, inicio: string, fim: string) => {
+    applyPatch(colaboradorId, (v) => aplicarJanela(v, periodo, inicio, fim));
+    toast.success("Sugestão aplicada. Conflitos recalculados.");
+  };
+
+  const suggestions = useMemo(() => {
+    const map: Record<string, SugestoesConflito[]> = {};
+    if (!generationResult?.context) return map;
+    const todos = [...generationResult.success, ...generationResult.conflicts];
+    for (const v of generationResult.conflicts) {
+      const s = sugerirResolucoes(v, todos, generationResult.context, anoReferencia);
+      if (s.length) map[v.colaborador_id] = s;
+    }
+    return map;
+  }, [generationResult, anoReferencia]);
+
   const handleTogglePeriodoUnico = (colaboradorId: string, on: boolean) => {
     applyPatch(colaboradorId, (v) => {
       if (on) {
@@ -166,7 +183,7 @@ export function GeradorFeriasDialog({ open, onOpenChange, anoReferencia, onSucce
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] max-w-[1400px] max-h-[92vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Wand2 className="h-5 w-5 text-primary" />
@@ -242,9 +259,9 @@ export function GeradorFeriasDialog({ open, onOpenChange, anoReferencia, onSucce
                       <Alert className="mb-4">
                         <AlertTriangle className="h-4 w-4" />
                         <AlertTitle>Férias com conflitos</AlertTitle>
-                        <AlertDescription>A coluna Conflitos mostra em qual período ocorre o choque e com quem. Altere a data de início do período em vermelho aqui mesmo (o fim é calculado em 15 dias, ou 30 se marcar "30 dias"); os conflitos são recalculados na hora. Se salvar com conflito, a férias será marcada como exceção.</AlertDescription>
+                        <AlertDescription>A coluna Conflitos mostra em qual período ocorre o choque e com quem. Altere a data de início do período em vermelho aqui mesmo (o fim é calculado em 15 dias, ou 30 se marcar "30 dias"); os conflitos são recalculados na hora. Abaixo de cada colaborador aparecem sugestões de datas livres nos dois sentidos (manter um e mover o outro); clique em uma data para aplicar. Se salvar com conflito, a férias será marcada como exceção.</AlertDescription>
                       </Alert>
-                      <PreviewFeriasTable vacations={generationResult.conflicts} selectedIds={selectedVacations} onToggleSelection={toggleVacationSelection} onSelectAll={() => selectAll(generationResult.conflicts)} onDeselectAll={() => deselectAll(generationResult.conflicts)} showConflicts onChangeDate={handleChangeDate} onTogglePeriodoUnico={handleTogglePeriodoUnico} />
+                      <PreviewFeriasTable vacations={generationResult.conflicts} selectedIds={selectedVacations} onToggleSelection={toggleVacationSelection} onSelectAll={() => selectAll(generationResult.conflicts)} onDeselectAll={() => deselectAll(generationResult.conflicts)} showConflicts onChangeDate={handleChangeDate} onTogglePeriodoUnico={handleTogglePeriodoUnico} suggestions={suggestions} onApplySuggestion={handleApplySuggestion} />
                     </>
                   ) : <div className="text-center py-8 text-muted-foreground">Nenhuma férias com conflitos</div>}
                 </TabsContent>
