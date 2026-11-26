@@ -5,6 +5,9 @@
 ## Expense cost centers
 - Guard permanent cost-center deletion in database RLS and a dependency-checking trigger; UI checks alone cannot protect linked records or prevent unauthorized deletion.
 
+## Expense property situations
+- Share property situation options, labels and validation through `despesasImovelSituacao`; this keeps forms, filters and history aligned with the database constraint.
+
 ## Expense accounts and status
 - Enforce operational bank-account assignments in database policies and mutation triggers, separately from administrative catalogue access; unassigned historical links must remain editable without disclosing account details.
 - Normalize due status in a non-recursive database trigger using a shared business-day function; date edits and background jobs must follow the same rule.

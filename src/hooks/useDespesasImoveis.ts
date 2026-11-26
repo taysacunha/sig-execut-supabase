@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { isImovelSituacao, type ImovelSituacao } from "@/lib/despesasImovelSituacao";
 
-export type ImovelSituacao = "alugado" | "vago" | "vendido" | "proprio_uso" | "em_aquisicao";
+export type { ImovelSituacao } from "@/lib/despesasImovelSituacao";
 export type ImovelTipo = "comercial" | "residencial" | "terreno" | "outro";
 export type RipSituacao = "possui" | "nao_possui" | "nao_informado";
 export type EncargoTipo = "iptu" | "tcr" | "spu" | "condominio" | "outro";
@@ -125,6 +126,7 @@ export function useSaveImovel() {
       input: ImovelInput;
       justificativaDuplicidade?: { motivo: string; duplicados: DuplicadoImovel[] };
     }) => {
+      if (!isImovelSituacao(input.situacao)) throw new Error("Situação do imóvel inválida.");
       const { data: userData } = await supabase.auth.getUser();
       const uid = userData.user?.id ?? null;
       const email = userData.user?.email ?? "sistema@interno";

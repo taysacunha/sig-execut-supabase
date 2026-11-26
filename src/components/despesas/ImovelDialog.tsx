@@ -36,6 +36,7 @@ import {
 } from "@/contexts/DespesasValuesContext";
 import { PessoaDialog } from "@/components/despesas/PessoaDialog";
 import { traduzirErroDespesas } from "@/lib/despesasErros";
+import { IMOVEL_SITUACOES as situacoes, IMOVEL_SITUACAO_LABEL as situacaoLbl } from "@/lib/despesasImovelSituacao";
 
 interface Props {
   open: boolean;
@@ -43,13 +44,6 @@ interface Props {
   editing: Imovel | null;
 }
 
-const situacoes: { v: ImovelSituacao; l: string }[] = [
-  { v: "alugado", l: "Alugado" },
-  { v: "vago", l: "Desocupado" },
-  { v: "vendido", l: "Vendido" },
-  { v: "proprio_uso", l: "Uso próprio" },
-  { v: "em_aquisicao", l: "Em aquisição" },
-];
 const tipos: { v: ImovelTipo; l: string }[] = [
   { v: "comercial", l: "Comercial" },
   { v: "residencial", l: "Residencial" },
@@ -148,10 +142,6 @@ function ImovelDialogInner({ open, onOpenChange, editing }: Props) {
     }
   }
 
-  const situacaoLbl: Record<string, string> = {
-    alugado: "Alugado", vago: "Desocupado", vendido: "Vendido",
-    proprio_uso: "Uso próprio", em_aquisicao: "Em aquisição",
-  };
   const motivoValido = dupMotivo.trim().length >= 10;
 
   return (
@@ -493,8 +483,8 @@ function HistoricoTab({ imovelId }: { imovelId: string }) {
         {hist.map((h) => (
           <TableRow key={h.id}>
             <TableCell>{new Date(h.data + "T00:00:00").toLocaleDateString("pt-BR")}</TableCell>
-            <TableCell className="capitalize">{h.situacao_anterior ?? "—"}</TableCell>
-            <TableCell className="capitalize">{h.situacao_nova}</TableCell>
+            <TableCell>{h.situacao_anterior ? situacaoLbl[h.situacao_anterior] ?? h.situacao_anterior : "—"}</TableCell>
+            <TableCell>{situacaoLbl[h.situacao_nova] ?? h.situacao_nova}</TableCell>
             <TableCell className="text-muted-foreground">{h.motivo ?? "—"}</TableCell>
           </TableRow>
         ))}

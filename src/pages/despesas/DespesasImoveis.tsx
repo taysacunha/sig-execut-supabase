@@ -24,10 +24,7 @@ import {
 import { useDespesasLookups } from "@/hooks/useDespesasLancamentos";
 import { ImovelDialog } from "@/components/despesas/ImovelDialog";
 import { useDespesasValues } from "@/contexts/DespesasValuesContext";
-
-const situacaoLabel: Record<string, string> = {
-  alugado: "Alugado", vago: "Desocupado", vendido: "Vendido", proprio_uso: "Uso próprio", em_aquisicao: "Em aquisição",
-};
+import { IMOVEL_SITUACOES, IMOVEL_SITUACAO_LABEL as situacaoLabel } from "@/lib/despesasImovelSituacao";
 
 export default function DespesasImoveis() {
   const { podeVer, podeEditar, podeExcluir } = useDespesasPermissions();
@@ -141,11 +138,7 @@ export default function DespesasImoveis() {
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todas</SelectItem>
-                <SelectItem value="alugado">Alugado</SelectItem>
-                <SelectItem value="vago">Desocupado</SelectItem>
-                <SelectItem value="vendido">Vendido</SelectItem>
-                <SelectItem value="proprio_uso">Uso próprio</SelectItem>
-                <SelectItem value="em_aquisicao">Em aquisição</SelectItem>
+                {IMOVEL_SITUACOES.map(({ v, l }) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
